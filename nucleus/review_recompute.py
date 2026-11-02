@@ -53,7 +53,7 @@ def _m339_criteria_version() -> str:
         _v = str(getattr(_si, "_DEAD_CODE_CRITERIA_VERSION", "") or "")
         return _v or "unknown"
     except Exception as _e:
-        silent_exc(_e, where="review_recompute::_m339_criteria_version")
+        silent_exc(_e, where="review_recompute::_m339_criteria_version", level="debug")
         return "unknown"
 
 
@@ -62,7 +62,7 @@ def _m339_code_version() -> str:
         import nucleus.self_inspector as _si
         return str(_si._m339_code_version() or "unknown")
     except Exception as _e:
-        silent_exc(_e, where="review_recompute::_m339_code_version")
+        silent_exc(_e, where="review_recompute::_m339_code_version", level="debug")
         return "unknown"
 
 
@@ -71,7 +71,7 @@ def _m339_proc_gen() -> str:
         from nucleus.proc_gen import proc_gen_str as _pgs
         return str(_pgs())
     except Exception as _e:
-        silent_exc(_e, where="review_recompute::_m339_proc_gen")
+        silent_exc(_e, where="review_recompute::_m339_proc_gen", level="debug")
         return "unknown"
 
 

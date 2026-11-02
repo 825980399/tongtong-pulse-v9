@@ -351,7 +351,7 @@ def capability_states(use_cache: bool = True) -> dict[str, Any]:
         _m = ProductionConsumptionMatcher()
         _res = _m.scan()
     except Exception as _e:
-        silent_exc(_e, where="nucleus.self_awareness.capability_ledger::capability_states")
+        silent_exc(_e, where="nucleus.self_awareness.capability_ledger::capability_states", level="debug")
         _out["source"] = "pcm_unavailable"
         _out["note"] = f"{type(_e).__name__}: {_e}"
         _CACHE["ts"] = time.time()
@@ -393,7 +393,7 @@ def register_capability_ledger(batch: str = "", pcm_result: dict | None = None) 
     try:
         from nucleus.self_awareness import maturity_ledger as ML
     except Exception as _e:
-        silent_exc(_e, where="nucleus.self_awareness.capability_ledger::register import")
+        silent_exc(_e, where="nucleus.self_awareness.capability_ledger::register import", level="debug")
         return {"error": f"{type(_e).__name__}: {_e}"}
 
     _reports = reconcile_reports()

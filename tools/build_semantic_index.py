@@ -231,7 +231,7 @@ def cmd_status(args) -> int:
                   f"（{'已完成' if p.get('finished') else '未完成'}）"
                   f" 速度 {p.get('speed', 0):.1f} 条/秒")
     except Exception as e:
-        silent_exc(e, where="tools.build_semantic_index::cmd_status L231")
+        silent_exc(e, where="tools.build_semantic_index::cmd_status L231", level="debug")
     print("=" * 66)
     return 0
 

@@ -471,7 +471,7 @@ class FrameworkDiagnostics:
                     "[M50-T1] 健康报告发布失败（已忽略）: %s",
                     type(_m50_he).__name__)
             except Exception as e:
-                silent_exc(e, where="nucleus.diagnostics::get_health_summary L473")
+                silent_exc(e, where="nucleus.diagnostics::get_health_summary L473", level="debug")
 
         parts = []
         health = diagnosis.get("overall_health", "unknown")
@@ -572,7 +572,7 @@ def shutdown_diagnostics() -> None:
             try:
                 _sd()
             except Exception as e:
-                silent_exc(e, where="nucleus.diagnostics::shutdown_diagnostics L574")
+                silent_exc(e, where="nucleus.diagnostics::shutdown_diagnostics L574", level="debug")
 # _m50_t1_diag_done
 
 # _m51_t2_wire

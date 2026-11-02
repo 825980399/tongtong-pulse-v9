@@ -90,9 +90,9 @@ def _framework_status():
                     _tail = f.read().decode("utf-8", "ignore")
                 out["graceful_shutdown"] = ("优雅关闭" in _tail) or ("已优雅关闭" in _tail) or ("graceful" in _tail.lower())
             except Exception as e:
-                silent_exc(e, where="tools.benchmark_hot_cold_faiss_kal::_framework_status L91")
+                silent_exc(e, where="tools.benchmark_hot_cold_faiss_kal::_framework_status L91", level="debug")
     except Exception as e:
-        silent_exc(e, where="tools.benchmark_hot_cold_faiss_kal::_framework_status L93")
+        silent_exc(e, where="tools.benchmark_hot_cold_faiss_kal::_framework_status L93", level="debug")
         out["error"] = "{}: {}".format(type(e).__name__, e)
     return out
 
@@ -140,7 +140,7 @@ def stage_node_pool(nodes=1000, seed=42):
         if callable(fn):
             res["cache_stats"] = fn()
     except Exception as e:
-        silent_exc(e, where="tools.benchmark_hot_cold_faiss_kal::stage_node_pool L138")
+        silent_exc(e, where="tools.benchmark_hot_cold_faiss_kal::stage_node_pool L138", level="debug")
     return res
 
 
@@ -340,7 +340,7 @@ def stage_kal(nodes=50, seed=7):
             kal.get_node(nid)
             get_lat.append(time.perf_counter() - t0)
         except Exception as e:
-            silent_exc(e, where="tools.benchmark_hot_cold_faiss_kal::stage_kal L338")
+            silent_exc(e, where="tools.benchmark_hot_cold_faiss_kal::stage_kal L338", level="debug")
     return {
         "status": "OK" if made else "NO_NODES_SAVED",
         "saved": len(made),
@@ -415,7 +415,7 @@ def stage_node_pool_real(parquet_dir="data/knowledge/parquet", sample_gets=2000)
         _mem0 = _proc.memory_info().rss
         _have_psutil = True
     except Exception as e:
-        silent_exc(e, where="tools.benchmark_hot_cold_faiss_kal::stage_node_pool_real L414")
+        silent_exc(e, where="tools.benchmark_hot_cold_faiss_kal::stage_node_pool_real L414", level="debug")
         _mem0 = 0
         _have_psutil = False
 
@@ -446,7 +446,7 @@ def stage_node_pool_real(parquet_dir="data/knowledge/parquet", sample_gets=2000)
     try:
         _all = pool.snapshot_active_nodes()
     except Exception as e:
-        silent_exc(e, where="tools.benchmark_hot_cold_faiss_kal::stage_node_pool_real L444")
+        silent_exc(e, where="tools.benchmark_hot_cold_faiss_kal::stage_node_pool_real L444", level="debug")
         _all = []
     loaded = len(_all)
     res = {
@@ -465,7 +465,7 @@ def stage_node_pool_real(parquet_dir="data/knowledge/parquet", sample_gets=2000)
         if callable(fn):
             res["tier_stats"] = fn()
     except Exception as e:
-        silent_exc(e, where="tools.benchmark_hot_cold_faiss_kal::stage_node_pool_real L462")
+        silent_exc(e, where="tools.benchmark_hot_cold_faiss_kal::stage_node_pool_real L462", level="debug")
 
     # get 采样（冷加载后查询性能）
     import random

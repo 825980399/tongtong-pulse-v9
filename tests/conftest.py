@@ -113,14 +113,14 @@ def _mute_project_logs_handlers():
             _loggers += [logging.getLogger(_n)
                          for _n in logging.root.manager.loggerDict]
         except Exception as _e:
-            silent_exc(_e, where="tests.conftest._mute_project_logs_handlers:loggerDict")
+            silent_exc(_e, where="tests.conftest._mute_project_logs_handlers:loggerDict", level="debug")
         for _lg in _loggers:
             for _h in list(getattr(_lg, "handlers", []) or []):
                 if _is_logs_handler(_h):
                     _h.addFilter(_drop)
                     _muted.append((_h, _drop))
     except Exception as _e:
-        silent_exc(_e, where="tests.conftest._mute_project_logs_handlers")
+        silent_exc(_e, where="tests.conftest._mute_project_logs_handlers", level="debug")
         _muted = []
     return _muted
 
@@ -131,7 +131,7 @@ def _restore_muted_logs_handlers(muted):
         try:
             _h.removeFilter(_f)
         except Exception as _e:
-            silent_exc(_e, where="tests.conftest._restore_muted_logs_handlers")
+            silent_exc(_e, where="tests.conftest._restore_muted_logs_handlers", level="debug")
 
 
 @pytest.fixture(scope="session", autouse=True)

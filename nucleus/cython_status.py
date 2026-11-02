@@ -34,7 +34,7 @@ def _cython_switch_on() -> bool:
         from config import FEATURE
         return bool(FEATURE.get("use_cython_extensions", False))
     except Exception as e:
-        silent_exc(e, where="nucleus.cython_status::_cython_switch_on L35")
+        silent_exc(e, where="nucleus.cython_status::_cython_switch_on L35", level="debug")
         return False
 
 

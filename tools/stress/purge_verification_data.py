@@ -92,7 +92,7 @@ def main() -> int:
                 _rows.append(json.loads(_ln))
             except ValueError as _e:
                 _bad += 1
-                silent_exc(_e, where="tools.stress.purge_verification_data.main.parse")
+                silent_exc(_e, where="tools.stress.purge_verification_data.main.parse", level="debug")
 
     _keep: list[dict] = []
     _n_verif = _n_legacy_mark = _n_legacy_purge = 0

@@ -87,7 +87,7 @@ def _read_json(path: str, default: Any = None) -> Any:
         with open(path, encoding="utf-8") as f:
             return json.load(f)
     except Exception as _e:
-        silent_exc(_e, where="world_model.expectation_ledger._read_json")
+        silent_exc(_e, where="world_model.expectation_ledger._read_json", level="debug")
         return default
 
 
@@ -102,12 +102,12 @@ def _read_jsonl(path: str) -> list[dict]:
                 try:
                     _d = json.loads(_line)
                 except ValueError as _e:
-                    silent_exc(_e, where="world_model.expectation_ledger._read_jsonl")
+                    silent_exc(_e, where="world_model.expectation_ledger._read_jsonl", level="debug")
                     continue
                 if isinstance(_d, dict):
                     _rows.append(_d)
     except Exception as _e:
-        silent_exc(_e, where="world_model.expectation_ledger._read_jsonl")
+        silent_exc(_e, where="world_model.expectation_ledger._read_jsonl", level="debug")
     return _rows
 
 
@@ -119,7 +119,7 @@ def _latest_graph(project_root: str) -> tuple[str, dict]:
         _cands = [f for f in os.listdir(_dir)
                   if f.startswith("graph_") and f.endswith(".json")]
     except Exception as _e:
-        silent_exc(_e, where="world_model.expectation_ledger._latest_graph")
+        silent_exc(_e, where="world_model.expectation_ledger._latest_graph", level="debug")
         return "", {}
     if not _cands:
         return "", {}
@@ -239,7 +239,7 @@ def _m324_warn_missing_gap(assertion_id: str, verdict: str, inferred: str) -> bo
             "[324刀3] 断言未显式给 gap_reason ⇒ 按兜底推断落账: id=%s verdict=%s "
             "inferred=%s（只留痕，不改判罚）", _aid, verdict, inferred or "-")
     except Exception as e:
-        silent_exc(e, where="expectation_ledger._m324_warn_missing_gap")
+        silent_exc(e, where="expectation_ledger._m324_warn_missing_gap", level="debug")
     return True
 
 
@@ -640,7 +640,7 @@ def _count_defs_in_file(path: str) -> int | None:
         with open(path, encoding="utf-8") as _f:
             _tree = ast.parse(_f.read())
     except Exception as _e:
-        silent_exc(_e, where="world_model.expectation_ledger._count_defs_in_file")
+        silent_exc(_e, where="world_model.expectation_ledger._count_defs_in_file", level="debug")
         return None
     return sum(1 for _n in ast.walk(_tree)
                if isinstance(_n, (ast.FunctionDef, ast.AsyncFunctionDef)))
@@ -738,7 +738,7 @@ def collect_assertions(project_root: str | None = None,
                   encoding="utf-8") as _f:
             _pcl_txt = _f.read()
     except Exception as _e:
-        silent_exc(_e, where="world_model.expectation_ledger.handbook_rule")
+        silent_exc(_e, where="world_model.expectation_ledger.handbook_rule", level="debug")
     if not _pcl_txt:
         _out.append(_mk("handbook.entry_rule.graph_judged",
                         "说明书入口判据应统一为图判定（旧启发式文案已消失）",
@@ -929,7 +929,7 @@ def sc3_consistency(project_root: str | None = None,
     try:
         from nucleus.self_awareness.CallGraphAnalyzer import CallGraphAnalyzer
     except Exception as _e:
-        silent_exc(_e, where="world_model.expectation_ledger.sc3_consistency.import")
+        silent_exc(_e, where="world_model.expectation_ledger.sc3_consistency.import", level="debug")
         return {"error": type(_e).__name__, "total": 0, "mismatch": 0}
     _graph_rel, _graph = _latest_graph(_root)
     _a = CallGraphAnalyzer()
@@ -951,7 +951,7 @@ def sc3_consistency(project_root: str | None = None,
     try:
         _cur_a4v = str(getattr(CallGraphAnalyzer, "_A4_CRITERIA_VERSION", "") or "")
     except Exception as _ve:
-        silent_exc(_ve, where="expectation_ledger.sc3_consistency.a4_version")
+        silent_exc(_ve, where="expectation_ledger.sc3_consistency.a4_version", level="debug")
     for _c in _names:
         # ★修正：断言侧必须拿到「说明书侧方法数」才有 gap——否则 a4_coverage 恒为
         #   unverifiable，对表会**空转（total=0）**，看起来"一致"其实是没比。
@@ -1006,7 +1006,7 @@ def sc3_consistency(project_root: str | None = None,
         from nucleus.proc_gen import proc_gen_str as _pgs
         _pg7 = _pgs()
     except Exception as _pe:
-        silent_exc(_pe, where="expectation_ledger.sc3_consistency.proc_gen")
+        silent_exc(_pe, where="expectation_ledger.sc3_consistency.proc_gen", level="debug")
     if _total <= 0:
         _module_logger.warning(
             "[337刀7][SC-3] total=0 ⇒ **UNAVAILABLE**（空转不得记 rate=0=通过）"
@@ -1195,7 +1195,7 @@ def sweep(project_root: str | None = None, loop: int | None = None,
                 _added += 1
                 _total += 1
     except Exception as _e:
-        silent_exc(_e, where="world_model.expectation_ledger.sweep")
+        silent_exc(_e, where="world_model.expectation_ledger.sweep", level="debug")
         _module_logger.info(
             "[320刀0][ledger_sweep] triggered=True generated=0 skipped=%d "
             "reason=write_error:%s source=%s", _skipped, type(_e).__name__, _src)

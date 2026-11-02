@@ -45,7 +45,7 @@ def _from_time_core() -> dict | None:
         return _snap
     except Exception as _e:
         from nucleus._silent_except import silent_exc
-        silent_exc(_e, "time_context._from_time_core")
+        silent_exc(_e, "time_context._from_time_core", level="debug")
         return None
 
 
@@ -107,5 +107,5 @@ def annotate_llm_prompt(prompt: str, now: float | None = None,
             trace("[345时] ctx_time=%s source=%s", _info["text"], _info["source"])
         except Exception as _e:
             from nucleus._silent_except import silent_exc
-            silent_exc(_e, "time_context.annotate_llm_prompt trace")
+            silent_exc(_e, "time_context.annotate_llm_prompt trace", level="debug")
     return _line + prompt, _info

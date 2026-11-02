@@ -36,7 +36,7 @@ def _log(level: str, msg: str) -> None:
     try:
         getattr(_logger, level)(msg)
     except Exception as e:
-        silent_exc(e, where="nucleus.mnemosyne.IdentityKnowledgeManager::_log L37")
+        silent_exc(e, where="nucleus.mnemosyne.IdentityKnowledgeManager::_log L37", level="debug")
 
 
 # ==================== 关系代数 ====================
@@ -475,7 +475,7 @@ class IdentityKnowledgeManager:
                 import config as _cfg_k9
                 _fb_on = bool(getattr(_cfg_k9, "IDENTITY_RELATION_FALLBACK_COMPLETE", True))
             except Exception as _k9_e:
-                silent_exc(_k9_e, where="IdentityKnowledgeManager.describe 开关读取")
+                silent_exc(_k9_e, where="IdentityKnowledgeManager.describe 开关读取", level="debug")
                 _fb_on = True
             _rel_text = str(_rel or "").strip()
             if _fb_on and (_rel_text not in RELATION_WORDS):
@@ -586,7 +586,7 @@ class IdentityKnowledgeManager:
             if os.path.exists(self._save_path):
                 os.remove(self._save_path)
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.IdentityKnowledgeManager::reset L569")
+            silent_exc(e, where="nucleus.mnemosyne.IdentityKnowledgeManager::reset L569", level="debug")
 
 
 # ==================== 单例 ====================

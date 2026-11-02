@@ -33,7 +33,7 @@ def _framework_looks_running(snapshot: str, threshold_sec: int = 600) -> bool:
         if os.path.exists(snapshot) and (time.time() - os.path.getmtime(snapshot) < threshold_sec):
             return True
     except OSError as _e:
-        silent_exc(_e, where="rebuild_parquet_from_snapshot::_framework_looks_running")
+        silent_exc(_e, where="rebuild_parquet_from_snapshot::_framework_looks_running", level="debug")
     try:
         import psutil
         for _p in psutil.process_iter(["name", "memory_info"]):
@@ -43,9 +43,9 @@ def _framework_looks_running(snapshot: str, threshold_sec: int = 600) -> bool:
                     if _mi is not None and _mi.rss > 1_000_000_000:
                         return True
             except Exception as _pe:
-                silent_exc(_pe, where="rebuild_parquet_from_snapshot::process_iter")
+                silent_exc(_pe, where="rebuild_parquet_from_snapshot::process_iter", level="debug")
     except Exception as _e:
-        silent_exc(_e, where="rebuild_parquet_from_snapshot::_framework_looks_running psutil")
+        silent_exc(_e, where="rebuild_parquet_from_snapshot::_framework_looks_running psutil", level="debug")
     return False
 
 
@@ -58,7 +58,7 @@ def _load_nodes(snapshot: str):
         try:
             _nodes.append(PulseNode.from_dict(_nd))
         except Exception as _e:
-            silent_exc(_e, where="rebuild_parquet_from_snapshot::_load_nodes")
+            silent_exc(_e, where="rebuild_parquet_from_snapshot::_load_nodes", level="debug")
     return _nodes
 
 

@@ -169,7 +169,7 @@ def shutdown() -> None:
         from nucleus.semantic.AsyncEncodeQueue import shutdown_encode_queue
         shutdown_encode_queue()
     except Exception as e:
-        silent_exc(e, where="nucleus.semantic.SemanticKernelService::shutdown L163")
+        silent_exc(e, where="nucleus.semantic.SemanticKernelService::shutdown L163", level="debug")
     try:
         from nucleus.semantic.VectorStore import shutdown_vector_store
         shutdown_vector_store()

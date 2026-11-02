@@ -63,7 +63,7 @@ def _try_gpu_search(query_vector: list, candidate_vectors: list, top_k: int):
             _GPU_STATE["gpu_ms_avg"] * 0.7 + _ms * 0.3)
         return [(i, float(_scores[i])) for i in _ranked], _ms
     except Exception as e:
-        silent_exc(e, where="nucleus.fast_ops::_try_gpu_search L68")
+        silent_exc(e, where="nucleus.fast_ops::_try_gpu_search L68", level="debug")
         return None
 
 
@@ -112,7 +112,7 @@ def fast_vector_search(query_vector: list, candidate_vectors: list, top_k: int =
                 _gpu_ok = False
         except Exception as e:
             # 路由中枢不可用时，退回保守阈值（宁可不用 GPU，也不能乱用）
-            silent_exc(e, where="nucleus.fast_ops::fast_vector_search L112")
+            silent_exc(e, where="nucleus.fast_ops::fast_vector_search L112", level="debug")
             _gpu_ok = (_n >= int(_gpu_cfg("min_candidates", 2000))
                        and _dim >= int(_gpu_cfg("min_dim", 64)))
             _gpu_reason = "路由中枢不可用，退回保守阈值"
@@ -124,13 +124,13 @@ def fast_vector_search(query_vector: list, candidate_vectors: list, top_k: int =
         try:
             _res = _try_gpu_search(query_vector, candidate_vectors, top_k)
         except Exception as e:
-            silent_exc(e, where="nucleus.fast_ops::fast_vector_search L124")
+            silent_exc(e, where="nucleus.fast_ops::fast_vector_search L124", level="debug")
             _res = None
         if _res is not None:
             try:
                 _rows, _ms = _res
             except Exception as e:
-                silent_exc(e, where="nucleus.fast_ops::fast_vector_search L129")
+                silent_exc(e, where="nucleus.fast_ops::fast_vector_search L129", level="debug")
                 _rows = None
             if _rows is None:
                 _res = None
@@ -145,7 +145,7 @@ def fast_vector_search(query_vector: list, candidate_vectors: list, top_k: int =
                               slower_limit=int(_gpu_cfg(
                                   "auto_disable_after_slower", 5)))
             except Exception as e:
-                silent_exc(e, where="nucleus.fast_ops::fast_vector_search L143")
+                silent_exc(e, where="nucleus.fast_ops::fast_vector_search L143", level="debug")
 
             # 与 CPU 基线比较；尚无基线时先放行（下一次就有数了）
             _base = _GPU_STATE["cpu_ms_avg"]
@@ -162,7 +162,7 @@ def fast_vector_search(query_vector: list, candidate_vectors: list, top_k: int =
                             f"已自动停用，后续一律走 CPU。若确认显卡可用，"
                             f"可调 config.GPU_VECTOR_SEARCH.min_candidates")
                     except Exception as e:
-                        silent_exc(e, where="nucleus.fast_ops::fast_vector_search L160")
+                        silent_exc(e, where="nucleus.fast_ops::fast_vector_search L160", level="debug")
             else:
                 _GPU_STATE["slower_streak"] = 0
 
@@ -179,7 +179,7 @@ def fast_vector_search(query_vector: list, candidate_vectors: list, top_k: int =
                             f"{_base:.1f}ms）；分派理由: {_gpu_reason}；"
                             f"累计GPU调用{_GPU_STATE['gpu_calls']}次")
                     except Exception as e:
-                        silent_exc(e, where="nucleus.fast_ops::fast_vector_search L177")
+                        silent_exc(e, where="nucleus.fast_ops::fast_vector_search L177", level="debug")
             return _rows
         # GPU 失败 → 静默回落下方 CPU 路径
 
@@ -208,7 +208,7 @@ def fast_vector_search(query_vector: list, candidate_vectors: list, top_k: int =
             _faiss_on = bool(getattr(_m70_cfg, "ENABLE_FAISS_FAST_OPS", True))
             _faiss_min = int(getattr(_m70_cfg, "FAISS_FAST_OPS_MIN_CANDIDATES", 5000))
         except Exception as e:
-            silent_exc(e, where="nucleus.fast_ops::fast_vector_search L206")
+            silent_exc(e, where="nucleus.fast_ops::fast_vector_search L206", level="debug")
             _faiss_on = True
             _faiss_min = 5000
         if _faiss_on and _n >= _faiss_min and _n > 0 and _dim > 0:
@@ -239,7 +239,7 @@ def fast_vector_search(query_vector: list, candidate_vectors: list, top_k: int =
                         if _rows70:
                             return _rows70
             except Exception as e:
-                silent_exc(e, where="nucleus.fast_ops::fast_vector_search L235")
+                silent_exc(e, where="nucleus.fast_ops::fast_vector_search L235", level="debug")
 
         # ★v27：Cython top-k 一体化（首选）
         try:
@@ -249,7 +249,7 @@ def fast_vector_search(query_vector: list, candidate_vectors: list, top_k: int =
             if _r is not None:
                 return _r
         except Exception as e:
-            silent_exc(e, where="nucleus.fast_ops::fast_vector_search L245")
+            silent_exc(e, where="nucleus.fast_ops::fast_vector_search L245", level="debug")
         # ★v27：批量余弦 Cython（次选），再 Python 排序
         try:
             from nucleus.gpu._cosine_cpu_cy import batch_cosine_cy
@@ -258,7 +258,7 @@ def fast_vector_search(query_vector: list, candidate_vectors: list, top_k: int =
             _ranked = sorted(range(len(_scores)), key=lambda i: _scores[i], reverse=True)[:top_k]
             return [(i, _scores[i]) for i in _ranked]
         except Exception as e:
-            silent_exc(e, where="nucleus.fast_ops::fast_vector_search L254")
+            silent_exc(e, where="nucleus.fast_ops::fast_vector_search L254", level="debug")
         # 纯 Python 回退
         scores = [(i, cosine_sim(query_vector, vec)) for i, vec in enumerate(candidate_vectors)]
         scores.sort(key=lambda x: x[1], reverse=True)
@@ -272,7 +272,7 @@ def fast_vector_search(query_vector: list, candidate_vectors: list, top_k: int =
             from nucleus.device_router import record_actual
             record_actual("cpu", _est_cpu, _ms)
         except Exception as e:
-            silent_exc(e, where="nucleus.fast_ops::fast_vector_search L268")
+            silent_exc(e, where="nucleus.fast_ops::fast_vector_search L268", level="debug")
 
 
 # _m70_t4_faiss_fastops

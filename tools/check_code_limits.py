@@ -58,7 +58,7 @@ def _m55_unified_excludes() -> bool:
 
         return bool(getattr(_m55_cfg, "ENABLE_EXCLUDE_DIRS_UNIFIED", True))
     except Exception as e:
-        silent_exc(e, where="tools.check_code_limits::_m55_unified_excludes L59")
+        silent_exc(e, where="tools.check_code_limits::_m55_unified_excludes L59", level="debug")
         return True
 
 _M55_LEGACY_EXCLUDE_DIRS = {
@@ -107,7 +107,7 @@ def scan_file(path: str) -> FileReport | None:
         with open(path, encoding="utf-8") as fh:
             source = fh.read()
     except (OSError, UnicodeDecodeError) as e:
-        silent_exc(e, where="tools.check_code_limits::scan_file L107")
+        silent_exc(e, where="tools.check_code_limits::scan_file L107", level="debug")
         return None
 
     lines = source.splitlines()
@@ -117,7 +117,7 @@ def scan_file(path: str) -> FileReport | None:
         tree = ast.parse(source)
     except SyntaxError as e:
         # 语法错误由 ruff 负责，此处跳过（不污染行数统计）
-        silent_exc(e, where="tools.check_code_limits::scan_file L115")
+        silent_exc(e, where="tools.check_code_limits::scan_file L115", level="debug")
         return None
 
     funcs = _iter_functions(tree)

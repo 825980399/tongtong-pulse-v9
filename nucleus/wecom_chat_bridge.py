@@ -105,7 +105,7 @@ class WeComChatBridge(SilentLogMixin):
             try:
                 self._info_field.unregister_condition(self._reply_listener_id)
             except Exception as e:
-                silent_exc(e, where="nucleus.wecom_chat_bridge::stop L83")
+                silent_exc(e, where="nucleus.wecom_chat_bridge::stop L83", level="debug")
             self._reply_listener_id = None
         # ★LEAK-3修复: 先异步断开 WSClient 连接（disconnect 为异步方法，须 await），
         #   再停止事件循环，避免 WebSocket 连接泄漏（CLOSE_WAIT）
@@ -115,7 +115,7 @@ class WeComChatBridge(SilentLogMixin):
                     lambda: asyncio.ensure_future(self._async_shutdown())
                 )
             except Exception as e:
-                silent_exc(e, where="nucleus.wecom_chat_bridge::stop L93")
+                silent_exc(e, where="nucleus.wecom_chat_bridge::stop L93", level="debug")
 
     async def _async_shutdown(self):
         """异步关闭：断开 WSClient 连接并停止事件循环"""

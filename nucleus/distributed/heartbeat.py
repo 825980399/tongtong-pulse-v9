@@ -32,7 +32,7 @@ def _distributed_enabled() -> bool:
         import config
         return bool(getattr(config, "ENABLE_DISTRIBUTED", False))
     except Exception as e:
-        silent_exc(e, where="nucleus.distributed.heartbeat::_distributed_enabled L29")
+        silent_exc(e, where="nucleus.distributed.heartbeat::_distributed_enabled L29", level="debug")
         return False
 
 
@@ -41,7 +41,7 @@ def _heartbeat_interval() -> float:
         import config
         return float(getattr(config, "DISTRIBUTED_HEARTBEAT_INTERVAL", 30))
     except Exception as e:
-        silent_exc(e, where="nucleus.distributed.heartbeat::_heartbeat_interval L37")
+        silent_exc(e, where="nucleus.distributed.heartbeat::_heartbeat_interval L37", level="debug")
         return 30.0
 
 
@@ -50,7 +50,7 @@ def _health_threshold() -> float:
         import config
         return float(getattr(config, "DISTRIBUTED_HEALTH_THRESHOLD", 0.5))
     except Exception as e:
-        silent_exc(e, where="nucleus.distributed.heartbeat::_health_threshold L45")
+        silent_exc(e, where="nucleus.distributed.heartbeat::_health_threshold L45", level="debug")
         return 0.5
 
 

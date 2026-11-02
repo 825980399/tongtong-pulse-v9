@@ -195,7 +195,7 @@ def compress(path: str, level: int = 6, keep_plain: bool = False,
             res["msg"] += "，明文已删"
         except Exception as e:
             res["msg"] += f"（明文删除失败：{type(e).__name__}: {e}）"
-            silent_exc(e, where="tools/snapshot_cold_gzip::compress(rm_plain)")
+            silent_exc(e, where="tools/snapshot_cold_gzip::compress(rm_plain)", level="debug")
     else:
         res["msg"] += "，按 --keep-plain 保留明文"
     return res
@@ -233,7 +233,7 @@ def _silent_remove(p: str) -> None:
         if os.path.exists(p):
             os.remove(p)
     except Exception as e:
-        silent_exc(e, where="tools/snapshot_cold_gzip::_silent_remove")
+        silent_exc(e, where="tools/snapshot_cold_gzip::_silent_remove", level="debug")
 
 
 def main() -> int:

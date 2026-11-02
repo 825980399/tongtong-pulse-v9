@@ -42,7 +42,7 @@ def register_growth_need_detected_receiver(bus=None) -> str | None:
         _registered = True
         return _sid
     except Exception as e:  # 总线不可用等 → 静默降级，绝不扰动运行路径
-        silent_exc(e, where="nucleus.events.orphan_receivers.register_growth_need_detected_receiver")
+        silent_exc(e, where="nucleus.events.orphan_receivers.register_growth_need_detected_receiver", level="debug")
         return None
 
 
@@ -52,5 +52,5 @@ def is_growth_need_detected_registered(bus=None) -> bool:
         _bus = bus or get_event_bus()
         return _bus.subscription_count(_EVENT_TYPE) > 0
     except Exception as e:  # 总线不可用 → 视为未登记
-        silent_exc(e, where="nucleus.events.orphan_receivers.is_growth_need_detected_registered")
+        silent_exc(e, where="nucleus.events.orphan_receivers.is_growth_need_detected_registered", level="debug")
         return False

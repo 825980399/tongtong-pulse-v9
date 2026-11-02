@@ -45,7 +45,7 @@ def _m55_unified_excludes() -> bool:
 
         return bool(getattr(_m55_cfg, "ENABLE_EXCLUDE_DIRS_UNIFIED", True))
     except Exception as e:
-        silent_exc(e, where="tools.audit_utils::_m55_unified_excludes L46")
+        silent_exc(e, where="tools.audit_utils::_m55_unified_excludes L46", level="debug")
         return True
 
 _M55_LEGACY_COMMON_EXCLUDE_DIRS: frozenset[str] = frozenset({

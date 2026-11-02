@@ -87,7 +87,7 @@ def _load_json(path):
         silent_exc(_e, where="tools.m404_layer_health_check._load_json[open]", level="debug")
         return None
     except (ValueError, TypeError) as _e:
-        silent_exc(_e, where="tools.m404_layer_health_check._load_json[parse]")
+        silent_exc(_e, where="tools.m404_layer_health_check._load_json[parse]", level="debug")
         return None
 
 
@@ -118,7 +118,7 @@ def _count_lines(path):
                 if _line.strip():
                     _n += 1
     except OSError as _e:
-        silent_exc(_e, where="tools.m404_layer_health_check._count_lines")
+        silent_exc(_e, where="tools.m404_layer_health_check._count_lines", level="debug")
         return None
     return _n
 
@@ -173,9 +173,9 @@ def read_pairs_cap(root=None):
             if _cap is not None:
                 break
     except OSError as _e:
-        silent_exc(_e, where="tools.m404_layer_health_check.read_pairs_cap[open]")
+        silent_exc(_e, where="tools.m404_layer_health_check.read_pairs_cap[open]", level="debug")
     except (SyntaxError, ValueError) as _e:
-        silent_exc(_e, where="tools.m404_layer_health_check.read_pairs_cap[parse]")
+        silent_exc(_e, where="tools.m404_layer_health_check.read_pairs_cap[parse]", level="debug")
     if _cap is None:
         return DEFAULT_PAIRS_CAP, "default"
     return _cap, "config.py:%d" % _line
@@ -231,7 +231,7 @@ def _probe_pid_is_framework(pid):
         from nucleus.evolution.night_orchestration import _cmdline_is_framework_main
         return bool(_cmdline_is_framework_main(_cl))
     except Exception as _e:
-        silent_exc(_e, where="tools.m404_layer_health_check._probe_pid_is_framework")
+        silent_exc(_e, where="tools.m404_layer_health_check._probe_pid_is_framework", level="debug")
         return None
 
 
@@ -241,7 +241,7 @@ def _probe_framework_running(root):
         from nucleus.evolution.night_orchestration import is_framework_running
         return is_framework_running(root)
     except Exception as _e:
-        silent_exc(_e, where="tools.m404_layer_health_check._probe_framework_running")
+        silent_exc(_e, where="tools.m404_layer_health_check._probe_framework_running", level="debug")
         return None
 
 
@@ -432,7 +432,7 @@ def check_l4(ctx):
                 if _h and _h not in _hours:
                     _hours.append(_h)
     except OSError as _e:
-        silent_exc(_e, where="tools.m404_layer_health_check.check_l4[read]")
+        silent_exc(_e, where="tools.m404_layer_health_check.check_l4[read]", level="debug")
         return _bad("L4", "因果链", "台账读不出来（文件被占用？）", _ev)
     _ev.update({"summaries": _rows, "hours": sorted(_hours),
                 "incomplete": _incomplete,

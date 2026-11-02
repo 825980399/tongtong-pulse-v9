@@ -186,7 +186,7 @@ class PulseSemanticComprehension(BasePulseOrgan):
             if not getattr(_cfg, "ENABLE_DIALOG_SELECT_MODEL_DEDUP", True):
                 return True
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseSemanticComprehension::_claim_classify_once L184")
+            silent_exc(e, where="organs.brain.PulseSemanticComprehension::_claim_classify_once L184", level="debug")
             return True
         try:
             import time as _time
@@ -202,7 +202,7 @@ class PulseSemanticComprehension(BasePulseOrgan):
                 self._classify_claimed[correlation_id] = _now
             return True
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseSemanticComprehension::_claim_classify_once L199")
+            silent_exc(e, where="organs.brain.PulseSemanticComprehension::_claim_classify_once L199", level="debug")
             return True
 
     def _on_semantic_classify(self, payload: dict) -> dict[str, Any]:
@@ -441,7 +441,7 @@ class PulseSemanticComprehension(BasePulseOrgan):
                 try:
                     return max(0.0, min(1.0, float(v or 0.0)))
                 except Exception as e:
-                    silent_exc(e, where="organs.brain.PulseSemanticComprehension::_f L433")
+                    silent_exc(e, where="organs.brain.PulseSemanticComprehension::_f L433", level="debug")
                     return 0.0
 
             # 维度2：检索相关度（top1 相似度）

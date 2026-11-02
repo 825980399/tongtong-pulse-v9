@@ -92,7 +92,7 @@ def _cpu_cores() -> int:
             import os
             return int(os.cpu_count() or 1)
         except Exception as e:
-            silent_exc(e, where="nucleus.device_router::_cpu_cores L78")
+            silent_exc(e, where="nucleus.device_router::_cpu_cores L78", level="debug")
             return 1
 
 
@@ -114,7 +114,7 @@ def _measure_gpu(cap: dict[str, Any]) -> None:
             cap["vram_total_mb"] = int(
                 torch.cuda.get_device_properties(0).total_memory / 1024 ** 2)
         except Exception as e:
-            silent_exc(e, where="nucleus.device_router::_measure_gpu L99")
+            silent_exc(e, where="nucleus.device_router::_measure_gpu L99", level="debug")
 
         # ① PCIe 带宽：拷 8MB 过去再拷回来，取较好值
         try:
@@ -129,7 +129,7 @@ def _measure_gpu(cap: dict[str, Any]) -> None:
                 cap["pcie_bytes_per_s"] = (_n * 4) / (_ms / 1000.0)
             del _d, _src
         except Exception as e:
-            silent_exc(e, where="nucleus.device_router::_measure_gpu L114")
+            silent_exc(e, where="nucleus.device_router::_measure_gpu L114", level="debug")
 
         # ② GPU 算力：1024³ matmul（2·N³ FLOPs）
         try:
@@ -144,7 +144,7 @@ def _measure_gpu(cap: dict[str, Any]) -> None:
                 cap["gpu_flops"] = (2.0 * 1024 ** 3) / (_ms / 1000.0)
             del _a, _b, _c
         except Exception as e:
-            silent_exc(e, where="nucleus.device_router::_measure_gpu L129")
+            silent_exc(e, where="nucleus.device_router::_measure_gpu L129", level="debug")
 
         # ③ launch 固定开销：连续 20 次极小 kernel，取均值
         try:
@@ -157,9 +157,9 @@ def _measure_gpu(cap: dict[str, Any]) -> None:
             cap["gpu_launch_ms"] = ((time.perf_counter() - _t0) * 1000.0) / 20.0
             del _x, _y
         except Exception as e:
-            silent_exc(e, where="nucleus.device_router::_measure_gpu L142")
+            silent_exc(e, where="nucleus.device_router::_measure_gpu L142", level="debug")
     except Exception as _e:
-        silent_exc(_e, where="nucleus.device_router::_measure_gpu L144")
+        silent_exc(_e, where="nucleus.device_router::_measure_gpu L144", level="debug")
         cap["probe_error"] = f"{type(_e).__name__}: {str(_e)[:80]}"
 
 
@@ -177,7 +177,7 @@ def _measure_cpu(cap: dict[str, Any]) -> None:
             cap["cpu_flops"] = (2.0 * _n ** 3) / (_ms / 1000.0)
         del _a, _b, _c
     except Exception as e:
-        silent_exc(e, where="nucleus.device_router::_measure_cpu L161")
+        silent_exc(e, where="nucleus.device_router::_measure_cpu L161", level="debug")
 
 
 def get_capability(force: bool = False) -> dict[str, Any]:

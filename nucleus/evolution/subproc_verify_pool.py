@@ -69,10 +69,10 @@ def _install_readonly_guard() -> Callable[[], int]:
             if getattr(_app, "guard_write", None) is not None:
                 _app.guard_write = _guarded
         except Exception as _e349:  # noqa: BLE001 —— 补不到不算失败，拒绝计数在主口
-            silent_exc(_e349, where="subproc_verify_pool::line71")
+            silent_exc(_e349, where="subproc_verify_pool::line71", level="debug")
             pass
     except Exception as _e349:  # noqa: BLE001
-        silent_exc(_e349, where="subproc_verify_pool::line73")
+        silent_exc(_e349, where="subproc_verify_pool::line73", level="debug")
         pass
     return lambda: _denied[0]
 
@@ -97,7 +97,7 @@ def _exec_task(task: dict) -> dict:
                 ast.parse(str(_txt), filename="<patch:%d>" % _i)
                 _ok += 1
             except Exception as _e:  # noqa: BLE001
-                silent_exc(_e, where="subproc_verify_pool.py::line99")
+                silent_exc(_e, where="subproc_verify_pool.py::line99", level="debug")
                 _bad += 1
                 _errs.append("text%d:%s" % (_i, type(_e).__name__))
         for _p in (_pl.get("paths") or []):
@@ -106,7 +106,7 @@ def _exec_task(task: dict) -> dict:
                     ast.parse(f.read(), filename=str(_p))
                 _ok += 1
             except Exception as _e:  # noqa: BLE001
-                silent_exc(_e, where="subproc_verify_pool.py::line107")
+                silent_exc(_e, where="subproc_verify_pool.py::line107", level="debug")
                 _bad += 1
                 _errs.append("%s:%s" % (os.path.basename(str(_p)), type(_e).__name__))
         return {"ok": _bad == 0, "parsed": _ok, "failed": _bad, "errors": _errs[:5]}
@@ -117,7 +117,7 @@ def _exec_task(task: dict) -> dict:
         try:
             return {"ok": True, "result": _fn(**_pl.get("kwargs") or {})}
         except Exception as _e:  # noqa: BLE001
-            silent_exc(_e, where="subproc_verify_pool::line115")
+            silent_exc(_e, where="subproc_verify_pool::line115", level="debug")
             return {"ok": False, "error": "callable_exc:%s" % type(_e).__name__}
     return {"ok": False, "error": "unknown_kind:%s" % _kind}
 
@@ -134,7 +134,7 @@ def _resolve_callable(dotted: str):
         _f = getattr(_m, _fn, None)
         return _f if callable(_f) else None
     except Exception as _e349:  # noqa: BLE001
-        silent_exc(_e349, where="subproc_verify_pool::line131")
+        silent_exc(_e349, where="subproc_verify_pool::line131", level="debug")
         return None
 
 
@@ -148,13 +148,13 @@ def _worker_main(task_q, res_q, allow_info_field: bool = True) -> None:
 
             _info = get_info_field()
         except Exception as _e349:  # noqa: BLE001
-            silent_exc(_e349, where="subproc_verify_pool::line144")
+            silent_exc(_e349, where="subproc_verify_pool::line144", level="debug")
             _info = None
     while True:
         try:
             _task = task_q.get()
         except Exception as _e349:  # noqa: BLE001 —— 队列被关
-            silent_exc(_e349, where="subproc_verify_pool::line149")
+            silent_exc(_e349, where="subproc_verify_pool::line149", level="debug")
             break
         if _task is None:
             break
@@ -162,7 +162,7 @@ def _worker_main(task_q, res_q, allow_info_field: bool = True) -> None:
         try:
             _r = _exec_task(_task)
         except Exception as _e:  # noqa: BLE001
-            silent_exc(_e, where="subproc_verify_pool.py::line162")
+            silent_exc(_e, where="subproc_verify_pool.py::line162", level="debug")
             _r = {"ok": False, "error": "task_exc:%s" % type(_e).__name__}
         _msg = {
             "pulse": "verify_done",
@@ -186,13 +186,13 @@ def _worker_main(task_q, res_q, allow_info_field: bool = True) -> None:
                                 "elapsed_ms": _msg["elapsed_ms"]},
                 })
             except Exception as _e:  # noqa: BLE001
-                silent_exc(_e, where="subproc_verify_pool.py::line185")
+                silent_exc(_e, where="subproc_verify_pool.py::line185", level="debug")
                 _msg["info_field"] = False
                 _msg["info_field_error"] = type(_e).__name__
         try:
             res_q.put(_msg)
         except Exception as _e349:  # noqa: BLE001
-            silent_exc(_e349, where="subproc_verify_pool::line184")
+            silent_exc(_e349, where="subproc_verify_pool::line184", level="debug")
             break
 
 
@@ -232,7 +232,7 @@ def run_verify_tasks(tasks: list, max_workers: int = MAX_WORKERS_CAP,
         try:
             _m = _rq.get(timeout=0.2)
         except Exception as _e349:  # noqa: BLE001 —— Empty/超时都继续轮询
-            silent_exc(_e349, where="subproc_verify_pool::line223")
+            silent_exc(_e349, where="subproc_verify_pool::line223", level="debug")
             # 派下去的任务还没回：如果进程全死了就别再等
             if not any(_p.is_alive() for _p in _procs):
                 break
@@ -244,7 +244,7 @@ def run_verify_tasks(tasks: list, max_workers: int = MAX_WORKERS_CAP,
         try:
             _p.join(timeout=2.0)
         except Exception as _e349:  # noqa: BLE001
-            silent_exc(_e349, where="subproc_verify_pool::line234")
+            silent_exc(_e349, where="subproc_verify_pool::line234", level="debug")
             pass
     # ★349刀11 自抓自修：**"还没回" 与 "崩了" 是两件不同的事**（铁律166）。
     #   首版把 `is_alive()` 也算进 crashed ⇒ 慢任务被我们 terminate 后报成
@@ -258,7 +258,7 @@ def run_verify_tasks(tasks: list, max_workers: int = MAX_WORKERS_CAP,
             try:
                 _p.terminate()
             except Exception as _e349:  # noqa: BLE001
-                silent_exc(_e349, where="subproc_verify_pool::line247")
+                silent_exc(_e349, where="subproc_verify_pool::line247", level="debug")
                 pass
     _pulses = []
     _results = []
@@ -308,7 +308,7 @@ def _timed_exec(task: dict) -> tuple:
     try:
         _r = _exec_task(task)
     except Exception as _e:  # noqa: BLE001
-        silent_exc(_e, where="subproc_verify_pool.py::line306")
+        silent_exc(_e, where="subproc_verify_pool.py::line306", level="debug")
         _r = {"ok": False, "error": type(_e).__name__}
     return _r, round((time.time() - _t0) * 1000, 2)
 
@@ -327,7 +327,7 @@ def thread_pool_baseline(tasks: list, max_workers: int = MAX_WORKERS_CAP) -> dic
             try:
                 _r, _ms = _f.result(timeout=DEFAULT_TASK_TIMEOUT_SEC)
             except Exception as _e:  # noqa: BLE001
-                silent_exc(_e, where="subproc_verify_pool.py::line324")
+                silent_exc(_e, where="subproc_verify_pool.py::line324", level="debug")
                 _r, _ms = {"ok": False, "error": type(_e).__name__}, None
             if _ms is not None:
                 _ems.append(_ms)
@@ -411,5 +411,5 @@ def dump_report(report: dict, path: str) -> bool:
         with open(path, "r", encoding="utf-8") as f:
             return bool(json.load(f))
     except Exception as _e349:  # noqa: BLE001
-        silent_exc(_e349, where="subproc_verify_pool::line397")
+        silent_exc(_e349, where="subproc_verify_pool::line397", level="debug")
         return False

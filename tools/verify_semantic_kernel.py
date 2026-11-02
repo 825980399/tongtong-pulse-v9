@@ -443,7 +443,7 @@ def _current_threshold():
         import config as CFG
         return CFG.SEMANTIC_KERNEL_CONFIG.get("similarity_threshold")
     except Exception as e:
-        silent_exc(e, where="tools.verify_semantic_kernel::_current_threshold L443")
+        silent_exc(e, where="tools.verify_semantic_kernel::_current_threshold L443", level="debug")
         return "?"
 
 

@@ -42,7 +42,7 @@ def _distributed_enabled() -> bool:
         import config
         return bool(getattr(config, "ENABLE_DISTRIBUTED", False))
     except Exception as e:
-        silent_exc(e, where="nucleus.distributed.node_registry::_distributed_enabled L40")
+        silent_exc(e, where="nucleus.distributed.node_registry::_distributed_enabled L40", level="debug")
         return False
 
 
@@ -116,7 +116,7 @@ class NodeRegistry:
             try:
                 self.persist()
             except Exception as e:
-                silent_exc(e, where="nucleus.distributed.node_registry::_maybe_persist L113")
+                silent_exc(e, where="nucleus.distributed.node_registry::_maybe_persist L113", level="debug")
 
     def _setup_simulation(self) -> None:
         _now = time.time()
@@ -200,7 +200,7 @@ class NodeRegistry:
                 try:
                     _node["health_score"] = max(0.0, min(1.0, float(health_score)))
                 except (TypeError, ValueError) as e:
-                    silent_exc(e, where="nucleus.distributed.node_registry::update_node_status L197")
+                    silent_exc(e, where="nucleus.distributed.node_registry::update_node_status L197", level="debug")
             _node["last_heartbeat"] = time.time()
             self._maybe_persist()
             return True

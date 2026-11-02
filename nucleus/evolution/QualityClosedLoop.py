@@ -231,7 +231,7 @@ class ParamTuningClosedLoop:
             from config import RUNTIME_PARAMS
             return RUNTIME_PARAMS.get(param)
         except Exception as e:
-            silent_exc(e, where="nucleus.evolution.QualityClosedLoop::_current_param_value L212")
+            silent_exc(e, where="nucleus.evolution.QualityClosedLoop::_current_param_value L212", level="debug")
             return None
 
     def _try_adjust(self, window_bad: list[tuple[float, str]], now: float) -> bool:
@@ -402,7 +402,7 @@ def _make_enabled(attr_name: str) -> Callable[[], bool]:
             import config
             return bool(getattr(config, attr_name, False))
         except Exception as e:
-            silent_exc(e, where="nucleus.evolution.QualityClosedLoop::_enabled L372")
+            silent_exc(e, where="nucleus.evolution.QualityClosedLoop::_enabled L372", level="debug")
             return False
     return _enabled
 
@@ -428,7 +428,7 @@ def create_search_quality_loop(log_fn=None) -> ParamTuningClosedLoop:
             # ★323批刀4（P-05·1）：上界 30s（旧上界 300 形同虚设，实测已爬到 23）
             _n = min(COOLDOWN_CAP_SEARCH, int(math.ceil(cur * 1.3)))
         except Exception as e:
-            silent_exc(e, where="nucleus.evolution.QualityClosedLoop::_cooldown_up L396")
+            silent_exc(e, where="nucleus.evolution.QualityClosedLoop::_cooldown_up L396", level="debug")
             return None
         return _n if _n > cur else None
 
@@ -436,7 +436,7 @@ def create_search_quality_loop(log_fn=None) -> ParamTuningClosedLoop:
         try:
             _n = max(COOLDOWN_FLOOR_SEARCH, int(math.floor(cur * 0.8)))
         except Exception as e:
-            silent_exc(e, where="nucleus.evolution.QualityClosedLoop::_cooldown_down L403")
+            silent_exc(e, where="nucleus.evolution.QualityClosedLoop::_cooldown_down L403", level="debug")
             return None
         return _n if _n < cur else None
 
@@ -484,7 +484,7 @@ def create_digestion_quality_loop(log_fn=None) -> ParamTuningClosedLoop:
         try:
             _n = max(1, int(cur) - 1)
         except Exception as e:
-            silent_exc(e, where="nucleus.evolution.QualityClosedLoop::_min_len_down L448")
+            silent_exc(e, where="nucleus.evolution.QualityClosedLoop::_min_len_down L448", level="debug")
             return None
         return _n if _n < cur else None
 
@@ -492,7 +492,7 @@ def create_digestion_quality_loop(log_fn=None) -> ParamTuningClosedLoop:
         try:
             _n = round(max(0.1, float(cur) - 0.05), 3)
         except Exception as e:
-            silent_exc(e, where="nucleus.evolution.QualityClosedLoop::_purity_down L455")
+            silent_exc(e, where="nucleus.evolution.QualityClosedLoop::_purity_down L455", level="debug")
             return None
         return _n if _n < cur else None
 

@@ -66,7 +66,7 @@ def is_test_env() -> bool:
     try:
         return ("pytest" in sys.modules) or bool(os.environ.get("PYTEST_CURRENT_TEST"))
     except Exception as e:
-        silent_exc(e, where="nucleus._env::is_test_env")
+        silent_exc(e, where="nucleus._env::is_test_env", level="debug")
         return False
 
 
@@ -82,7 +82,7 @@ def is_production_data_path(path: str) -> bool:
         _r = _PROJECT_ROOT.replace("\\", "/").lower()
         return _p.startswith(_r + "/data/")
     except Exception as e:
-        silent_exc(e, where="nucleus._env::is_production_data_path")
+        silent_exc(e, where="nucleus._env::is_production_data_path", level="debug")
         return True
 
 

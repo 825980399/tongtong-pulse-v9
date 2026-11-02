@@ -52,7 +52,7 @@ def resolve_api_key(channel: dict | None) -> str:
     try:
         return str((_cfg().REMOTE_API_CONFIG or {}).get("api_key", "") or "")
     except Exception as exc:
-        silent_exc(exc, where="channel_client::call_channel")
+        silent_exc(exc, where="channel_client::call_channel", level="debug")
         _L.debug("[channel_client] 全局密钥兜底失败: %s", type(exc).__name__)
         return ""
 
@@ -66,7 +66,7 @@ def pick_channel(channel: dict | None = None, model: str | None = None,
     try:
         _pool = cfg.get_active_channels()
     except Exception as exc:
-        silent_exc(exc, where="channel_client::call_channel")
+        silent_exc(exc, where="channel_client::call_channel", level="debug")
         _L.warning("[channel_client] 取渠道池失败: %s: %s", type(exc).__name__, exc)
         return None
     if not _pool:
@@ -111,7 +111,7 @@ def call_channel(channel: dict, prompt: str, *, api_key: str | None = None,
         from nucleus.ssrf_guard import is_safe_http_url
         _allowed, _reason = is_safe_http_url(_url)
     except Exception as exc:
-        silent_exc(exc, where="channel_client::call_channel")
+        silent_exc(exc, where="channel_client::call_channel", level="debug")
         _out["error"] = "SSRF守卫异常(拒绝请求): %s" % type(exc).__name__
         _L.warning("[channel_client] %s", _out["error"])
         return _out
@@ -126,7 +126,7 @@ def call_channel(channel: dict, prompt: str, *, api_key: str | None = None,
         _adapter = get_adapter_registry().get(
             channel.get("adapter", "openai_compatible"))
     except Exception as exc:
-        silent_exc(exc, where="channel_client::call_channel")
+        silent_exc(exc, where="channel_client::call_channel", level="debug")
         _out["error"] = "适配器不可用: %s" % type(exc).__name__
         _L.warning("[channel_client] %s", _out["error"])
         return _out
@@ -139,15 +139,15 @@ def call_channel(channel: dict, prompt: str, *, api_key: str | None = None,
     try:
         _body = _adapter.build_request(_model, _messages, max_tokens=max_tokens)
     except Exception as _se:
-        silent_exc(_se, where="channel_client::call_channel")
+        silent_exc(_se, where="channel_client::call_channel", level="debug")
         try:
             _body = _adapter.build_request(_model, _messages)
         except Exception as exc:
-            silent_exc(exc, where="channel_client::call_channel")
+            silent_exc(exc, where="channel_client::call_channel", level="debug")
             _out["error"] = "build_request 失败: %s" % type(exc).__name__
             return _out
     except Exception as exc:
-        silent_exc(exc, where="channel_client::call_channel")
+        silent_exc(exc, where="channel_client::call_channel", level="debug")
         _out["error"] = "build_request 失败: %s" % type(exc).__name__
         return _out
 
@@ -166,7 +166,7 @@ def call_channel(channel: dict, prompt: str, *, api_key: str | None = None,
                                     caller="channel_client:" + _name,
                                     payload=_payload)
         except Exception as _m360be:
-            silent_exc(_m360be, where="channel_client::call_channel 埋点 begin")
+            silent_exc(_m360be, where="channel_client::call_channel 埋点 begin", level="debug")
         with urllib.request.urlopen(_req, timeout=timeout or 60) as _resp:
             _raw = _resp.read().decode("utf-8", errors="replace")
         _data = json.loads(_raw)
@@ -176,8 +176,8 @@ def call_channel(channel: dict, prompt: str, *, api_key: str | None = None,
                 from nucleus.llm.paid_api_trace import finish as _m360_finish
                 _m360_finish(_m360_rid, False, error="HTTP %s" % exc.code)
             except Exception as _m360fe:
-                silent_exc(_m360fe, where="channel_client::call_channel 埋点 finish")
-        silent_exc(exc, where="channel_client::call_channel")
+                silent_exc(_m360fe, where="channel_client::call_channel 埋点 finish", level="debug")
+        silent_exc(exc, where="channel_client::call_channel", level="debug")
         _out["error"] = "HTTP %s" % exc.code
         _report_health(_name, False, 0.0)
         return _out
@@ -187,8 +187,8 @@ def call_channel(channel: dict, prompt: str, *, api_key: str | None = None,
                 from nucleus.llm.paid_api_trace import finish as _m360_finish
                 _m360_finish(_m360_rid, False, error="%s" % type(exc).__name__)
             except Exception as _m360fe:
-                silent_exc(_m360fe, where="channel_client::call_channel 埋点 finish")
-        silent_exc(exc, where="channel_client::call_channel")
+                silent_exc(_m360fe, where="channel_client::call_channel 埋点 finish", level="debug")
+        silent_exc(exc, where="channel_client::call_channel", level="debug")
         _out["error"] = "%s: %s" % (type(exc).__name__, exc)
         _report_health(_name, False, 0.0)
         return _out
@@ -196,14 +196,14 @@ def call_channel(channel: dict, prompt: str, *, api_key: str | None = None,
     try:
         _text = _adapter.parse_response(_data)
     except Exception as exc:
-        silent_exc(exc, where="channel_client::call_channel")
+        silent_exc(exc, where="channel_client::call_channel", level="debug")
         _out["error"] = "parse_response 失败: %s" % type(exc).__name__
         _report_health(_name, False, 0.0)
         return _out
     try:
         _usage = _adapter.extract_usage(_data) or {}
     except Exception as _se:
-        silent_exc(_se, where="channel_client::call_channel")
+        silent_exc(_se, where="channel_client::call_channel", level="debug")
         _usage = {}
 
     _report_health(_name, bool(_text), 0.0)
@@ -212,7 +212,7 @@ def call_channel(channel: dict, prompt: str, *, api_key: str | None = None,
             from nucleus.llm.paid_api_trace import finish as _m360_finish
             _m360_finish(_m360_rid, bool(_text), _usage)
         except Exception as _m360fe:
-            silent_exc(_m360fe, where="channel_client::call_channel 埋点 finish")
+            silent_exc(_m360fe, where="channel_client::call_channel 埋点 finish", level="debug")
     if not _text:
         _out["error"] = "响应无有效内容"
         return _out
@@ -226,5 +226,5 @@ def _report_health(name: str, ok: bool, latency: float) -> None:
         from nucleus.llm.channel_health import get_channel_health
         get_channel_health().record(name, ok, latency)
     except Exception as exc:
-        silent_exc(exc, where="channel_client::call_channel")
+        silent_exc(exc, where="channel_client::call_channel", level="debug")
         _L.debug("[channel_client] 健康度上报跳过: %s", type(exc).__name__)

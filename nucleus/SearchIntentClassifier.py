@@ -146,7 +146,7 @@ class SearchIntentClassifier:
                         "strategy": INTENT_STRATEGY.get(_llm_intent, INTENT_STRATEGY["fact_query"]),
                     }
             except Exception as e:
-                silent_exc(e, where="nucleus.SearchIntentClassifier::classify L148")
+                silent_exc(e, where="nucleus.SearchIntentClassifier::classify L148", level="debug")
 
         # LLM 不可用或失败：降级用规则结果（置信度偏低）
         _rule_result["source"] = "rule"

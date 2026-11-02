@@ -203,7 +203,7 @@ def test_06_log_level_is_debug_not_warning(caplog):
     from nucleus._silent_except import silent_exc
 
     with caplog.at_level(logging.DEBUG, logger="pulse.silent_except"):
-        silent_exc(ValueError("探测用错误"), where="unittest.m424_k1" + TAG)
+        silent_exc(ValueError("探测用错误"), where="unittest.m424_k1" + TAG, level="debug")
 
     recs = [r for r in caplog.records if "静默异常可见化" in r.getMessage()]
     assert len(recs) == 1, f"应捕获 1 条，实际 {len(recs)}"
@@ -254,7 +254,7 @@ def test_07_fingerprint_baseline_shrunk_and_consistent():
             present.update(handler_identity(h) for h in extract_handlers(src, rel))
         except SyntaxError as _e:
             # ★本文件也被静默 except 门禁扫（tests/ 同受管），这里必须留痕
-            silent_exc(_e, where="tests.test_m424_k1._all_repo_py[424刀1]")
+            silent_exc(_e, where="tests.test_m424_k1._all_repo_py[424刀1]", level="debug")
             continue
     rot = known - present
     assert not rot, f"白名单腐化 {len(rot)} 条：{list(rot)[:3]}"

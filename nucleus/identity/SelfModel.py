@@ -65,7 +65,7 @@ class SelfModel(SilentLogMixin):
                 from nucleus.runtime.RuntimeTrajectory import get_runtime_trajectory
                 self.set_trajectory(get_runtime_trajectory())
         except Exception as e:
-            silent_exc(e, where="nucleus.identity.SelfModel::__init__ L62")
+            silent_exc(e, where="nucleus.identity.SelfModel::__init__ L62", level="debug")
 
     # ========== 依赖注入 ==========
 

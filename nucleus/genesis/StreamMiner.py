@@ -124,7 +124,7 @@ class StreamMiner:
             try:
                 self.load_patterns()
             except Exception as e:
-                silent_exc(e, where="nucleus.genesis.StreamMiner::__init__ auto_load")
+                silent_exc(e, where="nucleus.genesis.StreamMiner::__init__ auto_load", level="debug")
 
     @staticmethod
     def _m411_periodicity_keep() -> int:
@@ -405,7 +405,7 @@ class StreamMiner:
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_STREAMMINER_CONSUMPTION", False))
         except Exception as e:
-            silent_exc(e, where="nucleus.genesis.StreamMiner::_consume_enabled L360")
+            silent_exc(e, where="nucleus.genesis.StreamMiner::_consume_enabled L360", level="debug")
             return False
 
     def _consume_cfg(self, key: str, default: Any) -> Any:
@@ -448,7 +448,7 @@ class StreamMiner:
                 self._last_persist_at = time.time()
                 return True
             except Exception as e:
-                silent_exc(e, where="nucleus.genesis.StreamMiner::save_patterns L398")
+                silent_exc(e, where="nucleus.genesis.StreamMiner::save_patterns L398", level="debug")
                 return False
 
     def load_patterns(self, path: str | None = None) -> int:
@@ -673,7 +673,7 @@ class StreamMiner:
                 from nucleus.world_model import typed_prediction as _tp
                 self._m410_tp = _tp
             except Exception as e:
-                silent_exc(e, where="nucleus.genesis.StreamMiner::_m410_mod L1")
+                silent_exc(e, where="nucleus.genesis.StreamMiner::_m410_mod L1", level="debug")
                 return None
         return self._m410_tp
 
@@ -683,7 +683,7 @@ class StreamMiner:
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_M410_TYPED_TOLERANCE", True))
         except Exception as e:
-            silent_exc(e, where="nucleus.genesis.StreamMiner::_m410_on L1")
+            silent_exc(e, where="nucleus.genesis.StreamMiner::_m410_on L1", level="debug")
             return False
 
     def _m410_profile(self, now: float) -> dict:
@@ -695,7 +695,7 @@ class StreamMiner:
             from nucleus.world_model import periodic_profile as _pp
             _snap = _pp.load_profile(max_age_sec=3600.0, now=now)
         except Exception as e:
-            silent_exc(e, where="nucleus.genesis.StreamMiner::_m410_profile L1")
+            silent_exc(e, where="nucleus.genesis.StreamMiner::_m410_profile L1", level="debug")
             _snap = {}
         self._m410_prof = _snap
         self._m410_prof_at = now
@@ -725,7 +725,7 @@ class StreamMiner:
             from nucleus.world_model import periodic_profile as _pp
             _tol = _pp.tolerance_for(event_type, self._m410_profile(time.time()))
         except Exception as e:
-            silent_exc(e, where="nucleus.genesis.StreamMiner::_m410_plan L1")
+            silent_exc(e, where="nucleus.genesis.StreamMiner::_m410_plan L1", level="debug")
         if _tol is None:
             return (_pt, None, "no_profile")
         return (_pt, float(_tol), "typed")
@@ -1120,7 +1120,7 @@ def shutdown_stream_miner() -> None:
             try:
                 _sd()
             except Exception as e:
-                silent_exc(e, where="nucleus.genesis.StreamMiner::shutdown_stream_miner L633")
+                silent_exc(e, where="nucleus.genesis.StreamMiner::shutdown_stream_miner L633", level="debug")
 
 
 # ========== 自测 ==========

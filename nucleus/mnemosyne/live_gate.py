@@ -89,7 +89,7 @@ def _cfg(name: str, default: Any) -> Any:
         import config as _c
         return getattr(_c, name, default)
     except Exception as _e:                                   # noqa: BLE001
-        silent_exc(_e, where="live_gate::_cfg " + name)
+        silent_exc(_e, where="live_gate::_cfg " + name, level="debug")
         return default
 
 
@@ -129,7 +129,7 @@ def _load_state(state_path: str | None = None) -> dict:
             _module_logger.info("[350开闸] 台账不存在 path=%s（首次运行或刚被清理）", _p)
         return _blank_state(_p, "absent")
     except Exception as _e:                                   # noqa: BLE001
-        silent_exc(_e, where="live_gate::_load_state")
+        silent_exc(_e, where="live_gate::_load_state", level="debug")
         return _blank_state(_p, "unreadable")
 
 

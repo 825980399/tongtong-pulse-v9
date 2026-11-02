@@ -163,7 +163,7 @@ def list_backups(backup_root: str = BACKUP_ROOT) -> list:
                               "file_count": _j.get("file_count"),
                               "label": _j.get("label", "")})
             except (ValueError, OSError) as e:
-                silent_exc(e, where="tools.tmp_backup::list_backups L165")
+                silent_exc(e, where="tools.tmp_backup::list_backups L165", level="debug")
         _info["bytes"] = _dir_size(_d)
         _out.append(_info)
     return _out
@@ -176,7 +176,7 @@ def _dir_size(path: str) -> int:
             try:
                 _t += os.path.getsize(os.path.join(_dp, _f))
             except OSError as e:
-                silent_exc(e, where="tools.tmp_backup::_dir_size L178")
+                silent_exc(e, where="tools.tmp_backup::_dir_size L178", level="debug")
     return _t
 
 
@@ -208,7 +208,7 @@ def restore(snapshot_id: str, tmp_dir: str = TMP_DIR,
         try:
             _manifest = json.load(open(_mf, encoding="utf-8"))
         except (ValueError, OSError) as e:
-            silent_exc(e, where="tools.tmp_backup::restore L210")
+            silent_exc(e, where="tools.tmp_backup::restore L210", level="debug")
 
     os.makedirs(tmp_dir, exist_ok=True)
     _restored, _skipped, _errors = [], [], []

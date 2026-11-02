@@ -434,7 +434,7 @@ def _version_stamps() -> dict:
         return {"criteria_version": _s.get("criteria_version"),
                 "code_version": _s.get("code_version")}
     except Exception as _e:
-        silent_exc(_e, "audit_problem_pool._version_stamps")
+        silent_exc(_e, "audit_problem_pool._version_stamps", level="debug")
         return {"criteria_version": None, "code_version": None}
 
 
@@ -444,7 +444,7 @@ def _proc_gen() -> str:
         from nucleus.proc_gen import proc_gen_str
         return str(proc_gen_str() or "unknown")
     except Exception as _e:
-        silent_exc(_e, "audit_problem_pool._proc_gen")
+        silent_exc(_e, "audit_problem_pool._proc_gen", level="debug")
         return "unknown"
 
 
@@ -528,7 +528,7 @@ def _m350_desc_of(issue: dict) -> str:
         from nucleus.evolution.desc_norm import normalize_desc
         return str(normalize_desc(_raw)["desc"])[:400]
     except Exception as _e:                                      # noqa: BLE001
-        silent_exc(_e, where="audit_problem_pool::_m350_desc_of")
+        silent_exc(_e, where="audit_problem_pool::_m350_desc_of", level="debug")
         return _raw[:400]
 
 
@@ -1432,7 +1432,7 @@ def hub_entries(hub: Any = None) -> dict:
             )
             _hub = get_verification_learning_hub()
         except Exception as _e:
-            silent_exc(_e, "audit_problem_pool.hub_entries 取 hub")
+            silent_exc(_e, "audit_problem_pool.hub_entries 取 hub", level="debug")
             return {"state": "unavailable", "entries": {}, "source": "", "reason": "hub_import"}
     try:
         _d = _hub.get_m335_strategies()

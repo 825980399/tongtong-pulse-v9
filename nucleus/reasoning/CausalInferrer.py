@@ -225,7 +225,7 @@ class CausalInferrer:
             try:
                 self._log_fn(level, msg)
             except Exception as e:
-                silent_exc(e, where="nucleus.reasoning.CausalInferrer::_log L226")
+                silent_exc(e, where="nucleus.reasoning.CausalInferrer::_log L226", level="debug")
 
 
 # ========== 模块级共享实例 ==========

@@ -245,4 +245,4 @@ def shutdown_search_scheduler() -> None:
             try:
                 _sd()
             except Exception as e:
-                silent_exc(e, where="nucleus.search_scheduler::shutdown_search_scheduler L242")
+                silent_exc(e, where="nucleus.search_scheduler::shutdown_search_scheduler L242", level="debug")

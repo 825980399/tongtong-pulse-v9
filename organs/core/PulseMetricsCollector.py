@@ -116,7 +116,7 @@ def _m389_tm_safe_gen() -> str:
         from nucleus.proc_gen import proc_gen_str as _pgs
         _g = str(_pgs() or "")
     except Exception as _e:
-        silent_exc(_e, where="PulseMetricsCollector::_m389_tm_safe_gen")
+        silent_exc(_e, where="PulseMetricsCollector::_m389_tm_safe_gen", level="debug")
     if not _g:
         return "unknown"
     return "".join(_ch if (_ch.isalnum() or _ch in "-_") else "_"
@@ -167,7 +167,7 @@ def _m389_tm_prune_baselines(dir_path: str, keep: int | None = None) -> list:
                 silent_exc(_re, where="PulseMetricsCollector::_m389_tm_prune_baselines",
                            level="debug")
     except Exception as _e:
-        silent_exc(_e, where="PulseMetricsCollector::_m389_tm_prune_baselines")
+        silent_exc(_e, where="PulseMetricsCollector::_m389_tm_prune_baselines", level="debug")
     return _dropped
 
 
@@ -325,7 +325,7 @@ def _m421_patch_chain_read(root: str | None = None) -> dict:
         else:
             _errs["patch_history"] = "文件不存在"
     except Exception as _e1:
-        silent_exc(_e1, where="PulseMetricsCollector::_m421_patch_chain_read[history]")
+        silent_exc(_e1, where="PulseMetricsCollector::_m421_patch_chain_read[history]", level="debug")
         _errs["patch_history"] = type(_e1).__name__
 
     # --- 源3：pending_patches（队列深度）---
@@ -348,7 +348,7 @@ def _m421_patch_chain_read(root: str | None = None) -> dict:
         else:
             _errs["pending_patches"] = "文件不存在"
     except Exception as _e2:
-        silent_exc(_e2, where="PulseMetricsCollector::_m421_patch_chain_read[pending]")
+        silent_exc(_e2, where="PulseMetricsCollector::_m421_patch_chain_read[pending]", level="debug")
         _errs["pending_patches"] = type(_e2).__name__
 
     # --- 源4：verify_feedback_ledger（落账）---
@@ -375,7 +375,7 @@ def _m421_patch_chain_read(root: str | None = None) -> dict:
         else:
             _errs["verify_feedback_ledger"] = "文件不存在"
     except Exception as _e3:
-        silent_exc(_e3, where="PulseMetricsCollector::_m421_patch_chain_read[ledger]")
+        silent_exc(_e3, where="PulseMetricsCollector::_m421_patch_chain_read[ledger]", level="debug")
         _errs["verify_feedback_ledger"] = type(_e3).__name__
 
     # ★429刀2：合成 `last_gen_at` = history 与 pending 两源的 max
@@ -433,7 +433,7 @@ def _m421_patch_chain_snapshot(root: str | None = None,
         try:
             _d = _m421_patch_chain_read(root)
         except Exception as _e:
-            silent_exc(_e, where="PulseMetricsCollector::_m421_patch_chain_snapshot")
+            silent_exc(_e, where="PulseMetricsCollector::_m421_patch_chain_snapshot", level="debug")
             _d = {f: None for f in _M421_PC_FIELDS}
             _d["state"] = "unavailable"
             _d["errors"] = {"read": type(_e).__name__}
@@ -512,7 +512,7 @@ def _m418_arrow_loaded() -> bool:
     try:
         return "pyarrow" in sys.modules
     except Exception as e:
-        silent_exc(e, where="PulseMetricsCollector::_m418_arrow_loaded")
+        silent_exc(e, where="PulseMetricsCollector::_m418_arrow_loaded", level="debug")
         return False
 
 
@@ -529,7 +529,7 @@ def _m418_arrow_mb():
         import pyarrow as _pa
         return round(float(_pa.total_allocated_bytes()) / 1048576.0, 3)
     except Exception as e:
-        silent_exc(e, where="PulseMetricsCollector::_m418_arrow_mb")
+        silent_exc(e, where="PulseMetricsCollector::_m418_arrow_mb", level="debug")
         return None
 
 
@@ -547,7 +547,7 @@ def _m377_tm_ensure() -> dict:
         if _mode not in _M377_TM_MODES:
             # 未知取值 ⇒ 按 resident 处理并留痕（观测面不因拼错而静默退化成空采）
             silent_exc(ValueError(f"unknown M339_TRACEMALLOC_MODE={_mode!r}"),
-                       where="PulseMetricsCollector::_m377_tm_ensure mode")
+                       where="PulseMetricsCollector::_m377_tm_ensure mode", level="debug")
             _mode = "resident"
         _out["mode"] = _mode
         _out["tracing"] = bool(_tm.is_tracing())
@@ -557,7 +557,7 @@ def _m377_tm_ensure() -> dict:
             _out["tracing"] = True
             _out["started_by_us"] = True
     except Exception as _e:
-        silent_exc(_e, where="PulseMetricsCollector::_m377_tm_ensure")
+        silent_exc(_e, where="PulseMetricsCollector::_m377_tm_ensure", level="debug")
         _out["error"] = type(_e).__name__
     return _out
 
@@ -597,7 +597,7 @@ def _m377_tm_delta(snap, base_path: str, top_n: int = 20) -> tuple[list, str]:
                     _ln = int(getattr(_frame, "lineno", 0) or 0)
                 except (IndexError, AttributeError) as _fde:
                     # 帧不可读不该静默：否则增量行会静静退化成 "?:0"，看起来像"没定位"
-                    silent_exc(_fde, where="PulseMetricsCollector::_m377_tm_delta frame")
+                    silent_exc(_fde, where="PulseMetricsCollector::_m377_tm_delta frame", level="debug")
                     _fn, _ln = "?", 0
                 _rows.append({"file": _fn, "line": _ln,
                               "size_kb": round(_diff / 1024.0, 1),
@@ -605,7 +605,7 @@ def _m377_tm_delta(snap, base_path: str, top_n: int = 20) -> tuple[list, str]:
             if not _rows:
                 _state = "no_growth"
     except Exception as _e:
-        silent_exc(_e, where="PulseMetricsCollector::_m377_tm_delta compare")
+        silent_exc(_e, where="PulseMetricsCollector::_m377_tm_delta compare", level="debug")
         _state = "baseline_unreadable"
         _rows = []
     try:
@@ -619,7 +619,7 @@ def _m377_tm_delta(snap, base_path: str, top_n: int = 20) -> tuple[list, str]:
         snap.dump(_tmp)
         os.replace(_tmp, base_path)
     except Exception as _e:
-        silent_exc(_e, where="PulseMetricsCollector::_m377_tm_delta dump")
+        silent_exc(_e, where="PulseMetricsCollector::_m377_tm_delta dump", level="debug")
     return _rows, _state
 
 
@@ -637,7 +637,7 @@ def _m401_gc_callback(phase, info):
             _M401_GC_LAST["at"] = time.time()
             _M401_GC_LAST["gen"] = int((info or {}).get("generation", -1))
     except Exception as _e:
-        silent_exc(_e, where="PulseMetricsCollector::_m401_gc_callback")
+        silent_exc(_e, where="PulseMetricsCollector::_m401_gc_callback", level="debug")
 
 
 class PulseMetricsCollector(BasePulseOrgan):
@@ -906,7 +906,7 @@ class PulseMetricsCollector(BasePulseOrgan):
             from utils.causal_chain import tick_from_heartbeat
             tick_from_heartbeat()
         except Exception as _e:
-            silent_exc(_e, where="PulseMetricsCollector::_m403_causal_tick")
+            silent_exc(_e, where="PulseMetricsCollector::_m403_causal_tick", level="debug")
 
     def _m402_dead_letter_tick(self) -> None:
         """★402刀2：死信三列台账（墙钟自门 300s，落 data/monitor/dead_letters_*.jsonl）。
@@ -918,7 +918,7 @@ class PulseMetricsCollector(BasePulseOrgan):
             from utils.dead_letter_ledger import tick_from_heartbeat
             tick_from_heartbeat()
         except Exception as _e:
-            silent_exc(_e, where="PulseMetricsCollector::_m402_dead_letter_tick")
+            silent_exc(_e, where="PulseMetricsCollector::_m402_dead_letter_tick", level="debug")
 
     def _on_persona_switched(self, payload: dict) -> dict[str, Any]:
         """缓存当前用户身份"""
@@ -1016,7 +1016,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                 _tot += int(getattr(_mm, "rss", 0) or 0)
             _mb = round(_tot / (1024.0 * 1024.0), 1)
         except Exception as _e:
-            silent_exc(_e, where="PulseMetricsCollector::_m337_image_mb")
+            silent_exc(_e, where="PulseMetricsCollector::_m337_image_mb", level="debug")
         self._m337_image_cache = {"ts": _now, "mb": _mb}
         return _mb
 
@@ -1085,19 +1085,19 @@ class PulseMetricsCollector(BasePulseOrgan):
             from nucleus.proc_gen import proc_gen_str as _pgs
             _v["proc_gen"] = str(_pgs())
         except Exception as _e:
-            silent_exc(_e, where="PulseMetricsCollector::_m339_version_stamp proc_gen")
+            silent_exc(_e, where="PulseMetricsCollector::_m339_version_stamp proc_gen", level="debug")
         try:
             from nucleus.self_awareness import CallGraphAnalyzer as _cga
             _v["code_version"] = str(getattr(_cga, "CODE_VERSION", "unknown"))
         except Exception as _e:
-            silent_exc(_e, where="PulseMetricsCollector::_m339_version_stamp code_version")
+            silent_exc(_e, where="PulseMetricsCollector::_m339_version_stamp code_version", level="debug")
         try:
             import nucleus.self_inspector as _si
             _v["criteria_version"] = str(
                 getattr(_si, "_DEAD_CODE_CRITERIA_VERSION", "unknown"))
         except Exception as _e:
             silent_exc(_e,
-                       where="PulseMetricsCollector::_m339_version_stamp criteria_version")
+                       where="PulseMetricsCollector::_m339_version_stamp criteria_version", level="debug")
         return _v
 
     # ---- ★349刀5：堆归因四类（AST / PulseNode / image / other）----
@@ -1156,12 +1156,12 @@ class PulseMetricsCollector(BasePulseOrgan):
             try:
                 _sz = float(_r.get("size_kb") or 0.0)
             except (TypeError, ValueError) as _e:
-                silent_exc(_e, where="PulseMetricsCollector::_m349_heap_attribution size")
+                silent_exc(_e, where="PulseMetricsCollector::_m349_heap_attribution size", level="debug")
                 _sz = 0.0
             try:
                 _cnt = int(_r.get("count") or 0)
             except (TypeError, ValueError) as _e:
-                silent_exc(_e, where="PulseMetricsCollector::_m349_heap_attribution count")
+                silent_exc(_e, where="PulseMetricsCollector::_m349_heap_attribution count", level="debug")
                 _cnt = 0
             if _sz > 0:
                 _with_size += 1
@@ -1275,7 +1275,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                 _dir, trace=lambda _f, *a: self._log(LogLevel.INFO, _f % a))
         except Exception as _m344_gae:
             silent_exc(_m344_gae,
-                       where="PulseMetricsCollector._m339_memory_probe 344补 3 域过滤")
+                       where="PulseMetricsCollector._m339_memory_probe 344补 3 域过滤", level="debug")
         _tm_rows: list = []
         _tm_rows_state = "unavailable"
         _tm_delta_rows: list = []
@@ -1365,7 +1365,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                         if _bytes_err == 1:
                             silent_exc(
                                 _e,
-                                where="organs.core.PulseMetricsCollector::_m339_memory_probe")
+                                where="organs.core.PulseMetricsCollector::_m339_memory_probe", level="debug")
                     _scanned += 1
                     if not (_scanned & 0xFFFF) and (
                             time.perf_counter() - _t0) > _budget:
@@ -1383,7 +1383,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                 self._m418_gc_bytes_total = int(sum(_byt.values()))
                 self._m418_gc_bytes_err = int(_bytes_err)
         except Exception as _se:
-            silent_exc(_se, where="PulseMetricsCollector::_m339_memory_probe body")
+            silent_exc(_se, where="PulseMetricsCollector::_m339_memory_probe body", level="debug")
             # 铁律150：不静默——探针自身报错必须可见（否则"没产物"与"报错"长得一样）
             self._log(LogLevel.WARNING,
                       f"[339内存观测] 采样异常（mode={_mode}）: {type(_se).__name__}: {_se}")
@@ -1485,7 +1485,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                 json.dump(_payload, _f, ensure_ascii=False, indent=2)
             os.replace(_tmp, _p)
         except OSError as _we:
-            silent_exc(_we, where="PulseMetricsCollector::_m339_memory_probe write")
+            silent_exc(_we, where="PulseMetricsCollector::_m339_memory_probe write", level="debug")
             self._log(LogLevel.WARNING,
                       f"[339内存观测] 产物写盘失败 {_dir}：{type(_we).__name__}: {_we}")
             _out["reason"] = "write_failed"
@@ -1694,7 +1694,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                                             "RELEASE_HEARTBEAT_EVERY_BEATS", 10) or 10))
             except (TypeError, ValueError) as _e343:
                 # 配置值非法 ⇒ 退回默认节拍，但必须留痕（否则"为什么每 10 拍"不可追溯）
-                silent_exc(_e343, where="PulseMetricsCollector::_m343_release_heartbeat every")
+                silent_exc(_e343, where="PulseMetricsCollector::_m343_release_heartbeat every", level="debug")
                 _every = 10
         _last = getattr(self, "_m343_rel_beat", None)
         if _last is not None and (_bc - int(_last)) < _every:
@@ -1704,7 +1704,7 @@ class PulseMetricsCollector(BasePulseOrgan):
         try:
             from nucleus.mnemosyne import release_policy as _rp343
         except Exception as _impe:
-            silent_exc(_impe, where="PulseMetricsCollector::_m343_release_heartbeat import")
+            silent_exc(_impe, where="PulseMetricsCollector::_m343_release_heartbeat import", level="debug")
             self._log(LogLevel.WARNING,
                       f"[343释放] release_policy 不可用 ⇒ 本轮无档位行: {type(_impe).__name__}: {_impe}")
             return {"status": "unavailable", "why": "import_failed"}
@@ -1744,7 +1744,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                     heap_probe=self._m344_heap_probe,
                     where=f"[343心跳] beat={_bc} every={_every}")
         except Exception as _are:
-            silent_exc(_are, where="PulseMetricsCollector::_m343_release_heartbeat 344刀5")
+            silent_exc(_are, where="PulseMetricsCollector::_m343_release_heartbeat 344刀5", level="debug")
             _offer_src = "unavailable"
             self._log(LogLevel.WARNING,
                       f"[344释放] AST 释放面异常（不静默）: {type(_are).__name__}: {_are}")
@@ -1779,7 +1779,7 @@ class PulseMetricsCollector(BasePulseOrgan):
         try:
             from nucleus.cognitive import organ_inventory as _oi
         except Exception as _e:
-            silent_exc(_e, where="PulseMetricsCollector::_m366_inventory_tick import")
+            silent_exc(_e, where="PulseMetricsCollector::_m366_inventory_tick import", level="debug")
             return {"status": "import_failed", "why": type(_e).__name__}
         if not _oi._inventory_on():
             return {"status": "disabled", "switch": "ENABLE_ORGAN_INVENTORY_EXPORT"}
@@ -1893,7 +1893,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                 _every = max(1, int(getattr(
                     _cfg, "PAID_USAGE_HEARTBEAT_EVERY_BEATS", 10) or 10))
             except (TypeError, ValueError) as _e360:
-                silent_exc(_e360, where="PulseMetricsCollector::_m360_paid_usage_tick every")
+                silent_exc(_e360, where="PulseMetricsCollector::_m360_paid_usage_tick every", level="debug")
                 _every = 10
         _last = getattr(self, "_m360_paid_beat", None)
         if _last is not None and (_bc - int(_last)) < _every:
@@ -1906,7 +1906,7 @@ class PulseMetricsCollector(BasePulseOrgan):
             _u["status"] = "ok"
             return _u
         except Exception as _e360u:
-            silent_exc(_e360u, where="PulseMetricsCollector::_m360_paid_usage_tick")
+            silent_exc(_e360u, where="PulseMetricsCollector::_m360_paid_usage_tick", level="debug")
             self._log(LogLevel.WARNING,
                       f"[360付费占比] 心跳取数失败（不静默）: {type(_e360u).__name__}: {_e360u}")
             return {"status": "error", "why": type(_e360u).__name__}
@@ -1986,7 +1986,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                         heap_mb=_out.get("heap_mb"))
                 except Exception as _mpe:
                     silent_exc(_mpe,
-                               where="PulseMetricsCollector::_collect_memory_pressure 339刀4")
+                               where="PulseMetricsCollector::_collect_memory_pressure 339刀4", level="debug")
                     self._log(LogLevel.WARNING,
                               f"[339内存观测] 钩子外层异常（不静默）: {type(_mpe).__name__}: {_mpe}")
                     _out["self_probe"] = None
@@ -1995,7 +1995,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                     _out["resource_probe"] = self._m382_resource_probe()
                 except Exception as _rpe382:
                     silent_exc(_rpe382,
-                               where="PulseMetricsCollector::_collect_memory_pressure 382刀9")
+                               where="PulseMetricsCollector::_collect_memory_pressure 382刀9", level="debug")
                     _out["resource_probe"] = None
                 # ★411刀1：器官级内存归因（300s 节流；异常不影响采集主链）
                 try:
@@ -2003,14 +2003,14 @@ class PulseMetricsCollector(BasePulseOrgan):
                         _out.get("process_rss_mb"))
                 except Exception as _mbo411:
                     silent_exc(_mbo411,
-                               where="PulseMetricsCollector::_collect_memory_pressure 411刀1")
+                               where="PulseMetricsCollector::_collect_memory_pressure 411刀1", level="debug")
                     _out["memory_by_organ"] = None
                 # ★383刀1（T-383-tier分布）：tier 分布慢节奏落盘（节流 300s，失败不影响采集）。
                 try:
                     _out["tier_distribution_path"] = self._m383_dump_tier_distribution()
                 except Exception as _tde383:
                     silent_exc(_tde383,
-                               where="PulseMetricsCollector::_collect_memory_pressure 383刀1")
+                               where="PulseMetricsCollector::_collect_memory_pressure 383刀1", level="debug")
                     _out["tier_distribution_path"] = ""
                 # ★383刀3（T-383-写面观察）：只读采样（mtime 差分），节流 300s，不拦截任何写。
                 try:
@@ -2019,7 +2019,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                 except Exception as _wfe383:
                     silent_exc(
                         _wfe383,
-                        where="PulseMetricsCollector::_collect_memory_pressure 383刀3")
+                        where="PulseMetricsCollector::_collect_memory_pressure 383刀3", level="debug")
                     _out["write_face"] = None
                 # ★385刀2：DL3 影子账本（resource 域，每 N 拍一条）。
                 #   ★只在有结果时才写 `_out` —— 开关关时输出结构与改前逐字相同。
@@ -2037,7 +2037,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                 except Exception as _dece385:
                     silent_exc(
                         _dece385,
-                        where="PulseMetricsCollector::_collect_memory_pressure 385刀2")
+                        where="PulseMetricsCollector::_collect_memory_pressure 385刀2", level="debug")
 
                 # ★343刀4：G0-G4 释放决策树心跳（**生产侧触发**，V6 未达修复）。
                 #   放在 self_probe 之后：同为"挂已活采样链"，不新增调度点。
@@ -2046,7 +2046,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                         heap_mb=_out.get("heap_mb"))
                 except Exception as _rhe:
                     silent_exc(_rhe,
-                               where="PulseMetricsCollector::_collect_memory_pressure 343刀4")
+                               where="PulseMetricsCollector::_collect_memory_pressure 343刀4", level="debug")
                     self._log(LogLevel.WARNING,
                               f"[343释放] 心跳外层异常（不静默）: {type(_rhe).__name__}: {_rhe}")
                     _out["release_heartbeat"] = {"status": "error",
@@ -2057,7 +2057,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                     _out["paid_usage"] = self._m360_paid_usage_tick()
                 except Exception as _m360pe:
                     silent_exc(_m360pe,
-                               where="PulseMetricsCollector::_collect_memory_pressure 360刀0-3")
+                               where="PulseMetricsCollector::_collect_memory_pressure 360刀0-3", level="debug")
                     _out["paid_usage"] = {"status": "error",
                                           "why": type(_m360pe).__name__}
 
@@ -2066,7 +2066,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                     _out["m363_diag"] = self._m363_diag_tick()
                 except Exception as _m363de:
                     silent_exc(_m363de,
-                               where="PulseMetricsCollector::_collect_memory_pressure 363刀B3")
+                               where="PulseMetricsCollector::_collect_memory_pressure 363刀B3", level="debug")
                     _out["m363_diag"] = {"status": "error",
                                          "why": type(_m363de).__name__}
 
@@ -2075,7 +2075,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                     _out["m366_inventory"] = self._m366_inventory_tick()
                 except Exception as _m366ie:
                     silent_exc(_m366ie,
-                               where="PulseMetricsCollector::_collect_memory_pressure 366B4")
+                               where="PulseMetricsCollector::_collect_memory_pressure 366B4", level="debug")
                     _out["m366_inventory"] = {"status": "error",
                                               "why": type(_m366ie).__name__}
 
@@ -2084,7 +2084,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                     _out["m364_leaderboard"] = self._m364_leaderboard_tick()
                 except Exception as _m364le:
                     silent_exc(_m364le,
-                               where="PulseMetricsCollector::_collect_memory_pressure 364刀B4")
+                               where="PulseMetricsCollector::_collect_memory_pressure 364刀B4", level="debug")
                     _out["m364_leaderboard"] = {"status": "error",
                                                 "why": type(_m364le).__name__}
 
@@ -2119,7 +2119,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                     _out["gc_triggered"] = bool(_al.get("gc_triggered"))
                 except Exception as _ae:
                     silent_exc(_ae,
-                               where="PulseMetricsCollector::_collect_memory_pressure growth_alarm")
+                               where="PulseMetricsCollector::_collect_memory_pressure growth_alarm", level="debug")
                     # 取不到 ⇒ None（**不填 False**：False="没超线"，None="没测"）
                     _out["growth_alarm"] = None
                     # ★365刀B1：告警链都取不到 ⇒ GC 到底有没有发生**不可判定**，同为 None
@@ -2149,7 +2149,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                 _out["restart_armed"] = bool(_enable_restart and self._mem_restart_streak >= 2)
                 self._last_restart_armed = _out["restart_armed"]
         except Exception as _e:
-            silent_exc(_e, where="organs.core.PulseMetricsCollector::_collect_memory_pressure")
+            silent_exc(_e, where="organs.core.PulseMetricsCollector::_collect_memory_pressure", level="debug")
             _out["reason"] = f"采集异常: {type(_e).__name__}"
         return _out
 
@@ -2168,7 +2168,7 @@ class PulseMetricsCollector(BasePulseOrgan):
         try:
             from nucleus.observability import memory_by_organ as _mo411
         except Exception as _e:
-            silent_exc(_e, where="PulseMetricsCollector::_m411_memory_by_organ:import")
+            silent_exc(_e, where="PulseMetricsCollector::_m411_memory_by_organ:import", level="debug")
             return {"state": "unavailable", "reason": "import_failed"}
         if not _mo411.enabled():
             return {"state": "disabled", "reason": "ENABLE_M411_MEMORY_BY_ORGAN=False"}
@@ -2251,7 +2251,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                 _wake.set()
             return True
         except Exception as _e:
-            silent_exc(_e, where="PulseMetricsCollector::_m417_request")
+            silent_exc(_e, where="PulseMetricsCollector::_m417_request", level="debug")
             return False
 
     def _m417_ensure_worker(self) -> bool:
@@ -2274,7 +2274,7 @@ class PulseMetricsCollector(BasePulseOrgan):
         try:
             _th.start()
         except Exception as _e:
-            silent_exc(_e, where="PulseMetricsCollector::_m417_ensure_worker")
+            silent_exc(_e, where="PulseMetricsCollector::_m417_ensure_worker", level="debug")
             return False
         self._m417_thread = _th
         _m417_state["started"] += 1
@@ -2286,7 +2286,7 @@ class PulseMetricsCollector(BasePulseOrgan):
             from utils.thread_priority import set_current_thread_lowest
             _m417_state["priority"] = set_current_thread_lowest()
         except Exception as _e:
-            silent_exc(_e, where="PulseMetricsCollector::_m417_worker_loop[priority]")
+            silent_exc(_e, where="PulseMetricsCollector::_m417_worker_loop[priority]", level="debug")
             _m417_state["priority"] = "unavailable"
         while not stop_evt.is_set():
             try:
@@ -2385,7 +2385,7 @@ class PulseMetricsCollector(BasePulseOrgan):
         try:
             _th.join(timeout=max(0.0, float(timeout)))
         except Exception as _e:
-            silent_exc(_e, where="PulseMetricsCollector::m417_stop_async")
+            silent_exc(_e, where="PulseMetricsCollector::m417_stop_async", level="debug")
         return not _th.is_alive()
 
 
@@ -2410,7 +2410,7 @@ class PulseMetricsCollector(BasePulseOrgan):
             snapshot["code_version"] = str((_m348_vs or {}).get("code_version") or "unknown")
         except Exception as _m348_pg_e:
             silent_exc(_m348_pg_e,
-                       where="PulseMetricsCollector::_build_observability_snapshot proc_gen")
+                       where="PulseMetricsCollector::_build_observability_snapshot proc_gen", level="debug")
             snapshot["proc_gen"] = "unknown"
         snapshot["pid"] = os.getpid()  # _m348_d1_top_procgen
 
@@ -2489,7 +2489,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                     _m403_prev_ns, limit=50) if self.info_field else []
             except Exception as _e:
                 silent_exc(_e, where="PulseMetricsCollector::_build_observability_snapshot"
-                                     "[prev_beat_events]")
+                                     "[prev_beat_events]", level="debug")
                 _m403_evts = []
         _hb["prev_beat_events"] = list(_m403_evts)
         _hb["prev_beat_event_count"] = len(_m403_evts)
@@ -2551,7 +2551,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                 snapshot["world_model"] = {"enabled": False}
         except Exception as _e_wm:
             silent_exc(_e_wm, where="PulseMetricsCollector::_build_observability_snapshot"
-                                    "[world_model]")
+                                    "[world_model]", level="debug")
             snapshot["world_model"] = {"enabled": None, "error": type(_e_wm).__name__}
 
         # ★411刀2：效果验证新鲜度（任务书指定落在 world_model.effect_verify_stale）。
@@ -2569,7 +2569,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                 snapshot["world_model"] = _wm
         except Exception as _e_evh:
             silent_exc(_e_evh, where="PulseMetricsCollector::_build_observability_snapshot"
-                                     "[effect_verify]")
+                                     "[effect_verify]", level="debug")
             _wm = snapshot.get("world_model")
             if not isinstance(_wm, dict):
                 _wm = {}
@@ -2605,7 +2605,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                 snapshot["memory_by_organ"] = {"state": "not_sampled_yet"}
         except Exception as _e_mbo:
             silent_exc(_e_mbo, where="PulseMetricsCollector::_build_observability_snapshot"
-                                    "[memory_by_organ]")
+                                    "[memory_by_organ]", level="debug")
             snapshot["memory_by_organ_top3"] = []
             snapshot["memory_by_organ"] = {"state": None,
                                            "error": type(_e_mbo).__name__}
@@ -2619,7 +2619,7 @@ class PulseMetricsCollector(BasePulseOrgan):
             snapshot["patch_chain"] = _m421_patch_chain_snapshot()
         except Exception as _e_pc421:
             silent_exc(_e_pc421, where="PulseMetricsCollector::"
-                                       "_build_observability_snapshot[patch_chain]")
+                                       "_build_observability_snapshot[patch_chain]", level="debug")
             snapshot["patch_chain"] = {
                 **{f: None for f in _M421_PC_FIELDS},
                 "state": "unavailable",
@@ -2661,7 +2661,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                     "cold": _ps.get("cold_count", 0),
                 }
             except Exception as _e:
-                silent_exc(_e, where="PulseMetricsCollector::_m403_collect_warm[nodes]")
+                silent_exc(_e, where="PulseMetricsCollector::_m403_collect_warm[nodes]", level="debug")
                 _ns = {}
         _out["nodes"] = _ns
 
@@ -2758,7 +2758,7 @@ class PulseMetricsCollector(BasePulseOrgan):
         try:
             _new = _fn()
         except Exception as _e:
-            silent_exc(_e, where=f"PulseMetricsCollector::_m403_tier_block[{tier}]")
+            silent_exc(_e, where=f"PulseMetricsCollector::_m403_tier_block[{tier}]", level="debug")
             return dict(_cache)
         if tier == "warm":
             self._m403_warm_cache = dict(_new)
@@ -2778,7 +2778,7 @@ class PulseMetricsCollector(BasePulseOrgan):
         try:
             from utils import snapshot_tiers as _st
         except Exception as _e:
-            silent_exc(_e, where="PulseMetricsCollector::_m403_write_tiered[import]")
+            silent_exc(_e, where="PulseMetricsCollector::_m403_write_tiered[import]", level="debug")
             return safe_write_json(health_path, snapshot, backup=False)
 
         _now = time.time()
@@ -2883,7 +2883,7 @@ class PulseMetricsCollector(BasePulseOrgan):
             from nucleus.organ_assembler import get_last_validate_report
             _rep = get_last_validate_report()
         except Exception as _e:
-            silent_exc(_e, where="PulseMetricsCollector::_m396_declared_organ_count")
+            silent_exc(_e, where="PulseMetricsCollector::_m396_declared_organ_count", level="debug")
             return {"declared": None, "declared_source": "unavailable"}
         if not _rep:
             return {"declared": None, "declared_source": "not_scanned"}
@@ -2934,7 +2934,7 @@ class PulseMetricsCollector(BasePulseOrgan):
             import config as _c
             return bool(getattr(_c, "ENABLE_LINK_STATUS_ALIAS_MATCH", True))
         except Exception as e:
-            silent_exc(e, where="organs.core.PulseMetricsCollector::_m50_alias_match_on L547")
+            silent_exc(e, where="organs.core.PulseMetricsCollector::_m50_alias_match_on L547", level="debug")
             return True
 
     @classmethod
@@ -3049,7 +3049,7 @@ class PulseMetricsCollector(BasePulseOrgan):
             import config as _c
             return bool(getattr(_c, "ENABLE_M401_SNAPSHOT_EXTRA_FIELDS", True))
         except Exception as _e:
-            silent_exc(_e, where="PulseMetricsCollector::_m401_extra_fields_on")
+            silent_exc(_e, where="PulseMetricsCollector::_m401_extra_fields_on", level="debug")
             return True
 
     def _m401_memory_block(self, mp: dict[str, Any] | None) -> dict[str, Any]:
@@ -3100,7 +3100,7 @@ class PulseMetricsCollector(BasePulseOrgan):
             _gens = len(_st)
             self._m401_gc_probe_install(_gc)
         except Exception as _e:
-            silent_exc(_e, where="PulseMetricsCollector::_m401_gc_block")
+            silent_exc(_e, where="PulseMetricsCollector::_m401_gc_block", level="debug")
         _last = dict(_M401_GC_LAST)
         return {
             "count": _cnt,
@@ -3119,14 +3119,14 @@ class PulseMetricsCollector(BasePulseOrgan):
             gc_mod.callbacks.append(_m401_gc_callback)
             _M401_GC_PROBE_ON = True
         except Exception as _e:
-            silent_exc(_e, where="PulseMetricsCollector::_m401_gc_probe_install")
+            silent_exc(_e, where="PulseMetricsCollector::_m401_gc_probe_install", level="debug")
 
     def _m401_thread_count(self) -> int | None:
         """线程数（含本线程）。取不到 ⇒ None。"""
         try:
             return int(threading.active_count())
         except Exception as _e:
-            silent_exc(_e, where="PulseMetricsCollector::_m401_thread_count")
+            silent_exc(_e, where="PulseMetricsCollector::_m401_thread_count", level="debug")
             return None
 
     def _m401_handle_count(self) -> int | None:
@@ -3139,7 +3139,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                 return None
             return int(_fn())
         except Exception as _e:
-            silent_exc(_e, where="PulseMetricsCollector::_m401_handle_count")
+            silent_exc(_e, where="PulseMetricsCollector::_m401_handle_count", level="debug")
             return None
 
     def _count_snapshot_backups(self) -> int:
@@ -3154,7 +3154,7 @@ class PulseMetricsCollector(BasePulseOrgan):
                 count += 1
             return count
         except Exception as e:
-            silent_exc(e, where="organs.core.PulseMetricsCollector::_count_snapshot_backups L660")
+            silent_exc(e, where="organs.core.PulseMetricsCollector::_count_snapshot_backups L660", level="debug")
             return 0
 
     def _flatten_snapshot(self, snapshot: dict[str, Any]) -> dict[str, Any]:

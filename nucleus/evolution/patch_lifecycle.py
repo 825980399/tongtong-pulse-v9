@@ -179,7 +179,7 @@ def _read_effect_verified(patch_id: str) -> Any:
                 return _x.get("effect_verified")
         return None
     except Exception as e:
-        silent_exc(e, where="nucleus.evolution.patch_lifecycle::_read_effect_verified")
+        silent_exc(e, where="nucleus.evolution.patch_lifecycle::_read_effect_verified", level="debug")
         return None
 
 

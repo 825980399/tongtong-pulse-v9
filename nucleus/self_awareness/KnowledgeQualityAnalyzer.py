@@ -627,7 +627,7 @@ class KnowledgeQualityAnalyzer:
                 if _m:
                     return int(_m.group(1)), int(_m.group(2))
         except Exception as e:
-            silent_exc(e, where="nucleus.self_awareness.KnowledgeQualityAnalyzer::_current_version L627")
+            silent_exc(e, where="nucleus.self_awareness.KnowledgeQualityAnalyzer::_current_version L627", level="debug")
         return 9, 5
 
     @staticmethod
@@ -766,7 +766,7 @@ def _has_any_link(node: dict) -> bool:
         if int(node.get("cooccurrence_count") or 0) > 0:
             return True
     except Exception as e:
-        silent_exc(e, where="nucleus.self_awareness.KnowledgeQualityAnalyzer::_has_any_link L766")
+        silent_exc(e, where="nucleus.self_awareness.KnowledgeQualityAnalyzer::_has_any_link L766", level="debug")
     _sr = node.get("semantic_relations")
     return bool(isinstance(_sr, (list, tuple)) and len(_sr) > 0)
 

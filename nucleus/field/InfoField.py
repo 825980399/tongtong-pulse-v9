@@ -65,7 +65,7 @@ def _m379_bus_has_consumer(event_name: str) -> bool:
         from nucleus.events.EventBus import has_subscribers as _hs
         return bool(_hs(event_name))
     except Exception as _e:
-        silent_exc(_e, where="InfoField::_m379_bus_has_consumer")
+        silent_exc(_e, where="InfoField::_m379_bus_has_consumer", level="debug")
         return True
 
 
@@ -115,7 +115,7 @@ def _m353_classify_stuck(stack_lines) -> str:
             return "logging_io"
         return "handler_body"
     except Exception as e:
-        silent_exc(e, where="nucleus.field.InfoField::_m353_classify_stuck")
+        silent_exc(e, where="nucleus.field.InfoField::_m353_classify_stuck", level="debug")
         return "unknown"
 
 
@@ -545,7 +545,7 @@ class InfoField(SilentLogMixin):
             _l3_workers = int(_m418_cap("l3", _l3_workers))
             _adaptive_workers = int(_m418_cap("adaptive", _adaptive_workers))
         except Exception as _m418_e:
-            silent_exc(_m418_e, where="InfoField::_init_task_pool 418刀3②")
+            silent_exc(_m418_e, where="InfoField::_init_task_pool 418刀3②", level="debug")
         if _m418_raw != {"l0": _l0_workers, "l1": _l1_workers, "l2": _l2_workers,
                          "l3": _l3_workers, "adaptive": _adaptive_workers}:
             _module_logger.info(
@@ -1325,7 +1325,7 @@ class InfoField(SilentLogMixin):
             _lay = getattr(_cfg, "PULSE_LAYER", {}) or {}
             _sys_thr = float(_lay.get("high_load_memory_threshold", 85.0))
         except Exception as _e:
-            silent_exc(_e, where="nucleus.field.InfoField::_m169_mem_thresholds")
+            silent_exc(_e, where="nucleus.field.InfoField::_m169_mem_thresholds", level="debug")
             _sys_thr = 85.0
         return {
             "system_percent": _sys_thr,
@@ -1349,7 +1349,7 @@ class InfoField(SilentLogMixin):
                 float(_proc.memory_info().rss) / 1048576.0, 1)
             _out["ok"] = True
         except Exception as _e:
-            silent_exc(_e, where="nucleus.field.InfoField::_m169_memory_pressure")
+            silent_exc(_e, where="nucleus.field.InfoField::_m169_memory_pressure", level="debug")
             _out["reason"] = f"采集失败: {type(_e).__name__}"
             return _out
         _sys_b = _out["system_percent"] > _thr["system_percent"]
@@ -1367,7 +1367,7 @@ class InfoField(SilentLogMixin):
             _module_logger.warning(
                 "[C8] 硬件采样失败：本轮不据此判轻负载，保持当前等级={}".format(getattr(self, "_load_level", "?")))
         except Exception as _e:
-            silent_exc(_e, where="nucleus.field.InfoField::_m169_log_probe_failure")
+            silent_exc(_e, where="nucleus.field.InfoField::_m169_log_probe_failure", level="debug")
 
     def _check_high_load(self):
         """检查系统负载，高负载时自动降低各层线程池活跃度（增强版：持续时间保护 + 线程池延迟调整）"""
@@ -1401,7 +1401,7 @@ class InfoField(SilentLogMixin):
             except Exception as _probe_err:
                 # ★162批刀1·A1链A：psutil 已装但运行时异常（OSError/PermissionError 等）
                 # 须兜底捕获并标记，否则会穿出 _check_high_load 到 publish() 热路径。
-                silent_exc(_probe_err, where="nucleus.field.InfoField::_check_high_load psutil fallback")
+                silent_exc(_probe_err, where="nucleus.field.InfoField::_check_high_load psutil fallback", level="debug")
                 cpu_percent = 0
                 mem_percent = 0
             # ★第169批 C8：采集可用性判定 —— **刻意不改动既有 except 体**
@@ -1410,7 +1410,7 @@ class InfoField(SilentLogMixin):
                 import psutil as _ps_probe  # noqa: F401
                 self._m169_hw_probe_ok = True
             except Exception as _pe:
-                silent_exc(_pe, where="nucleus.field.InfoField::_check_high_load psutil probe")
+                silent_exc(_pe, where="nucleus.field.InfoField::_check_high_load psutil probe", level="debug")
                 self._m169_hw_probe_ok = False
         # 获取GPU使用率（使用正确的字段名）
         with self._hardware_lock:
@@ -1672,7 +1672,7 @@ class InfoField(SilentLogMixin):
             from config import FEATURE
             return bool(FEATURE.get("use_runtime_adaptive_tuning", False))
         except Exception as e:
-            silent_exc(e, where="nucleus.field.InfoField::_read_adaptive_tuning_flag L1361")
+            silent_exc(e, where="nucleus.field.InfoField::_read_adaptive_tuning_flag L1361", level="debug")
             return False
 
     @staticmethod
@@ -2022,7 +2022,7 @@ class InfoField(SilentLogMixin):
         try:
             _depth = pool._work_queue.qsize()   # SimpleQueue/Queue 均支持 qsize
         except Exception as e:
-            silent_exc(e, where="nucleus.field.InfoField::_admit_layer_task L1710")
+            silent_exc(e, where="nucleus.field.InfoField::_admit_layer_task L1710", level="debug")
             return True                      # 拿不到深度就放行，不做无谓拦截
         # ★P2-31 水位预警：达上限 80% 即告警，不必等队列满（提前发现积压趋势）
         _warn_ratio = float(PULSE_LAYER.get("l2_warn_ratio", 0.8)) if layer == _PULSE_LAYER_L2 else 0.8
@@ -2131,7 +2131,7 @@ class InfoField(SilentLogMixin):
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_L3_QUEUE_LIMIT_ORDER_FIX", True))
         except Exception as e:
-            silent_exc(e, where="nucleus.field.InfoField::_m33_queue_limit_order_fix_on L1818")
+            silent_exc(e, where="nucleus.field.InfoField::_m33_queue_limit_order_fix_on L1818", level="debug")
             return True
 
     @staticmethod
@@ -2141,7 +2141,7 @@ class InfoField(SilentLogMixin):
             from config import FEATURE
             return bool(FEATURE.get("l3_dynamic_scaling_enabled", True))
         except Exception as e:
-            silent_exc(e, where="nucleus.field.InfoField::_read_l3_dynamic_scaling_flag L1827")
+            silent_exc(e, where="nucleus.field.InfoField::_read_l3_dynamic_scaling_flag L1827", level="debug")
             return True
 
     def _auto_scale_l3_by_depth(self):
@@ -2180,7 +2180,7 @@ class InfoField(SilentLogMixin):
         try:
             _depth = _pool._work_queue.qsize()
         except Exception as e:
-            silent_exc(e, where="nucleus.field.InfoField::_auto_scale_l3_by_depth L1865")
+            silent_exc(e, where="nucleus.field.InfoField::_auto_scale_l3_by_depth L1865", level="debug")
             return
         _limit = self._layer_queue_limits.get(_PULSE_LAYER_L3, 0)
         if _limit <= 0:
@@ -2374,7 +2374,7 @@ class InfoField(SilentLogMixin):
             from config import FEATURE as _FEATURE
             return bool(_FEATURE.get("enable_concurrency_count_recovery", True))
         except Exception as e:
-            silent_exc(e, where="nucleus.field.InfoField::_concurrency_recovery_enabled L2058")
+            silent_exc(e, where="nucleus.field.InfoField::_concurrency_recovery_enabled L2058", level="debug")
             return True
 
     def _track_layer_inflight(self, layer_tag: str, organ_name: str, delta: int):
@@ -2554,7 +2554,7 @@ class InfoField(SilentLogMixin):
             _window = float(getattr(_cfg, "DUPLICATE_EVENT_WINDOW_SEC", 5.0) or 5.0)
             _depth = int(getattr(_cfg, "DUPLICATE_EVENT_STACK_DEPTH", 12) or 12)
         except Exception as e:
-            silent_exc(e, where="nucleus.field.InfoField::_dup_trace_check L2244")
+            silent_exc(e, where="nucleus.field.InfoField::_dup_trace_check L2244", level="debug")
             return
         try:
             _payload = pulse.get("payload", {}) or {}
@@ -2656,7 +2656,7 @@ class InfoField(SilentLogMixin):
                     if len(_out) >= limit:
                         break
         except Exception as _e:
-            silent_exc(_e, where="InfoField.recent_event_names")
+            silent_exc(_e, where="InfoField.recent_event_names", level="debug")
             return []
         return _out
 
@@ -2733,7 +2733,7 @@ class InfoField(SilentLogMixin):
                         return True
             return False
         except Exception as _e:
-            silent_exc(_e, where="InfoField::has_real_consumer")
+            silent_exc(_e, where="InfoField::has_real_consumer", level="debug")
             return True
 
     def get_stats(self) -> dict[str, Any]:
@@ -3189,7 +3189,7 @@ def get_system_load_level(default: str = "") -> str:
             return _dflt
         _raw = str(_f.get_load_level() or "").strip()
     except Exception as e:
-        silent_exc(e, where="nucleus.field.InfoField::get_system_load_level L323")
+        silent_exc(e, where="nucleus.field.InfoField::get_system_load_level L323", level="debug")
         return _dflt
     if not _raw:
         return _dflt
@@ -3240,7 +3240,7 @@ def audit_and_dump_dead_events() -> dict[str, Any] | None:
         )
         return _result
     except Exception as e:
-        silent_exc(e, where="nucleus.field.InfoField.audit_and_dump_dead_events")
+        silent_exc(e, where="nucleus.field.InfoField.audit_and_dump_dead_events", level="debug")
         return None
 
 
@@ -3257,7 +3257,7 @@ def register_infofield_dead_events_schedule(scheduler=None):
     try:
         from nucleus.self_awareness.DailyScheduler import get_daily_scheduler
     except Exception as e:
-        silent_exc(e, where="nucleus.field.InfoField.register_infofield_dead_events_schedule")
+        silent_exc(e, where="nucleus.field.InfoField.register_infofield_dead_events_schedule", level="debug")
         return None
     _sched = scheduler or get_daily_scheduler()
     if _sched is None:
@@ -3268,7 +3268,7 @@ def register_infofield_dead_events_schedule(scheduler=None):
         else:
             _sched._infofield_dead_attached = True
     except Exception as e:
-        silent_exc(e, where="nucleus.field.InfoField.register_infofield_dead_events_schedule")
+        silent_exc(e, where="nucleus.field.InfoField.register_infofield_dead_events_schedule", level="debug")
         return _sched
     return _sched
 

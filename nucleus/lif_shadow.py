@@ -136,7 +136,7 @@ class LIFShadow:
                     _f.write(json.dumps(_rec, ensure_ascii=False))
                     _f.write("\n")
         except Exception as e:
-            silent_exc(e)
+            silent_exc(e, level="debug")
             return 0
         self._last_flush_ts = time.time()  # 212批·刀3：成功落盘后重置时间兜底锚点
         return len(batch)

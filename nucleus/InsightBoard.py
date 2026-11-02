@@ -288,7 +288,7 @@ class InsightBoard:
                 _out.append(round(max(0.05, min(1.0, 1.0 - _max_sim)), 4))
             return _out
         except Exception as e:
-            silent_exc(e, where="nucleus.InsightBoard::_m301_batch_novelty")
+            silent_exc(e, where="nucleus.InsightBoard::_m301_batch_novelty", level="debug")
             return None
 
     def _m290_score_entry(self, entry: dict[str, Any], novelty: float | None = None) -> float:
@@ -373,7 +373,7 @@ class InsightBoard:
                 )
                 _sent += 1
         except Exception as e:
-            silent_exc(e, where="nucleus.InsightBoard::_m301_dispatch_hypotheses")
+            silent_exc(e, where="nucleus.InsightBoard::_m301_dispatch_hypotheses", level="debug")
         return _sent
 
     def dump_to_disk(self, path: str) -> int:
@@ -415,7 +415,7 @@ class InsightBoard:
             if _sent:
                 _payload["hypotheses_dispatched"] = _sent
         except Exception as e:
-            silent_exc(e, where="nucleus.InsightBoard::dump_to_disk dispatch")
+            silent_exc(e, where="nucleus.InsightBoard::dump_to_disk dispatch", level="debug")
         return len(_kept)
 
 
@@ -449,4 +449,4 @@ def shutdown_insight_board() -> None:
             try:
                 _sd()
             except Exception as e:
-                silent_exc(e, where="nucleus.InsightBoard::shutdown_insight_board L289")
+                silent_exc(e, where="nucleus.InsightBoard::shutdown_insight_board L289", level="debug")

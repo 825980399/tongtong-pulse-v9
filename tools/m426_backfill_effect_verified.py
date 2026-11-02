@@ -87,7 +87,7 @@ def classify(patch: dict) -> tuple[str, str]:
         _bi = int(_b)
         _ai = int(_a)
     except (TypeError, ValueError) as _e:
-        silent_exc(_e, where="m426_backfill_effect_verified.classify")
+        silent_exc(_e, where="m426_backfill_effect_verified.classify", level="debug")
         _bi = _ai = -1
     if _rv == "true_pass" and _bi >= 1 and _ai == 0:
         return "fill_true", f"reprobe: 复现成功 {_bi} 处 → 修复后 0 处（true_pass）"

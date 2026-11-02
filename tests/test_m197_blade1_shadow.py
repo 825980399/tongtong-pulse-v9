@@ -25,7 +25,7 @@ class TestM197Blade1Shadow(unittest.TestCase):
             try:
                 _orig(level, msg, *a, **k)
             except Exception as _exc:
-                silent_exc(_exc, where="tests/test_m197_blade1_shadow.py:_cap")
+                silent_exc(_exc, where="tests/test_m197_blade1_shadow.py:_cap", level="debug")
 
         _lung._log = _cap
         _lung._build_channel_messages("测试 prompt")

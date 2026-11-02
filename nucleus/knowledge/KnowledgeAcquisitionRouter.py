@@ -191,7 +191,7 @@ class KnowledgeAcquisitionRouter:
             if not getattr(_cfg, 'ENABLE_KNOWLEDGE_ACQUISITION_ROUTER', False):
                 return None
         except Exception as e:
-            silent_exc(e, where="nucleus.knowledge.KnowledgeAcquisitionRouter::acquire L184")
+            silent_exc(e, where="nucleus.knowledge.KnowledgeAcquisitionRouter::acquire L184", level="debug")
             return None
 
         # ★第164批 刀A4：浏览器熔断——连续失败达阈值则退避，本次返回 None
@@ -290,7 +290,7 @@ class KnowledgeAcquisitionRouter:
                     return False
             return True
         except Exception as e:
-            silent_exc(e, where="nucleus.knowledge.KnowledgeAcquisitionRouter::_channel_enabled L273")
+            silent_exc(e, where="nucleus.knowledge.KnowledgeAcquisitionRouter::_channel_enabled L273", level="debug")
             return False
 
     def _try_channel(self, channel: str, query: str,
@@ -334,7 +334,7 @@ class KnowledgeAcquisitionRouter:
         try:
             import jieba.posseg as _posseg
         except Exception as e:
-            silent_exc(e, where="nucleus.knowledge.KnowledgeAcquisitionRouter::_extract_core_entity L316")
+            silent_exc(e, where="nucleus.knowledge.KnowledgeAcquisitionRouter::_extract_core_entity L316", level="debug")
             return None
         try:
             _q = str(query or "").strip()
@@ -346,7 +346,7 @@ class KnowledgeAcquisitionRouter:
             ]
             return _cands[0] if _cands else None
         except Exception as e:
-            silent_exc(e, where="nucleus.knowledge.KnowledgeAcquisitionRouter::_extract_core_entity L327")
+            silent_exc(e, where="nucleus.knowledge.KnowledgeAcquisitionRouter::_extract_core_entity L327", level="debug")
             return None
 
     def _try_wiki(self, query: str) -> dict[str, Any] | None:
@@ -462,7 +462,7 @@ class KnowledgeAcquisitionRouter:
         try:
             self._log_fn(f"[策略路由器] {msg}")
         except Exception as e:
-            silent_exc(e, where="nucleus.knowledge.KnowledgeAcquisitionRouter::_log L385")
+            silent_exc(e, where="nucleus.knowledge.KnowledgeAcquisitionRouter::_log L385", level="debug")
 
 
 # ========== 模块级单例（供双腿/控制器接线使用） ==========

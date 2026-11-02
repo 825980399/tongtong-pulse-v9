@@ -299,7 +299,7 @@ def _m312_rel_file(file_path, root: str) -> str:
         from nucleus.data.path_utils import safe_relpath
         _rel = str(safe_relpath(_p, root)).replace("\\", "/")
     except Exception as e:
-        silent_exc(e, where="nucleus.exploration_audit::_m312_rel_file")
+        silent_exc(e, where="nucleus.exploration_audit::_m312_rel_file", level="debug")
         _rel = _p
     # safe_relpath 跨盘时**降级为绝对路径** ⇒ 这里再兜一层，绝不让盘符落盘；
     # 越过项目根的 ../ 链同样不收（它暴露的是根的绝对深度，一样是外泄面）。
@@ -346,7 +346,7 @@ def _m338_version_stamps():
 
         _out["code_version"] = getattr(CallGraphAnalyzer, "CODE_VERSION", None)
     except Exception as _e:
-        silent_exc(_e, where="exploration_audit::_m338_version_stamps code_version")
+        silent_exc(_e, where="exploration_audit::_m338_version_stamps code_version", level="debug")
     try:
         # ★铁律156：_DEAD_CODE_CRITERIA_VERSION 是**类属性**，必须按类取；
         #   按模块名 import 会 ImportError ⇒ 退成 unknown ⇒ 门槛永远关。
@@ -355,7 +355,7 @@ def _m338_version_stamps():
         _out["criteria_version"] = getattr(
             SelfInspector, "_DEAD_CODE_CRITERIA_VERSION", None)
     except Exception as _e:
-        silent_exc(_e, where="exploration_audit::_m338_version_stamps criteria_version")
+        silent_exc(_e, where="exploration_audit::_m338_version_stamps criteria_version", level="debug")
     if _out["code_version"] or _out["criteria_version"]:
         _out["source"] = "class_attr"
     return _out
@@ -709,7 +709,7 @@ def record_audit_findings_to_hub(report: dict[str, Any], max_entries: int = 15) 
             get_verification_learning_hub,
         )
     except Exception as e:
-        silent_exc(e, where="nucleus.exploration_audit::record_audit_findings_to_hub L316")
+        silent_exc(e, where="nucleus.exploration_audit::record_audit_findings_to_hub L316", level="debug")
         return 0
     _hub = get_verification_learning_hub()
     _issues = report.get("issues", []) or []
@@ -749,5 +749,5 @@ def record_audit_findings_to_hub(report: dict[str, Any], max_entries: int = 15) 
             )
             _recorded += 1
         except Exception as e:
-            silent_exc(e, where="nucleus.exploration_audit::record_audit_findings_to_hub L354")
+            silent_exc(e, where="nucleus.exploration_audit::record_audit_findings_to_hub L354", level="debug")
     return _recorded

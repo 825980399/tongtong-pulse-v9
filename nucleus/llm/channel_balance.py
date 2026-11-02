@@ -51,7 +51,7 @@ def _manager():
         from nucleus.llm.ChannelConcurrency import get_channel_concurrency_manager
         return get_channel_concurrency_manager()
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.channel_balance::_manager")
+        silent_exc(e, where="nucleus.llm.channel_balance::_manager", level="debug")
         return None
 
 
@@ -62,7 +62,7 @@ def _paid_channels() -> frozenset:
         _p = getattr(_cfg, "PAID_CHANNELS", frozenset())
         return frozenset(str(x) for x in _p)
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.channel_balance::_paid_channels")
+        silent_exc(e, where="nucleus.llm.channel_balance::_paid_channels", level="debug")
         return frozenset()
 
 
@@ -78,14 +78,14 @@ def channel_has_room(manager: Any, name: str) -> bool:
     try:
         _sem = manager.get_semaphore(name)
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.channel_balance::channel_has_room.get_semaphore")
+        silent_exc(e, where="nucleus.llm.channel_balance::channel_has_room.get_semaphore", level="debug")
         return True
     if _sem is None:
         return True
     try:
         return int(_sem.available()) > 0
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.channel_balance::channel_has_room.available")
+        silent_exc(e, where="nucleus.llm.channel_balance::channel_has_room.available", level="debug")
         return True
 
 
@@ -136,12 +136,12 @@ def log_pick(caller: str, rows: list, index: int, reason: str) -> None:
     try:
         _picked = str((rows[index] or {}).get("channel") or "")
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.channel_balance::log_pick")
+        silent_exc(e, where="nucleus.llm.channel_balance::log_pick", level="debug")
     try:
         _LOG.info("%s caller=%s picked=%s reason=%s",
                   BALANCE_TAG, caller or "-", _picked or "-", reason)
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.channel_balance::log_pick.emit")
+        silent_exc(e, where="nucleus.llm.channel_balance::log_pick.emit", level="debug")
 
 
 
@@ -176,7 +176,7 @@ def _lb_switch_on() -> bool:
         import config as _cfg
         return bool(getattr(_cfg, "ENABLE_CHANNEL_LOAD_BALANCE", True))
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.channel_balance::_lb_switch_on")
+        silent_exc(e, where="nucleus.llm.channel_balance::_lb_switch_on", level="debug")
         return True
 
 
@@ -186,7 +186,7 @@ def _lb_quota():
         from nucleus.llm.ChannelQuotaMonitor import get_channel_quota_monitor
         return get_channel_quota_monitor()
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.channel_balance::_lb_quota")
+        silent_exc(e, where="nucleus.llm.channel_balance::_lb_quota", level="debug")
         return None
 
 
@@ -205,7 +205,7 @@ def _lb_paid_default() -> frozenset:
         if _n:
             return frozenset(str(x) for x in _n)
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.channel_balance::_lb_paid_default")
+        silent_exc(e, where="nucleus.llm.channel_balance::_lb_paid_default", level="debug")
     return _paid_channels()
 
 
@@ -227,7 +227,7 @@ def channel_headroom(manager, name: str) -> tuple:
     try:
         _sem = manager.get_semaphore(name)
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.channel_balance::channel_headroom.get")
+        silent_exc(e, where="nucleus.llm.channel_balance::channel_headroom.get", level="debug")
         return 1.0, "sem_error"
     if _sem is None:
         return 1.0, "unregistered"
@@ -235,7 +235,7 @@ def channel_headroom(manager, name: str) -> tuple:
         _max = int(_sem.max_value)
         _avail = int(_sem.available())
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.channel_balance::channel_headroom.read")
+        silent_exc(e, where="nucleus.llm.channel_balance::channel_headroom.read", level="debug")
         return 1.0, "read_error"
     if _max <= 0:
         return 0.0, "max_zero"
@@ -258,18 +258,18 @@ def channel_load(name: str, health=None, quota=None, manager=None) -> dict:
         try:
             _succ = max(0.0, min(1.0, float(health.success_rate(name))))
         except Exception as e:
-            silent_exc(e, where="nucleus.llm.channel_balance::channel_load.success")
+            silent_exc(e, where="nucleus.llm.channel_balance::channel_load.success", level="debug")
             _why.append("health:error")
         try:
             _n = int(health.consecutive_fails(name) or 0)
             if _n:
                 _why.append("fails:%d" % _n)
         except Exception as e:
-            silent_exc(e, where="nucleus.llm.channel_balance::channel_load.fails")
+            silent_exc(e, where="nucleus.llm.channel_balance::channel_load.fails", level="debug")
         try:
             _broken = not bool(health.is_available(name))
         except Exception as e:
-            silent_exc(e, where="nucleus.llm.channel_balance::channel_load.avail")
+            silent_exc(e, where="nucleus.llm.channel_balance::channel_load.avail", level="debug")
 
     _rem = 1.0
     if quota is not None and name:
@@ -280,7 +280,7 @@ def channel_load(name: str, health=None, quota=None, manager=None) -> dict:
                 if _rem < 1.0:
                     _why.append("quota:%.2f" % _rem)
         except Exception as e:
-            silent_exc(e, where="nucleus.llm.channel_balance::channel_load.quota")
+            silent_exc(e, where="nucleus.llm.channel_balance::channel_load.quota", level="debug")
             _why.append("quota:error")
 
     _score = (LB_W0 * _hr) + (LB_W1 * _succ) + (LB_W2 * _rem)
@@ -295,7 +295,7 @@ def channel_load(name: str, health=None, quota=None, manager=None) -> dict:
             if _sem is not None:
                 _in_use, _maxc = int(_sem.in_use), int(_sem.max_value)
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.channel_balance::channel_load.in_use")
+        silent_exc(e, where="nucleus.llm.channel_balance::channel_load.in_use", level="debug")
 
     return {"name": name, "headroom": round(_hr, 4), "success": round(_succ, 4),
             "remaining": round(_rem, 4), "broken": _broken, "available": _hr > 0,
@@ -325,12 +325,12 @@ def order_by_load(candidates: list, health=None, quota=None, manager=None,
     try:
         _mgr = manager if manager is not None else _manager()
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.channel_balance::order_by_load.manager")
+        silent_exc(e, where="nucleus.llm.channel_balance::order_by_load.manager", level="debug")
         _mgr = None
     try:
         _q = quota if quota is not None else _lb_quota()
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.channel_balance::order_by_load.quota")
+        silent_exc(e, where="nucleus.llm.channel_balance::order_by_load.quota", level="debug")
         _q = None
     _paid = _lb_paid_default() if paid_names is None else frozenset(
         str(x) for x in (paid_names or ()))
@@ -376,7 +376,7 @@ def log_order(caller: str, info: dict) -> None:
                   LB_TAG, caller or "-", ">".join(info.get("order") or []) or "-",
                   ">".join(info.get("paid_tail") or []) or "-", " ".join(_parts))
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.channel_balance::log_order")
+        silent_exc(e, where="nucleus.llm.channel_balance::log_order", level="debug")
 
 
 def pick_and_acquire(rows: list, caller: str = "", paid_channels=None):
@@ -398,7 +398,7 @@ def pick_and_acquire(rows: list, caller: str = "", paid_channels=None):
         _idx, _why = pick_balanced_index(rows, caller=caller,
                                         paid_channels=paid_channels)
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.channel_balance::pick_and_acquire")
+        silent_exc(e, where="nucleus.llm.channel_balance::pick_and_acquire", level="debug")
         return None, None
     if not rows or _idx >= len(rows):
         return None, None
@@ -418,6 +418,6 @@ def pick_and_acquire(rows: list, caller: str = "", paid_channels=None):
         try:
             _mgr.release(_name)
         except Exception as e:
-            silent_exc(e, where="nucleus.llm.channel_balance::pick_and_acquire.release")
+            silent_exc(e, where="nucleus.llm.channel_balance::pick_and_acquire.release", level="debug")
 
     return rows[_idx], _release

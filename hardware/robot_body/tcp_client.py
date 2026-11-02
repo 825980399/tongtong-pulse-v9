@@ -100,7 +100,7 @@ class RobotBodyTCP:
             try:
                 self._sock.close()
             except Exception as e:
-                silent_exc(e, where="tcp_client.disconnect:97")
+                silent_exc(e, where="tcp_client.disconnect:97", level="debug")
             self._sock = None
         print("[RobotBodyTCP] 已断开连接")
 
@@ -167,7 +167,7 @@ class RobotBodyTCP:
                         self._recv_buffer.extend(data)
                         self._parse_packets()
             except TimeoutError as e:
-                silent_exc(e, where="hardware/robot_body/tcp_client.py:166")
+                silent_exc(e, where="hardware/robot_body/tcp_client.py:166", level="debug")
                 continue
             except Exception as e:
                 if self._running:
@@ -256,7 +256,7 @@ class RobotBodyTCP:
             try:
                 self._sock.close()
             except Exception as e:
-                silent_exc(e, where="tcp_client._attempt_reconnect:252")
+                silent_exc(e, where="tcp_client._attempt_reconnect:252", level="debug")
             self._sock = None
 
         time.sleep(2)

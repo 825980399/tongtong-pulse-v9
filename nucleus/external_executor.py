@@ -41,13 +41,13 @@ try:
     from utils.thread_budget import cap as _m426_cap
     _OP_WORKERS = int(_m426_cap("ext_op", _OP_WORKERS))
 except Exception as _m426_e:
-    silent_exc(_m426_e, where="external_executor::_OP_WORKERS 426刀1")
+    silent_exc(_m426_e, where="external_executor::_OP_WORKERS 426刀1", level="debug")
 _OP_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=_OP_WORKERS, thread_name_prefix="ExtOp")
 try:
     from utils.thread_budget import register as _m426_reg
     _m426_reg("ext_op", _OP_EXECUTOR)
 except Exception as _m426_e:
-    silent_exc(_m426_e, where="external_executor::register 426刀1")
+    silent_exc(_m426_e, where="external_executor::register 426刀1", level="debug")
 
 # ★A1【P0】外层调度线程池：替代 _try_execute_next 中每任务新建 threading.Thread 的无界创建。
 #   设计说明（为何不用星轨字面的 _OP_EXECUTOR.submit(self._execute_operation)）：
@@ -63,7 +63,7 @@ try:
     from utils.thread_budget import cap as _m426_cap2
     _SCHED_WORKERS = int(_m426_cap2("ext_sched", 2))
 except Exception as _m426_e:
-    silent_exc(_m426_e, where="external_executor::_SCHED_WORKERS 426刀1")
+    silent_exc(_m426_e, where="external_executor::_SCHED_WORKERS 426刀1", level="debug")
     _SCHED_WORKERS = 2
 _SCHEDULER_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
     max_workers=_SCHED_WORKERS, thread_name_prefix="ExtOpSched")
@@ -71,7 +71,7 @@ try:
     from utils.thread_budget import register as _m426_reg2
     _m426_reg2("ext_sched", _SCHEDULER_EXECUTOR)
 except Exception as _m426_e:
-    silent_exc(_m426_e, where="external_executor::register_sched 426刀1")
+    silent_exc(_m426_e, where="external_executor::register_sched 426刀1", level="debug")
 
 
 class OperationPriority(Enum):
@@ -537,7 +537,7 @@ def shutdown_global_executor():
         if _OP_EXECUTOR is not None:
             _OP_EXECUTOR.shutdown(wait=False, cancel_futures=True)
     except Exception as e:
-        silent_exc(e, where="nucleus.external_executor::shutdown_global_executor L514")
+        silent_exc(e, where="nucleus.external_executor::shutdown_global_executor L514", level="debug")
     finally:
         _OP_EXECUTOR = None
     # ★A1【P0】：外层调度池一并关闭并复位
@@ -545,7 +545,7 @@ def shutdown_global_executor():
         if _SCHEDULER_EXECUTOR is not None:
             _SCHEDULER_EXECUTOR.shutdown(wait=False, cancel_futures=True)
     except Exception as e:
-        silent_exc(e, where="nucleus.external_executor::shutdown_global_executor L522")
+        silent_exc(e, where="nucleus.external_executor::shutdown_global_executor L522", level="debug")
     finally:
         _SCHEDULER_EXECUTOR = None
     _inst = _external_executor

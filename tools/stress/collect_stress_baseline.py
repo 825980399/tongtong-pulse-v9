@@ -127,7 +127,7 @@ def _framework_pid_info() -> dict:
     try:
         import psutil
     except Exception as _e:
-        silent_exc(_e, where="tools.stress.collect_stress_baseline.pid.import")
+        silent_exc(_e, where="tools.stress.collect_stress_baseline.pid.import", level="debug")
         _out["note"] = "psutil 不可用: %s" % type(_e).__name__
         return _out
     _out["available"] = True
@@ -138,7 +138,7 @@ def _framework_pid_info() -> dict:
                 _out["match"].append({"pid": _p.info.get("pid"),
                                       "create_time": _p.info.get("create_time")})
     except Exception as _e:
-        silent_exc(_e, where="tools.stress.collect_stress_baseline.pid.iter")
+        silent_exc(_e, where="tools.stress.collect_stress_baseline.pid.iter", level="debug")
         _out["note"] = "process_iter 失败: %s" % type(_e).__name__
     if _out["match"]:
         _best = sorted(_out["match"], key=lambda x: x.get("create_time") or 0)[-1]
@@ -156,7 +156,7 @@ def _rel(path: str) -> str:
     try:
         return os.path.relpath(path, _ROOT).replace("\\", "/")
     except Exception as _e:
-        silent_exc(_e, where="tools.stress.collect_stress_baseline.rel")
+        silent_exc(_e, where="tools.stress.collect_stress_baseline.rel", level="debug")
         return path
 
 
@@ -179,19 +179,19 @@ def l_loop_triple_proof(_pid: dict) -> dict:
                 try:
                     _r = json.loads(_ln)
                 except ValueError as _e:
-                    silent_exc(_e, where="tools.stress.collect_stress_baseline.triple.row")
+                    silent_exc(_e, where="tools.stress.collect_stress_baseline.triple.row", level="debug")
                     continue
                 _s = str(_r.get("source_process") or "")
                 if _s == "live" or (not _s and str(_r.get("source") or "") == "live"):
                     _live += 1
     except Exception as _e:
-        silent_exc(_e, where="tools.stress.collect_stress_baseline.triple.read")
+        silent_exc(_e, where="tools.stress.collect_stress_baseline.triple.read", level="debug")
     _pairs: list = []
     try:
         _pairs = sorted(glob.glob(os.path.join(_ROOT, "**", "pulse_pairs_*.jsonl"),
                                   recursive=True))[-8:]
     except Exception as _e:
-        silent_exc(_e, where="tools.stress.collect_stress_baseline.triple.pairs")
+        silent_exc(_e, where="tools.stress.collect_stress_baseline.triple.pairs", level="debug")
     return {
         "p1_tag_live_rows": _live,
         "p2_pid": _pid.get("pid"),
@@ -235,7 +235,7 @@ def _m325_latest_per_item(root: str) -> dict:
     try:
         _j = json.load(open(_best, encoding="utf-8"))
     except Exception as _e:
-        silent_exc(_e, where="collect_stress_baseline::_m325_latest_per_item")
+        silent_exc(_e, where="collect_stress_baseline::_m325_latest_per_item", level="debug")
         return {}
     _dist = _j.get("evidence_tier_dist")
     return {"path": _rel(_best), "count": _j.get("count"),
@@ -252,7 +252,7 @@ def _m325_intake_summary(root: str) -> dict:
     try:
         _j = json.load(open(_p, encoding="utf-8"))
     except Exception as _e:
-        silent_exc(_e, where="collect_stress_baseline::_m325_intake_summary")
+        silent_exc(_e, where="collect_stress_baseline::_m325_intake_summary", level="debug")
         return {}
     if not isinstance(_j, dict):
         return {}
@@ -476,7 +476,7 @@ def source_provenance() -> dict:
                 try:
                     _r = json.loads(_line)
                 except ValueError as _e:
-                    silent_exc(_e, where="tools.stress.collect_stress_baseline.provenance")
+                    silent_exc(_e, where="tools.stress.collect_stress_baseline.provenance", level="debug")
                     continue
                 _s = str(_r.get("source_process") or "")
                 if not _s:

@@ -136,7 +136,7 @@ class ReasoningExperience(SilentLogMixin):
             import config as _c
             return bool(getattr(_c, "EXPERIENCE_PROMPT_GUARD", True))
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.ReasoningExperience::_m407_prompt_guard_on")
+            silent_exc(e, where="nucleus.mnemosyne.ReasoningExperience::_m407_prompt_guard_on", level="debug")
             return True
 
     def _m407_polluted_gate_on(self) -> bool:
@@ -145,7 +145,7 @@ class ReasoningExperience(SilentLogMixin):
             import config as _c
             return bool(getattr(_c, "ENABLE_EXPERIENCE_CLEANUP_FILTER", True))
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.ReasoningExperience::_m407_polluted_gate_on")
+            silent_exc(e, where="nucleus.mnemosyne.ReasoningExperience::_m407_polluted_gate_on", level="debug")
             return True
 
     # ========== 持久化 ==========
@@ -515,4 +515,4 @@ def shutdown_reasoning_experience() -> None:
             try:
                 _sd()
             except Exception as e:
-                silent_exc(e, where="nucleus.mnemosyne.ReasoningExperience::shutdown_reasoning_experience L358")
+                silent_exc(e, where="nucleus.mnemosyne.ReasoningExperience::shutdown_reasoning_experience L358", level="debug")

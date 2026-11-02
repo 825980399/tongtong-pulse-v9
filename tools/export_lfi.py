@@ -57,7 +57,7 @@ def _build_adjacency(organs: list[dict]) -> tuple[dict[str, set[str]], dict[str,
             _out.setdefault(_em, set()).add(_sub)
             _in.setdefault(_sub, set()).add(_em)
     except Exception as _e:
-        silent_exc(_e, where="export_lfi.event_graph")
+        silent_exc(_e, where="export_lfi.event_graph", level="debug")
     return _out, _in
 
 
@@ -76,7 +76,7 @@ def _static_health_map() -> dict[str, Any]:
         for _r in _rows:
             _h[_r.get("organ")] = _r.get("score")
     except Exception as _e:
-        silent_exc(_e, where="export_lfi.health")
+        silent_exc(_e, where="export_lfi.health", level="debug")
     return _h
 
 

@@ -82,7 +82,7 @@ def _as_int(value: Any) -> int | None:
     try:
         return int(value)
     except (TypeError, ValueError) as e:
-        silent_exc(e, where="nucleus.evolution.patch_verification_split::_as_int L69")
+        silent_exc(e, where="nucleus.evolution.patch_verification_split::_as_int L69", level="debug")
         return None
 
 

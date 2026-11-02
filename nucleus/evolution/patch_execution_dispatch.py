@@ -506,6 +506,32 @@ def dispatch_on_tick(now: float | None = None) -> dict[str, Any]:
                 "budget": _bs,
                 "result": {"dispatched": 0, "dispatched_selected": 0,
                            "blocked_reason": "budget_tripped"}}
+    # ★430批刀2：**派单前**先做超期归档 —— 顺序不能反。
+    #   `SafeEvolutionExecutor._m94_pending_blocks_regeneration` 在老化开关关闭时走
+    #   `has_pending_patch_for`：**只要同 file+method 有 pending 就永久冻结再生**，
+    #   不看年龄。所以滞留件不搬走，"重新生成一条合格的补丁"这条路根本走不通
+    #   —— 这才是 11 条僵尸的真正代价，不只是"触发 LLM 门禁"。
+    try:
+        if _m430_archive_enabled():
+            _arch430 = archive_stale_pending(now=_now, dry_run=False)
+            if _arch430.get("aged_out"):
+                _module_logger.info(
+                    "[430刀2][超期归档] 阈值=%.1f天 扫描=%d 归档=%d 保留=%d ids=%s "
+                    "备份=%s 剩余=%s",
+                    float(_arch430.get("ttl_days") or 0), _arch430.get("scanned", 0),
+                    _arch430.get("aged_out", 0), _arch430.get("kept", 0),
+                    _arch430.get("archived_ids") or [], _arch430.get("backup") or "-",
+                    _arch430.get("left"))
+            else:
+                _module_logger.debug(
+                    "[430刀2][超期归档] 无超期件 阈值=%.1f天 扫描=%d 保留=%d err=%s",
+                    float(_arch430.get("ttl_days") or 0), _arch430.get("scanned", 0),
+                    _arch430.get("kept", 0), _arch430.get("error") or "-")
+    except Exception as _ar430e:
+        silent_exc(_ar430e, where="patch_execution_dispatch.dispatch_on_tick 430刀2 归档",
+                   level="warning")
+        _module_logger.warning("[430刀2][超期归档] 节拍调用异常（不影响派单）：%s: %s",
+                               type(_ar430e).__name__, _ar430e)
     _r = dispatch_runtime_verified_patches(limit=1)
     # ★339批刀1（E裁决）：O3「确认后自动派单」显式通道。
     #   放在主管道之后：主管道管「无人裁决」的自动分诊（risk低/trust≥40），
@@ -758,6 +784,192 @@ def _m331_rf_ttl_sweep(pending_path: str | None = None, ttl_sec: float | None = 
         _out["archive_file"] = _arch
     except Exception as e:
         silent_exc(e, where="patch_execution_dispatch::_m331_rf_ttl_sweep write", level="debug")
+        _out["error"] = f"write_failed:{type(e).__name__}"
+    return _out
+
+
+# ===== ★430批刀2（裁决：开）：pending 池「长期未裁决」归档出口 =====
+# 为什么另起一套、而不是直接开 `ENABLE_PENDING_QUEUE_AGING`（T0 实测依据）：
+#   · 那个开关的**动作是 `status='approved'`（自动审批放行）**，不是"清理/归档"
+#     —— 见 `config.py` 第 6257-6270 行注释与 `PatchManager._m94_aging_eligible`；
+#   · 它的资格判据第一行就是 `source == "local_rule"`（PatchManager.py:1645），
+#     而池里 11 条僵尸是 **10 条 llm + 1 条 o3_open_gate** ⇒ 打开后对它们**一条都不生效**；
+#   · 它的阈值是 20 条 / 24 小时（`PENDING_AGING_MAX_COUNT` / `_MAX_AGE_HOURS`），不是 7 天；
+#   · 280批刀3 关掉它的原文理由是「aging 对 source=llm 队列空转(合格项恒0)，明写 llm 永不自动」。
+#   ⇒ 直接置 True = 对僵尸零效果 + 给 local_rule 类补丁打开"24h 自动审批放行"的潜伏通道。
+#   任务书刀2 真正要的效果（"超 7 天自动归档、不硬删、留记录"）在本文件里也**没有现成实现**
+#   （`_m331_rf_ttl_sweep` 只处理 `status == "runtime_failed"`），故新写本出口，同型复用其模式。
+#   遗留裁决项：`ENABLE_PENDING_QUEUE_AGING` 本批**保持 False 未动**，见交付报告 §7.2。
+_M430_ARCHIVE_REL = os.path.join("data", "patches", "pending_verified_archive_430.jsonl")
+#: 只归档「已复核通过但长期没人裁决」的条目；`pending` / `runtime_failed` 等**不碰**
+#: （`runtime_failed` 有 331刀4 自己的出口，重复归档会让两条链互相抢件）
+_M430_ARCHIVE_STATUSES = ("runtime_verified",)
+
+
+def _m430_archive_enabled() -> bool:
+    """★430刀2：归档出口总开关（`config.ENABLE_PENDING_VERIFIED_ARCHIVE`，默认 True）。
+
+    读不到配置 ⇒ True（与 `_m363_pending_graded_on` 同族口径：任务书要求的开启态）。
+    """
+    try:
+        import config as _cfg430
+        return bool(getattr(_cfg430, "ENABLE_PENDING_VERIFIED_ARCHIVE", True))
+    except Exception as e:
+        silent_exc(e, where="patch_execution_dispatch::_m430_archive_enabled",
+                   level="warning")
+        return True
+
+
+def _m430_archive_ttl_sec() -> float:
+    """★430刀2：归档阈值（`config.PENDING_VERIFIED_ARCHIVE_TTL_DAYS`，默认 7 天）。"""
+    try:
+        import config as _cfg430
+        _d = float(getattr(_cfg430, "PENDING_VERIFIED_ARCHIVE_TTL_DAYS", 7) or 7)
+    except Exception as e:
+        silent_exc(e, where="patch_execution_dispatch::_m430_archive_ttl_sec",
+                   level="warning")
+        _d = 7.0
+    if _d <= 0:
+        _d = 7.0
+    return _d * 86400.0
+
+
+def _m430_row_ts(patch: dict) -> float:
+    """补丁的"入池时刻"（多源回退，取首个可用值；都没有返 0.0）。"""
+    if not isinstance(patch, dict):
+        return 0.0
+    for _k in ("created_at", "generated_at", "saved_at", "timestamp", "submitted_at"):
+        _v = patch.get(_k)
+        if isinstance(_v, (int, float)) and not isinstance(_v, bool) and _v > 0:
+            return float(_v)
+    return 0.0
+
+
+def _m430_archived_ids(archive_path: str) -> set:
+    """已归档过的 id 集合（幂等：同一 id 不重复追加归档行）。"""
+    _ids: set = set()
+    if not os.path.isfile(archive_path):
+        return _ids
+    try:
+        with open(archive_path, encoding="utf-8") as _f:
+            for _ln in _f:
+                _ln = _ln.strip()
+                if not _ln:
+                    continue
+                try:
+                    _r = json.loads(_ln)
+                except (ValueError, TypeError) as _je430:
+                    silent_exc(_je430, where="patch_execution_dispatch::_m430_archived_ids parse",
+                               level="debug")
+                    continue
+                if isinstance(_r, dict) and _r.get("id"):
+                    _ids.add(str(_r["id"]))
+    except OSError as _oe430:
+        silent_exc(_oe430, where="patch_execution_dispatch::_m430_archived_ids read",
+                   level="debug")
+    return _ids
+
+
+def archive_stale_pending(now: float | None = None,
+                          pending_path: str | None = None,
+                          ttl_sec: float | None = None,
+                          dry_run: bool = True,
+                          archive_path: str | None = None,
+                          ledger_path: str | None = None,
+                          statuses: tuple = _M430_ARCHIVE_STATUSES) -> dict:
+    """★430批刀2：把「长期未裁决」的 pending 条目**归档搬出**（不硬删、可回退）。
+
+    语义边界（三条，都是"不擅自扩权"）：
+      ① 只动 `status` ∈ `statuses`（默认仅 `runtime_verified`）——`pending`（待审）、
+         `runtime_failed`（331刀4 有自己出口）、`approved` 一概不碰；
+      ② **不删数据**：整行（含全部字段）追加进归档 jsonl + 带 `archived_at` /
+         `archived_by` / `archive_reason`，再从 pending 移除 ⇒ 任何一条都可原样搬回；
+      ③ 写盘前先把 pending 原文件复制一份 `*.bak_430_archive_<ts>`，回退只需 copy 回来。
+
+    `dry_run` 默认 **True**（与 `_m331_rf_ttl_sweep` 同规）：不擅自改生产数据。
+    幂等：已在归档文件里的 id 不再重复追加，也不从 pending 再删一次（重跑安全）。
+    """
+    _now = float(time.time() if now is None else now)
+    _ttl = _m430_archive_ttl_sec() if ttl_sec is None else float(ttl_sec)
+    _root = _m326_repo_root()
+    _pp = pending_path or os.path.join(_root, "data", "patches", "pending_patches.json")
+    _arch = archive_path or os.path.join(_root, _M430_ARCHIVE_REL)
+    _out: dict = {"ttl_sec": _ttl, "ttl_days": round(_ttl / 86400.0, 2),
+                  "dry_run": bool(dry_run), "scanned": 0, "aged_out": 0, "kept": 0,
+                  "archived_ids": [], "keep_ids": [], "ages_hours": {},
+                  "structure": "", "error": "", "backup": "", "written": False}
+    try:
+        with open(_pp, encoding="utf-8") as _fh:
+            _d = json.load(_fh)
+    except OSError as e:
+        silent_exc(e, where="patch_execution_dispatch::archive_stale_pending read",
+                   level="debug")
+        _out["error"] = f"read_failed:{type(e).__name__}"
+        return _out
+    if not isinstance(_d, list):
+        # dict 形态只报告不改（与 331刀4 同口径：避免破坏结构）
+        _out["structure"] = "dict_only_report（不改动）"
+        _items = list((_d.get("patches") or {}).values()) if isinstance(_d, dict) else []
+    else:
+        _out["structure"] = "list"
+        _items = _d
+    _done = _m430_archived_ids(_arch)
+    _aged: list = []
+    for _p in _items:
+        if not isinstance(_p, dict):
+            continue
+        if str(_p.get("status") or "") not in statuses:
+            continue
+        _out["scanned"] += 1
+        _ts = _m430_row_ts(_p)
+        _age = (_now - _ts) if _ts > 0 else -1.0
+        _pid = str(_p.get("id") or "")
+        _out["ages_hours"][_pid] = round(_age / 3600.0, 1) if _age >= 0 else None
+        if _age < 0:
+            # 没有时间戳 ⇒ 不可判定 ⇒ **不归档**（保守：宁留勿删）
+            _out["keep_ids"].append(_pid)
+            continue
+        if _age >= _ttl and _pid not in _done:
+            _aged.append(_p)
+            _out["archived_ids"].append(_pid)
+        else:
+            _out["keep_ids"].append(_pid)
+    _out["aged_out"] = len(_aged)
+    _out["kept"] = len(_out["keep_ids"])
+    if dry_run or not _aged or not isinstance(_d, list):
+        return _out
+    # ---- 真正归档 ----
+    try:
+        _out["backup"] = _pp + ".bak_430_archive_" + time.strftime("%Y%m%d_%H%M%S")
+        with open(_pp, "rb") as _src, open(_out["backup"], "wb") as _dst:
+            _dst.write(_src.read())
+        os.makedirs(os.path.dirname(_arch), exist_ok=True)
+        with open(_arch, "a", encoding="utf-8", newline=chr(10)) as _f:
+            for _p in _aged:
+                _row = dict(_p)
+                _row["archived_at"] = _now
+                _row["archived_by"] = "430刀2_超期归档"
+                _row["archive_reason"] = (
+                    f"runtime_verified 滞留 "
+                    f"{(_now - _m430_row_ts(_p)) / 86400.0:.1f} 天 > 阈值 "
+                    f"{_ttl / 86400.0:.1f} 天")
+                _row["archived_from"] = "pending_patches.json"
+                _f.write(json.dumps(_row, ensure_ascii=False) + "\n")
+                _m331_note_blocked(_p.get("id"), reason="archived_by_430_ttl",
+                                   category="runtime_verified_archived",
+                                   path=ledger_path)
+        _aged_ids = {str(_p.get("id") or "") for _p in _aged}
+        _left = [_p for _p in _d if str(_p.get("id") or "") not in _aged_ids]
+        _tmp = _pp + ".m430.tmp"
+        with open(_tmp, "w", encoding="utf-8", newline="\n") as _f:
+            json.dump(_left, _f, ensure_ascii=False, indent=2)
+        os.replace(_tmp, _pp)
+        _out["written"] = True
+        _out["archive_file"] = _arch
+        _out["left"] = len(_left)
+    except OSError as e:
+        silent_exc(e, where="patch_execution_dispatch::archive_stale_pending write",
+                   level="debug")
         _out["error"] = f"write_failed:{type(e).__name__}"
     return _out
 
@@ -2566,6 +2778,15 @@ def _m324_blocked_reason(patch: dict, ledger: dict | None = None,
     ★422刀2：方法级冷却闸**前置**于 per-patch cap —— 前者按 (file, method) 拦住
     "换个 id 再来一遍"，后者按 patch id 拦住"同一条补丁反复重试"，两个维度不互替。
     """
+    # ★430批刀1：**派过的打标记，同一条不重复派**（任务书刀1 第三条要求）。
+    #   缺陷现场：`_write_back` 成功只把 `runtime_verified` 置 True、**不改 status**，
+    #   而选择器门槛正是 `status == runtime_verified` ⇒ 沙箱跑通的下一个 tick 还会被选中，
+    #   每圈白跑一次。活体留痕 `data/reports/patch_dispatch_trace.jsonl` 里
+    #   `patch_1788891456_0407` 于同一 proc_gen 内被连派两次（executed=1 applied=0）。
+    #   两个字段都认：`dispatched_ok` 是本批新增的显式布尔（铁律153：显式布尔禁理由串反推）；
+    #   `sandbox_ok` 是 372刀3 已有的成功标记 ⇒ **存量数据无需迁移**，天然向后兼容。
+    if patch.get("dispatched_ok") is True or patch.get("sandbox_ok") is True:
+        return "already_dispatched_ok"
     _cd = _m422_cooldown_reason(patch, now=now, path=cooldown_path)
     if _cd:
         return _cd
@@ -3095,6 +3316,88 @@ def _m356_close_loop_fixed(patch: dict) -> dict | None:
         return None
 
 
+def pending_pool_diagnosis(rows: list | None = None,
+                           project_root: str | None = None) -> dict:
+    """★430批刀1：pending 池**结构性拒收**归因（只读，不改任何字段、不写盘）。
+
+    为什么需要它（429 的活体教训）：11 条 `runtime_verified` 在池里躺了 228 小时，
+    观测面只有一句「派单=0」，看不出到底是"读不到源"还是"条目本身不合格"。
+    本函数按 `select_pending_candidates` **完全相同的门槛与顺序**逐条判，
+    输出「每道门槛各挡住几条」+ 每条卡在哪一关 ⇒ 一次回答"生成了也白生成"白在哪一级。
+
+    ★门槛顺序必须与 `select_pending_candidates` 一致，否则归因会漂：
+      o3 → status → risk → trust → fragment → sandbox → blast_unknown → blast_over → not_pilot
+    ★只读：不碰 `_M363_PENDING_REJ`（那个是生产拒收分布，不能让诊断污染）。
+    """
+    _out: dict = {"rows": 0, "dispatchable": 0, "pilot_pass": 0, "gates": {},
+                  "by_status": {}, "by_source": {}, "detail": [], "error": ""}
+    if rows is None:
+        try:
+            rows = _m363_read_pending_rows(project_root)
+        except Exception as _e430:
+            silent_exc(_e430, where="patch_execution_dispatch::pending_pool_diagnosis load",
+                       level="debug")
+            _out["error"] = f"load_failed:{type(_e430).__name__}"
+            return _out
+    if not isinstance(rows, list):
+        _out["error"] = "not_list"
+        return _out
+    for _p in rows:
+        if not isinstance(_p, dict):
+            continue
+        _out["rows"] += 1
+        _st = str(_p.get("status") or "")
+        _src = str(_p.get("source") or "")
+        _out["by_status"][_st] = _out["by_status"].get(_st, 0) + 1
+        _out["by_source"][_src] = _out["by_source"].get(_src, 0) + 1
+        try:
+            _trust = float(_p.get("trust_score", 0) or 0)
+        except (TypeError, ValueError) as _te430:
+            # 解析不出来与「就是 0 分」处置动作不同（前者要修数据）⇒ 必须留痕，不静默
+            silent_exc(_te430,
+                       where="patch_execution_dispatch::pending_pool_diagnosis trust_score",
+                       level="debug")
+            _trust = 0.0
+        _gate = ""
+        if _m363_is_o3_row(_p):
+            _gate = "o3"
+        elif _st not in PENDING_GRADED_OK_STATUS:
+            _gate = "status"
+        elif _p.get("risk_level") not in ("低", "low"):
+            _gate = "risk"
+        elif _trust < PENDING_GRADED_TRUST_MIN:
+            _gate = "trust"
+        elif is_fragment_to_full(_p):
+            _gate = "fragment"
+        elif is_sandbox_incompatible(_p):
+            _gate = "sandbox"
+        else:
+            _br430 = blast_radius_of(str(_p.get("method") or ""),
+                                     file=str(_p.get("file") or ""))
+            if _br430 is None:
+                _gate = "blast_unknown"
+            elif _br430 > PENDING_GRADED_BLAST_MAX:
+                _gate = "blast_over"
+            else:
+                _key430 = (str(_p.get("file") or "").replace("\\", "/"),
+                           str(_p.get("method") or ""))
+                if _key430 in PILOT_FIRST_BATCH:
+                    _out["dispatchable"] += 1
+                    _out["pilot_pass"] += 1
+                    _gate = ""
+                else:
+                    _out["dispatchable"] += 1
+                    _gate = "not_pilot"
+        if _gate:
+            _out["gates"][_gate] = _out["gates"].get(_gate, 0) + 1
+        _out["detail"].append({"id": str(_p.get("id") or "")[:32],
+                               "file": str(_p.get("file") or ""),
+                               "method": str(_p.get("method") or ""),
+                               "status": _st, "source": _src,
+                               "gate": _gate or "pass"})
+    return _out
+
+
 def dispatch_runtime_verified_patches(limit: int = 1, framework: Any = None) -> dict:
     """主入口：每日派单 ≤1 条 runtime_verified 低风险补丁到 motor.execute，回写 runtime_verified。"""
     _fw = framework or get_dispatch_framework()
@@ -3150,6 +3453,22 @@ def dispatch_runtime_verified_patches(limit: int = 1, framework: Any = None) -> 
             max(0, _M363_PENDING_REJ.get("passed", 0)
                 - _M363_PENDING_REJ.get("not_pilot", 0)),
             {k: v for k, v in get_m363_pending_rej().items() if v})
+    # ★430批刀1：选中为空 ⇒ 出一行**结构性拒收归因**。
+    #   任务书刀1 的目标是"让补丁真正流动"，而流动性为零时唯一有用的信息是
+    #   "卡在哪一关"——否则「生成了也白生成」永远没人知道白在哪。
+    if not _selected:
+        try:
+            _diag430 = pending_pool_diagnosis()
+            _module_logger.info(
+                "[430刀1][待派池诊断] 选中=0 来源=%s pending=%d 结构可派=%d 白名单内=%d "
+                "拒收=%s 状态=%s 来源分布=%s",
+                _sel_src, _diag430.get("rows", 0), _diag430.get("dispatchable", 0),
+                _diag430.get("pilot_pass", 0), _diag430.get("gates") or {},
+                _diag430.get("by_status") or {}, _diag430.get("by_source") or {})
+        except Exception as _dg430e:
+            silent_exc(_dg430e,
+                       where="patch_execution_dispatch::dispatch pending_pool_diagnosis",
+                       level="debug")
     # ★324批刀0：选中 ≠ 执行 ≠ 有副作用——三拆，且失败超限者转人工
     _n_selected = len(_selected)
     _blocked: list = []
@@ -3176,12 +3495,24 @@ def dispatch_runtime_verified_patches(limit: int = 1, framework: Any = None) -> 
     for _p in _dispatchable:
         _v = dispatch_and_verify(_sandbox, _p)
         _write_back(_p, _v)
+        # ★430批刀1：**派单标记**。成功/失败都记次数（可看出重试了几轮），
+        #   成功另记 `dispatched_ok`（供 `_m324_blocked_reason` 的同一条不重复派闸读取）。
+        #   失败侧原有 324/326/331/422 四道累计与冷却，本处只补**成功侧**的缺口。
+        try:
+            _p["dispatch_count"] = int(_p.get("dispatch_count") or 0) + 1
+        except (TypeError, ValueError) as _dc430e:
+            silent_exc(_dc430e, where="patch_execution_dispatch::dispatch dispatch_count",
+                       level="debug")
+            _p["dispatch_count"] = 1
+        _p["last_dispatch_at"] = time.time()
         # ★356刀1：应用成功 ⇒ 审计池 FIXED（六段闭环第 3 段接线）。
         if _v.get("success"):
             # ★372刀3（裁决 A3）：沙箱成功 ≠ 源码落地 ⇒ FIXED 只挂 landed 事件。
             #   沙箱成功/失败**独立留痕**（sandbox_ok / sandbox_ok_at），不与 landed 合并语义。
             _p["sandbox_ok"] = True
             _p["sandbox_ok_at"] = _v.get("executed_at") or time.time()
+            _p["dispatched_ok"] = True
+            _p["dispatched_ok_at"] = _p["sandbox_ok_at"]
             if _m372_landed_ok(_p):
                 _m356_close_loop_fixed(_p)
             else:

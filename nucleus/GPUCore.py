@@ -33,7 +33,7 @@ def _m353_probe_enabled() -> bool:
         import config as _cfg
         return bool(getattr(_cfg, "GPU_PROBE_ENABLED", True))
     except Exception as e:
-        silent_exc(e, where="nucleus.GPUCore::_m353_probe_enabled")
+        silent_exc(e, where="nucleus.GPUCore::_m353_probe_enabled", level="debug")
         return True
 
 class GPUCore(SilentLogMixin):
@@ -174,7 +174,7 @@ class GPUCore(SilentLogMixin):
                 self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
             return "low"
         except Exception as e:
-            silent_exc(e, where="nucleus.GPUCore::get_vram_pressure L146")
+            silent_exc(e, where="nucleus.GPUCore::get_vram_pressure L146", level="debug")
             return "low"
 
     # ========== ★PHASE14：真正的 GPU 计算（此前本类只有「探测」） ==========
@@ -224,7 +224,7 @@ class GPUCore(SilentLogMixin):
             try:
                 self._log("DEBUG", f"GPU 批量余弦失败，回退 CPU: {_e}")
             except Exception as e:
-                silent_exc(e, where="nucleus.GPUCore::batch_cosine_gpu L195")
+                silent_exc(e, where="nucleus.GPUCore::batch_cosine_gpu L195", level="debug")
             return None
 
     # ========== GPU 显存缓存（可选） ==========
@@ -256,7 +256,7 @@ class GPUCore(SilentLogMixin):
                 self._cache[key] = (time.time(), _val)
             return _val
         except Exception as e:
-            silent_exc(e, where="nucleus.GPUCore::gpu_cache L227")
+            silent_exc(e, where="nucleus.GPUCore::gpu_cache L227", level="debug")
             return None
 
 

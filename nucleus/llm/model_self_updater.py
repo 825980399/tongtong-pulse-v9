@@ -192,7 +192,7 @@ class ModelSelfUpdater:
                 _f.write(json.dumps(idx, ensure_ascii=False, indent=2))
             return True
         except OSError as e:
-            silent_exc(e, where="nucleus.llm.model_self_updater::_save_index L199")
+            silent_exc(e, where="nucleus.llm.model_self_updater::_save_index L199", level="debug")
             return False
 
     def list_versions(self) -> list:
@@ -215,7 +215,7 @@ class ModelSelfUpdater:
                 _v = self._quality_fn()
                 return float(_v) if isinstance(_v, (int, float)) else None
             except Exception as e:
-                silent_exc(e, where="nucleus.llm.model_self_updater::current_quality L221")
+                silent_exc(e, where="nucleus.llm.model_self_updater::current_quality L221", level="debug")
                 return None
         _cur = self.current_version() or {}
         _q = _cur.get("quality")

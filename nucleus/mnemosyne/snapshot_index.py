@@ -145,7 +145,7 @@ def build_payload(snapshot_path: str, metadata: dict, spans: list) -> dict:
         try:
             _spans.append([_nid, int(_span[0]), int(_span[1])])
         except (TypeError, IndexError, ValueError) as _e:
-            silent_exc(_e, where="nucleus.mnemosyne.snapshot_index::build_payload 切片编码")
+            silent_exc(_e, where="nucleus.mnemosyne.snapshot_index::build_payload 切片编码", level="debug")
     return {
         "schema": INDEX_SCHEMA,
         "snapshot_basename": os.path.basename(str(snapshot_path)),
@@ -178,13 +178,13 @@ def save(snapshot_path: str, payload: dict) -> bool:
         os.replace(_tmp, _ip)
         return True
     except (OSError, TypeError, ValueError) as _e:
-        silent_exc(_e, where="nucleus.mnemosyne.snapshot_index::save 原子写")
+        silent_exc(_e, where="nucleus.mnemosyne.snapshot_index::save 原子写", level="debug")
         # 清残留 .tmp：验收⑤要求"无 .tmp 残留"，写失败也不许留。
         try:
             if os.path.exists(_tmp):
                 os.remove(_tmp)
         except OSError as _e2:
-            silent_exc(_e2, where="nucleus.mnemosyne.snapshot_index::save 清理 .tmp")
+            silent_exc(_e2, where="nucleus.mnemosyne.snapshot_index::save 清理 .tmp", level="debug")
         return False
 
 
@@ -201,7 +201,7 @@ def invalidate(snapshot_path: str, reason: str = "") -> bool:
             os.remove(_ip)
             _removed = True
     except OSError as _e:
-        silent_exc(_e, where="nucleus.mnemosyne.snapshot_index::invalidate 删除索引")
+        silent_exc(_e, where="nucleus.mnemosyne.snapshot_index::invalidate 删除索引", level="debug")
     _set_health(snapshot_path, "index_missing",
                 reason or "索引已失效（主档变更）", nodes=-1)
     return _removed
@@ -226,7 +226,7 @@ def load(snapshot_path: str, expect_checksum: str | None = None) -> dict | None:
         with open(_ip, "r", encoding="utf-8") as _f:
             _payload = json.load(_f)
     except (OSError, ValueError) as _e:
-        silent_exc(_e, where="nucleus.mnemosyne.snapshot_index::load 解析索引")
+        silent_exc(_e, where="nucleus.mnemosyne.snapshot_index::load 解析索引", level="debug")
         _set_health(snapshot_path, "index_stale", "索引解析失败", nodes=-1)
         return None
     if not isinstance(_payload, dict):
@@ -240,7 +240,7 @@ def load(snapshot_path: str, expect_checksum: str | None = None) -> dict | None:
     try:
         _st = os.stat(snapshot_path)
     except OSError as _e:
-        silent_exc(_e, where="nucleus.mnemosyne.snapshot_index::load stat 主档")
+        silent_exc(_e, where="nucleus.mnemosyne.snapshot_index::load stat 主档", level="debug")
         _set_health(snapshot_path, "scan_failed", "主档 stat 失败", nodes=-1)
         return None
     if int(_payload.get("file_size", -1)) != int(_st.st_size):
@@ -282,7 +282,7 @@ def spans_of(payload: dict) -> tuple[list, "object"]:
         try:
             _nid, _s, _e = _row[0], int(_row[1]), int(_row[2])
         except (TypeError, IndexError, ValueError) as _e:
-            silent_exc(_e, where="nucleus.mnemosyne.snapshot_index::spans_of 解码")
+            silent_exc(_e, where="nucleus.mnemosyne.snapshot_index::spans_of 解码", level="debug")
             continue
         _nid_key = _nid if isinstance(_nid, str) else None
         _spans.append((_nid_key, (_s, _e)))
@@ -300,13 +300,13 @@ def stats(snapshot_path: str) -> dict[str, Any]:
         try:
             _sz = os.path.getsize(_ip)
         except OSError as _e:
-            silent_exc(_e, where="nucleus.mnemosyne.snapshot_index::stats 取索引体量")
+            silent_exc(_e, where="nucleus.mnemosyne.snapshot_index::stats 取索引体量", level="debug")
     _ssz = -1
     try:
         if os.path.exists(snapshot_path):
             _ssz = os.path.getsize(snapshot_path)
     except OSError as _e:
-        silent_exc(_e, where="nucleus.mnemosyne.snapshot_index::stats 取主档体量")
+        silent_exc(_e, where="nucleus.mnemosyne.snapshot_index::stats 取主档体量", level="debug")
     _h = health(snapshot_path)
     return {
         "snapshot_path": str(snapshot_path),

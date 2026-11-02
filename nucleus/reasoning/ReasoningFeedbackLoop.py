@@ -112,7 +112,7 @@ class ReasoningFeedbackLoop:
                     f"原因={_opt_result.get('reasons', [])[:1]}"
                 )
         except Exception as _opt_e:
-            silent_exc(_opt_e, where="nucleus.reasoning.ReasoningFeedbackLoop::record_quality L113")
+            silent_exc(_opt_e, where="nucleus.reasoning.ReasoningFeedbackLoop::record_quality L113", level="debug")
 
     # ========== 核心：参数优化 ==========
 

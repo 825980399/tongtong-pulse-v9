@@ -62,7 +62,7 @@ def retriever_enabled() -> bool:
         import config
         return bool(getattr(config, "ENABLE_EXPERIENCE_RETRIEVER_OBSERVE", True))
     except Exception as e:
-        silent_exc(e, where="nucleus.mnemosyne.experience_retriever::retriever_enabled L64")
+        silent_exc(e, where="nucleus.mnemosyne.experience_retriever::retriever_enabled L64", level="debug")
         return True
 
 
@@ -72,7 +72,7 @@ def _graph_adjacency_enabled() -> bool:
         import config
         return bool(getattr(config, "ENABLE_GRAPH_ADJACENCY", False))
     except Exception as e:
-        silent_exc(e, where="nucleus.mnemosyne.experience_retriever::_graph_adjacency_enabled")
+        silent_exc(e, where="nucleus.mnemosyne.experience_retriever::_graph_adjacency_enabled", level="debug")
         return False
 
 
@@ -88,7 +88,7 @@ def _in_test_env() -> bool:
     try:
         return ("pytest" in sys.modules) or bool(os.environ.get("PYTEST_CURRENT_TEST"))
     except Exception as e:
-        silent_exc(e, where="nucleus.mnemosyne.experience_retriever::_in_test_env L79")
+        silent_exc(e, where="nucleus.mnemosyne.experience_retriever::_in_test_env L79", level="debug")
         return False
 
 
@@ -98,7 +98,7 @@ def _is_production_data_path(path: str) -> bool:
         _r = os.path.abspath(_PROJECT_ROOT).replace("\\", "/").lower()
         return _p.startswith(_r + "/data/")
     except Exception as e:
-        silent_exc(e, where="nucleus.mnemosyne.experience_retriever::_is_production_data_path L88")
+        silent_exc(e, where="nucleus.mnemosyne.experience_retriever::_is_production_data_path L88", level="debug")
         return True
 
 
@@ -168,7 +168,7 @@ class ExperienceRetriever:
         try:
             return bool(self.encoder().is_available())
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.experience_retriever::available L151")
+            silent_exc(e, where="nucleus.mnemosyne.experience_retriever::available L151", level="debug")
             return False
 
     def top_k(self) -> int:
@@ -221,7 +221,7 @@ class ExperienceRetriever:
             return []
         except Exception as _e:
             silent_exc(_e, where="nucleus.mnemosyne.experience_retriever::"
-                                 "_all_experiences L186")
+                                 "_all_experiences L186", level="debug")
             self._m421_mark_degrade(f"{type(_e).__name__}: {_e}")
             return []
 
@@ -336,7 +336,7 @@ class ExperienceRetriever:
             return _out
         except Exception as _e:                      # 检索失败不得影响调用方
             # ★421刀3：走正规留痕 + 记降级。stderr 打印在日志里查不到，等于没报。
-            silent_exc(_e, where="nucleus.mnemosyne.experience_retriever::retrieve L279")
+            silent_exc(_e, where="nucleus.mnemosyne.experience_retriever::retrieve L279", level="debug")
             self._m421_mark_degrade(f"retrieve: {type(_e).__name__}: {_e}")
             return []
 
@@ -425,7 +425,7 @@ class ExperienceRetriever:
                                       "adjacent_count": len(_adj),
                                       "adjacent_organs": sorted(_adj_orgs)}}
         except Exception as _e:
-            silent_exc(_e, where="nucleus.mnemosyne.experience_retriever::_with_adjacent")
+            silent_exc(_e, where="nucleus.mnemosyne.experience_retriever::_with_adjacent", level="debug")
             return {"direct": direct, "adjacent": [],
                     "adjacent_meta": {"expanded": False, "reason": "error"}}
 
@@ -594,7 +594,7 @@ def analyze_pollution(pool: Any = None) -> dict:
             _q = getattr(pool, "query_experiences", None)
             _raw = list(_q(limit=100000) or []) if callable(_q) else []
     except Exception as _e:
-        silent_exc(_e, where="nucleus.mnemosyne.experience_retriever::analyze_pollution")
+        silent_exc(_e, where="nucleus.mnemosyne.experience_retriever::analyze_pollution", level="debug")
         return {"status": "error", "error": f"{type(_e).__name__}: {_e}", "total": 0}
 
     from collections import Counter

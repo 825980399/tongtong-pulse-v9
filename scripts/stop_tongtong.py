@@ -74,7 +74,7 @@ def list_framework_pids(root=None):
                            level="debug")
                 continue
     except Exception as _e:
-        silent_exc(_e, where="scripts.stop_tongtong.list_framework_pids")
+        silent_exc(_e, where="scripts.stop_tongtong.list_framework_pids", level="debug")
         return None
     return sorted(_out)
 
@@ -108,7 +108,7 @@ def main(argv=None):
     try:
         _rc = subprocess.call(_cmd)
     except OSError as _e:
-        silent_exc(_e, where="scripts.stop_tongtong.main[delegate]")
+        silent_exc(_e, where="scripts.stop_tongtong.main[delegate]", level="debug")
         print("[stop] 调用 %s 失败：%s" % (_DELEGATE, _e))
         return 1
     print("[stop] 退出码 %d（0=已退出 / 1=超时或错误 / 2=未运行 / 3=无法判定）" % _rc)

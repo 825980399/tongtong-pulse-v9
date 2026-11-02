@@ -199,7 +199,7 @@ def snapshot_dependency_and_l2() -> dict[str, Any]:
                 dep = d.get("llm_dependency_ratio", d.get("overall_llm_share"))
                 dep = float(dep) if dep is not None else None
         except Exception as e:
-            silent_exc(e, where="tools.benchmark.external_bench_harness::snapshot_dependency_and_l2[dep]")
+            silent_exc(e, where="tools.benchmark.external_bench_harness::snapshot_dependency_and_l2[dep]", level="debug")
             dep = None
 
     l2: float | None = None
@@ -208,7 +208,7 @@ def snapshot_dependency_and_l2() -> dict[str, Any]:
 
         l2 = get_semantic_cache_l2().stats().get("hit_rate")
     except Exception as e:
-        silent_exc(e, where="tools.benchmark.external_bench_harness::snapshot_dependency_and_l2[l2]")
+        silent_exc(e, where="tools.benchmark.external_bench_harness::snapshot_dependency_and_l2[l2]", level="debug")
         l2 = None
 
     return {

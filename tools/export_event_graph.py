@@ -143,7 +143,7 @@ def _emit_types_of(src: str) -> tuple[set[str], int]:
     try:
         _tree = ast.parse(src)
     except SyntaxError as _e:
-        silent_exc(_e, where="_emit_types_of")
+        silent_exc(_e, where="_emit_types_of", level="debug")
         return _types, _unresolved
     for _node in ast.walk(_tree):
         if not (isinstance(_node, ast.Call) and _is_pulse_core_emit(_node)):
@@ -181,7 +181,7 @@ def _subscribe_types_of(src: str) -> tuple[set[str], bool, int]:
     try:
         _tree = ast.parse(src)
     except SyntaxError as _e:
-        silent_exc(_e, where="_subscribe_types_of")
+        silent_exc(_e, where="_subscribe_types_of", level="debug")
         return _subs, _wild, _unresolved
 
     for _fn in ast.walk(_tree):
@@ -368,7 +368,7 @@ def derive_import_edges() -> "list[dict[str, Any]]":
             try:
                 _tree = _ast.parse(_io.open(_fp, encoding="utf-8", errors="ignore").read())
             except Exception as e:
-                silent_exc(e, where="tools.export_event_graph::derive_import_edges parse")
+                silent_exc(e, where="tools.export_event_graph::derive_import_edges parse", level="debug")
                 continue
             _cls = _fn[:-3]
             for _n in _ast.walk(_tree):
@@ -410,7 +410,7 @@ def export_event_graph(organs: Any = None, as_json: bool = False, runtime_event_
     try:
         _import_edges = derive_import_edges()
     except Exception as _ie300:
-        silent_exc(_ie300, where="tools.export_event_graph::export_event_graph import_edges")
+        silent_exc(_ie300, where="tools.export_event_graph::export_event_graph import_edges", level="debug")
         _import_edges = []
     _payload = {
         "version": "v0.5",
@@ -449,7 +449,7 @@ def _struct_hash(payload: dict[str, Any]) -> str:
         _ser = json.dumps(payload.get("edges") or [], ensure_ascii=False, sort_keys=True)
         return hashlib.sha256(_ser.encode("utf-8")).hexdigest()[:16]
     except Exception as e:
-        silent_exc(e, where="tools.export_event_graph::_struct_hash")
+        silent_exc(e, where="tools.export_event_graph::_struct_hash", level="debug")
         return ""
 
 
@@ -489,10 +489,10 @@ def save_event_graph_cache(payload: dict[str, Any] | None = None,
             try:
                 os.remove(_old)
             except OSError as _re:
-                silent_exc(_re, where="tools.export_event_graph::save_event_graph_cache:滚动清理")
+                silent_exc(_re, where="tools.export_event_graph::save_event_graph_cache:滚动清理", level="debug")
         return _main
     except Exception as e:
-        silent_exc(e, where="tools.export_event_graph::save_event_graph_cache")
+        silent_exc(e, where="tools.export_event_graph::save_event_graph_cache", level="debug")
         return None
 
 
@@ -506,7 +506,7 @@ def load_event_graph_cache(cache_dir: str | None = None) -> dict[str, Any] | Non
         with open(_main, encoding="utf-8") as _f:
             return json.load(_f)
     except Exception as e:
-        silent_exc(e, where="tools.export_event_graph::load_event_graph_cache")
+        silent_exc(e, where="tools.export_event_graph::load_event_graph_cache", level="debug")
         return None
 
 

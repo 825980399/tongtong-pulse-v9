@@ -43,7 +43,7 @@ class ChannelSpeedProfiler:
             _bucket["min"] = min(_bucket["min"], _s)
             _bucket["max"] = max(_bucket["max"], _s)
         except Exception as e:
-            silent_exc(e, where="nucleus.llm.channel_speed_profiler::record L45")
+            silent_exc(e, where="nucleus.llm.channel_speed_profiler::record L45", level="debug")
 
     def profile(self, name: str | None = None) -> dict:
         """返回画像。name=None 时返回 {渠道名: 画像} 的全量字典。"""
@@ -84,4 +84,4 @@ class ChannelSpeedProfiler:
             else:
                 self._stats.pop(str(name), None)
         except Exception as e:
-            silent_exc(e, where="nucleus.llm.channel_speed_profiler::reset L87")
+            silent_exc(e, where="nucleus.llm.channel_speed_profiler::reset L87", level="debug")

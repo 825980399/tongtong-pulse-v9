@@ -628,7 +628,7 @@ class SelfAwarenessDailyScheduler:
                         project_root=self._project_root, now_fn=self._now_fn,
                         logger=_module_logger)
                 except Exception as _277r_e:
-                    silent_exc(_277r_e, "DailyScheduler.run_once:晨读")
+                    silent_exc(_277r_e, "DailyScheduler.run_once:晨读", level="debug")
 
             # ★第282批 刀1：每日03:00 拍一次事件图谱，落盘 data/graphs/event_graph.json（滚动保留7份）。
             #   运行时消费者（self_inspector 的 blast_radius / retrieve 邻接扩展）只读缓存，绝不现扫。
@@ -645,7 +645,7 @@ class SelfAwarenessDailyScheduler:
                         "[图谱缓存] 每日拍图落盘 edge_count=%d path=%s",
                         _g282.get("edge_count"), _gp282)
                 except Exception as _ge282:
-                    silent_exc(_ge282, "DailyScheduler.run_once:图谱缓存")
+                    silent_exc(_ge282, "DailyScheduler.run_once:图谱缓存", level="debug")
 
             # ★第282批 刀3：PHASE18 先注册消费方——读 snapshot() 四类结果并入日报【PHASE18信号】节。
             #   不翻 ENABLE_PHASE18_SIGNALS（采集闸留待后续批次），此处只接消费方，零行为变更。
@@ -657,7 +657,7 @@ class SelfAwarenessDailyScheduler:
                     if _rp:
                         _282_dr.append_phase18_section(_rp, logger=_module_logger)
                 except Exception as _p18e282:
-                    silent_exc(_p18e282, "DailyScheduler.run_once:PHASE18信号")
+                    silent_exc(_p18e282, "DailyScheduler.run_once:PHASE18信号", level="debug")
 
             # ★第294批 刀1：装掌握率分母——日报出「掌握率=understood/total」。
             #   纯只读观测 + 追加日报一行，失败只 warning 不影响调度主流程。
@@ -667,7 +667,7 @@ class SelfAwarenessDailyScheduler:
                     _res["mastery"] = _294_dr.append_mastery_section(
                         _rp, logger=_module_logger)
                 except Exception as _m294e:
-                    silent_exc(_m294e, "DailyScheduler.run_once:掌握率")
+                    silent_exc(_m294e, "DailyScheduler.run_once:掌握率", level="debug")
 
             # ★第298批 刀2：日报固定输出入队哨兵四数（新补丁/入队被拦/M92拒绝/pending）。
             if not self._is_test_env() and _rp:
@@ -676,7 +676,7 @@ class SelfAwarenessDailyScheduler:
                     _res["queue_stats"] = _298_dr.append_queue_stats_section(
                         _rp, logger=_module_logger)
                 except Exception as _m298e:
-                    silent_exc(_m298e, "DailyScheduler.run_once:入队哨兵")
+                    silent_exc(_m298e, "DailyScheduler.run_once:入队哨兵", level="debug")
 
             # ★第300批 刀3：日报输出补救链上游三数（进入校验/判定阻断/attempt）。
             if not self._is_test_env() and _rp:
@@ -685,7 +685,7 @@ class SelfAwarenessDailyScheduler:
                     _res["remediation_stats"] = _300_dr.append_remediation_stats_section(
                         _rp, logger=_module_logger)
                 except Exception as _m300e:
-                    silent_exc(_m300e, "DailyScheduler.run_once:补救链三数")
+                    silent_exc(_m300e, "DailyScheduler.run_once:补救链三数", level="debug")
 
             # ★第313批 刀1（P0）：日报输出全局认知**实际值**（status/gaps/三源计数）。
             #   308 批只让分析器在活体跑了；报告侧此前只有一行键名摘要
@@ -697,7 +697,7 @@ class SelfAwarenessDailyScheduler:
                     _res["global_awareness"] = _313_dr.append_global_awareness_section(
                         _rp, logger=_module_logger)
                 except Exception as _m313e:
-                    silent_exc(_m313e, "DailyScheduler.run_once:全局认知")
+                    silent_exc(_m313e, "DailyScheduler.run_once:全局认知", level="debug")
 
             # ★第360批 刀0-3（小林 DeepSeek 付费止血）：日报固定输出
             #   「付费 tokens / 免费 tokens / 付费占比」一节。纯只读，零语义变更。
@@ -707,7 +707,7 @@ class SelfAwarenessDailyScheduler:
                     _res["paid_usage"] = _360_dr.append_paid_usage_section(
                         _rp, logger=_module_logger)
                 except Exception as _m360e:
-                    silent_exc(_m360e, "DailyScheduler.run_once:付费占比")
+                    silent_exc(_m360e, "DailyScheduler.run_once:付费占比", level="debug")
 
             # ★第375批 刀11：日报输出**四维渠道判读**（paid/HHI/燃烧率/429 健康度）。
             #   354 把判读函数写好了但零调用点 —— 口径对的没跑、口径错的（全局
@@ -718,7 +718,7 @@ class SelfAwarenessDailyScheduler:
                     _res["channel_reading"] = _375_dr.append_channel_reading_section(
                         _rp, logger=_module_logger)
                 except Exception as _m375e:
-                    silent_exc(_m375e, "DailyScheduler.run_once:四维渠道判读")
+                    silent_exc(_m375e, "DailyScheduler.run_once:四维渠道判读", level="debug")
 
             # ★第312批 刀3：留痕行读上游结果前先兑 dict（上游异常路径可能返回 None，
             #   直接 `.get()` 会在留痕行自抛 AttributeError，把「回扫失败」升级成「每日拍失败」）。
@@ -742,7 +742,7 @@ class SelfAwarenessDailyScheduler:
                         "[309刀1] 存量高危回扫完成: changed=%s total=%s",
                         _rr.get("changed"), _rr.get("total"))
                 except Exception as _m300r:
-                    silent_exc(_m300r, "DailyScheduler.run_once:存量高危回扫")
+                    silent_exc(_m300r, "DailyScheduler.run_once:存量高危回扫", level="debug")
 
             # ★第286批 刀2：每日03:00 落盘 InsightBoard + PHASE18 snapshot（滚动保留7份）。
             if not self._is_test_env():
@@ -772,7 +772,7 @@ class SelfAwarenessDailyScheduler:
                     _res["phase18_snapshot_dump"] = {"path": _m286_p18_path}
                     _module_logger.info("[思维洞察落盘] insights=%d", _m286_n)
                 except Exception as _m286_e:
-                    silent_exc(_m286_e, "DailyScheduler.run_once:思维洞察落盘")
+                    silent_exc(_m286_e, "DailyScheduler.run_once:思维洞察落盘", level="debug")
 
             self._runs += 1
         except Exception as _e:
@@ -832,7 +832,7 @@ class SelfAwarenessDailyScheduler:
             try:
                 _fn()
             except Exception as _te:
-                silent_exc(_te, f"SelfAwarenessDailyScheduler._run_tick_hooks:{_name}")
+                silent_exc(_te, f"SelfAwarenessDailyScheduler._run_tick_hooks:{_name}", level="debug")
 
     def _run_daily_hooks(self, res: dict[str, Any]) -> None:
         """依次调用所有已注册每日钩子，结果/异常记入 res["hooks"]。
@@ -845,7 +845,7 @@ class SelfAwarenessDailyScheduler:
                 _r = _fn()
                 res.setdefault("hooks", {})[_name] = {"status": "ok", "result": _r}
             except Exception as _he:
-                silent_exc(_he, f"SelfAwarenessDailyScheduler._run_daily_hooks:{_name}")
+                silent_exc(_he, f"SelfAwarenessDailyScheduler._run_daily_hooks:{_name}", level="debug")
                 res.setdefault("hooks", {})[_name] = {
                     "status": "error", "error": type(_he).__name__}
 

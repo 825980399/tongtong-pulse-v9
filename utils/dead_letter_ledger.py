@@ -76,7 +76,7 @@ def const_events() -> set:
     try:
         import nucleus.const as _c
     except Exception as _e:
-        silent_exc(_e, where="dead_letter_ledger.const_events:import")
+        silent_exc(_e, where="dead_letter_ledger.const_events:import", level="debug")
         return _out
     for _name in dir(_c):
         if not _name.endswith("Event"):
@@ -100,7 +100,7 @@ def face_subscribed(events) -> dict:
     try:
         from nucleus.events.EventBus import has_subscribers
     except Exception as _e:
-        silent_exc(_e, where="dead_letter_ledger.face_subscribed:import")
+        silent_exc(_e, where="dead_letter_ledger.face_subscribed:import", level="debug")
         return _out
     for _e_name in events:
         try:
@@ -125,12 +125,12 @@ def face_routed() -> dict:
     try:
         from nucleus.field.InfoField import get_info_field
     except Exception as _e:
-        silent_exc(_e, where="dead_letter_ledger.face_routed:import")
+        silent_exc(_e, where="dead_letter_ledger.face_routed:import", level="debug")
         return _out
     try:
         _field = get_info_field()
     except Exception as _e:
-        silent_exc(_e, where="dead_letter_ledger.face_routed:get_info_field")
+        silent_exc(_e, where="dead_letter_ledger.face_routed:get_info_field", level="debug")
         return _out
     if _field is None:
         return _out
@@ -139,12 +139,12 @@ def face_routed() -> dict:
     try:
         _counts = dict(_field.event_publish_counts() or {})
     except Exception as _e:
-        silent_exc(_e, where="dead_letter_ledger.face_routed:publish_counts")
+        silent_exc(_e, where="dead_letter_ledger.face_routed:publish_counts", level="debug")
     try:
         _audit = _field.audit_ghost_listeners() or {}
         _dead = {str(r.get("event_type")) for r in (_audit.get("dead_events") or [])}
     except Exception as _e:
-        silent_exc(_e, where="dead_letter_ledger.face_routed:audit")
+        silent_exc(_e, where="dead_letter_ledger.face_routed:audit", level="debug")
         return {}
     for _name, _n in _counts.items():
         _pub = int(_n or 0)
@@ -159,7 +159,7 @@ def face_delivered() -> dict:
         from utils.pulse_tracer import traffic_counts
         return dict(traffic_counts())
     except Exception as _e:
-        silent_exc(_e, where="dead_letter_ledger.face_delivered")
+        silent_exc(_e, where="dead_letter_ledger.face_delivered", level="debug")
         return {"emits": {}, "receives": {}}
 
 
@@ -171,7 +171,7 @@ def face_dead_letters() -> dict:
         return {str(i.get("event")): int(i.get("count") or 0)
                 for i in (_s.get("items") or [])}
     except Exception as _e:
-        silent_exc(_e, where="dead_letter_ledger.face_dead_letters")
+        silent_exc(_e, where="dead_letter_ledger.face_dead_letters", level="debug")
         return {}
 
 
@@ -197,7 +197,7 @@ def _safe(fn, where: str, fallback):
     try:
         return fn()
     except Exception as _e:
-        silent_exc(_e, where="dead_letter_ledger.collect:%s" % where)
+        silent_exc(_e, where=f"dead_letter_ledger.collect:{where}", level="debug")
         return fallback
 
 
@@ -347,7 +347,7 @@ def tick(*, force: bool = False, now: float | None = None,
             for _rec in _lines:
                 _f.write(json.dumps(_rec, ensure_ascii=False, sort_keys=False) + "\n")
     except Exception as _e:
-        silent_exc(_e, where="dead_letter_ledger.tick:write:%s" % _path)
+        silent_exc(_e, where=f"dead_letter_ledger.tick:write:{_path}", level="debug")
         return None
 
     _LAST_TICK_TS = _now
@@ -384,7 +384,7 @@ def read_ledger(path: str, limit: int = 0) -> list:
                                level="debug")
                     continue
     except OSError as _e:
-        silent_exc(_e, where="dead_letter_ledger.read_ledger:open")
+        silent_exc(_e, where="dead_letter_ledger.read_ledger:open", level="debug")
         return _out
     return _out[-limit:] if limit else _out
 

@@ -126,7 +126,7 @@ def _resolve_const(cls_name, attr):
     except Exception as _rc_e:
         # 解析不了就交回 None（由调用方 assertIsNotNone 给出明确失败）
         from nucleus._silent_except import silent_exc
-        silent_exc(_rc_e, where="test_event_tap_m17._resolve_const")
+        silent_exc(_rc_e, where="test_event_tap_m17._resolve_const", level="debug")
         return None
 
 

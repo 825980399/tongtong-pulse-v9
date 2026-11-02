@@ -53,7 +53,7 @@ def _m169_dwell_enabled() -> bool:
         import config as _cfg
         return bool(getattr(_cfg, "ENABLE_REPORT_DWELL_AUDIT", True))
     except Exception as _e:
-        silent_exc(_e, where="tools.report_dwell_audit::_m169_dwell_enabled")
+        silent_exc(_e, where="tools.report_dwell_audit::_m169_dwell_enabled", level="debug")
         return True
 
 
@@ -67,7 +67,7 @@ def _limit_days(limit_days: float | None = None) -> float:
         return float(getattr(_cfg, "REPORT_DWELL_LIMIT_DAYS",
                              DEFAULT_LIMIT_DAYS))
     except Exception as _e:
-        silent_exc(_e, where="tools.report_dwell_audit::_limit_days")
+        silent_exc(_e, where="tools.report_dwell_audit::_limit_days", level="debug")
         return DEFAULT_LIMIT_DAYS
 
 

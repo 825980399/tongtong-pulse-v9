@@ -46,14 +46,14 @@ def set_current_thread_lowest() -> str:
             _got = int(_k32.GetThreadPriority(_h))
             return "win32_lowest" if _got == THREAD_PRIORITY_LOWEST else "win32_set_but_%d" % _got
         except Exception as _e:
-            silent_exc(_e, where="utils.thread_priority.set_current_thread_lowest")
+            silent_exc(_e, where="utils.thread_priority.set_current_thread_lowest", level="debug")
             return "unavailable"
     try:
         import os
         os.nice(19)
         return "posix_nice19"
     except Exception as _e:
-        silent_exc(_e, where="utils.thread_priority.set_current_thread_lowest")
+        silent_exc(_e, where="utils.thread_priority.set_current_thread_lowest", level="debug")
         return "unavailable"
 
 

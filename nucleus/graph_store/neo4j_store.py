@@ -48,7 +48,7 @@ def _enabled() -> bool:
         import config
         return bool(getattr(config, "ENABLE_NEO4J_GRAPH_STORE", False))
     except Exception as e:
-        silent_exc(e, where="nucleus.graph_store.neo4j_store::_enabled L48")
+        silent_exc(e, where="nucleus.graph_store.neo4j_store::_enabled L48", level="debug")
         return False
 
 
@@ -108,7 +108,7 @@ class Neo4jStore:
                 try:
                     self._driver.close()
                 except Exception as e:
-                    silent_exc(e, where="nucleus.graph_store.neo4j_store::close L107")
+                    silent_exc(e, where="nucleus.graph_store.neo4j_store::close L107", level="debug")
                 self._driver = None
             self._available = False
 

@@ -24,7 +24,7 @@ def _tmp():
         if not os.path.isdir(_SCRATCH):
             os.makedirs(_SCRATCH)
     except OSError as _e:
-        silent_exc(_e, where="tests.test_knife2_hot_cold_lazy_m162")
+        silent_exc(_e, where="tests.test_knife2_hot_cold_lazy_m162", level="debug")
     fd, path = tempfile.mkstemp(suffix=".json", prefix="snap_k2_", dir=_SCRATCH)
     os.close(fd)
     return path
@@ -36,7 +36,7 @@ def _cleanup(path):
             if _p and os.path.exists(_p):
                 os.remove(_p)
         except OSError as _e:
-            silent_exc(_e, where="tests.test_knife2_hot_cold_lazy_m162")
+            silent_exc(_e, where="tests.test_knife2_hot_cold_lazy_m162", level="debug")
 
 
 def _make_mixed(path, n_each=3):
@@ -117,4 +117,4 @@ def test_knife2_non_iterable_fallback_marker():
         try:
             os.remove(p)
         except OSError as _e:
-            silent_exc(_e, where="tests.test_knife2_hot_cold_lazy_m162")
+            silent_exc(_e, where="tests.test_knife2_hot_cold_lazy_m162", level="debug")

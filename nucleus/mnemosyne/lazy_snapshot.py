@@ -136,7 +136,7 @@ def _iter_snapshot(mm: mmap.mmap, array_key: bytes = b"nodes"):
                         node_dict = json.loads(raw)
                         nid = node_dict.get("node_id")
                     except Exception as _e:
-                        silent_exc(_e, where="lazy_snapshot._iter_snapshot[424刀1]")
+                        silent_exc(_e, where="lazy_snapshot._iter_snapshot[424刀1]", level="debug")
                         nid = None
                         node_dict = {}
                     nid_key = nid if isinstance(nid, str) else None
@@ -157,7 +157,7 @@ def _iter_snapshot(mm: mmap.mmap, array_key: bytes = b"nodes"):
                 metadata[key] = json.loads(
                     mm[vspan[0]:vspan[1]].decode("utf-8", "replace"))
             except Exception as _e:
-                silent_exc(_e, where="lazy_snapshot._iter_snapshot[424刀1]")
+                silent_exc(_e, where="lazy_snapshot._iter_snapshot[424刀1]", level="debug")
                 metadata[key] = None
             i = vspan[1]
 
@@ -234,12 +234,12 @@ class LazySnapshotView:
             if self._mm is not None:
                 self._mm.close()
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.lazy_snapshot::_close_mm L205")
+            silent_exc(e, where="nucleus.mnemosyne.lazy_snapshot::_close_mm L205", level="debug")
         try:
             if self._file is not None:
                 self._file.close()
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.lazy_snapshot::_close_mm L210")
+            silent_exc(e, where="nucleus.mnemosyne.lazy_snapshot::_close_mm L210", level="debug")
         self._mm = None
         self._file = None
 

@@ -352,7 +352,7 @@ class AutonomousProbeOrchestrator(SilentLogMixin):
                 _body.append(_l)
             return "".join(_body)
         except Exception as e:
-            silent_exc(e, where="nucleus.self_probe::_read_method_body_light L355")
+            silent_exc(e, where="nucleus.self_probe::_read_method_body_light L355", level="debug")
             return ""
 
     def _probe_l3(self, name: str, called_methods: list[str], budget: dict[str, Any]) -> dict[str, Any]:
@@ -389,7 +389,7 @@ class AutonomousProbeOrchestrator(SilentLogMixin):
                     _n += 1
             return _n
         except Exception as e:
-            silent_exc(e, where="nucleus.self_probe::_count_recent_errors L391")
+            silent_exc(e, where="nucleus.self_probe::_count_recent_errors L391", level="debug")
             return 0
 
     # ==================================================================

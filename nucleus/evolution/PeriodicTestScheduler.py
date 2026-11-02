@@ -141,7 +141,7 @@ class PeriodicTestScheduler:
             try:
                 print(f"[PeriodicTestScheduler][{level}] {message}", flush=True)
             except Exception as e:
-                silent_exc(e, where="nucleus.evolution.PeriodicTestScheduler::_log L142")
+                silent_exc(e, where="nucleus.evolution.PeriodicTestScheduler::_log L142", level="debug")
 
     # ========== 脚本发现与分类 ==========
 

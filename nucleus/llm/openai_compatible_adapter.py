@@ -74,7 +74,7 @@ class OpenAICompatibleAdapter(BaseLLMAdapter):
             _text = content.strip()
             return _text or None
         except Exception as e:
-            silent_exc(e, where="nucleus.llm.openai_compatible_adapter::parse_response L76")
+            silent_exc(e, where="nucleus.llm.openai_compatible_adapter::parse_response L76", level="debug")
             return None
 
     def extract_usage(self, response: Any) -> dict | None:
@@ -115,7 +115,7 @@ class OpenAICompatibleAdapter(BaseLLMAdapter):
             return {"prompt_tokens": _pi or 0, "completion_tokens": _ci or 0,
                     "total_tokens": _ti}
         except Exception as e:
-            silent_exc(e, where="nucleus.llm.openai_compatible_adapter::extract_usage L116")
+            silent_exc(e, where="nucleus.llm.openai_compatible_adapter::extract_usage L116", level="debug")
             return None
 
     def check_availability(self, api_key: str) -> bool:

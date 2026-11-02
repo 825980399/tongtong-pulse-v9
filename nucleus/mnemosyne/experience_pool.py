@@ -345,7 +345,7 @@ class ExperiencePool:
             try:
                 _m426_evicted = self._evict_overflow()
             except Exception as _e:
-                silent_exc(_e, where="experience_pool::_trim_capacity 426刀3")
+                silent_exc(_e, where="experience_pool::_trim_capacity 426刀3", level="debug")
                 _m426_evicted = 0
             if _m426_evicted:
                 _module_logger.info(
@@ -371,7 +371,7 @@ class ExperiencePool:
             import config as _c
             return bool(getattr(_c, "ENABLE_EXPERIENCE_DECAY_ON_TRIM", True))
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.experience_pool::_m49_decay_on_trim_on L292")
+            silent_exc(e, where="nucleus.mnemosyne.experience_pool::_m49_decay_on_trim_on L292", level="debug")
             return True
 
     #: 摘要算法版本（第47批起：保留原文，不再覆盖）
@@ -439,7 +439,7 @@ class ExperiencePool:
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_EXPERIENCE_DEDUP", False))
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.experience_pool::_dedup_enabled L359")
+            silent_exc(e, where="nucleus.mnemosyne.experience_pool::_dedup_enabled L359", level="debug")
             return False
 
     def _has_duplicate(self, content: str) -> bool:
@@ -462,7 +462,7 @@ class ExperiencePool:
             import config as _c
             return bool(getattr(_c, "ENABLE_M426_EXPERIENCE_COMPACT", True))
         except Exception as _e:
-            silent_exc(_e, where="experience_pool::_m426_compact_on")
+            silent_exc(_e, where="experience_pool::_m426_compact_on", level="debug")
             return True
 
     @staticmethod
@@ -472,7 +472,7 @@ class ExperiencePool:
             import config as _c
             return bool(getattr(_c, "ENABLE_M426_EXPERIENCE_EVICT", True))
         except Exception as _e:
-            silent_exc(_e, where="experience_pool::_m426_evict_on")
+            silent_exc(_e, where="experience_pool::_m426_evict_on", level="debug")
             return True
 
     @staticmethod
@@ -482,7 +482,7 @@ class ExperiencePool:
             _s = _M426_WS_RE.sub(" ", str(text or "").strip())
             return _M426_NUM_RE.sub("#", _s)
         except Exception as _e:
-            silent_exc(_e, where="experience_pool::_m426_norm")
+            silent_exc(_e, where="experience_pool::_m426_norm", level="debug")
             return str(text or "")[:120]
 
     def _m426_find_similar(self, content: str):
@@ -519,7 +519,7 @@ class ExperiencePool:
                 #   相反），那正是 0.98 阈值要拦住的反例。
                 _r = difflib.SequenceMatcher(None, content, _s).ratio()
             except Exception as _e2:
-                silent_exc(_e2, where="experience_pool::_m426_find_similar:ratio")
+                silent_exc(_e2, where="experience_pool::_m426_find_similar:ratio", level="debug")
                 continue
             if _r >= _thr and _r > _best_r:
                 _best, _best_r = _e, _r
@@ -544,7 +544,7 @@ class ExperiencePool:
             if float(entry.get("decay_rate", 0.05) or 0) == 0.0:
                 return True
         except (TypeError, ValueError) as _e:
-            silent_exc(_e, where="experience_pool::_m426_hard_protected")
+            silent_exc(_e, where="experience_pool::_m426_hard_protected", level="debug")
         return bool(entry.get("pinned"))
 
     @staticmethod
@@ -561,13 +561,13 @@ class ExperiencePool:
             _ac = (int(base.get("activation_count", 0) or 0)
                    + int(other.get("activation_count", 0) or 0) + 1)
         except (TypeError, ValueError) as _e:
-            silent_exc(_e, where="experience_pool::_m426_merge_into:ac")
+            silent_exc(_e, where="experience_pool::_m426_merge_into:ac", level="debug")
             _ac = 1
         base["activation_count"] = _ac
         try:
             base["merged_count"] = int(base.get("merged_count", 0) or 0) + 1
         except (TypeError, ValueError) as _e:
-            silent_exc(_e, where="experience_pool::_m426_merge_into:mc")
+            silent_exc(_e, where="experience_pool::_m426_merge_into:mc", level="debug")
             base["merged_count"] = 1
         _other_id = str(other.get("id") or "")
         if _other_id:
@@ -580,7 +580,7 @@ class ExperiencePool:
             base["timestamp"] = max(float(base.get("timestamp", 0) or 0),
                                     float(other.get("timestamp", 0) or 0))
         except (TypeError, ValueError) as _e:
-            silent_exc(_e, where="experience_pool::_m426_merge_into:ts")
+            silent_exc(_e, where="experience_pool::_m426_merge_into:ts", level="debug")
         _bs = str(base.get("summary") or "").strip()
         _os = str(other.get("summary") or "").strip()
         if len(_os) > len(_bs):
@@ -634,7 +634,7 @@ class ExperiencePool:
                         # 判定用原文（理由同 _m426_find_similar）
                         _r = difflib.SequenceMatcher(None, _bs, _s).ratio()
                     except Exception as _e2:
-                        silent_exc(_e2, where="experience_pool::compact_similar:ratio")
+                        silent_exc(_e2, where="experience_pool::compact_similar:ratio", level="debug")
                         continue
                     if _r >= _thr:
                         _hit = (_b, _r)
@@ -736,7 +736,7 @@ class ExperiencePool:
         try:
             _r = self.compact_similar()
         except Exception as _e:
-            silent_exc(_e, where="experience_pool::_m426_compact_on_load")
+            silent_exc(_e, where="experience_pool::_m426_compact_on_load", level="debug")
             return
         if not _r.get("merged"):
             return
@@ -783,7 +783,7 @@ class ExperiencePool:
                 detect as _detect,
             )
         except Exception as _e:
-            silent_exc(_e, where="nucleus.mnemosyne.experience_pool::_screen_write_pollution")
+            silent_exc(_e, where="nucleus.mnemosyne.experience_pool::_screen_write_pollution", level="debug")
             return "ok", ""
         _flag, _reason = _detect(experience)
         if _flag == "ok":
@@ -808,7 +808,7 @@ class ExperiencePool:
             import config as _c
             return bool(getattr(_c, "ENABLE_EXPERIENCE_AUTO_CLEAN", True))
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.experience_pool::_auto_clean_enabled L402")
+            silent_exc(e, where="nucleus.mnemosyne.experience_pool::_auto_clean_enabled L402", level="debug")
             return True
 
     # ★主线第65批 T1/P1：分类收窄常量
@@ -837,7 +837,7 @@ class ExperiencePool:
             import config as _c
             _wl = getattr(_c, "EXPERIENCE_POLLUTION_WHITELIST_SOURCES", []) or []
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.experience_pool::_serp_classify L477")
+            silent_exc(e, where="nucleus.mnemosyne.experience_pool::_serp_classify L477", level="debug")
             _wl = []
         if _src and _src in [str(s).lower() for s in _wl]:
             return ""
@@ -848,7 +848,7 @@ class ExperiencePool:
             from nucleus.data.experience_cleanup import CLASS_TEMPLATE, CLASS_WRITE_SIDE
             from nucleus.data.experience_cleanup import classify as _serp_classify_fn
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.experience_pool::_serp_classify L488")
+            silent_exc(e, where="nucleus.mnemosyne.experience_pool::_serp_classify L488", level="debug")
             _serp_classify_fn = None
             CLASS_TEMPLATE = "template_summary_legacy"
             CLASS_WRITE_SIDE = "write_side_boilerplate"
@@ -857,7 +857,7 @@ class ExperiencePool:
                 if _serp_classify_fn(experience) == CLASS_TEMPLATE:
                     return CLASS_TEMPLATE
             except Exception as e:
-                silent_exc(e, where="nucleus.mnemosyne.experience_pool::_serp_classify L496")
+                silent_exc(e, where="nucleus.mnemosyne.experience_pool::_serp_classify L496", level="debug")
         # 3) write_side 收窄：仅真正含 SERP 样板 token 且覆盖度达标才判
         if not _s:
             return ""
@@ -886,7 +886,7 @@ class ExperiencePool:
             import config as _c
             return bool(getattr(_c, "ENABLE_EXPERIENCE_POLLUTION_CLEANUP", True))
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.experience_pool::_cleanup_enabled L478")
+            silent_exc(e, where="nucleus.mnemosyne.experience_pool::_cleanup_enabled L478", level="debug")
             return True
 
     def run_pollution_cleanup(self, dry_run: bool = False) -> dict:
@@ -917,13 +917,13 @@ class ExperiencePool:
                     _res["reason"] = "adaptive_frequency_throttle"
                     return _res
             except Exception as e:
-                silent_exc(e, where="nucleus.mnemosyne.experience_pool::run_pollution_cleanup L556")
+                silent_exc(e, where="nucleus.mnemosyne.experience_pool::run_pollution_cleanup L556", level="debug")
         try:
             import config as _c
             _hi = float(getattr(_c, "EXPERIENCE_POLLUTION_HIGH_CONFIDENCE", 0.9))
             _me = float(getattr(_c, "EXPERIENCE_POLLUTION_MEDIUM_CONFIDENCE", 0.7))
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.experience_pool::run_pollution_cleanup L562")
+            silent_exc(e, where="nucleus.mnemosyne.experience_pool::run_pollution_cleanup L562", level="debug")
             _hi, _me = 0.9, 0.7
         _quarantine = []
         with self._lock:
@@ -1017,7 +1017,7 @@ class ExperiencePool:
             import config as _c
             return bool(getattr(_c, "ENABLE_EXPERIENCE_QUARANTINE_RESTORE", True))
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.experience_pool::_restore_enabled L607")
+            silent_exc(e, where="nucleus.mnemosyne.experience_pool::_restore_enabled L607", level="debug")
             return True
 
     def restore_from_quarantine(self, dry_run: bool = False,
@@ -1462,7 +1462,7 @@ class ExperiencePool:
                         component="ExperiencePool"):
                     return
             except ImportError as e:
-                silent_exc(e, where="nucleus.mnemosyne.experience_pool::_save L1064")
+                silent_exc(e, where="nucleus.mnemosyne.experience_pool::_save L1064", level="debug")
             os.makedirs(self._base_dir, exist_ok=True)
             # ★第54批 T4（P2-370）：合并保存 —— 保留停机期写入的清洗标记，
             #   不再用内存快照整体覆盖磁盘（灰度 ENABLE_EXPERIENCE_MERGE_SAVE）。
@@ -1509,7 +1509,7 @@ class ExperiencePool:
                     if os.path.exists(tmp_file):
                         os.remove(tmp_file)
                 except Exception as e:
-                    silent_exc(e, where="nucleus.mnemosyne.experience_pool::_save L1111")
+                    silent_exc(e, where="nucleus.mnemosyne.experience_pool::_save L1111", level="debug")
                 _module_logger.error(f"保存失败（重试3次后仍失败）: {_last_error}")
         except Exception as e:
             _module_logger.error(f"保存失败: {e}")
@@ -1562,7 +1562,7 @@ class ExperiencePool:
             # 兜底：safe_read_json 本身不该抛，但**绝不能**因为异常而清空池
             self._load_state = "degraded"
             self._load_error = f"{type(e).__name__}: {e}"
-            silent_exc(e, where="nucleus.mnemosyne.experience_pool::_load L1163")
+            silent_exc(e, where="nucleus.mnemosyne.experience_pool::_load L1163", level="debug")
             _module_logger.error(
                 f"[经验池] 读盘异常，**保留旧值** {len(self._experiences)} 条："
                 f"{self._load_error} | path={self._pool_file}")
@@ -1650,7 +1650,7 @@ def shutdown_experience_pool() -> None:
             try:
                 _sd()
             except Exception as e:
-                silent_exc(e, where="nucleus.mnemosyne.experience_pool::shutdown_experience_pool L1133")
+                silent_exc(e, where="nucleus.mnemosyne.experience_pool::shutdown_experience_pool L1133", level="debug")
 
 
 # ========== 自测 ==========

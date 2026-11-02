@@ -164,7 +164,7 @@ class PatchAutoApprover:
             if not getattr(_c, "PATCH_AUTO_APPROVE_ACCEPT_RUNTIME_VERIFIED", True):
                 return False
         except Exception as e:
-            silent_exc(e, where="nucleus.evolution.PatchAutoApprover::_verified L166")
+            silent_exc(e, where="nucleus.evolution.PatchAutoApprover::_verified L166", level="debug")
         if patch.get("runtime_verified") in _VERIFIED_TRUTHY:
             return True
         return str(patch.get("status", "")) == "runtime_verified"
@@ -174,7 +174,7 @@ class PatchAutoApprover:
         try:
             return float(patch.get("trust_score", 0) or 0) >= _trust_threshold()
         except Exception as e:
-            silent_exc(e, where="nucleus.evolution.PatchAutoApprover::_trust_ok L176")
+            silent_exc(e, where="nucleus.evolution.PatchAutoApprover::_trust_ok L176", level="debug")
             return False
 
     @staticmethod
@@ -486,7 +486,7 @@ class PatchAutoApprover:
                     pending_count=_total,
                     by_decision=_by)
         except Exception as e:
-            silent_exc(e, where="nucleus.evolution.PatchAutoApprover::scan_pending L481")
+            silent_exc(e, where="nucleus.evolution.PatchAutoApprover::scan_pending L481", level="debug")
 
         return {"total": len(_patches), "auto_approved": _approved, "by_decision": _by,
                 "detail": _detail}

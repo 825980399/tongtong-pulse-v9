@@ -99,7 +99,7 @@ def _rel(path: str) -> str:
     try:
         return os.path.relpath(path, _ROOT)
     except ValueError as e:
-        silent_exc(e, where="tools.m408_clean_low_quality_experience::_rel")
+        silent_exc(e, where="tools.m408_clean_low_quality_experience::_rel", level="debug")
         return path
 
 
@@ -149,7 +149,7 @@ def measure(path: str) -> dict:
     try:
         from nucleus.mnemosyne.ReasoningExperience import ReasoningExperience
     except Exception as e:
-        silent_exc(e, where="tools.m408_clean_low_quality_experience::measure import")
+        silent_exc(e, where="tools.m408_clean_low_quality_experience::measure import", level="debug")
         return {"skipped": "import_failed", "error": type(e).__name__}
     _dir = os.path.dirname(path)
     if os.path.basename(path) != "reasoning_experience.json":
@@ -157,7 +157,7 @@ def measure(path: str) -> dict:
     try:
         _re = ReasoningExperience(data_dir=_dir)
     except Exception as e:
-        silent_exc(e, where="tools.m408_clean_low_quality_experience::measure ctor")
+        silent_exc(e, where="tools.m408_clean_low_quality_experience::measure ctor", level="debug")
         return {"skipped": "ctor_failed", "error": type(e).__name__}
     _rows = []
     for _q in PROBE_QUESTIONS:
@@ -165,7 +165,7 @@ def measure(path: str) -> dict:
             _re.search(_q)
             _diag = getattr(_re, "last_search_diagnostics", {}) or {}
         except Exception as e:
-            silent_exc(e, where="tools.m408_clean_low_quality_experience::measure search")
+            silent_exc(e, where="tools.m408_clean_low_quality_experience::measure search", level="debug")
             _diag = {"best_score": -1.0, "hit": False, "error": type(e).__name__}
         _rows.append({"q": _q,
                       "best_score": _diag.get("best_score"),

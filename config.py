@@ -4321,7 +4321,7 @@ def log_config_change(param_name: str, old_value, new_value, source: str = "unkn
         with open(log_file, "a", encoding="utf-8") as f:
             f.write(_json.dumps(log_entry, ensure_ascii=False) + "\n")
     except Exception as e:
-        silent_exc(e, where="config::log_config_change L3677")
+        silent_exc(e, where="config::log_config_change L3677", level="debug")
 
 def _watch_config_file():
     """后台线程：监听配置文件变更并自动重载
@@ -4544,7 +4544,7 @@ def _channels_enabled() -> bool:
             for c in _pool
         )
     except Exception as e:
-        silent_exc(e, where="config::_channels_enabled L3823")
+        silent_exc(e, where="config::_channels_enabled L3823", level="debug")
         return False
 
 def get_active_channels(include_disabled: bool = False) -> list:
@@ -4656,7 +4656,7 @@ def get_llm_call_target(preferred_model: str | None = None,
             _m353_log(caller, _rows, _idx, _why)
             return _rows[_idx]
         except Exception as e:
-            silent_exc(e, where="config::get_llm_call_target L4390 (353刀1 起点均衡)")
+            silent_exc(e, where="config::get_llm_call_target L4390 (353刀1 起点均衡)", level="debug")
         return _rows[0]
     return {"api_url": "", "api_key": "", "model": "deepseek-flash",
             "channel": "", "source": "none"}
@@ -5656,13 +5656,13 @@ def get_task_offset(key: str, default: float = 0):
         if isinstance(_rp, dict) and key in _rp:
             return _rp[key]
     except Exception as e:
-        silent_exc(e, where="config::get_task_offset L4650")
+        silent_exc(e, where="config::get_task_offset L4650", level="debug")
     try:
         _c = globals().get("TASK_OFFSET_CONFIG")
         if isinstance(_c, dict) and key in _c:
             return _c[key]
     except Exception as e:
-        silent_exc(e, where="config::get_task_offset L4656")
+        silent_exc(e, where="config::get_task_offset L4656", level="debug")
     return default
 # ★主线第63批 T1/P0（2026-09-16）：publish 步骤7 细粒度统计锁开关。
 #   True（默认）= 步骤7 用专用 _stats_lock，与全局 self._lock 解耦，消除高并发锁等待瓶颈；
@@ -6908,6 +6908,26 @@ ENABLE_PAID_USAGE_HEARTBEAT = True
 # pending 补丁「分级候选」总开关（363刀A2）。
 # 默认 True：读不到配置也按 True（与既有 O3 老化开关同族口径）。
 ENABLE_PENDING_GRADED_CANDIDATE = True
+
+# ============================================================================
+# ★第430批刀2（裁决：开）：pending 池「长期未裁决」**归档**出口
+#   为何不复用 ENABLE_PENDING_QUEUE_AGING（三个实测理由，T0 已核对源码）：
+#     · 那个开关的动作是 `status='approved'`（**自动审批放行**），不是归档/清理；
+#     · 资格判据第一行是 `source == "local_rule"`（PatchManager.py:1645），
+#       而池里 10 条僵尸全是 `source=llm` ⇒ 打开对它**一条都不生效**（纯空转）；
+#     · 阈值是 20 条 / 24 小时，与任务书要的「7 天」不是同一个数。
+#   ⇒ 本批**不动** ENABLE_PENDING_QUEUE_AGING（保持 False），新开这一对键。
+#   读取点：nucleus/evolution/patch_execution_dispatch.py::_m430_archive_enabled
+#           nucleus/evolution/patch_execution_dispatch.py::_m430_archive_ttl_sec
+# ============================================================================
+#   True（默认）⇒ 节拍照常检查超期件；False ⇒ 完全不扫（零读数、零写盘）。
+ENABLE_PENDING_VERIFIED_ARCHIVE = True
+#   归档阈值（天）。超期 ⇒ 整行搬进 data/patches/pending_verified_archive_430.jsonl，
+#   从 pending 移除，**不删数据**（整行留档，可原样搬回）。
+#   任务书建议 7 天；取 7 的理由：11 条僵尸最老 9.5 天、次老 9.4 天，
+#   而最近一批（21.5h）刚生成 —— 7 天能清掉历史存量且不误伤新件。
+PENDING_VERIFIED_ARCHIVE_TTL_DAYS = 7
+# [M430-CFG]
 
 # 写面观测（383批）：扫描 data/ 下产物的落盘面。
 # 默认 True：关掉 = 完全不扫、零读数。

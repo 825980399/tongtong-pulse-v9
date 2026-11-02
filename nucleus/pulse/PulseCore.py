@@ -334,7 +334,7 @@ class PulseCore:
             import config as _c
             return bool(getattr(_c, "ENABLE_M379_LIFELINE_LAYER", True))
         except Exception as _e:
-            silent_exc(_e, where="PulseCore::_m379_lifeline_fix_on")
+            silent_exc(_e, where="PulseCore::_m379_lifeline_fix_on", level="debug")
             return True
 
     def _m379_note_downgrade(self, event_type: str, was: str) -> None:
@@ -475,7 +475,7 @@ class PulseCore:
                     self._completed_fingerprints.popitem(last=False)
                 self._total_completed += 1
         except Exception as e:
-            silent_exc(e, where="nucleus.pulse.PulseCore::notify_completed L294")
+            silent_exc(e, where="nucleus.pulse.PulseCore::notify_completed L294", level="debug")
 
     def _mark_completed(self, pulse_id: str):
         with self._execution_lock:

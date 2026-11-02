@@ -37,7 +37,7 @@ def _cfg_flag(name: str, default: bool = False) -> bool:
         import config as _cfg
         return bool(getattr(_cfg, name, default))
     except Exception as _e:
-        silent_exc(_e, where="dashboard._cfg_flag:%s" % name)
+        silent_exc(_e, where=f"dashboard._cfg_flag:{name}", level="debug")
         return default
 
 
@@ -47,7 +47,7 @@ def _module_present(dotted: str) -> bool:
         __import__(dotted)
         return True
     except Exception as _e:
-        silent_exc(_e, where="dashboard._module_present:%s" % dotted)
+        silent_exc(_e, where=f"dashboard._module_present:{dotted}", level="debug")
         return False
 
 
@@ -62,7 +62,7 @@ def _layer_l1() -> dict[str, Any]:
         import config as _cfg
         _thr = float(getattr(_cfg, "SEMANTIC_CACHE_THRESHOLD", None) or 0.85)
     except Exception as _e:
-        silent_exc(_e, where="dashboard._layer_l1.threshold")
+        silent_exc(_e, where="dashboard._layer_l1.threshold", level="debug")
 
     _dq = _cfg_flag("ENABLE_LLM_DATA_QUALITY_EVAL", True)
     return {
@@ -140,7 +140,7 @@ def _read_external_dependency_metrics() -> dict[str, Any]:
         from nucleus.field.external_dependency_observe import snapshot
         _cur = snapshot()
     except Exception as _e:
-        silent_exc(_e, where="dashboard.external_dependency.snapshot")
+        silent_exc(_e, where="dashboard.external_dependency.snapshot", level="debug")
     _last_logged = _read_last_external_dependency_snapshot_from_logs()
     _llm_used_false_ratio = (_cur or {}).get("llm_used_false_ratio", 0.0) if _cur else 0.0
     _ext_dep = round(1.0 - float(_llm_used_false_ratio), 6)
@@ -170,7 +170,7 @@ def _read_last_external_dependency_snapshot_from_logs() -> dict[str, Any] | None
                 with open(_f, encoding="utf-8", errors="replace") as _fh:
                     _lines = _fh.read().splitlines()[-2000:]
             except OSError as _e:
-                silent_exc(_e, where="dashboard.read_logs.open")
+                silent_exc(_e, where="dashboard.read_logs.open", level="debug")
                 continue
             for _ln in _lines:
                 if _marker not in _ln:
@@ -182,12 +182,12 @@ def _read_last_external_dependency_snapshot_from_logs() -> dict[str, Any] | None
                         try:
                             _kv[_k] = float(_v)
                         except ValueError as _e:
-                            silent_exc(_e, where="dashboard.read_logs.parse")
+                            silent_exc(_e, where="dashboard.read_logs.parse", level="debug")
 
                 if _kv:
                     _last = _kv
     except Exception as _e:
-        silent_exc(_e, where="dashboard.read_logs")
+        silent_exc(_e, where="dashboard.read_logs", level="debug")
     return _last
 
 
@@ -209,7 +209,7 @@ def _compute_retention() -> dict[str, Any]:
                 for _ in _fh:
                     _pairs += 1
         except OSError as _e:
-            silent_exc(_e, where="dashboard.retention.os")
+            silent_exc(_e, where="dashboard.retention.os", level="debug")
     _elig = 0
     for _f in glob.glob(os.path.join(_base, "calls_*.jsonl")):
         try:
@@ -221,14 +221,14 @@ def _compute_retention() -> dict[str, Any]:
                     try:
                         _r = json.loads(_ln)
                     except Exception as _e:
-                        silent_exc(_e, where="dashboard.retention.json")
+                        silent_exc(_e, where="dashboard.retention.json", level="debug")
                         continue
                     if (_r.get("status") == "success"
                             and (_r.get("prompt") or "").strip()
                             and (_r.get("response") or "").strip()):
                         _elig += 1
         except OSError as _e:
-            silent_exc(_e, where="dashboard.retention.os")
+            silent_exc(_e, where="dashboard.retention.os", level="debug")
     _rate = round(_pairs / _elig, 6) if _elig else 0.0
     return {
         "value": _rate,

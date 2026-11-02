@@ -82,7 +82,7 @@ def _cy_cache_enabled() -> bool:
         import config as _cfg
         return bool(getattr(_cfg, "ENABLE_FREQUENCY_CODEC_CACHE", True))
     except Exception as e:
-        silent_exc(e, where="nucleus.pulse.FrequencyCodec::_cy_cache_enabled L83")
+        silent_exc(e, where="nucleus.pulse.FrequencyCodec::_cy_cache_enabled L83", level="debug")
         return True
 
 

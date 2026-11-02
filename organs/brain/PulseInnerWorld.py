@@ -1092,7 +1092,7 @@ class PulseInnerWorld(
                 _min_rel = 0.0
         except Exception as _k89_e:
             from nucleus._silent_except import silent_exc
-            silent_exc(_k89_e, where="PulseInnerWorld._ir_qica_knowledge_retrieve 开关读取")
+            silent_exc(_k89_e, where="PulseInnerWorld._ir_qica_knowledge_retrieve 开关读取", level="debug")
             _gate_on, _min_rel = True, 0.05
             _skip_ph = True
 
@@ -1118,7 +1118,7 @@ class PulseInnerWorld(
                         return False
                 except Exception as _ph_e:
                     from nucleus._silent_except import silent_exc
-                    silent_exc(_ph_e, where="PulseInnerWorld._k89_accept 占位符判据")
+                    silent_exc(_ph_e, where="PulseInnerWorld._k89_accept 占位符判据", level="debug")
             if not _gate_on:
                 return True
             _kw = list(getattr(_node, "keywords", []) or [])
@@ -2202,7 +2202,7 @@ class PulseInnerWorld(
                 from nucleus.processing_type import annotate_payload
                 annotate_payload(payload)
             except Exception as _m345_e:
-                silent_exc(_m345_e, where="PulseInnerWorld._emit 345刀3 标注")
+                silent_exc(_m345_e, where="PulseInnerWorld._emit 345刀3 标注", level="debug")
         return super()._emit(event_type, payload, target_organ=target_organ,
                              priority=priority, ttl_ns=ttl_ns, layer=layer)
 
@@ -2579,7 +2579,7 @@ class PulseInnerWorld(
             import config as _cfg30
             return bool(getattr(_cfg30, "ENABLE_LOCAL_REASONING_LENGTH_OPTIMIZATION", True))
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseInnerWorld::_m30_local_length_enabled L2457")
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_m30_local_length_enabled L2457", level="debug")
             return True
 
     @staticmethod
@@ -2598,7 +2598,7 @@ class PulseInnerWorld(
                 _cfg30, "LOCAL_REASONING_LENGTH_HINT",
                 "请在回答中展开论述、分层说明，不少于{chars}字，避免只给结论。")
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseInnerWorld::_m30_local_length_hint L2476")
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_m30_local_length_hint L2476", level="debug")
             return ""
         if _target <= 0:
             return ""
@@ -2608,7 +2608,7 @@ class PulseInnerWorld(
         try:
             return _tmpl.format(chars=_target)
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseInnerWorld::_m30_local_length_hint L2485")
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_m30_local_length_hint L2485", level="debug")
             return f"请在回答中展开论述，不少于{_target}字。"
 
     # ================================================================
@@ -2626,7 +2626,7 @@ class PulseInnerWorld(
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_DEEP_THINK_ROUTING_OPTIMIZATION", True))
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseInnerWorld::_m29_routing_enabled L2501")
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_m29_routing_enabled L2501", level="debug")
             return True
 
     @staticmethod
@@ -2635,7 +2635,7 @@ class PulseInnerWorld(
             import config as _cfg
             return float(getattr(_cfg, "DEEP_THINK_COMPLEXITY_THRESHOLD", 0.6) or 0.6)
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseInnerWorld::_m29_complexity_threshold L2509")
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_m29_complexity_threshold L2509", level="debug")
             return 0.6
 
     @staticmethod
@@ -2644,7 +2644,7 @@ class PulseInnerWorld(
             import config as _cfg
             return int(getattr(_cfg, "DEEP_THINK_MIN_QUESTION_CHARS", 30) or 30)
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseInnerWorld::_m29_min_question_chars L2517")
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_m29_min_question_chars L2517", level="debug")
             return 30
 
     @staticmethod
@@ -4206,7 +4206,7 @@ class PulseInnerWorld(
             import config as _cfg
             return bool(getattr(_cfg, "EXPERIENCE_ROUTE_TRACE", True))
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseInnerWorld::_m406_route_trace_on")
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_m406_route_trace_on", level="debug")
             return True
 
     @staticmethod
@@ -4224,7 +4224,7 @@ class PulseInnerWorld(
             _min_hits = int(getattr(_cfg, "EXPERIENCE_KNOWLEDGE_GUARD_MIN_HITS", 3) or 3)
             _scan = int(getattr(_cfg, "EXPERIENCE_KNOWLEDGE_GUARD_SCAN_LIMIT", 800) or 800)
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseInnerWorld::_m406_knowledge_guard_params")
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_m406_knowledge_guard_params", level="debug")
             _min_hits, _scan = 3, 800
         return max(1, _min_hits), max(50, _scan)
 
@@ -4271,7 +4271,7 @@ class PulseInnerWorld(
                     _hits += 1
             return _hits
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseInnerWorld::_m406_knowledge_hit_count")
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_m406_knowledge_hit_count", level="debug")
             return 0
 
     def _m406_trace_experience_route(self, question: str, exp_match, reasoning_exp) -> None:
@@ -4304,7 +4304,7 @@ class PulseInnerWorld(
                       f"thr={_thr:.2f} n={_n} type={_type or '-'} src={_src or '-'} "
                       f"query=\"{question[:40]}\" top_hit=\"{_top}\"")
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseInnerWorld::_m406_trace_experience_route")
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_m406_trace_experience_route", level="debug")
 
     def _detect_experience_route(self, ctx: "PulseInnerWorld.InferenceContext"):
         """
@@ -6291,7 +6291,7 @@ class PulseInnerWorld(
             import config
             return bool(config.FEATURE.get("use_evidence_trace", False))
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseInnerWorld::_evidence_trace_enabled L6014")
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_evidence_trace_enabled L6014", level="debug")
             return False
 
     # ========== ★登顶路线图-山1：可验证推理证据链 ==========
@@ -10225,7 +10225,7 @@ class PulseInnerWorld(
             context["ctx_time_ts"] = _m345_t["ts"]
             context["ctx_time_source"] = _m345_t["source"]
         except Exception as _m345_ce:
-            silent_exc(_m345_ce, where="PulseInnerWorld._build_memory_context 345刀4 时间注入")
+            silent_exc(_m345_ce, where="PulseInnerWorld._build_memory_context 345刀4 时间注入", level="debug")
         # ★345刀7：上下文挂「重启恢复事实」——与刀4 同一收口（本函数有 10 处调用），
         #   挂在源头即可让每条生成路径的 memory_context 都带上"我此前存在过"。
         #   口径：只读落盘事实 + 渲染，不改任何话术模板（烛微345裁定）。
@@ -10238,7 +10238,7 @@ class PulseInnerWorld(
             context["ctx_restart_total"] = int(_m345_rc.get("total") or 0)
             context["ctx_restart_state"] = _m345_rc.get("state")
         except Exception as _m345_re:
-            silent_exc(_m345_re, where="PulseInnerWorld._build_memory_context 345刀7 上下文恢复")
+            silent_exc(_m345_re, where="PulseInnerWorld._build_memory_context 345刀7 上下文恢复", level="debug")
 
         # 第一层：关系与情绪
         if guidance:
@@ -10353,7 +10353,7 @@ class PulseInnerWorld(
             context["experience_hits"] = list(_m411_obs.get("hits") or [])
             context["experience_hit_n"] = int(_m411_obs.get("n") or 0)
         except Exception as _m411_ehe:
-            silent_exc(_m411_ehe, where="PulseInnerWorld._build_memory_context 411刀4 经验命中")
+            silent_exc(_m411_ehe, where="PulseInnerWorld._build_memory_context 411刀4 经验命中", level="debug")
 
         return context
     def _analyze_relation_signals(self, question: str, user_name: str):
@@ -10590,7 +10590,7 @@ class PulseInnerWorld(
                         return _desc
             return ""
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseInnerWorld::_identity_lookup L10225")
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_identity_lookup L10225", level="debug")
             return ""
     def _record_conversation(self, question: str, answer: str, user_name: str,
                               method: str, confidence: float):
@@ -13868,7 +13868,7 @@ class PulseInnerWorld(
             answer = sanitize_placeholder_text(
                 answer, log=lambda _m: self._log(LogLevel.DEBUG, _m))
         except Exception as _ph_e:
-            silent_exc(_ph_e, where="PulseInnerWorld::_sanitize_internal_content 占位符净化")
+            silent_exc(_ph_e, where="PulseInnerWorld::_sanitize_internal_content 占位符净化", level="debug")
         # ★S6：记录进入正则清洗前的长度，用于判断过滤器是否真的删掉了东西
         _before_regex = answer
 
@@ -14450,7 +14450,7 @@ class PulseInnerWorld(
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_TRUE_MULTI_STEP", False))
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseInnerWorld::_true_multi_step_enabled L14597")
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_true_multi_step_enabled L14597", level="debug")
             return False
 
     def _m35_entry_probe(self, question: str, plan: list, core_words: list):
@@ -14763,7 +14763,7 @@ class PulseInnerWorld(
             _kws = self._m31_extract_key_terms(step_prompt, limit=5)
             return any(kw in result for kw in _kws)
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseInnerWorld::_validate_step_result L14899")
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_validate_step_result L14899", level="debug")
             return True
 
     def _reframe_step_prompt(self, prompt: str, fallback: str) -> str:
@@ -14791,7 +14791,7 @@ class PulseInnerWorld(
                     return _seg[:40]
             return _txt[:40]
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseInnerWorld::_summarize_step_for_next L14926")
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_summarize_step_for_next L14926", level="debug")
             return ""
 
     def _synthesize_step_results(self, step_results: list, question: str) -> str:
@@ -15241,7 +15241,7 @@ class PulseInnerWorld(
             _prompt, _m345_ti = _m345_atp(
                 _prompt, trace=lambda _f, *a: self._log(LogLevel.INFO, _f % a))
         except Exception as _m345_te:
-            silent_exc(_m345_te, where="PulseInnerWorld._generate_branch_with_model 345刀4 时间注入")
+            silent_exc(_m345_te, where="PulseInnerWorld._generate_branch_with_model 345刀4 时间注入", level="debug")
         # ★345刀7：把「此前存在的事实」前置进 prompt。
         #   病根：重启后上下文里没有任何"我此前存在过"的事实 ⇒ 模型按无历史推断。
         #   故此处**只补上下文**，话术模板一字不改（烛微345裁定；
@@ -15255,7 +15255,7 @@ class PulseInnerWorld(
                 trace=lambda _f, *a: self._log(LogLevel.INFO, _f % a))
         except Exception as _m345_rpe:
             silent_exc(_m345_rpe,
-                       where="PulseInnerWorld._generate_branch_with_model 345刀7 上下文恢复")
+                       where="PulseInnerWorld._generate_branch_with_model 345刀7 上下文恢复", level="debug")
 
         # 4. 同步调用大模型
         try:
@@ -15799,7 +15799,7 @@ class PulseInnerWorld(
             return bool(getattr(_cfg,
                                 "ENABLE_MULTI_STEP_OPERATIONAL_ADMISSION", False))
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseInnerWorld::_m31_operational_admission_on L15881")
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_m31_operational_admission_on L15881", level="debug")
             # ★364刀B5：读异常同样按「关」处理（fail-closed），不猜「旧行为」
             return False
 
@@ -15819,7 +15819,7 @@ class PulseInnerWorld(
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_MULTI_STEP_FAIL_RETURN_NONE", True))
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseInnerWorld::_m34_fail_return_none_on L15899")
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_m34_fail_return_none_on L15899", level="debug")
             return True
 
     @staticmethod
@@ -15837,7 +15837,7 @@ class PulseInnerWorld(
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_MULTI_STEP_SIGNAL_V2", True))
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseInnerWorld::_m34_widened_signal_on L15916")
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_m34_widened_signal_on L15916", level="debug")
             return True
 
     @staticmethod
@@ -15852,7 +15852,7 @@ class PulseInnerWorld(
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_MULTI_STEP_OP_RECHECK", True))
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseInnerWorld::_m34_op_recheck_on L15930")
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_m34_op_recheck_on L15930", level="debug")
             return True
 
     @staticmethod
@@ -15871,7 +15871,7 @@ class PulseInnerWorld(
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_MULTI_STEP_ENTRY_PROBE", True))
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseInnerWorld::_m35_entry_probe_on L15948")
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_m35_entry_probe_on L15948", level="debug")
             return True
 
     @staticmethod
@@ -15890,7 +15890,7 @@ class PulseInnerWorld(
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_MULTI_STEP_BA_CHAIN_LOOSE", True))
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseInnerWorld::_m35_ba_chain_loose_on L15966")
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_m35_ba_chain_loose_on L15966", level="debug")
             return True
 
     @staticmethod
@@ -15910,7 +15910,7 @@ class PulseInnerWorld(
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_BRANCH_GEN_CONCURRENCY_GUARD", True))
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseInnerWorld::_m32_branch_concurrency_on L15985")
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_m32_branch_concurrency_on L15985", level="debug")
             return True
 
     @staticmethod
@@ -15930,7 +15930,7 @@ class PulseInnerWorld(
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_BRANCH_GEN_CHANNEL_FIRST", True))
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseInnerWorld::_m31_branch_channel_first_on L16004")
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_m31_branch_channel_first_on L16004", level="debug")
             return True
 
     @staticmethod
@@ -16115,7 +16115,7 @@ class PulseInnerWorld(
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_DEEP_THINK_SUBPROCESS_FIX", True))
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseInnerWorld::_m31_deep_think_fix_on L16184")
+            silent_exc(e, where="organs.brain.PulseInnerWorld::_m31_deep_think_fix_on L16184", level="debug")
             return True
 
     def _m31_accept_subproc_deep_result(self, result):
@@ -17624,7 +17624,7 @@ class PulseInnerWorld(
             if _m345_gm_dim:
                 _m345_gm_dim = str(_m345_gm_dim)[:80]
         except Exception as _m345_ge:
-            silent_exc(_m345_ge, where="PulseInnerWorld._convert_vision_to_learning 345刀5 成长记忆")
+            silent_exc(_m345_ge, where="PulseInnerWorld._convert_vision_to_learning 345刀5 成长记忆", level="debug")
 
         if weak_areas_labels:  # type: ignore[possibly-unbound]
             plan = (f"为了{'、'.join(weak_areas_labels)}，"  # type: ignore[possibly-unbound]

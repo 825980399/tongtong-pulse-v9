@@ -111,7 +111,7 @@ class ChannelQuotaMonitor:
         try:
             return float(getattr(_c, "QUOTA_PAUSE_RATIO", 0.05))
         except Exception as e:
-            silent_exc(e, where="nucleus.llm.ChannelQuotaMonitor::pause_ratio L112")
+            silent_exc(e, where="nucleus.llm.ChannelQuotaMonitor::pause_ratio L112", level="debug")
             return 0.05
 
     def alert_ratio(self) -> float:
@@ -123,7 +123,7 @@ class ChannelQuotaMonitor:
         try:
             return float(getattr(_c, "QUOTA_ALERT_RATIO", 0.20))
         except Exception as e:
-            silent_exc(e, where="nucleus.llm.ChannelQuotaMonitor::alert_ratio L123")
+            silent_exc(e, where="nucleus.llm.ChannelQuotaMonitor::alert_ratio L123", level="debug")
             return 0.20
 
     def safety_margin(self) -> float:
@@ -136,7 +136,7 @@ class ChannelQuotaMonitor:
         try:
             return float(getattr(_c, "QUOTA_USAGE_SAFETY_MARGIN", 1.0))
         except Exception as e:
-            silent_exc(e, where="nucleus.llm.ChannelQuotaMonitor::safety_margin L135")
+            silent_exc(e, where="nucleus.llm.ChannelQuotaMonitor::safety_margin L135", level="debug")
             return 1.0
 
     def _force_enabled(self) -> set:
@@ -219,7 +219,7 @@ class ChannelQuotaMonitor:
                 if str(_ch.get("name")) == str(channel_name):
                     return str(_ch.get("quota_type", "fixed") or "fixed")
         except Exception as e:
-            silent_exc(e, where="nucleus.llm.ChannelQuotaMonitor::quota_type_of L217")
+            silent_exc(e, where="nucleus.llm.ChannelQuotaMonitor::quota_type_of L217", level="debug")
             return "fixed"
         return "fixed"
 
@@ -229,7 +229,7 @@ class ChannelQuotaMonitor:
         try:
             return int(getattr(_c, "QUOTA_DAILY_RESET_HOUR", 11) or 11)
         except Exception as e:
-            silent_exc(e, where="nucleus.llm.ChannelQuotaMonitor::daily_reset_hour L226")
+            silent_exc(e, where="nucleus.llm.ChannelQuotaMonitor::daily_reset_hour L226", level="debug")
             return 11
 
     def _ensure_daily_reset(self, channel_name: str,

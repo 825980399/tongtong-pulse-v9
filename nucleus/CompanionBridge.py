@@ -376,4 +376,4 @@ def shutdown_companion_bridge() -> None:
             try:
                 _sd()
             except Exception as e:
-                silent_exc(e, where="nucleus.CompanionBridge::shutdown_companion_bridge L377")
+                silent_exc(e, where="nucleus.CompanionBridge::shutdown_companion_bridge L377", level="debug")

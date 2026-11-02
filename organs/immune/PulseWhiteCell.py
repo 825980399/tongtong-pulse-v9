@@ -444,7 +444,7 @@ class PulseWhiteCell(BasePulseOrgan):
                                 _class_file = _fp
                                 break
                     except Exception as e:
-                        silent_exc(e, where="organs.immune.PulseWhiteCell::_generate_attribute_init_patch L442")
+                        silent_exc(e, where="organs.immune.PulseWhiteCell::_generate_attribute_init_patch L442", level="debug")
             if _class_file:
                 break
 
@@ -455,7 +455,7 @@ class PulseWhiteCell(BasePulseOrgan):
             with open(_class_file, encoding='utf-8') as _f:
                 _file_content = _f.read()
         except Exception as e:
-            silent_exc(e, where="organs.immune.PulseWhiteCell::_generate_attribute_init_patch L453")
+            silent_exc(e, where="organs.immune.PulseWhiteCell::_generate_attribute_init_patch L453", level="debug")
             return None
 
         import re as _re_gap

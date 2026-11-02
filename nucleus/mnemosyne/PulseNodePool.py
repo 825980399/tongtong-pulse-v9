@@ -82,7 +82,7 @@ def m350_cold_index_evidence(cold_dir: str | None = None) -> dict:
         return {"state": "absent", "writable": False, "index_entries": 0,
                 "index_mtime": None, "path": _p, "why": "冷索引不存在"}
     except Exception as _e:
-        silent_exc(_e, where="PulseNodePool::m350_cold_index_evidence")
+        silent_exc(_e, where="PulseNodePool::m350_cold_index_evidence", level="debug")
         return {"state": "unreadable", "writable": None, "index_entries": None,
                 "index_mtime": None, "path": _p, "why": "读不到不猜"}
 
@@ -94,7 +94,7 @@ def _m343_pg() -> str:
         return str(_pgs())
     except Exception as _e:
         # 取不到代次只降级为 unknown（**不填 0**，铁律：0 会被读成合法代次），但必须留痕
-        silent_exc(_e, where="PulseNodePool::_m343_pg")
+        silent_exc(_e, where="PulseNodePool::_m343_pg", level="debug")
         return "unknown"
 
 
@@ -233,7 +233,7 @@ class PulseNodePool(SilentLogMixin):
             if 'nodepool_max_cold_cache' in _rp and hasattr(self, '_max_cold_cache'):
                 self._max_cold_cache = _rp['nodepool_max_cold_cache']
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::refresh_runtime_params L176")
+            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::refresh_runtime_params L176", level="debug")
 
 
     # ========== ★353刀3：冷化链可达性（T-冷化链可达性-1） ==========
@@ -259,7 +259,7 @@ class PulseNodePool(SilentLogMixin):
         try:
             _v = int(value)
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::set_max_warm L235")
+            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::set_max_warm L235", level="debug")
             _module_logger.warning("[353冷化] 阈值钩子被拒：value 非整数 %r", value)
             return self._max_warm
         if _v < 1:
@@ -289,7 +289,7 @@ class PulseNodePool(SilentLogMixin):
             _cold = len(self._cold)
             _max_warm = int(self._max_warm or 0)
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::cold_chain_reachability L262")
+            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::cold_chain_reachability L262", level="debug")
             return {"verdict": "blocked:inspect_failed", "reachable": False}
         if _max_warm <= 0:
             _verdict = "blocked:max_warm_invalid"
@@ -357,7 +357,7 @@ class PulseNodePool(SilentLogMixin):
                 _node.hebbian_weight = _new
             return _new
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::sync_hebbian_weight L228")
+            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::sync_hebbian_weight L228", level="debug")
             return 0.0
 
     def set_index_store(self, index_store):
@@ -561,7 +561,7 @@ class PulseNodePool(SilentLogMixin):
             try:
                 node.trust_score = max(0.0, min(100.0, float(node.trust_score)))
             except Exception as _e:
-                silent_exc(_e, where="PulseNodePool.add[424刀1]")
+                silent_exc(_e, where="PulseNodePool.add[424刀1]", level="debug")
                 node.trust_score = 50.0
 
             # ===== 幂等检查 =====
@@ -875,17 +875,17 @@ class PulseNodePool(SilentLogMixin):
                             try:
                                 node.value = _keep["value"]
                             except Exception as e:
-                                silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::get L717")
+                                silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::get L717", level="debug")
                         if "linked_nodes" in _keep:
                             try:
                                 node.linked_nodes = _keep["linked_nodes"]
                             except Exception as e:
-                                silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::get L722")
+                                silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::get L722", level="debug")
                         node._m70_blanked = False
                         try:
                             self._cold_evicted.discard(getattr(node, "node_id", ""))
                         except Exception as e:
-                            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::get L727")
+                            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::get L727", level="debug")
                     else:
                         # 内存无 keep → 记录 id，锁外冷召回（不在持锁状态做 IO）
                         _m70_pending_recall = node
@@ -996,7 +996,7 @@ class PulseNodePool(SilentLogMixin):
             return bool(getattr(config, "ENABLE_NEO4J_GRAPH_STORE", False)
                        and getattr(config, "ENABLE_NEO4J_DUAL_WRITE", False))
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m71_dw_enabled L837")
+            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m71_dw_enabled L837", level="debug")
             return False
 
     def _m71_dw_stats(self) -> dict:
@@ -1162,7 +1162,7 @@ class PulseNodePool(SilentLogMixin):
                        and getattr(config, "ENABLE_NEO4J_DUAL_WRITE", False)
                        and getattr(config, "ENABLE_NEO4J_READ", False))
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m72_neo4j_read_enabled L1002")
+            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m72_neo4j_read_enabled L1002", level="debug")
             return False
 
     def _m72_read_stats(self) -> dict:
@@ -1189,7 +1189,7 @@ class PulseNodePool(SilentLogMixin):
             import config
             return float(getattr(config, "NEO4J_READ_COMPARE_RATE", 0.1))
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m73_compare_rate L1028")
+            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m73_compare_rate L1028", level="debug")
             return 0.1
 
     def _m73_compare_thresholds(self):
@@ -1349,7 +1349,7 @@ class PulseNodePool(SilentLogMixin):
             return bool(getattr(config, "ENABLE_INFLUXDB_TIMESERIES", False)
                        and getattr(config, "ENABLE_INFLUXDB_WRITE_ONLY", False))
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m71_influx_enabled L1187")
+            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m71_influx_enabled L1187", level="debug")
             return False
 
     def _m71_influx_store(self):
@@ -1493,12 +1493,12 @@ class PulseNodePool(SilentLogMixin):
                     try:
                         _n.value = _keep["value"]
                     except Exception as e:
-                        silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_batch_materialize L1335")
+                        silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_batch_materialize L1335", level="debug")
                 if "linked_nodes" in _keep:
                     try:
                         _n.linked_nodes = _keep["linked_nodes"]
                     except Exception as e:
-                        silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_batch_materialize L1340")
+                        silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_batch_materialize L1340", level="debug")
                 _n._m70_blanked = False
             else:
                 _nid = getattr(_n, "node_id", "")
@@ -1521,16 +1521,16 @@ class PulseNodePool(SilentLogMixin):
                     try:
                         _n.value = getattr(_rn, "value", _n.value)
                     except Exception as e:
-                        silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_batch_materialize L1363")
+                        silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_batch_materialize L1363", level="debug")
                     try:
                         _n.linked_nodes = getattr(_rn, "linked_nodes", _n.linked_nodes)
                     except Exception as e:
-                        silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_batch_materialize L1367")
+                        silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_batch_materialize L1367", level="debug")
                     _n._m70_blanked = False
                     try:
                         self._cold_evicted.discard(_nid)
                     except Exception as e:
-                        silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_batch_materialize L1372")
+                        silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_batch_materialize L1372", level="debug")
         return nodes
 
     def get_all_including_evicted(self) -> list[PulseNode]:
@@ -1918,7 +1918,7 @@ class PulseNodePool(SilentLogMixin):
                                 })
                                 # ★T-127b：_l3_fuse_record() 已从收集块挪到执行段（修 T-125a 误接位置 bug）
                         except Exception as e:
-                            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::run_memory_verification L1751")
+                            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::run_memory_verification L1751", level="debug")
                     continue
 
                 _last = getattr(_node, "last_activated", 0.0) or _now
@@ -2054,7 +2054,7 @@ class PulseNodePool(SilentLogMixin):
             with open(_path, encoding="utf-8") as _f:
                 return _json.load(_f)
         except Exception as _e:
-            silent_exc(_e, where="PulseNodePool._l3_fuse_state[424刀1]")
+            silent_exc(_e, where="PulseNodePool._l3_fuse_state[424刀1]", level="debug")
             return {"date": "", "count": 0}
 
     def _l3_fuse_allows(self) -> bool:
@@ -2249,7 +2249,7 @@ class PulseNodePool(SilentLogMixin):
                 _module_logger.debug(
                     "[第162批刀3] 冷存compaction窗口可用（驱逐后由 compact_cold_storage 接管）")
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_enforce_cold_cache L2054")
+            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_enforce_cold_cache L2054", level="debug")
         if not self._cold_storage_enabled:
             return
         # ★第170批 C10（L-7）：分位动态化驱逐替代固定阈值（灰度开关）
@@ -2644,7 +2644,7 @@ class PulseNodePool(SilentLogMixin):
                     "[T1内存保护] 温缓存已缩小到 %d (内存使用率 %.1f%%)",
                     len(self._warm_lru), mem.percent)
         except ImportError as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_shrink_cache L2398")
+            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_shrink_cache L2398", level="debug")
         except Exception as e:
             _module_logger.debug("[T1内存保护] 异常已忽略: %s: %s", type(e).__name__, e)
 
@@ -2686,7 +2686,7 @@ class PulseNodePool(SilentLogMixin):
                 "[169批 C11] 冷池%s %s ok=%s detail=%s",
                 action, node_id, ok, detail or "-")
         except Exception as _e:
-            silent_exc(_e, where="nucleus.mnemosyne.PulseNodePool::_m169_cold_trace")
+            silent_exc(_e, where="nucleus.mnemosyne.PulseNodePool::_m169_cold_trace", level="debug")
 
     # ===== ★343刀6（洞鉴第二季）：冷化链**持久化闭环** =====
     #   病根（341/洞鉴实证）：`[338冷化]` 驱逐 140 次，但 `cold.index.json`
@@ -2734,7 +2734,7 @@ class PulseNodePool(SilentLogMixin):
                     _lf.write(json.dumps(_rec, ensure_ascii=False) + "\n")
                 _led_ok = True
             except Exception as _e:
-                silent_exc(_e, where="PulseNodePool::_m343_record_eviction ledger")
+                silent_exc(_e, where="PulseNodePool::_m343_record_eviction ledger", level="debug")
         # ② 内存索引（键=node_id，与 _rebuild_cold_index 同结构 + 343 三字段）
         try:
             self._ensure_cold_index()
@@ -2751,7 +2751,7 @@ class PulseNodePool(SilentLogMixin):
                 }
                 _n_idx = len(self._cold_index)
         except Exception as _e:
-            silent_exc(_e, where="PulseNodePool::_m343_record_eviction index")
+            silent_exc(_e, where="PulseNodePool::_m343_record_eviction index", level="debug")
             _n_idx = -1
         # ③ 持久化（节流：首条立即写，同窗口内合并，避免 140 次全量重写）
         _wrote, _mtime = self._m343_persist_cold_index()
@@ -2801,7 +2801,7 @@ class PulseNodePool(SilentLogMixin):
             return os.path.join(os.path.dirname(self._cold_dir.rstrip(os.sep))
                                 or self._cold_dir, "reload_stats.json")
         except Exception as _e:
-            silent_exc(_e, where="PulseNodePool::_m349_reload_stats_path")
+            silent_exc(_e, where="PulseNodePool::_m349_reload_stats_path", level="debug")
             return "reload_stats.json"
 
     def _m349_note_reload(self, kind: str, node_id: str, ok: bool,
@@ -2849,7 +2849,7 @@ class PulseNodePool(SilentLogMixin):
                     _st["proc_gen"])
             self._m349_persist_reload_stats()
         except Exception as _e:
-            silent_exc(_e, where="PulseNodePool::_m349_note_reload")
+            silent_exc(_e, where="PulseNodePool::_m349_note_reload", level="debug")
 
     def _m349_persist_reload_stats(self, force: bool = False) -> bool:
         """原子写 `reload_stats.json`（节流 `_M349_RELOAD_PERSIST_GAP`）。"""
@@ -2877,7 +2877,7 @@ class PulseNodePool(SilentLogMixin):
             self._m349_reload_persist_ts = _now
             return True
         except Exception as _e:
-            silent_exc(_e, where="PulseNodePool::_m349_persist_reload_stats")
+            silent_exc(_e, where="PulseNodePool::_m349_persist_reload_stats", level="debug")
             return False
 
     def reload_hit_rate(self) -> dict:
@@ -2922,7 +2922,7 @@ class PulseNodePool(SilentLogMixin):
                         _v["reload"] = "available"
                         _done += 1
         except Exception as _e:
-            silent_exc(_e, where="PulseNodePool::_m343_mark_flushed")
+            silent_exc(_e, where="PulseNodePool::_m343_mark_flushed", level="debug")
             return 0
         if _done:
             self._m343_persist_cold_index(force=True)
@@ -2960,11 +2960,11 @@ class PulseNodePool(SilentLogMixin):
                 _mt = os.path.getmtime(_ip)
             except OSError as _e2:
                 # 写成功但取 mtime 失败：退回"现在"，不能因为读不到时间就说没写（判据要能区分两件事）
-                silent_exc(_e2, where="PulseNodePool::_m343_persist_cold_index mtime")
+                silent_exc(_e2, where="PulseNodePool::_m343_persist_cold_index mtime", level="debug")
                 _mt = _now
             return True, _mt
         except Exception as _e:
-            silent_exc(_e, where="PulseNodePool::_m343_persist_cold_index")
+            silent_exc(_e, where="PulseNodePool::_m343_persist_cold_index", level="debug")
             self._cold_index_stale = True
             _module_logger.warning(
                 "[343冷化] 索引持久化失败（陈旧标记已置）: %s: %s",
@@ -3146,7 +3146,7 @@ class PulseNodePool(SilentLogMixin):
         try:
             import pyarrow.parquet as pq  # 可用性探测（pa_compat 内部再导入 pa）· ★421/R1-B3 pq 在用
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_flush_cold_buffer_nodes L2576")
+            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_flush_cold_buffer_nodes L2576", level="debug")
             return 0
         try:
             _rows = [self._cold_node_to_row(_n) for _n in nodes]
@@ -3171,7 +3171,7 @@ class PulseNodePool(SilentLogMixin):
                 self._m343_mark_flushed(len(_rows))
             except Exception as _m343f_e:
                 silent_exc(_m343f_e,
-                           where="PulseNodePool::_flush_cold_buffer_nodes 343置flushed")
+                           where="PulseNodePool::_flush_cold_buffer_nodes 343置flushed", level="debug")
             return len(_rows)
         except Exception as _e:
             _module_logger.warning(f"[第81批 T4] 冷存批量 flush 失败: {_e}")
@@ -3267,7 +3267,7 @@ class PulseNodePool(SilentLogMixin):
                 # S2：写盘成功 → 索引新鲜，复位陈旧标记
                 self._cold_index_stale = False
             except Exception as e:
-                silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_rebuild_cold_index L2676")
+                silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_rebuild_cold_index L2676", level="debug")
                 # S2：json.dump 写失败 → 外置陈旧标记，供 S3 新鲜度告警与可观测面板读取
                 self._cold_index_stale = True
         except Exception as _e:
@@ -3299,7 +3299,7 @@ class PulseNodePool(SilentLogMixin):
                             self._cold_index = _loaded
                         _loaded_ok = True
             except Exception as e:
-                silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_ensure_cold_index L2692")
+                silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_ensure_cold_index L2692", level="debug")
             if _loaded_ok:
                 # S3：仅 getmtime 比较，不读 parquet 内容、不引入周期全扫
                 self._cold_index_stale = self._m162_cold_index_freshness_check(_ip)
@@ -3314,7 +3314,7 @@ class PulseNodePool(SilentLogMixin):
             import config as _cfg
             _warn_days = float(getattr(_cfg, "COLD_INDEX_STALE_WARN_DAYS", 3))
         except Exception as _e:
-            silent_exc(_e, where="nucleus.mnemosyne.PulseNodePool::_m162_cold_index_freshness_check L2699")
+            silent_exc(_e, where="nucleus.mnemosyne.PulseNodePool::_m162_cold_index_freshness_check L2699", level="debug")
             _warn_days = 3.0
         try:
             if not os.path.isfile(index_path):
@@ -3329,7 +3329,7 @@ class PulseNodePool(SilentLogMixin):
                             try:
                                 _m = os.path.getmtime(os.path.join(_root, _fn))
                             except OSError as _oe:
-                                silent_exc(_oe, where="nucleus.mnemosyne.PulseNodePool::_m162_cold_index_freshness_check L2699")
+                                silent_exc(_oe, where="nucleus.mnemosyne.PulseNodePool::_m162_cold_index_freshness_check L2699", level="debug")
                                 continue
                             if _m > _latest:
                                 _latest = _m
@@ -3346,7 +3346,7 @@ class PulseNodePool(SilentLogMixin):
                     f"[第162批刀3] 侧车索引落后 {_lag_days:.1f} 天（未超阈值 {_warn_days:.0f} 天）")
             return False
         except Exception as _e:
-            silent_exc(_e, where="nucleus.mnemosyne.PulseNodePool::_m162_cold_index_freshness_check L2699")
+            silent_exc(_e, where="nucleus.mnemosyne.PulseNodePool::_m162_cold_index_freshness_check L2699", level="debug")
             return False
 
     def _cold_row_to_node(self, row: dict) -> "PulseNode | None":
@@ -3464,7 +3464,7 @@ class PulseNodePool(SilentLogMixin):
         try:
             import pyarrow.parquet as pq
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_recall_cold_node L2798")
+            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_recall_cold_node L2798", level="debug")
             return None
         # ★第81批 T4：确保缓冲落盘 + 索引可用，再走单点索引召回（毫秒-百毫秒级）
         self.flush_cold_buffer()
@@ -3522,24 +3522,24 @@ class PulseNodePool(SilentLogMixin):
                 try:
                     node.value = _keep["value"]
                 except Exception as e:
-                    silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_materialize_lazy_node L2849")
+                    silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_materialize_lazy_node L2849", level="debug")
             if "linked_nodes" in _keep:
                 try:
                     node.linked_nodes = _keep["linked_nodes"]
                 except Exception as e:
-                    silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_materialize_lazy_node L2854")
+                    silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_materialize_lazy_node L2854", level="debug")
             node._m70_blanked = False
             try:
                 self._cold_evicted.discard(_nid)
             except Exception as e:
-                silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_materialize_lazy_node L2859")
+                silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_materialize_lazy_node L2859", level="debug")
             return True
         # 内存无 keep → 走真冷存召回
         if _nid and getattr(self, "_cold_storage_enabled", False):
             try:
                 _recalled = self.recall_cold_nodes_batch([_nid])
             except Exception as e:
-                silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_materialize_lazy_node L2866")
+                silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_materialize_lazy_node L2866", level="debug")
                 _recalled = []
             if _recalled:
                 _rn = _recalled[0]
@@ -3548,16 +3548,16 @@ class PulseNodePool(SilentLogMixin):
                     try:
                         node.value = getattr(_rn, "value", node.value)
                     except Exception as e:
-                        silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_materialize_lazy_node L2874")
+                        silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_materialize_lazy_node L2874", level="debug")
                     try:
                         node.linked_nodes = getattr(_rn, "linked_nodes", node.linked_nodes)
                     except Exception as e:
-                        silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_materialize_lazy_node L2878")
+                        silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_materialize_lazy_node L2878", level="debug")
                     node._m70_blanked = False
                     try:
                         self._cold_evicted.discard(_nid)
                     except Exception as e:
-                        silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_materialize_lazy_node L2883")
+                        silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_m70_materialize_lazy_node L2883", level="debug")
                 return True
         _module_logger.error(
             f"[第81批 T2] 节点池懒加载节点 {_nid} 无法回填（无 _m70_keep 且冷存无副本），保留空白")
@@ -3635,7 +3635,7 @@ class PulseNodePool(SilentLogMixin):
             for _n in list(getattr(self, "_cold", {}).values()):
                 _bytes += _sys.getsizeof(_n)
         except Exception as _e:
-            silent_exc(_e, where="PulseNodePool::cold_chain_report 冷池体积估算")
+            silent_exc(_e, where="PulseNodePool::cold_chain_report 冷池体积估算", level="debug")
         _evict = int(_stats.get("evict_count", 0) or 0)
         _recall = int(_stats.get("recall_count", 0) or 0)
         # 未触发归因（铁律159：判据必须蕴含可达性——先答「该不该动作」）
@@ -3696,7 +3696,7 @@ class PulseNodePool(SilentLogMixin):
             import config as _c
             return bool(getattr(_c, "ENABLE_COLD_COMPACTION_ADAPTIVE", True))
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_cold_compaction_adaptive_enabled L2938")
+            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_cold_compaction_adaptive_enabled L2938", level="debug")
             return True
 
     def _get_system_load_level(self) -> str:
@@ -3705,7 +3705,7 @@ class PulseNodePool(SilentLogMixin):
             from nucleus.runtime_metrics import get_runtime_metrics
             return get_runtime_metrics().get_system_load().get("load_level", "low")
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_get_system_load_level L2946")
+            silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::_get_system_load_level L2946", level="debug")
             return "low"
 
     def compact_cold_storage(self) -> dict[str, Any]:
@@ -3731,7 +3731,7 @@ class PulseNodePool(SilentLogMixin):
         try:
             import pyarrow.parquet as pq  # 可用性探测（pa_compat 内部再导入 pa）· ★421/R1-B4 pq 在用
         except Exception as _e:
-            silent_exc(_e, where="nucleus.mnemosyne.PulseNodePool::compact_cold_storage L2978")
+            silent_exc(_e, where="nucleus.mnemosyne.PulseNodePool::compact_cold_storage L2978", level="debug")
             return {"before_files": 0, "after_files": 0, "node_count": 0,
                     "dedup_count": 0, "success": False, "reason": f"pyarrow_unavailable:{_e}"}
         _dir = self._cold_parquet_dir()
@@ -3834,7 +3834,7 @@ class PulseNodePool(SilentLogMixin):
                     try:
                         shutil.rmtree(_tmp_dir)
                     except Exception as e:
-                        silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::compact_cold_storage L3080")
+                        silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::compact_cold_storage L3080", level="debug")
                     return {"before_files": _before, "after_files": _before,
                             "before_per_level": _before_per_level,
                             "node_count": 0, "dedup_count": 0, "success": False,
@@ -3849,7 +3849,7 @@ class PulseNodePool(SilentLogMixin):
                 import config as _cfg_m60
                 _retry_on = bool(getattr(_cfg_m60, "ENABLE_COLD_COMPACT_WINDOWS_RETRY", True))
             except Exception as e:
-                silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::compact_cold_storage L3095")
+                silent_exc(e, where="nucleus.mnemosyne.PulseNodePool::compact_cold_storage L3095", level="debug")
                 _retry_on = True
             if not _retry_on:
                 # 灰度关闭：与改造前完全一致（单次 rmtree + rename）

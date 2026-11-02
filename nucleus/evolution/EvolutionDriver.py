@@ -276,7 +276,7 @@ class EvolutionDriver(SilentLogMixin):
                 json.dump(_data, _f, ensure_ascii=False, indent=2)
             return True
         except Exception as e:
-            silent_exc(e, where="nucleus.evolution.EvolutionDriver::request_apply_now L279")
+            silent_exc(e, where="nucleus.evolution.EvolutionDriver::request_apply_now L279", level="debug")
             return False
 
     def has_apply_request(self) -> bool:

@@ -158,7 +158,7 @@ def govern_quarantine_expiry(dry: bool = False) -> dict:
     try:
         _entries = json.load(open(_MANIFEST, encoding="utf-8")) or []
     except Exception as e:
-        silent_exc(e, where="tools.data_governance_m41::govern_quarantine_expiry L159")
+        silent_exc(e, where="tools.data_governance_m41::govern_quarantine_expiry L159", level="debug")
         return {"purged": 0, "freed_bytes": 0}
     _kept = []
     _purged = 0
@@ -183,7 +183,7 @@ def govern_quarantine_expiry(dry: bool = False) -> dict:
                     try:
                         _freed += os.path.getsize(_p)
                     except OSError as e:
-                        silent_exc(e, where="tools.data_governance_m41::govern_quarantine_expiry L183")
+                        silent_exc(e, where="tools.data_governance_m41::govern_quarantine_expiry L183", level="debug")
             _purged += 1
         else:
             _kept.append(_e)
@@ -251,12 +251,12 @@ def govern_backups(dry: bool = False) -> dict:
             try:
                 _after = os.path.getsize(_dst)
             except OSError as e:
-                silent_exc(e, where="tools.data_governance_m41::govern_backups L252")
+                silent_exc(e, where="tools.data_governance_m41::govern_backups L252", level="debug")
                 _after = 0
             try:
                 os.remove(_p)
             except OSError as e:
-                silent_exc(e, where="tools.data_governance_m41::govern_backups L256")
+                silent_exc(e, where="tools.data_governance_m41::govern_backups L256", level="debug")
             _archived += 1
             _freed += max(0, _sz - _after)
     return {"keep": _keep, "total": len(_rows), "archived": _archived,

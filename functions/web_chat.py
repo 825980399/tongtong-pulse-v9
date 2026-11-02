@@ -455,7 +455,7 @@ class WebChatHandler(BaseHTTPRequestHandler):
                     if user:
                         return user
         except Exception as e:
-            silent_exc(e, where="functions.web_chat::_get_current_user_name L451")
+            silent_exc(e, where="functions.web_chat::_get_current_user_name L451", level="debug")
         return "访客"
 
     def _handle_upload(self):

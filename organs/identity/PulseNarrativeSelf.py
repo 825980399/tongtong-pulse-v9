@@ -85,7 +85,7 @@ class PulseNarrativeSelf(BasePulseOrgan):
         try:
             self._narrative_store_state = self.load()
         except Exception as _e_ns412:
-            silent_exc(_e_ns412, where="PulseNarrativeSelf.__init__ 412刀1 叙事回放")
+            silent_exc(_e_ns412, where="PulseNarrativeSelf.__init__ 412刀1 叙事回放", level="debug")
 
     def _load_narrative_config(self):
         """从config加载叙事自我配置，失败时使用兜底值"""
@@ -178,7 +178,7 @@ class PulseNarrativeSelf(BasePulseOrgan):
                     self._dynamic_values[_val_k] = max(
                         0.1, min(1.0, 0.85 * self._dynamic_values[_val_k] + 0.15 * _val_s))
         except Exception as e:
-            silent_exc(e, where="organs.identity.PulseNarrativeSelf::_on_record L172")
+            silent_exc(e, where="organs.identity.PulseNarrativeSelf::_on_record L172", level="debug")
 
         # 步骤6: 生成当前人生阶段总结 + 行为建议
         life_stage = self._generate_life_stage_summary()
@@ -220,7 +220,7 @@ class PulseNarrativeSelf(BasePulseOrgan):
         try:
             from nucleus.observability import narrative_store as _ns412
         except Exception as _e_imp:
-            silent_exc(_e_imp, where="PulseNarrativeSelf.persist 412刀1 import")
+            silent_exc(_e_imp, where="PulseNarrativeSelf.persist 412刀1 import", level="debug")
             return {"ok": False, "reason": "import_failed"}
         if not _ns412.enabled():
             return {"ok": False, "reason": "disabled"}
@@ -245,7 +245,7 @@ class PulseNarrativeSelf(BasePulseOrgan):
                     cont_days=_cdays,
                 )
         except Exception as _e_dig413:
-            silent_exc(_e_dig413, where="PulseNarrativeSelf.persist 413刀3 digest")
+            silent_exc(_e_dig413, where="PulseNarrativeSelf.persist 413刀3 digest", level="debug")
             _dig = {}
             _anchor = _now
         _dl = _dig.get("delta") if isinstance(_dig.get("delta"), dict) else {}
@@ -301,7 +301,7 @@ class PulseNarrativeSelf(BasePulseOrgan):
         try:
             from nucleus.observability import narrative_store as _ns412
         except Exception as _e_imp:
-            silent_exc(_e_imp, where="PulseNarrativeSelf.load 412刀1 import")
+            silent_exc(_e_imp, where="PulseNarrativeSelf.load 412刀1 import", level="debug")
             return {"state": "unavailable", "restored": 0, "continuous_days": 0,
                     "bad_lines": 0, "reason": "import_failed"}
         if not _ns412.enabled():
@@ -466,7 +466,7 @@ class PulseNarrativeSelf(BasePulseOrgan):
                     f"（L2认知{_l2}个，L3智慧{_l3}个）。"
                 )
         except Exception as e:
-            silent_exc(e, where="organs.identity.PulseNarrativeSelf::_generate_weekly_report L335")
+            silent_exc(e, where="organs.identity.PulseNarrativeSelf::_generate_weekly_report L335", level="debug")
         dominant_values = sorted(self._dynamic_values.items(), key=lambda x: x[1], reverse=True)
         top_values_str = "、".join(f"{v[0]}({v[1]:.2f})" for v in dominant_values[:3])
 
@@ -526,7 +526,7 @@ class PulseNarrativeSelf(BasePulseOrgan):
                     if _comment and len(_comment) > 10:
                         _reasoning_skill_text = _comment
         except Exception as e:
-            silent_exc(e, where="organs.identity.PulseNarrativeSelf::_generate_weekly_report L383")
+            silent_exc(e, where="organs.identity.PulseNarrativeSelf::_generate_weekly_report L383", level="debug")
 
         # ===== 新增: 生命叙事的意义建构——从经历中提炼成长感悟 =====
         life_lesson = self._distill_life_lesson(recent_events, values_changed, recent_themes)
@@ -724,7 +724,7 @@ class PulseNarrativeSelf(BasePulseOrgan):
             _ns_days = int(_st.get("continuous_days") or 0)
             _ns_state = str(_st.get("state") or "")
         except Exception as _e_ns:
-            silent_exc(_e_ns, where="PulseNarrativeSelf._generate_life_stage_summary 412刀1")
+            silent_exc(_e_ns, where="PulseNarrativeSelf._generate_life_stage_summary 412刀1", level="debug")
         dominant_values = sorted(self._dynamic_values.items(), key=lambda x: x[1], reverse=True)
         top_value = dominant_values[0][0] if dominant_values else "学习"
 
@@ -1309,7 +1309,7 @@ class PulseNarrativeSelf(BasePulseOrgan):
         try:
             return dict(self._generate_behavior_guidance(str(event_type or "general")))
         except Exception as e:
-            silent_exc(e, where="organs.identity.PulseNarrativeSelf::get_behavior_guidance L1138")
+            silent_exc(e, where="organs.identity.PulseNarrativeSelf::get_behavior_guidance L1138", level="debug")
             return None
 
     def get_narrative_clues(self, limit: int = 2) -> list[str]:

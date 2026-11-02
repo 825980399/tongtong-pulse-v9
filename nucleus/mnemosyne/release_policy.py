@@ -76,7 +76,7 @@ def _cfg(name: str, default):
         import config as _c
         return getattr(_c, name, default)
     except Exception as _e:
-        silent_exc(_e, where="release_policy::_cfg " + name)
+        silent_exc(_e, where="release_policy::_cfg " + name, level="debug")
         return default
 
 
@@ -217,7 +217,7 @@ def probe_refcount(obj: Any) -> int:
     try:
         _refs = gc.get_referrers(obj)
     except Exception as _e:
-        silent_exc(_e, where="release_policy::probe_refcount")
+        silent_exc(_e, where="release_policy::probe_refcount", level="debug")
         return -1
     _n = 0
     for _r in _refs:

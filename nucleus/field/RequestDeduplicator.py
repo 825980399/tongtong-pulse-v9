@@ -366,7 +366,7 @@ def get_request_deduplicator() -> RequestDeduplicator | None:
         _max_wait = int(getattr(_cfg, "REQUEST_DEDUP_MAX_WAITERS", 10) or 10)
         _ttl = float(getattr(_cfg, "REQUEST_DEDUP_REUSE_TTL_SEC", 5.0) or 5.0)
     except Exception as e:
-        silent_exc(e, where="nucleus.field.RequestDeduplicator::get_request_deduplicator L359")
+        silent_exc(e, where="nucleus.field.RequestDeduplicator::get_request_deduplicator L359", level="debug")
         return None
 
     with _DEDUP_LOCK:

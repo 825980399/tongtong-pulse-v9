@@ -85,7 +85,7 @@ def enabled() -> bool:
         import config as _c
         return bool(getattr(_c, SWITCH, True))
     except Exception as _e:
-        silent_exc(_e, where="evolution.perf_delta_probe:enabled")
+        silent_exc(_e, where="evolution.perf_delta_probe:enabled", level="debug")
         return True
 
 
@@ -133,7 +133,7 @@ def measure_import_ms(file_abs: str, project_root: str | None = None,
     try:
         from nucleus.security.sandbox_limits import execute_code_in_subprocess
     except Exception as _e:
-        silent_exc(_e, where="evolution.perf_delta_probe:import_sandbox")
+        silent_exc(_e, where="evolution.perf_delta_probe:import_sandbox", level="debug")
         _out["reason"] = "sandbox_unavailable"
         return _out
     _root = os.path.abspath(project_root or os.path.dirname(file_abs))

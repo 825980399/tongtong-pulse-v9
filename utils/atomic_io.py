@@ -58,9 +58,9 @@ def replace_with_retry(tmp: str, dst: str, attempts: int = REPLACE_ATTEMPTS,
                           or getattr(e, "winerror", None) in (5, 32, 33))
             if not _retryable and _i == 0:
                 # 不可重试的错（路径不存在/名字非法）不要空转 6 次
-                silent_exc(e, where="utils.atomic_io::replace_with_retry non_retryable")
+                silent_exc(e, where="utils.atomic_io::replace_with_retry non_retryable", level="debug")
                 return False
             time.sleep(base_sleep * (2 ** _i))
     if _last is not None:
-        silent_exc(_last, where="utils.atomic_io::replace_with_retry exhausted")
+        silent_exc(_last, where="utils.atomic_io::replace_with_retry exhausted", level="debug")
     return False

@@ -278,7 +278,7 @@ class PulseKidney(BasePulseOrgan):
                             nodes_to_remove.append(node)
                             continue
                     except Exception as e:
-                        silent_exc(e, where="organs.body.PulseKidney::_on_purge_check L280")
+                        silent_exc(e, where="organs.body.PulseKidney::_on_purge_check L280", level="debug")
                 if age_days > effective_max_age and node.activation_count < 2:
                     nodes_to_remove.append(node)
                     continue
@@ -799,7 +799,7 @@ class PulseKidney(BasePulseOrgan):
             import config as _c
             return bool(getattr(_c, "ENABLE_KAL_CALL_SITES", True))
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseKidney::_m70_kal_callsites_on L748")
+            silent_exc(e, where="organs.body.PulseKidney::_m70_kal_callsites_on L748", level="debug")
             return True
 
 # ========== 自测 ==========

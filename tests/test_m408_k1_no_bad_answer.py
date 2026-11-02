@@ -186,7 +186,7 @@ class TestD_NoExperienceDefaultAnywhere(unittest.TestCase):
             except OSError as _e:
                 # 单文件读不了（占用/权限/正在被删）不该让整仓扫描失败，
                 # 但也不许静默 —— 走统一可见化（cw2 门禁要求）。
-                silent_exc(_e, "tests/test_m408_k1_no_bad_answer.py 扫描读文件")
+                silent_exc(_e, "tests/test_m408_k1_no_bad_answer.py 扫描读文件", level="debug")
                 continue
             if "experience_default" in _t:
                 hits.append(os.path.relpath(_p, _ROOT).replace("\\", "/"))

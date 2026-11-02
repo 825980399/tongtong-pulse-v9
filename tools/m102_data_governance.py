@@ -445,14 +445,14 @@ def apply_b():
             if not os.access(VECTORS_NPZ, os.W_OK):
                 os.chmod(VECTORS_NPZ, 0o666)
         except Exception as e:
-            silent_exc(e, where="tools.m102_data_governance::apply_b L459")
+            silent_exc(e, where="tools.m102_data_governance::apply_b L459", level="debug")
         os.replace(tmp_npz, VECTORS_NPZ)
     except Exception:
         if os.path.exists(tmp_npz):
             try:
                 os.remove(tmp_npz)
             except Exception as e:
-                silent_exc(e, where="tools.m102_data_governance::apply_b L466")
+                silent_exc(e, where="tools.m102_data_governance::apply_b L466", level="debug")
         raise
     _atomic_json(VECTORS_META, meta)
     print(f"T-102b 完成: 孤儿向量移除 {removed:} 条 ({len(vids):} -> {len(new_ids):})；npz {before_npz / 2 ** 20:.2f} MB -> {os.path.getsize(VECTORS_NPZ) / 2 ** 20:.2f} MB；meta {before_meta / 2 ** 20:.2f} MB -> {os.path.getsize(VECTORS_META) / 2 ** 20:.2f} MB")

@@ -36,7 +36,7 @@ def _m418_lock_window_on() -> bool:
         import config as _cfg
         return bool(getattr(_cfg, "ENABLE_M418_LOCK_WAIT_WINDOW", True))
     except Exception as e:
-        silent_exc(e, "runtime_metrics.py:_m418_lock_window_on")
+        silent_exc(e, "runtime_metrics.py:_m418_lock_window_on", level="debug")
         return True
 
 
@@ -54,7 +54,7 @@ def _m418_lock_window_avg(waits, stamps, now) -> tuple:
     try:
         _n = min(len(waits), len(stamps))
     except Exception as _e:                      # pragma: no cover - 防御
-        silent_exc(_e, where="nucleus.runtime_metrics::_m418_lock_window_avg")
+        silent_exc(_e, where="nucleus.runtime_metrics::_m418_lock_window_avg", level="debug")
         return 0.0, 0
     if not _n:
         return 0.0, 0
@@ -68,7 +68,7 @@ def _m418_lock_window_avg(waits, stamps, now) -> tuple:
                 _sum += float(_w[_i])
                 _cnt += 1
     except Exception as e:
-        silent_exc(e, "runtime_metrics.py:_m418_lock_window_avg")
+        silent_exc(e, "runtime_metrics.py:_m418_lock_window_avg", level="debug")
         return 0.0, 0
     if not _cnt:
         return 0.0, 0
@@ -172,21 +172,21 @@ class RuntimeMetrics:
         try:
             self._queue.put_nowait(("pulse", duration_ms, lock_wait_ms, queue_depth))
         except queue.Full as _se:
-            silent_exc(_se, "runtime_metrics.py:101")
+            silent_exc(_se, "runtime_metrics.py:101", level="debug")
 
     def record_error(self, pulse_type: str, error: str, traceback_text: str, lock_held: bool = False):
         """记录异常现场快照（脉冲类型 + 错误 + 调用栈 + 锁状态）。"""
         try:
             self._queue.put_nowait(("error", pulse_type, error, traceback_text, lock_held))
         except queue.Full as _se:
-            silent_exc(_se, "runtime_metrics.py:108")
+            silent_exc(_se, "runtime_metrics.py:108", level="debug")
 
     def record_reentry(self, task_name: str):
         """记录周期任务重入触发。"""
         try:
             self._queue.put_nowait(("reentry", task_name))
         except queue.Full as _se:
-            silent_exc(_se, "runtime_metrics.py:115")
+            silent_exc(_se, "runtime_metrics.py:115", level="debug")
 
     def _aggregate_loop(self):
         """独立聚合线程：批量消费队列，更新指标（避免主链路被埋点拖慢）。"""
@@ -304,7 +304,7 @@ class RuntimeMetrics:
             )
             get_adaptive_controller().set_level(_lv)
         except Exception as _se:
-            silent_exc(_se, "runtime_metrics.py:_sync_adaptive_level")
+            silent_exc(_se, "runtime_metrics.py:_sync_adaptive_level", level="debug")
 
     def _check_alerts(self, point: dict[str, Any]) -> None:
         """★B3：告警阈值联动——异常指标主动写告警日志，并记入快照。"""
@@ -349,7 +349,7 @@ class RuntimeMetrics:
                               for _n, _v in _top]
                     _hot_lock_msg = f"，主要来源: {' | '.join(_parts)}"
             except Exception as _se:
-                silent_exc(_se, "runtime_metrics.py:241")
+                silent_exc(_se, "runtime_metrics.py:241", level="debug")
             _alerts.append({
                 "type": "lock_wait_high",
                 "level": "WARNING",
@@ -452,7 +452,7 @@ class RuntimeMetrics:
                 else:
                     _logger.warning(_a["message"])
         except Exception as _se:
-            silent_exc(_se, "runtime_metrics.py:298")
+            silent_exc(_se, "runtime_metrics.py:298", level="debug")
 
     def get_queue_depth(self) -> int:
         """★第64批 T4：获取当前瞬时队列深度（供自适应缓存 TTL 参考）。
@@ -480,7 +480,7 @@ class RuntimeMetrics:
             _cpu = float(psutil.cpu_percent(interval=None))
             _mem = float(psutil.virtual_memory().percent)
         except Exception as _se:
-            silent_exc(_se, "runtime_metrics.py:326")
+            silent_exc(_se, "runtime_metrics.py:326", level="debug")
         _level = "low"
         # ★第169批 C8：内存维度参与分级（与 InfoField 口径对齐）。
         #   默认阈值较高 -> 既有 CPU/队列判定**零回归**；内存真的高时才升档。
@@ -511,7 +511,7 @@ class RuntimeMetrics:
                     float(getattr(_c, "RUNTIME_MEM_LEVEL_HIGH", 90.0)),
                     float(getattr(_c, "RUNTIME_MEM_LEVEL_MEDIUM", 85.0)))
         except Exception as _e:
-            silent_exc(_e, where="nucleus.runtime_metrics::_m169_mem_level_thresholds")
+            silent_exc(_e, where="nucleus.runtime_metrics::_m169_mem_level_thresholds", level="debug")
             return (95.0, 90.0, 85.0)
 
     def get_memory_usage(self) -> dict[str, Any]:
@@ -530,7 +530,7 @@ class RuntimeMetrics:
             _vms = _mi.vms / (1024.0 * 1024.0)
             _pct = float(_p.memory_percent())
         except Exception as _se:
-            silent_exc(_se, "runtime_metrics.py:357")
+            silent_exc(_se, "runtime_metrics.py:357", level="debug")
         return {"rss_mb": round(_rss, 1), "vms_mb": round(_vms, 1),
                 "percent": round(_pct, 1)}
 
@@ -560,7 +560,7 @@ class RuntimeMetrics:
                     _st["state"] = "normal"
                     _st["last"] = _now
         except Exception as _e:
-            silent_exc(_e, where="runtime_metrics._m403_alarm_transition")
+            silent_exc(_e, where="runtime_metrics._m403_alarm_transition", level="debug")
 
     def check_memory_alarm(self, threshold_percent: float = 80.0) -> bool:
         """★主线第65批 T5：内存超阈值告警（True=触发）。调用方自行决定降载/GC。
@@ -622,7 +622,7 @@ class RuntimeMetrics:
             _ramp = float(getattr(_c427, "MEMORY_RAMP_SEC", 600.0) or 600.0)
             _thr = float(getattr(_c427, "MEMORY_GROWTH_ALARM_MB_PER_MIN", 10.0) or 10.0)
         except Exception as _ce427:
-            silent_exc(_ce427, where="runtime_metrics::get_memory_growth_report config")
+            silent_exc(_ce427, where="runtime_metrics::get_memory_growth_report config", level="debug")
             _ramp, _thr = 600.0, 10.0
         _out["ramp_sec"] = _ramp
         _out["sample_interval_sec"] = float(getattr(self, "_sample_interval", 5.0) or 5.0)
@@ -676,7 +676,7 @@ class RuntimeMetrics:
                 _out["phase"] == "steady" and _out["growth_mb_per_min"] >= _thr)
             return _out
         except Exception as e:
-            silent_exc(e, where="nucleus.runtime_metrics::get_memory_growth_report")
+            silent_exc(e, where="nucleus.runtime_metrics::get_memory_growth_report", level="debug")
             return _out
 
     def get_memory_growth_rate(self, window_samples: int = 60) -> float:
@@ -694,7 +694,7 @@ class RuntimeMetrics:
             return float(self.get_memory_growth_report(
                 window_samples=window_samples).get("growth_mb_per_min") or 0.0)
         except Exception as e:
-            silent_exc(e, where="nucleus.runtime_metrics::get_memory_growth_rate L440")
+            silent_exc(e, where="nucleus.runtime_metrics::get_memory_growth_rate L440", level="debug")
             return 0.0
 
     def check_memory_alarm_detailed(self, threshold_percent: float = 80.0,
@@ -754,7 +754,7 @@ class RuntimeMetrics:
                     _logger, "memory_detailed", True, _msg,
                     "[运行时指标] 内存告警解除（使用率 %.1f%%，RSS=%.1fMB）" % (_pct, _rss))
             except Exception as _se:
-                silent_exc(_se, "runtime_metrics.py:435")
+                silent_exc(_se, "runtime_metrics.py:435", level="debug")
             if auto_gc and _enable_gc:
                 # ★364刀B1③：`gc.collect()` 是 **STW** 暂停，必须留痕
                 #   （回收对象数 + 暂停时长 + 触发闸因），否则「回收有没有用、
@@ -779,7 +779,7 @@ class RuntimeMetrics:
                         "RSS=%.1fMB 使用率=%.1f%%",
                         _collected, _gc_pause_ms, ",".join(_triggers), _rss, _pct)
                 except Exception as _se:
-                    silent_exc(_se, "runtime_metrics.py:441")
+                    silent_exc(_se, "runtime_metrics.py:441", level="debug")
         else:
             # 未触发 ⇒ 只有"从告警恢复到正常"这一刻才留 INFO（重复调用不会再打）
             try:
@@ -787,7 +787,7 @@ class RuntimeMetrics:
                     _logger, "memory_detailed", False, "",
                     "[运行时指标] 内存告警解除（使用率 %.1f%%，RSS=%.1fMB）" % (_pct, _rss))
             except Exception as _se:
-                silent_exc(_se, "runtime_metrics.py:441b")
+                silent_exc(_se, "runtime_metrics.py:441b", level="debug")
         return {"triggered": _triggered, "percent": _pct, "rss_mb": _rss,
                 "growth_mb_per_min": round(_growth, 3), "gc_triggered": _gc_done,
                 # ★364刀B1②③：闸因与回收读数一起返回（观测面可直接读）
@@ -827,7 +827,7 @@ class RuntimeMetrics:
                 _s["thread_pools"] = _inv.get("pools", [])
                 _s["thread_budget_total"] = _inv.get("budget_total")
             except Exception as _e:
-                silent_exc(_e, where="runtime_metrics::get_snapshot 426刀1")
+                silent_exc(_e, where="runtime_metrics::get_snapshot 426刀1", level="debug")
             return _s
 
     def get_history(self, limit: int = 120) -> list[dict[str, Any]]:
@@ -884,7 +884,7 @@ def shutdown_runtime_metrics() -> None:
             try:
                 _sd()
             except Exception as _se:
-                silent_exc(_se, "runtime_metrics.py:506")
+                silent_exc(_se, "runtime_metrics.py:506", level="debug")
 
 
 # ===== ★主线第67批 T4/P1：队列深度自适应降频机制 =====
@@ -924,7 +924,7 @@ def _adaptive_enabled() -> bool:
         import config
         return bool(getattr(config, "ENABLE_ADAPTIVE_FREQUENCY", True))
     except Exception as e:
-        silent_exc(e, where="nucleus.runtime_metrics::_adaptive_enabled L582")
+        silent_exc(e, where="nucleus.runtime_metrics::_adaptive_enabled L582", level="debug")
         return True
 
 
@@ -955,7 +955,7 @@ def assess_load_level(queue_depth=None, cpu_percent=None, memory_percent=None,
             elif _q >= _med:
                 _level = "MEDIUM"
         except (TypeError, ValueError) as _se:
-            silent_exc(_se, "runtime_metrics.py:570")
+            silent_exc(_se, "runtime_metrics.py:570", level="debug")
 
     if cpu_percent is not None:
         try:
@@ -967,7 +967,7 @@ def assess_load_level(queue_depth=None, cpu_percent=None, memory_percent=None,
             elif _c > 50 and _level == "LOW":
                 _level = "MEDIUM"
         except (TypeError, ValueError) as _se:
-            silent_exc(_se, "runtime_metrics.py:582")
+            silent_exc(_se, "runtime_metrics.py:582", level="debug")
 
     if memory_percent is not None:
         try:
@@ -975,7 +975,7 @@ def assess_load_level(queue_depth=None, cpu_percent=None, memory_percent=None,
             if _m > 90 and _level != "CRITICAL":
                 _level = "CRITICAL"
         except (TypeError, ValueError) as _se:
-            silent_exc(_se, "runtime_metrics.py:590")
+            silent_exc(_se, "runtime_metrics.py:590", level="debug")
 
     # 快照保存中：至少视为 MEDIUM（保存本身吃 IO，不宜再叠加非关键操作）
     if snapshot_saving and _level == "LOW":
@@ -1015,7 +1015,7 @@ class AdaptiveFrequencyController:
                     _logger = logging.getLogger("pulse.module.runtime_metrics")
                     _logger.info(f"[自适应降频] 负载等级变化: {_old} → {level}")
                 except Exception as _e:
-                    silent_exc(_e, "runtime_metrics.py:AdaptiveFrequencyController.set_level")
+                    silent_exc(_e, "runtime_metrics.py:AdaptiveFrequencyController.set_level", level="debug")
                 self._level = level
                 self._level_since = _ts
                 # ★366刀N2：双向留痕 —— 只有"进/出暂停"才是关键事件，普通升降仍走 INFO
@@ -1115,7 +1115,7 @@ class AdaptiveFrequencyController:
             else:
                 _logger.info(_msg)
         except Exception as _e:
-            silent_exc(_e, "runtime_metrics.py:AdaptiveFrequencyController._emit_pause_event")
+            silent_exc(_e, "runtime_metrics.py:AdaptiveFrequencyController._emit_pause_event", level="debug")
         return _rec
 
     def get_pause_resume_events(self, limit: int = 20) -> list:
@@ -1158,7 +1158,7 @@ class AdaptiveFrequencyController:
             else:
                 _logger.debug(f"[自适应降频] 操作「{name}」节流跳过(等级={self._level})")
         except Exception as _e:
-            silent_exc(_e, "runtime_metrics.py:AdaptiveFrequencyController._log_skip")
+            silent_exc(_e, "runtime_metrics.py:AdaptiveFrequencyController._log_skip", level="debug")
 
     def get_stats(self) -> dict:
         """控制器状态（等级 / 已注册操作 / 跳过与执行计数）。"""

@@ -90,7 +90,7 @@ def _pyx_public_names(pyx_path: str) -> set[str]:
         with open(pyx_path, encoding="utf-8") as _f:
             _src = _f.read()
     except Exception as _e:
-        silent_exc(_e, where="build_cython_all::_pyx_public_names read")
+        silent_exc(_e, where="build_cython_all::_pyx_public_names read", level="debug")
         return _names
     for _m in _re.finditer(_src):
         _n = _m.group(1)
@@ -107,7 +107,7 @@ def _import_public_names(mod_path: str) -> set[str]:
     try:
         _m = importlib.import_module(mod_path)
     except Exception as _e:
-        silent_exc(_e, where=f"build_cython_all::_import_public_names {mod_path}")
+        silent_exc(_e, where=f"build_cython_all::_import_public_names {mod_path}", level="debug")
         return set()
     _out: set[str] = set()
     for _n in dir(_m):
@@ -187,7 +187,7 @@ def smoke(mod_path: str, samples: dict[str, tuple]) -> dict[str, Any]:
     try:
         _m = importlib.import_module(mod_path)
     except Exception as _e:
-        silent_exc(_e, where=f"build_cython_all::smoke import {mod_path}")
+        silent_exc(_e, where=f"build_cython_all::smoke import {mod_path}", level="debug")
         _out["errors"].append(f"import: {type(_e).__name__}: {_e}")
         return _out
     for _fn, _args in samples.items():
@@ -195,7 +195,7 @@ def smoke(mod_path: str, samples: dict[str, tuple]) -> dict[str, Any]:
             _v = getattr(_m, _fn)(*_args)
             _out["called"].append(f"{_fn}->{repr(_v)[:60]}")
         except Exception as _e:
-            silent_exc(_e, where=f"build_cython_all::smoke {mod_path}.{_fn}")
+            silent_exc(_e, where=f"build_cython_all::smoke {mod_path}.{_fn}", level="debug")
             _out["errors"].append(f"{_fn}: {type(_e).__name__}: {_e}")
     _out["ok"] = not _out["errors"]
     return _out

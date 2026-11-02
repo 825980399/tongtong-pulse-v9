@@ -85,7 +85,7 @@ def enabled() -> bool:
         import config as _c
         return bool(getattr(_c, SWITCH, True))
     except Exception as _e:
-        silent_exc(_e, where="observability.narrative_store:enabled")
+        silent_exc(_e, where="observability.narrative_store:enabled", level="debug")
         return True
 
 
@@ -100,7 +100,7 @@ def events_enabled() -> bool:
         import config as _c
         return bool(getattr(_c, EVENTS_SWITCH, True))
     except Exception as _e:
-        silent_exc(_e, where="observability.narrative_store:events_enabled")
+        silent_exc(_e, where="observability.narrative_store:events_enabled", level="debug")
         return True
 
 
@@ -170,7 +170,7 @@ def _atomic_write_lines(path: str, rows: list[dict]) -> tuple[bool, str]:
     try:
         os.makedirs(_dir, exist_ok=True)
     except Exception as _e:
-        silent_exc(_e, where="observability.narrative_store:_atomic_write_lines:mkdir")
+        silent_exc(_e, where="observability.narrative_store:_atomic_write_lines:mkdir", level="debug")
         return False, "mkdir_failed:%s" % type(_e).__name__
     _tmp = path + ".tmp412"
     try:

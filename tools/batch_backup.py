@@ -85,7 +85,7 @@ def _m55_unified_excludes() -> bool:
 
         return bool(getattr(_m55_cfg, "ENABLE_EXCLUDE_DIRS_UNIFIED", True))
     except Exception as e:
-        silent_exc(e, where="tools.batch_backup::_m55_unified_excludes L79")
+        silent_exc(e, where="tools.batch_backup::_m55_unified_excludes L79", level="debug")
         return True
 
 _M55_LEGACY_SKIP_DIR_NAMES: frozenset[str] = frozenset({

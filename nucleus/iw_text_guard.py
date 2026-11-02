@@ -36,7 +36,7 @@ def _search_topic_guard_enabled() -> bool:
         import config as _cfg
         return bool(getattr(_cfg, "ENABLE_SEARCH_TOPIC_GUARD", True))
     except Exception as e:
-        silent_exc(e, where="nucleus.iw_text_guard::_search_topic_guard_enabled L36")
+        silent_exc(e, where="nucleus.iw_text_guard::_search_topic_guard_enabled L36", level="debug")
         return True
 
 

@@ -505,7 +505,7 @@ class PulseSpiritualCore(BasePulseOrgan):
                         elif _failure_type == "capability":
                             _failure_text += "这不是'我不行'，而是'我还在成长'——每一个你还不擅长的领域，都是未来的成长空间。"
             except Exception as e:
-                silent_exc(e, where="organs.brain.PulseSpiritualCore::_generate_spiritual_narrative L504")
+                silent_exc(e, where="organs.brain.PulseSpiritualCore::_generate_spiritual_narrative L504", level="debug")
 
         if _failure_text:
             _prompt_parts.append(f"【你需要特别关注的自我状态】{_failure_text}")

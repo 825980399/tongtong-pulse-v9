@@ -187,7 +187,7 @@ def diff_kind(record: Any) -> str:
         if _skeleton(_orig) == _skeleton(_new):
             return "comment_only"
     except (SyntaxError, ValueError) as _e:
-        silent_exc(_e, where="patch_risk_gate.diff_kind 解析前后片段")
+        silent_exc(_e, where="patch_risk_gate.diff_kind 解析前后片段", level="debug")
         return "unknown"
     # ★412刀4：只删不增 ⇒ `delete_only`（注意：**识别** 与 **放行** 是两件事）
     if _is_delete_only(_orig, _new):
@@ -357,7 +357,7 @@ def annotate_rows(rows: Any, project_root: str | None = None) -> dict:
         try:
             _j = judge(_r, project_root=project_root)
         except Exception as _e:
-            silent_exc(_e, where="patch_risk_gate.annotate_rows.judge")
+            silent_exc(_e, where="patch_risk_gate.annotate_rows.judge", level="debug")
             continue
         _verdicts.append(_j)
         _new = {
@@ -490,14 +490,14 @@ def gate_allows(record: Any, project_root: str | None = None) -> tuple:
     except Exception as _e:
         # 读不到开关 ⇒ 按**默认（启用）**继续判定，而不是直接放行 ——
         # 否则一次 import 抖动就把整道闸静默关掉。
-        silent_exc(_e, where="patch_risk_gate.gate_allows 读开关")
+        silent_exc(_e, where="patch_risk_gate.gate_allows 读开关", level="debug")
         _on = True
     if not _on:
         return True, "gate_off"
     try:
         _j = judge(record, project_root=project_root)
     except Exception as _e:
-        silent_exc(_e, where="patch_risk_gate.gate_allows judge")
+        silent_exc(_e, where="patch_risk_gate.gate_allows judge", level="debug")
         return False, "judge_failed"
     if _j.get("eligible"):
         return True, "low:%s" % _j.get("diff_kind")
@@ -510,7 +510,7 @@ def gate_status() -> dict:
         import config as _cfg
         _on = bool(getattr(_cfg, "PATCH_M406_NARROW_GATE", True))
     except Exception as _e:
-        silent_exc(_e, where="patch_risk_gate.gate_status 读开关")
+        silent_exc(_e, where="patch_risk_gate.gate_status 读开关", level="debug")
         _on = True
     return {"schema": SCHEMA, "gate_on": _on,
             "narrow_kinds": list(narrow_kinds()),

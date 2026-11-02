@@ -100,7 +100,7 @@ class EnvironmentManager:
             )
             return result.returncode == 0
         except Exception as e:
-            silent_exc(e, where="nucleus.review.EnvironmentManager::_check_pip L103")
+            silent_exc(e, where="nucleus.review.EnvironmentManager::_check_pip L103", level="debug")
             return False
 
     def check_package(self, package_name: str) -> PackageInfo:

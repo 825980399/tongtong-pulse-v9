@@ -1040,7 +1040,7 @@ class QICA(BasePulseOrgan):
                 return float(_r[0][1])
             return 0.0
         except Exception as e:
-            silent_exc(e, where="nucleus.qica.QICA::_intent_vector_match L969")
+            silent_exc(e, where="nucleus.qica.QICA::_intent_vector_match L969", level="debug")
             return 0.0
 
     def _record_context(self, anchor: dict[str, Any]) -> None:

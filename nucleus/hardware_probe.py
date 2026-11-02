@@ -120,7 +120,7 @@ def _detect_gpu() -> bool:
         )
         return result.returncode == 0 and bool(result.stdout.strip())
     except Exception as e:
-        silent_exc(e, where="nucleus.hardware_probe::_detect_gpu L122")
+        silent_exc(e, where="nucleus.hardware_probe::_detect_gpu L122", level="debug")
         return False
 
 

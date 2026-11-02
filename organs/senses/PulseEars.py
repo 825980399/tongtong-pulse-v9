@@ -146,7 +146,7 @@ class PulseEars(BasePulseOrgan):
             if 'ears_max_context' in _rp and hasattr(self, '_max_context'):
                 self._max_context = _rp['ears_max_context']
         except Exception as e:
-            silent_exc(e, where="organs.senses.PulseEars::refresh_runtime_params L62")
+            silent_exc(e, where="organs.senses.PulseEars::refresh_runtime_params L62", level="debug")
 
 
     def __init__(self, organ_name: str = "耳朵"):
@@ -400,7 +400,7 @@ class PulseEars(BasePulseOrgan):
                     recognizer = vosk.KaldiRecognizer(model, 16000)
                     recognizer.SetWords(False)
                 except Exception as e:
-                    silent_exc(e, where="organs.senses.PulseEars::_voice_listen_loop L301")
+                    silent_exc(e, where="organs.senses.PulseEars::_voice_listen_loop L301", level="debug")
                 has_speech = False
                 last_partial_text = ""
                 silence_count = 0

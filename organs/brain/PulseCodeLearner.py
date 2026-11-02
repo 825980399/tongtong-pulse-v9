@@ -538,7 +538,7 @@ class PulseCodeLearner(BasePulseOrgan):
                       "tools/ 验证脚本未纳入自动检测")
         except Exception as e:
             # 日志本身不可用时绝不再抛，避免影响心跳主链路
-            silent_exc(e, where="organs.brain.PulseCodeLearner::_warn_periodic_scheduler_missing L523")
+            silent_exc(e, where="organs.brain.PulseCodeLearner::_warn_periodic_scheduler_missing L523", level="debug")
 
     def _maybe_trigger_health_driven_evolution(self):
         """健康度驱动的主动进化触发（★完美级全自主闭环入口）。"""
@@ -605,7 +605,7 @@ class PulseCodeLearner(BasePulseOrgan):
             import config as _c
             return bool(getattr(_c, "ENABLE_CODE_LEARNING_ADAPTIVE", True))
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseCodeLearner::_m65_code_learning_adaptive_enabled L591")
+            silent_exc(e, where="organs.brain.PulseCodeLearner::_m65_code_learning_adaptive_enabled L591", level="debug")
             return True
 
     def _m65_get_load_level(self):
@@ -617,7 +617,7 @@ class PulseCodeLearner(BasePulseOrgan):
             from nucleus.field.InfoField import get_system_load_level
             return str(get_system_load_level() or "low")
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseCodeLearner::_m65_get_load_level L323")
+            silent_exc(e, where="organs.brain.PulseCodeLearner::_m65_get_load_level L323", level="debug")
             return "low"
     def _learn_own_code_structure(self):
         # ★T3: 自适应降频接线——代码学习
@@ -628,7 +628,7 @@ class PulseCodeLearner(BasePulseOrgan):
             if not _ctrl.should_execute("code_learning"):
                 return
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseCodeLearner::_learn_own_code_structure L613")
+            silent_exc(e, where="organs.brain.PulseCodeLearner::_learn_own_code_structure L613", level="debug")
         """
         代码自主理解（增强版）：批量、深度、结构化地理解自己的代码。
 
@@ -1167,7 +1167,7 @@ class PulseCodeLearner(BasePulseOrgan):
                                     _file_path_for_analysis, node_pool=self.node_pool
                                 )
                             except Exception as e:
-                                silent_exc(e, where="organs.brain.PulseCodeLearner::_learn_own_code_structure L1152")
+                                silent_exc(e, where="organs.brain.PulseCodeLearner::_learn_own_code_structure L1152", level="debug")
                                 self._layered_cache[_file_path_for_analysis] = None
                     _layered = self._layered_cache.get(_file_path_for_analysis)
                     if _layered:
@@ -2198,7 +2198,7 @@ class PulseCodeLearner(BasePulseOrgan):
                         if isinstance(m, dict) and m.get("name")
                     ]
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseCodeLearner::_build_data_flow_graph 全量方法集")
+            silent_exc(e, where="organs.brain.PulseCodeLearner::_build_data_flow_graph 全量方法集", level="debug")
 
         # 识别入口方法和叶子方法（★第297批刀1/刀2 修复）
         for key, info in call_graph.items():
@@ -2288,7 +2288,7 @@ class PulseCodeLearner(BasePulseOrgan):
                         if "数据流" in _oval and getattr(_of, "state", None) == "active":
                             _of.state = "dormant"
             except Exception as e:
-                silent_exc(e, where="organs.brain.PulseCodeLearner::_build_data_flow_graph 快照收敛")
+                silent_exc(e, where="organs.brain.PulseCodeLearner::_build_data_flow_graph 快照收敛", level="debug")
             if self.node_pool:
                 _flow_node.value = clean_content_text(_flow_node.value) or _flow_node.value
                 self.node_pool.add(_flow_node)
@@ -2619,7 +2619,7 @@ class PulseCodeLearner(BasePulseOrgan):
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_EXPERIENCE_TRANSFER", False))
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseCodeLearner::_experience_transfer_enabled L2486")
+            silent_exc(e, where="organs.brain.PulseCodeLearner::_experience_transfer_enabled L2486", level="debug")
             return False
 
     def _get_experience_transfer(self):
@@ -3128,7 +3128,7 @@ class PulseCodeLearner(BasePulseOrgan):
                     _thr = int(getattr(_pcfg, "EVOLUTION_CONFIG", {})
                                .get("pending_backlog_warn_threshold", 8))
                 except Exception as e:
-                    silent_exc(e, where="organs.brain.PulseCodeLearner::_filter_issues_with_pending_patch L2998")
+                    silent_exc(e, where="organs.brain.PulseCodeLearner::_filter_issues_with_pending_patch L2998", level="debug")
                 if _cnt >= _thr:
                     _h = _oldest_s / 3600.0
                     _age = (f"{_h:.1f}小时" if _h >= 1.0
@@ -3139,7 +3139,7 @@ class PulseCodeLearner(BasePulseOrgan):
                               f"再次尝试修复，也不会自动消失。"
                               f"如需放行/拒绝，请处理 pending_patches.json")
             except Exception as e:
-                silent_exc(e, where="organs.brain.PulseCodeLearner::_filter_issues_with_pending_patch L3009")
+                silent_exc(e, where="organs.brain.PulseCodeLearner::_filter_issues_with_pending_patch L3009", level="debug")
             _kept, _dropped = [], 0
             for _iss in issues:
                 _organ = str(_iss.get("organ") or "").strip()
@@ -3155,7 +3155,7 @@ class PulseCodeLearner(BasePulseOrgan):
             return _kept, _dropped
         except Exception as e:
             # 门禁异常一律放行，宁可重复发现也不能漏发现
-            silent_exc(e, where="organs.brain.PulseCodeLearner::_filter_issues_with_pending_patch L3024")
+            silent_exc(e, where="organs.brain.PulseCodeLearner::_filter_issues_with_pending_patch L3024", level="debug")
             return issues, 0
 
     def _review_own_code_issues(self):

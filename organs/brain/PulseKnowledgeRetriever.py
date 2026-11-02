@@ -134,7 +134,7 @@ class PulseKnowledgeRetriever:
             if not isinstance(value, str):
                 value = str(value)
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseKnowledgeRetriever::clean_node_value L134")
+            silent_exc(e, where="organs.brain.PulseKnowledgeRetriever::clean_node_value L134", level="debug")
             return None
 
         if len(value) < 5:

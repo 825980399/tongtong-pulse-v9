@@ -172,7 +172,7 @@ class PulseHormones(BasePulseOrgan):
             inertia_cfg = cfg.get("emotion_inertia", {})
             return float(inertia_cfg.get("factor", 0.6))
         except Exception as e:
-            silent_exc(e, where="organs.endocrine.PulseHormones::_load_emotion_inertia L173")
+            silent_exc(e, where="organs.endocrine.PulseHormones::_load_emotion_inertia L173", level="debug")
             return 0.6
 
     # ========== 脉冲入口 ==========
@@ -342,7 +342,7 @@ class PulseHormones(BasePulseOrgan):
                     keywords=[*_attribution.get("keywords", []), effective_emotion]
                 )
             except Exception as e:
-                silent_exc(e, where="organs.endocrine.PulseHormones::_on_detect L342")
+                silent_exc(e, where="organs.endocrine.PulseHormones::_on_detect L342", level="debug")
         # ===== v22.0 M2新增结束 =====
         if effective_emotion in ("悲伤", "恐惧", "愤怒") and effective_intensity > 0.5:
             self._emit(HormonesEvent.CARE_NEEDED, {
@@ -402,7 +402,7 @@ class PulseHormones(BasePulseOrgan):
                     content=f"感受到{effective_emotion}(强度{effective_intensity:.2f})",
                 )
             except Exception as e:
-                silent_exc(e, where="organs.endocrine.PulseHormones::_on_detect L402")
+                silent_exc(e, where="organs.endocrine.PulseHormones::_on_detect L402", level="debug")
 
         # 写入情绪日志
         self._write_emotion_log(effective_emotion, effective_intensity, user_name)
@@ -993,7 +993,7 @@ class PulseHormones(BasePulseOrgan):
                         try:
                             os.unlink(_tmp)
                         except OSError as _ue:
-                            silent_exc(_ue, where="organs.endocrine.PulseHormones::_write_emotion_log 清理")
+                            silent_exc(_ue, where="organs.endocrine.PulseHormones::_write_emotion_log 清理", level="debug")
         except Exception as e:
             self._log(LogLevel.DEBUG, f"数据处理异常已忽略: {type(e).__name__}: {e}")
     # ========== 共振条件 ==========

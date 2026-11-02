@@ -61,7 +61,7 @@ class PulseMouth(BasePulseOrgan):
             if 'mouth_tts_cooldown_seconds' in _rp and hasattr(self, '_tts_cooldown_seconds'):
                 self._tts_cooldown_seconds = _rp['mouth_tts_cooldown_seconds']
         except Exception as e:
-            silent_exc(e, where="organs.motor.PulseMouth::refresh_runtime_params L63")
+            silent_exc(e, where="organs.motor.PulseMouth::refresh_runtime_params L63", level="debug")
 
 
     def __init__(self, organ_name: str = "嘴巴"):
@@ -359,7 +359,7 @@ class PulseMouth(BasePulseOrgan):
                 try:
                     self._play_beep()
                 except Exception as e:
-                    silent_exc(e, where="organs.motor.PulseMouth::_do_speak L362")
+                    silent_exc(e, where="organs.motor.PulseMouth::_do_speak L362", level="debug")
                 if self._tts_fail_count >= self._tts_max_fails:
                     self._log(LogLevel.WARNING, f"语音连续失败{self._tts_max_fails}次，进入{self._tts_cooldown_seconds}秒冷却")
                     self._tts_cooldown_until = time.time() + self._tts_cooldown_seconds

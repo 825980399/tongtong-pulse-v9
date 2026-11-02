@@ -261,7 +261,7 @@ class PollutionTagger:
                         _n.quality_flag = _flag
                         _n.quality_reason = _reason
                 except Exception as e:
-                    silent_exc(e, where="nucleus.knowledge.PollutionTagger::scan_pool L188")
+                    silent_exc(e, where="nucleus.knowledge.PollutionTagger::scan_pool L188", level="debug")
 
             if _flag != FLAG_CLEAN and _log is not None:
                 _nid = str((_n if isinstance(_n, dict) else getattr(_n, "node_id", "")) or "")
@@ -269,7 +269,7 @@ class PollutionTagger:
                     _log("INFO", f"[污染标记] 节点{_nid[:18]} 标记={_flag} "
                                  f"原因={_reason} 路径={str(_n.get('space_path') if isinstance(_n, dict) else getattr(_n, 'space_path', ''))[:30]}")
                 except Exception as e:
-                    silent_exc(e, where="nucleus.knowledge.PollutionTagger::scan_pool L195")
+                    silent_exc(e, where="nucleus.knowledge.PollutionTagger::scan_pool L195", level="debug")
 
         _stats = self.get_stats()
         _stats["elapsed_ms"] = int((time.time() - _t0) * 1000)
@@ -279,7 +279,7 @@ class PollutionTagger:
                              f"polluted={_stats['polluted']}, suspect={_stats['suspect']}, "
                              f"clean={_stats['clean']}（只标记不删除）")
             except Exception as e:
-                silent_exc(e, where="nucleus.knowledge.PollutionTagger::scan_pool L205")
+                silent_exc(e, where="nucleus.knowledge.PollutionTagger::scan_pool L205", level="debug")
         return _stats
 
     def scan_nodes(self, nodes: Iterable[Any], log_fn=None, apply_to_node: bool = True) -> dict[str, Any]:
@@ -316,12 +316,12 @@ class PollutionTagger:
                         _n.quality_flag = _flag
                         _n.quality_reason = _reason
                 except Exception as e:
-                    silent_exc(e, where="nucleus.knowledge.PollutionTagger::scan_nodes L228")
+                    silent_exc(e, where="nucleus.knowledge.PollutionTagger::scan_nodes L228", level="debug")
             if _flag != FLAG_CLEAN and _log is not None:
                 try:
                     _log("INFO", f"[污染标记] 标记={_flag} 原因={_reason}")
                 except Exception as e:
-                    silent_exc(e, where="nucleus.knowledge.PollutionTagger::scan_nodes L232")
+                    silent_exc(e, where="nucleus.knowledge.PollutionTagger::scan_nodes L232", level="debug")
         return self.get_stats()
 
     # ========== 降权 ==========
@@ -395,7 +395,7 @@ class PollutionTagger:
             try:
                 return node.to_dict()
             except Exception as e:
-                silent_exc(e, where="nucleus.knowledge.PollutionTagger::_to_dict L302")
+                silent_exc(e, where="nucleus.knowledge.PollutionTagger::_to_dict L302", level="debug")
         return {
             "node_id": getattr(node, "node_id", ""),
             "value": getattr(node, "value", ""),

@@ -147,13 +147,13 @@ class StructuredParallelScheduler:
             from utils.thread_budget import cap as _m426_cap
             _m426_workers = int(_m426_cap("struct_parallel", _m426_workers))
         except Exception as _m426_e:
-            silent_exc(_m426_e, where="StructuredParallelScheduler::__init__ 426刀1")
+            silent_exc(_m426_e, where="StructuredParallelScheduler::__init__ 426刀1", level="debug")
         self._executor = ThreadPoolExecutor(max_workers=_m426_workers, thread_name_prefix="StructParallel")
         try:
             from utils.thread_budget import register as _m426_reg
             _m426_reg("struct_parallel", self._executor)
         except Exception as _m426_e:
-            silent_exc(_m426_e, where="StructuredParallelScheduler::register 426刀1")
+            silent_exc(_m426_e, where="StructuredParallelScheduler::register 426刀1", level="debug")
         self._shutdown = False  # ★v26.0修复：关闭标志，防止shutdown后仍提交任务
 
     @classmethod

@@ -64,7 +64,7 @@ class TestIdentitySeedJudge(unittest.TestCase):
             reset_event_bus()
         except Exception as _e:
             # ★cw2「未跟踪盲区」：新 .py 的 except 必须走 silent_exc（禁裸 pass）
-            silent_exc(_e, where="test_identity_seed_m159b::setUp reset_event_bus")
+            silent_exc(_e, where="test_identity_seed_m159b::setUp reset_event_bus", level="debug")
 
     def _run_check(self):
         """构造最轻替身 organ（绕过重 __init__）并跑一次身份校验。"""

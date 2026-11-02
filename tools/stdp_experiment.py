@@ -81,18 +81,18 @@ def load_traces(paths: List[str]) -> List[Dict[str, Any]]:
                     try:
                         _o = json.loads(_ln)
                     except Exception as e:
-                        silent_exc(e)
+                        silent_exc(e, level="debug")
                         continue
                     if not isinstance(_o, dict) or "ts" not in _o:
                         continue
                     try:
                         _o["ts"] = float(_o["ts"])
                     except Exception as e:
-                        silent_exc(e)
+                        silent_exc(e, level="debug")
                         continue
                     records.append(_o)
         except Exception as e:
-            silent_exc(e)
+            silent_exc(e, level="debug")
     return records
 
 
@@ -173,7 +173,7 @@ def run_experiment(input_paths: List[str],
                     _of.write(json.dumps(_r, ensure_ascii=False))
                     _of.write("\n")
         except Exception as e:
-            silent_exc(e)
+            silent_exc(e, level="debug")
 
     return {
         "results": results,
@@ -214,7 +214,7 @@ def load_pulse_pairs(paths: List[str]) -> Dict[str, Any]:
                     try:
                         _o = json.loads(_ln)
                     except Exception as e:
-                        silent_exc(e)
+                        silent_exc(e, level="debug")
                         continue
                     _pid = _o.get("pulse_id")
                     if not _pid:
@@ -225,7 +225,7 @@ def load_pulse_pairs(paths: List[str]) -> Dict[str, Any]:
                     elif _o.get("type") == "receive":
                         _g["receives"].append(_o)
         except Exception as e:
-            silent_exc(e)
+            silent_exc(e, level="debug")
     return _groups
 
 
@@ -284,7 +284,7 @@ def run_pair_experiment(input_paths: List[str], out_path: Optional[str] = None,
                     _of.write(json.dumps(_r, ensure_ascii=False))
                     _of.write("\n")
         except Exception as e:
-            silent_exc(e)
+            silent_exc(e, level="debug")
     return {
         "results": results, "weights": _weights, "params": fp,
         "pair_count": _pair_count, "out_path": out_path,

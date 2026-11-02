@@ -139,7 +139,7 @@ def _atomic_write(path: str, doc) -> bool:
                 os.remove(_tmp)
         except OSError as _e:
             # 清理临时文件失败不该掩盖原始写盘错误 —— 只留痕，仍返回 False
-            silent_exc(_e, where="tools/m407_deprecate_prompt_pollution.py::_atomic_write")
+            silent_exc(_e, where="tools/m407_deprecate_prompt_pollution.py::_atomic_write", level="debug")
         return False
 
 

@@ -373,7 +373,7 @@ class ExperienceTransfer:
             try:
                 self._log_fn(level, msg)
             except Exception as e:
-                silent_exc(e, where="nucleus.evolution.ExperienceTransfer::_log L375")
+                silent_exc(e, where="nucleus.evolution.ExperienceTransfer::_log L375", level="debug")
 
 
 # ========== 模块级共享实例 ==========

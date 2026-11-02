@@ -532,7 +532,7 @@ class PulseInitiative(BasePulseOrgan):
             return random.choice(templates)
 
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseInitiative::_generate_knowledge_greeting L532")
+            silent_exc(e, where="organs.brain.PulseInitiative::_generate_knowledge_greeting L532", level="debug")
             return None
 
     def _generate_interest_greeting(self, user_name: str, intimacy: int) -> str | None:
@@ -565,7 +565,7 @@ class PulseInitiative(BasePulseOrgan):
                 ]
             return random.choice(_templates)
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseInitiative::_generate_interest_greeting L564")
+            silent_exc(e, where="organs.brain.PulseInitiative::_generate_interest_greeting L564", level="debug")
             return None
 
     def _generate_goal_greeting(self, user_name: str, intimacy: int) -> str | None:
@@ -594,7 +594,7 @@ class PulseInitiative(BasePulseOrgan):
                 return f"我最近有点想远离「{_desc}」…"
             return f"我有个想法：{_desc}。想和你说说。"
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseInitiative::_generate_goal_greeting L592")
+            silent_exc(e, where="organs.brain.PulseInitiative::_generate_goal_greeting L592", level="debug")
             return None
 
     # ========== 预留接口 ==========

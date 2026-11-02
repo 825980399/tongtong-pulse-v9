@@ -191,7 +191,7 @@ def _pair_file_cap() -> int:
             return _PAIR_FILE_CAP
         return _v
     except Exception as _e:
-        silent_exc(_e, where="utils.pulse_tracer::_pair_file_cap")
+        silent_exc(_e, where="utils.pulse_tracer::_pair_file_cap", level="debug")
         return _PAIR_FILE_CAP
 
 
@@ -204,7 +204,7 @@ def _pair_trim_by_lines_on() -> bool:
         import config
         return bool(getattr(config, "ENABLE_M401_PAIR_TRIM_BY_LINES", True))
     except Exception as _e:
-        silent_exc(_e, where="utils.pulse_tracer::_pair_trim_by_lines_on")
+        silent_exc(_e, where="utils.pulse_tracer::_pair_trim_by_lines_on", level="debug")
         return True
 
 
@@ -224,7 +224,7 @@ def _pair_lines_after_append(path: str, appended: int) -> int:
             try:
                 _n = _pair_count_lines(path)
             except OSError as _e:
-                silent_exc(_e, where="utils.pulse_tracer::_pair_lines_after_append 实测失败")
+                silent_exc(_e, where="utils.pulse_tracer::_pair_lines_after_append 实测失败", level="debug")
                 _n = int(appended or 0)
             _PAIR_LINE_STATE["path"] = path
             _PAIR_LINE_STATE["lines"] = _n
@@ -769,7 +769,7 @@ def _orphan_ring_max() -> int:
             return _ORPHAN_RING_FALLBACK
         return _v
     except Exception as _e:
-        silent_exc(_e, where="utils.pulse_tracer::_orphan_ring_max")
+        silent_exc(_e, where="utils.pulse_tracer::_orphan_ring_max", level="debug")
         return _ORPHAN_RING_FALLBACK
 
 
@@ -800,7 +800,7 @@ def _ring_append_orphans(rows) -> None:
                 try:
                     _n = _pair_count_lines(_p)
                 except OSError as _e:
-                    silent_exc(_e, where="utils.pulse_tracer::_ring_append_orphans 实测失败")
+                    silent_exc(_e, where="utils.pulse_tracer::_ring_append_orphans 实测失败", level="debug")
                     _n = len(_rows)
             else:
                 _n = int(_ORPHAN_RING_STATE.get("lines") or 0) + len(_rows)
@@ -816,7 +816,7 @@ def _ring_append_orphans(rows) -> None:
             with _pair_state_lock:
                 _ORPHAN_RING_STATE["lines"] = len(_keep)
     except Exception as _e:
-        silent_exc(_e, where="utils.pulse_tracer::_ring_append_orphans")
+        silent_exc(_e, where="utils.pulse_tracer::_ring_append_orphans", level="debug")
 
 
 def flush_to_file(force: bool = False):

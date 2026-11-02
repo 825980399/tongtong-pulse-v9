@@ -132,7 +132,7 @@ class HybridParallelScheduler(SilentLogMixin):
             import psutil
             return round(psutil.virtual_memory().total / (1024 ** 3), 1)
         except Exception as e:
-            silent_exc(e, where="nucleus.HybridParallelScheduler::_detect_memory_gb L124")
+            silent_exc(e, where="nucleus.HybridParallelScheduler::_detect_memory_gb L124", level="debug")
             return 16.0
 
     def _get_cpu_usage(self) -> float:
@@ -140,7 +140,7 @@ class HybridParallelScheduler(SilentLogMixin):
             import psutil
             return psutil.cpu_percent(interval=0.1)
         except Exception as e:
-            silent_exc(e, where="nucleus.HybridParallelScheduler::_get_cpu_usage L131")
+            silent_exc(e, where="nucleus.HybridParallelScheduler::_get_cpu_usage L131", level="debug")
             return 50.0
 
     def _calc_target_processes(self, level: AdaptiveLevel) -> int:
@@ -184,7 +184,7 @@ class HybridParallelScheduler(SilentLogMixin):
                 except Exception as _m418_e:
                     self._thread_workers = _m418_raw
                     silent_exc(_m418_e,
-                               where="HybridParallelScheduler::_ensure_pools 418刀3②")
+                               where="HybridParallelScheduler::_ensure_pools 418刀3②", level="debug")
                 self._thread_pool = ThreadPoolExecutor(max_workers=self._thread_workers, thread_name_prefix="HybridIO")
                 _log(f"线程池初始化完成: {self._thread_workers}个线程")
 
@@ -365,7 +365,7 @@ class HybridParallelScheduler(SilentLogMixin):
                 self._process_pool.shutdown(wait=wait)
                 _log("进程池已关闭")
             except Exception as e:
-                silent_exc(e, where="nucleus.HybridParallelScheduler::shutdown L348")
+                silent_exc(e, where="nucleus.HybridParallelScheduler::shutdown L348", level="debug")
             self._process_pool = None
             self._process_pool_initialized = False
         if self._thread_pool:

@@ -53,7 +53,7 @@ def test_m380_d6_no_timer_reemits_managed_event_type():
             with io.open(_p, encoding="utf-8", errors="ignore") as _f:
                 _src = _f.read()
         except OSError as _oe:
-            silent_exc(_oe, where="test_m380_d6.read_src")
+            silent_exc(_oe, where="test_m380_d6.read_src", level="debug")
             continue
         if "Timer(" not in _src:
             continue

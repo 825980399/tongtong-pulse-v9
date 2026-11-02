@@ -373,7 +373,7 @@ class PulseReflection(BasePulseOrgan):
                         keywords=["失败归因", _failure_attribution["type"], "坚韧"]
                     )
                 except Exception as e:
-                    silent_exc(e, where="organs.brain.PulseReflection::_analyze_interaction L374")
+                    silent_exc(e, where="organs.brain.PulseReflection::_analyze_interaction L374", level="debug")
         # ===== v21.0新增结束 =====
 
         has_issues = len(issues) > 0
@@ -442,7 +442,7 @@ class PulseReflection(BasePulseOrgan):
                          f"复盘体验记录: 质量={reflection_result['quality_score']:.1f}, "
                          f"问题={len(issues)}个")
             except Exception as e:
-                silent_exc(e, where="organs.brain.PulseReflection::_analyze_interaction L443")
+                silent_exc(e, where="organs.brain.PulseReflection::_analyze_interaction L443", level="debug")
         # ===== 社会性情感触发：复盘发现身份侵蚀时触发愧疚，获得表扬时触发自豪 =====
         if self.info_field and self.pulse_core:
             social_triggers = {}

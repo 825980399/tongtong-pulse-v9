@@ -118,7 +118,7 @@ def patch_rates(hist_path: str | None = None) -> dict[str, Any]:
     try:
         from nucleus.evolution.patch_quality_evaluator import evaluate_history
     except Exception as e:
-        silent_exc(e, where="nucleus.self_awareness.maturity_ledger::patch_rates import")
+        silent_exc(e, where="nucleus.self_awareness.maturity_ledger::patch_rates import", level="debug")
         _out["source"] = "import_failed"
         return _out
     _p = hist_path or os.path.join(_PROJECT_ROOT, "data", "patches", "patch_history.json")
@@ -130,7 +130,7 @@ def patch_rates(hist_path: str | None = None) -> dict[str, Any]:
         _res = evaluate_history(_hist)
         _items = [x for x in (_res.get("patches") or []) if isinstance(x, dict)]
     except Exception as e:
-        silent_exc(e, where="nucleus.self_awareness.maturity_ledger::patch_rates evaluate")
+        silent_exc(e, where="nucleus.self_awareness.maturity_ledger::patch_rates evaluate", level="debug")
         _out["source"] = "evaluate_failed"
         return _out
 
@@ -180,7 +180,7 @@ def probe_count() -> int:
             return 0
         return len([f for f in os.listdir(_d) if os.path.isfile(os.path.join(_d, f))])
     except Exception as e:
-        silent_exc(e, where="nucleus.self_awareness.maturity_ledger::probe_count")
+        silent_exc(e, where="nucleus.self_awareness.maturity_ledger::probe_count", level="debug")
         return 0
 
 
@@ -223,7 +223,7 @@ def effect_verify_rate(hist_path: str | None = None) -> dict[str, Any]:
         })
         return _out
     except Exception as e:
-        silent_exc(e, where="nucleus.self_awareness.maturity_ledger::effect_verify_rate")
+        silent_exc(e, where="nucleus.self_awareness.maturity_ledger::effect_verify_rate", level="debug")
         _out["source"] = "read_failed"
         return _out
 
@@ -238,7 +238,7 @@ def load_overrides(path: str | None = None) -> dict[str, Any]:
         _d = json.load(open(_p, encoding="utf-8"))
         return _d if isinstance(_d, dict) else {}
     except Exception as e:
-        silent_exc(e, where="nucleus.self_awareness.maturity_ledger::load_overrides")
+        silent_exc(e, where="nucleus.self_awareness.maturity_ledger::load_overrides", level="debug")
         return {}
 
 
@@ -320,7 +320,7 @@ def _weighted_score(dims: dict[str, dict]) -> float | None:
     try:
         from nucleus.self_awareness.quality_score_v2 import DIMENSION_WEIGHTS_V2
     except Exception as e:
-        silent_exc(e, where="nucleus.self_awareness.maturity_ledger::_weighted_score import")
+        silent_exc(e, where="nucleus.self_awareness.maturity_ledger::_weighted_score import", level="debug")
         return None
     _acc, _tw = 0.0, 0.0
     for _name, _d in (dims or {}).items():
@@ -382,7 +382,7 @@ def build_entry(result: dict[str, Any], overrides: dict[str, Any] | None = None,
         from nucleus.self_awareness.quality_score_v2 import quality_level
         _level = quality_level(_score)
     except Exception as e:
-        silent_exc(e, where="nucleus.self_awareness.maturity_ledger::build_entry level")
+        silent_exc(e, where="nucleus.self_awareness.maturity_ledger::build_entry level", level="debug")
         _level = "unknown"
 
     # ★第158批 上-A T-唯一口径件-1：台账**只引唯一口径件的值**，不得自行重算。
@@ -493,7 +493,7 @@ def register_daily(result: dict[str, Any] | None = None, batch: str = "",
         from nucleus.self_awareness.quality_score_v2 import evaluate_v2
         _res = result if isinstance(result, dict) else evaluate_v2()
     except Exception as e:
-        silent_exc(e, where="nucleus.self_awareness.maturity_ledger::register_daily evaluate")
+        silent_exc(e, where="nucleus.self_awareness.maturity_ledger::register_daily evaluate", level="debug")
         return {"error": f"{type(e).__name__}: {e}", "version": LEDGER_VERSION}
     _entry = build_entry(_res, batch=batch)
     append_entry(_entry, path)

@@ -354,7 +354,7 @@ class VectorEncoder:
                 return None
             return np.asarray(out, dtype=np.float32)
         except Exception as e:
-            silent_exc(e, where="nucleus.semantic.VectorEncoder::_cosine_cython L349")
+            silent_exc(e, where="nucleus.semantic.VectorEncoder::_cosine_cython L349", level="debug")
             return None
 
     @classmethod
@@ -383,7 +383,7 @@ class VectorEncoder:
                     if r:
                         return [(int(i), float(s)) for i, s in r]
                 except Exception as e:
-                    silent_exc(e, where="nucleus.semantic.VectorEncoder::topk L378")
+                    silent_exc(e, where="nucleus.semantic.VectorEncoder::topk L378", level="debug")
 
             idx = np.argpartition(-arr, k - 1)[:k]
             idx = idx[np.argsort(-arr[idx])]

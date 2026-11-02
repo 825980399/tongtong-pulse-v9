@@ -201,7 +201,7 @@ class SurvivalOrchestrator(SilentLogMixin):
         try:
             get_semantic_cache_l2().telemetry()
         except Exception as _tele_e:
-            silent_exc(_tele_e, where="nucleus.SurvivalOrchestrator::on_heartbeat.telemetry")
+            silent_exc(_tele_e, where="nucleus.SurvivalOrchestrator::on_heartbeat.telemetry", level="debug")
 
         self.tick()
 
@@ -405,7 +405,7 @@ class SurvivalOrchestrator(SilentLogMixin):
                 confidence=confidence,
             )
         except Exception as e:
-            silent_exc(e, where="nucleus.SurvivalOrchestrator::_post_insight L409")
+            silent_exc(e, where="nucleus.SurvivalOrchestrator::_post_insight L409", level="debug")
 
     # ========== 日志 ==========
 
@@ -422,7 +422,7 @@ class SurvivalOrchestrator(SilentLogMixin):
             logging.getLogger("pulse").log(
                 coerce_log_level(level), f"{LOG_TAG} {message}")
         except Exception as e:
-            silent_exc(e, where="nucleus.SurvivalOrchestrator::_log L426")
+            silent_exc(e, where="nucleus.SurvivalOrchestrator::_log L426", level="debug")
 
     def _log_error(self, level, message=None, **kwargs) -> None:
         try:
@@ -431,7 +431,7 @@ class SurvivalOrchestrator(SilentLogMixin):
             import logging
             logging.getLogger("pulse").error(f"{LOG_TAG} {message}")
         except Exception as e:
-            silent_exc(e, where="nucleus.SurvivalOrchestrator::_log_error L435")
+            silent_exc(e, where="nucleus.SurvivalOrchestrator::_log_error L435", level="debug")
 
 
 # ===== 模块级单例 =====

@@ -55,7 +55,7 @@ def _m360_trace_enabled() -> bool:
         import config as _cfg
         return bool(getattr(_cfg, "ENABLE_PAID_API_TRACE", True))
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.paid_api_trace::_m360_trace_enabled")
+        silent_exc(e, where="nucleus.llm.paid_api_trace::_m360_trace_enabled", level="debug")
         return True
 
 
@@ -67,7 +67,7 @@ def _m360_trace_path() -> str:
         if _rel:
             return _rel if os.path.isabs(_rel) else os.path.join(_PROJECT_ROOT, _rel)
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.paid_api_trace::_m360_trace_path")
+        silent_exc(e, where="nucleus.llm.paid_api_trace::_m360_trace_path", level="debug")
     return os.path.join(_PROJECT_ROOT, _TRACE_DIRNAME, _TRACE_BASENAME)
 
 
@@ -83,7 +83,7 @@ def _m360_stack(depth: int = 5) -> list:
             if len(_out) >= depth:
                 break
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.paid_api_trace::_m360_stack")
+        silent_exc(e, where="nucleus.llm.paid_api_trace::_m360_stack", level="debug")
     return _out
 
 
@@ -92,7 +92,7 @@ def _m360_host_of(url: str) -> str:
         from urllib.parse import urlparse
         return (urlparse(str(url)).hostname or "").lower()
     except Exception as _e:
-        silent_exc(_e, where="nucleus.llm.paid_api_trace::_m360_host_of urlparse")
+        silent_exc(_e, where="nucleus.llm.paid_api_trace::_m360_host_of urlparse", level="debug")
         return ""
 
 
@@ -117,7 +117,7 @@ def _m360_paid_hosts() -> set:
         if _h:
             _hosts.add(_h)
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.paid_api_trace::_m360_paid_hosts")
+        silent_exc(e, where="nucleus.llm.paid_api_trace::_m360_paid_hosts", level="debug")
     return _hosts
 
 
@@ -131,7 +131,7 @@ def is_paid_endpoint(url: str) -> bool:
             if _h == _ph or _h.endswith("." + _ph):
                 return True
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.paid_api_trace::is_paid_endpoint")
+        silent_exc(e, where="nucleus.llm.paid_api_trace::is_paid_endpoint", level="debug")
     return False
 
 
@@ -148,7 +148,7 @@ def _m360_log(msg: str, level: str = "info") -> None:
         _lg = get_module_logger("paid_api_trace")
         getattr(_lg, level if level in ("info", "warning", "error") else "info")(msg)
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.paid_api_trace::_m360_log")
+        silent_exc(e, where="nucleus.llm.paid_api_trace::_m360_log", level="debug")
 
 
 def _m360_append(rec: dict) -> bool:
@@ -160,12 +160,12 @@ def _m360_append(rec: dict) -> bool:
         _path = _m360_trace_path()
         os.makedirs(os.path.dirname(_path), exist_ok=True)
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.paid_api_trace::_m360_append makedirs")
+        silent_exc(e, where="nucleus.llm.paid_api_trace::_m360_append makedirs", level="debug")
         return False
     try:
         _line = json.dumps(rec, ensure_ascii=False, default=str)
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.paid_api_trace::_m360_append dumps")
+        silent_exc(e, where="nucleus.llm.paid_api_trace::_m360_append dumps", level="debug")
         return False
     try:
         with _TRACE_LOCK:
@@ -175,7 +175,7 @@ def _m360_append(rec: dict) -> bool:
                 try:
                     os.fsync(_fd)
                 except Exception as _e:
-                    silent_exc(_e, where="nucleus.llm.paid_api_trace::_m360_append fsync")
+                    silent_exc(_e, where="nucleus.llm.paid_api_trace::_m360_append fsync", level="debug")
             finally:
                 os.close(_fd)
             if not _size_warned:
@@ -186,10 +186,10 @@ def _m360_append(rec: dict) -> bool:
                                   "继续追加但请尽快归档" % (_path, _SOFT_MAX_BYTES),
                                   level="warning")
                 except Exception as _e:
-                    silent_exc(_e, where="nucleus.llm.paid_api_trace::_m360_append getsize")
+                    silent_exc(_e, where="nucleus.llm.paid_api_trace::_m360_append getsize", level="debug")
         return True
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.paid_api_trace::_m360_append write")
+        silent_exc(e, where="nucleus.llm.paid_api_trace::_m360_append write", level="debug")
         return False
 
 
@@ -215,7 +215,7 @@ def begin(url: str, model: str = "", caller: str = "", payload=None) -> str:
             _pb = len(json.dumps(payload, ensure_ascii=False, default=str)
                       .encode("utf-8"))
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.paid_api_trace::begin payload_size")
+        silent_exc(e, where="nucleus.llm.paid_api_trace::begin payload_size", level="debug")
         _pb = -1
     _rec = {
         "event": "request",

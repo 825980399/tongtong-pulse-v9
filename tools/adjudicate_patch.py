@@ -149,7 +149,7 @@ def _cmd_obsolete(args, pm, pending, history, obsolete, obsolete_path):
     try:
         _lst.pop(_i)
     except Exception as e:
-        silent_exc(e, where="tools.adjudicate_patch::_cmd_obsolete L149")
+        silent_exc(e, where="tools.adjudicate_patch::_cmd_obsolete L149", level="debug")
     _seen = {str(o.get("id")) for o in obsolete if isinstance(o, dict)}
     if str(_p.get("id")) not in _seen:
         obsolete.append(_p)

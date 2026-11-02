@@ -90,7 +90,7 @@ def _scan_getattr_defaults() -> dict[str, list]:
         try:
             _tree = ast.parse(open(_p, encoding="utf-8", errors="replace").read())
         except SyntaxError as _e:
-            silent_exc(_e, where="m397_k4::_scan_getattr_defaults parse")
+            silent_exc(_e, where="m397_k4::_scan_getattr_defaults parse", level="debug")
             continue
         _rel = os.path.relpath(_p, _ROOT).replace("\\", "/")
         for _node in ast.walk(_tree):
@@ -169,7 +169,7 @@ def test_05_cold_storage_is_test_only():
         try:
             _src = open(_p, encoding="utf-8", errors="replace").read()
         except Exception as _e:
-            silent_exc(_e, where="m397_k4::test_05 read")
+            silent_exc(_e, where="m397_k4::test_05 read", level="debug")
             continue
         assert "ENABLE_COLD_STORAGE" not in _src, \
             f"{os.path.relpath(_p, _ROOT)} 生产面引用了 ENABLE_COLD_STORAGE（不再是测试专用）"

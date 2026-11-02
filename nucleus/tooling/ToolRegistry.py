@@ -121,7 +121,7 @@ class ToolRegistry:
                 json.dump(_data, _f, ensure_ascii=False, indent=2)
             return True
         except Exception as _e:
-            silent_exc(_e, where="nucleus.tooling.ToolRegistry::save")
+            silent_exc(_e, where="nucleus.tooling.ToolRegistry::save", level="debug")
             return False
 
     def load(self, path: str | None = None) -> int:
@@ -148,7 +148,7 @@ class ToolRegistry:
                 self._stats.setdefault(_n, _s)
             return len(_data.get("tools", {}))
         except Exception as _e:
-            silent_exc(_e, where="nucleus.tooling.ToolRegistry::load")
+            silent_exc(_e, where="nucleus.tooling.ToolRegistry::load", level="debug")
             return 0
 
     # ========== 工具发现 ==========
@@ -361,7 +361,7 @@ def register_default_tools() -> None:
             category="code_check",
         )
     except Exception as e:
-        silent_exc(e, where="nucleus.tooling.ToolRegistry::register_default_tools L307")
+        silent_exc(e, where="nucleus.tooling.ToolRegistry::register_default_tools L307", level="debug")
 
     # 外部命令执行工具
     try:
@@ -377,7 +377,7 @@ def register_default_tools() -> None:
             category="execution",
         )
     except Exception as e:
-        silent_exc(e, where="nucleus.tooling.ToolRegistry::register_default_tools L323")
+        silent_exc(e, where="nucleus.tooling.ToolRegistry::register_default_tools L323", level="debug")
 
     # ★第162批 刀10：注册完成后持久化（重启可恢复）；失败不影响主流程
     _registry.save()

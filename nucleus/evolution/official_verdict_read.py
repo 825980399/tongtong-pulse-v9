@@ -86,7 +86,7 @@ def _cfg(name: str, default: Any = None) -> Any:
 
         return getattr(_c, name, default)
     except Exception as _e:
-        silent_exc(_e, where="official_verdict_read::_cfg %s" % name)
+        silent_exc(_e, where=f"official_verdict_read::_cfg {name}", level="debug")
         return default
 
 
@@ -118,7 +118,7 @@ def read_verdict(project_root: str | None = None) -> dict:
         with open(_p, encoding="utf-8") as _f:
             _d = json.load(_f)
     except (ValueError, OSError) as _e:
-        silent_exc(_e, where="official_verdict_read::read_verdict")
+        silent_exc(_e, where="official_verdict_read::read_verdict", level="debug")
         _out["state"] = "unreadable"
         _out["why"] = "read_error:%s" % type(_e).__name__
         return _out
@@ -293,6 +293,6 @@ def persist_verdict(report: dict, project_root: str | None = None,
         _out["ok"] = _out["persisted"]
         _out["why"] = "saved" if _out["persisted"] else "readback_mismatch"
     except Exception as _e:
-        silent_exc(_e, where="official_verdict_read::persist_verdict")
+        silent_exc(_e, where="official_verdict_read::persist_verdict", level="debug")
         _out["why"] = "%s: %s" % (type(_e).__name__, str(_e)[:200])
     return _out

@@ -397,7 +397,7 @@ class ClassificationFeedback:
             store._matrix[i] = (v / n).astype("float32")
             return True
         except Exception as e:
-            silent_exc(e, where="nucleus.qica.IntentChannels::adjust_prototype L390")
+            silent_exc(e, where="nucleus.qica.IntentChannels::adjust_prototype L390", level="debug")
             return False
 
 
@@ -985,7 +985,7 @@ def fuse(channel_scores: dict[str, dict[str, float]]) -> dict[str, Any]:
                 )
         except Exception as e:
             # 遥测为增强项，任何异常不得影响主融合流程
-            silent_exc(e, where="nucleus.qica.IntentChannels::fuse L975")
+            silent_exc(e, where="nucleus.qica.IntentChannels::fuse L975", level="debug")
 
     return {
         "intent_scores": fused,
@@ -1102,7 +1102,7 @@ def encode_text(text: str, wait_timeout: float = 60.0) -> Any:
     try:
         from nucleus.semantic.VectorEncoder import get_vector_encoder
     except Exception as e:
-        silent_exc(e, where="nucleus.qica.IntentChannels::encode_text L1093")
+        silent_exc(e, where="nucleus.qica.IntentChannels::encode_text L1093", level="debug")
         return None
 
     st = _ENCODER_STATE

@@ -1641,7 +1641,7 @@ class PulseSubconscious(BasePulseOrgan):
             _w = getattr(_cfg_win, "GROWTH_HUB_WINDOW_SEC", 3600)
             _win = float(_w) if _w is not None else 3600.0
         except Exception as _e_win:
-            silent_exc(_e_win, where="PulseSubconscious._m304_growth_to_hub.window")
+            silent_exc(_e_win, where="PulseSubconscious._m304_growth_to_hub.window", level="debug")
             _win = 3600.0
         _now_win = time.time()
         _start_win = getattr(self, "_m304_growth_window_start", None)
@@ -1693,7 +1693,7 @@ class PulseSubconscious(BasePulseOrgan):
                       f"[316刀3][hub] organ=潜意识 task_type=growth_hypothesis topic={_subject}")
             return 1
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseSubconscious::_m304_growth_to_hub")
+            silent_exc(e, where="organs.brain.PulseSubconscious::_m304_growth_to_hub", level="debug")
             return 0
 
     def _on_growth_need(self, payload: dict) -> dict[str, Any]:
@@ -2273,7 +2273,7 @@ class PulseSubconscious(BasePulseOrgan):
         try:
             _clues.sort(key=lambda x: x.get("confidence", 0.5), reverse=True)
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseSubconscious::_generate_autonomous_exploration_goal L2101")
+            silent_exc(e, where="organs.brain.PulseSubconscious::_generate_autonomous_exploration_goal L2101", level="debug")
             return None
         _chosen = _clues[0]
 
@@ -3076,7 +3076,7 @@ class PulseSubconscious(BasePulseOrgan):
             return _random.choice(_templates)
 
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseSubconscious::_get_highlight_memory_share L2902")
+            silent_exc(e, where="organs.brain.PulseSubconscious::_get_highlight_memory_share L2902", level="debug")
             return None
 
     def _get_current_emotion(self) -> str:
@@ -4893,7 +4893,7 @@ class PulseSubconscious(BasePulseOrgan):
         try:
             _n = max(0, int(limit))
         except (TypeError, ValueError) as e:
-            silent_exc(e, where="organs.brain.PulseSubconscious::get_active_exploration_clues limit")
+            silent_exc(e, where="organs.brain.PulseSubconscious::get_active_exploration_clues limit", level="debug")
             _n = 3
         if _n == 0:
             return []
@@ -4911,7 +4911,7 @@ class PulseSubconscious(BasePulseOrgan):
                 _recent = sorted(_log_map.items(),
                                  key=lambda kv: float(kv[1] or 0.0), reverse=True)
             except (TypeError, ValueError) as e:
-                silent_exc(e, where="organs.brain.PulseSubconscious::get_active_exploration_clues sort")
+                silent_exc(e, where="organs.brain.PulseSubconscious::get_active_exploration_clues sort", level="debug")
                 _recent = []
             for _topic, _ts in _recent:
                 if len(_out) >= _n:
@@ -4982,32 +4982,32 @@ class PulseSubconscious(BasePulseOrgan):
         try:
             import config as _cfg
         except Exception as _e:
-            silent_exc(_e, where="PulseSubconscious._m183_observations_tick")
+            silent_exc(_e, where="PulseSubconscious._m183_observations_tick", level="debug")
             return
         # 刀3：认知状态机温度观测
         if getattr(_cfg, "ENABLE_COGNITIVE_TEMPERATURE_OBSERVE", False):
             try:
                 self._m183_cognitive_temperature_observe(_cfg)
             except Exception as _e:
-                silent_exc(_e, where="PulseSubconscious._m183_cognitive_temperature_observe")
+                silent_exc(_e, where="PulseSubconscious._m183_cognitive_temperature_observe", level="debug")
         # 刀4：记忆强度衰减影子排序观测
         if getattr(_cfg, "ENABLE_MEMORY_STRENGTH_SHADOW", False):
             try:
                 self._m183_memory_strength_shadow(_cfg)
             except Exception as _e:
-                silent_exc(_e, where="PulseSubconscious._m183_memory_strength_shadow")
+                silent_exc(_e, where="PulseSubconscious._m183_memory_strength_shadow", level="debug")
         # 刀5：顿悟触发器碰撞扫描观测
         if getattr(_cfg, "ENABLE_HEBBIAN_COLLISION_SCAN", False):
             try:
                 self._m183_scan_hebbian_collision(_cfg)
             except Exception as _e:
-                silent_exc(_e, where="PulseSubconscious._m183_scan_hebbian_collision")
+                silent_exc(_e, where="PulseSubconscious._m183_scan_hebbian_collision", level="debug")
         # 刀6：赫布边衰减心跳调度
         if getattr(_cfg, "ENABLE_HEBBIAN_APPLY_DECAY", False):
             try:
                 self._m183_apply_hebbian_decay(_cfg)
             except Exception as _e:
-                silent_exc(_e, where="PulseSubconscious._m183_apply_hebbian_decay")
+                silent_exc(_e, where="PulseSubconscious._m183_apply_hebbian_decay", level="debug")
 
     def _m183_cognitive_temperature_observe(self, _cfg) -> None:
         """刀3：把(energy,mood,focus,hour)映射为建议温度并记日志。
@@ -5039,7 +5039,7 @@ class PulseSubconscious(BasePulseOrgan):
         try:
             _nodes = self.node_pool.get_all()
         except Exception as _e:
-            silent_exc(_e, where="PulseSubconscious._m183_memory_strength_shadow")
+            silent_exc(_e, where="PulseSubconscious._m183_memory_strength_shadow", level="debug")
             return
         if not _nodes:
             return

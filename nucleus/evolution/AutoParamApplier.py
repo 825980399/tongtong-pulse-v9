@@ -64,7 +64,7 @@ class AutoParamApplier:
             if not getattr(_cfg, 'ENABLE_AUTO_PARAM_APPLY', False):
                 return 0
         except Exception as e:
-            silent_exc(e, where="nucleus.evolution.AutoParamApplier::submit_patches L65")
+            silent_exc(e, where="nucleus.evolution.AutoParamApplier::submit_patches L65", level="debug")
             return 0
         if not patches:
             return 0
@@ -181,7 +181,7 @@ class AutoParamApplier:
         try:
             self._log_fn(f"[参数自动应用] {msg}")
         except Exception as e:
-            silent_exc(e, where="nucleus.evolution.AutoParamApplier::_log L181")
+            silent_exc(e, where="nucleus.evolution.AutoParamApplier::_log L181", level="debug")
 
 
 # ========== 模块级单例 ==========

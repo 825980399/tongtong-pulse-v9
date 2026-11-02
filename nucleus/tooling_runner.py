@@ -424,4 +424,4 @@ def shutdown_tooling_runner() -> None:
             try:
                 _sd()
             except Exception as e:
-                silent_exc(e, where="nucleus.tooling_runner::shutdown_tooling_runner L213")
+                silent_exc(e, where="nucleus.tooling_runner::shutdown_tooling_runner L213", level="debug")

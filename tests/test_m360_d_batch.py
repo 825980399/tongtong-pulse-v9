@@ -96,7 +96,7 @@ class TestM360D09DeadBroadcast(unittest.TestCase):
                 try:
                     delattr(config, "EVENTBUS_QUEUE_ALARM_DEPTH")
                 except Exception as _e:
-                    silent_exc(_e, where="test_m360_d 还原 EVENTBUS_QUEUE_ALARM_DEPTH")
+                    silent_exc(_e, where="test_m360_d 还原 EVENTBUS_QUEUE_ALARM_DEPTH", level="debug")
             else:
                 config.EVENTBUS_QUEUE_ALARM_DEPTH = _old
 

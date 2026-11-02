@@ -66,7 +66,7 @@ def _enabled() -> bool:
         return bool(getattr(_cfg, "ENABLE_FIRST_RUN_DECLARATION", True))
     except Exception as _e:
         from nucleus._silent_except import silent_exc
-        silent_exc(_e, "first_run_declaration._enabled")
+        silent_exc(_e, "first_run_declaration._enabled", level="debug")
         return True
 
 
@@ -81,7 +81,7 @@ def _read_state() -> dict[str, Any]:
         return _d if isinstance(_d, dict) else {}
     except Exception as _e:
         from nucleus._silent_except import silent_exc
-        silent_exc(_e, "first_run_declaration._read_state")
+        silent_exc(_e, "first_run_declaration._read_state", level="debug")
         return {}
 
 
@@ -100,7 +100,7 @@ def _write_state(state: dict[str, Any]) -> bool:
         return True
     except Exception as _e:
         from nucleus._silent_except import silent_exc
-        silent_exc(_e, "first_run_declaration._write_state")
+        silent_exc(_e, "first_run_declaration._write_state", level="debug")
         return False
 
 
@@ -158,4 +158,4 @@ def reset_for_tests() -> None:
                 os.remove(_p)
         except Exception as _e:
             from nucleus._silent_except import silent_exc
-            silent_exc(_e, "first_run_declaration.reset_for_tests")
+            silent_exc(_e, "first_run_declaration.reset_for_tests", level="debug")

@@ -62,7 +62,7 @@ def _m335_limits() -> dict:
         _day_c = getattr(_cfg, "EVOLUTION_BUDGET_DAILY_CALLS", None)
         _week_c = getattr(_cfg, "EVOLUTION_BUDGET_WEEKLY_CALLS", None)
     except Exception as _e:
-        silent_exc(_e, where="evolution_budget::_m335_limits")
+        silent_exc(_e, where="evolution_budget::_m335_limits", level="debug")
         _module_logger.warning("[335刀6][费用熔断] 配置读取失败（%s: %s）"
                                " ⇒ 按未配置处理（**不熔断**，不猜额度）",
                                type(_e).__name__, _e)

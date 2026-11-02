@@ -203,7 +203,7 @@ class LLMEvolutionEngine(SilentLogMixin):
                         "[352接线] engine=evolution source=%s channel=%s model=%s host=%s",
                         _tgt.get("source"), _tgt.get("channel"), _model, _host)
                 except Exception as _le:
-                    silent_exc(_le, where="LLMEvolutionEngine::_call_llm route_log")
+                    silent_exc(_le, where="LLMEvolutionEngine::_call_llm route_log", level="debug")
                 _payload_bytes = json.dumps({
                     "model": _model,
                     "messages": [
@@ -411,7 +411,7 @@ class LLMEvolutionEngine(SilentLogMixin):
             from nucleus.evolution.AestheticJudge import get_aesthetic_judge
             return get_aesthetic_judge().feedback_guidance()
         except Exception as e:
-            silent_exc(e, where="nucleus.evolution.LLMEvolutionEngine::_aesthetic_guidance L175")
+            silent_exc(e, where="nucleus.evolution.LLMEvolutionEngine::_aesthetic_guidance L175", level="debug")
             return ""
 
     def _format_call_chain(self, call_chain: dict[str, Any] | None) -> str:
@@ -601,7 +601,7 @@ class LLMEvolutionEngine(SilentLogMixin):
             with open(_abs, encoding='utf-8', errors='ignore') as _f:
                 _content = _f.read()
         except Exception as e:
-            silent_exc(e, where="nucleus.evolution.LLMEvolutionEngine::_check_original_unique L347")
+            silent_exc(e, where="nucleus.evolution.LLMEvolutionEngine::_check_original_unique L347", level="debug")
             return False
         # 统计出现次数（取 original_code 的前 50 字符作为匹配键，避免完全匹配失败）
         _key = original_code.strip()[:50]

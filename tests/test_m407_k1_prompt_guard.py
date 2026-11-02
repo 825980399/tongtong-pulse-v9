@@ -70,7 +70,7 @@ class _Base(unittest.TestCase):
                 try:
                     os.remove(p)
                 except OSError as _e:
-                    silent_exc(_e, where="tests/test_m407_k1_prompt_guard.py::tearDown")
+                    silent_exc(_e, where="tests/test_m407_k1_prompt_guard.py::tearDown", level="debug")
 
 
 # ------------------------------------------------------------------ A 入库闸

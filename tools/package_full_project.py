@@ -43,7 +43,7 @@ def _m55_unified_excludes() -> bool:
 
         return bool(getattr(_m55_cfg, "ENABLE_EXCLUDE_DIRS_UNIFIED", True))
     except Exception as e:
-        silent_exc(e, where="tools.package_full_project::_m55_unified_excludes L40")
+        silent_exc(e, where="tools.package_full_project::_m55_unified_excludes L40", level="debug")
         return True
 
 _M55_LEGACY_EXCLUDE_DIRS = {"__pycache__", ".git", ".idea", ".vscode", "node_modules",

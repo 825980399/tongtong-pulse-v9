@@ -87,7 +87,7 @@ def _m418_safe_pn_on() -> bool:
         import config as _cfg
         return bool(getattr(_cfg, "ENABLE_M418_FUSION_SAFE_PATHNAME", True))
     except Exception as e:
-        silent_exc(e, where="organs.body.PulseLiver::_m418_safe_pn_on")
+        silent_exc(e, where="organs.body.PulseLiver::_m418_safe_pn_on", level="debug")
         return True
 
 
@@ -520,7 +520,7 @@ class PulseLiver(BasePulseOrgan):
         try:
             import psutil
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLiver::_sample_resource_usage L444")
+            silent_exc(e, where="organs.body.PulseLiver::_sample_resource_usage L444", level="debug")
             return  # psutil 不可用则跳过（不影响主流程）
         _proc = psutil.Process(os.getpid())
         _mem = _proc.memory_info()
@@ -528,17 +528,17 @@ class PulseLiver(BasePulseOrgan):
         try:
             _handles = int(_proc.num_handles())
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLiver::_sample_resource_usage L451")
+            silent_exc(e, where="organs.body.PulseLiver::_sample_resource_usage L451", level="debug")
             _handles = None
         try:
             _open_files = len(_proc.open_files())
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLiver::_sample_resource_usage L455")
+            silent_exc(e, where="organs.body.PulseLiver::_sample_resource_usage L455", level="debug")
             _open_files = None
         try:
             _threads = int(_proc.num_threads())
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLiver::_sample_resource_usage L459")
+            silent_exc(e, where="organs.body.PulseLiver::_sample_resource_usage L459", level="debug")
             _threads = None
 
         self._rss_samples.append(_rss)
@@ -594,7 +594,7 @@ class PulseLiver(BasePulseOrgan):
         try:
             _uptime_s = time.time() - _proc.create_time()
         except Exception as _e:
-            silent_exc(_e, where="organs.body.PulseLiver::_sample_resource_usage L499")
+            silent_exc(_e, where="organs.body.PulseLiver::_sample_resource_usage L499", level="debug")
             _uptime_s = None
         # ★165批A3：RSS 下行台阶回落告警（与上一采样点比跌幅 >200MB 即告警，归因不再靠推定）
         _prev_rss = self._rss_samples[-2] if len(self._rss_samples) >= 2 else None
@@ -1070,7 +1070,7 @@ class PulseLiver(BasePulseOrgan):
             import config
             return config.LIVER_CONFIG.get("l1_to_l2_threshold", 20)
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLiver::_get_l1_threshold L949")
+            silent_exc(e, where="organs.body.PulseLiver::_get_l1_threshold L949", level="debug")
             return 20
 
     def _get_l2_threshold(self) -> int:
@@ -1078,7 +1078,7 @@ class PulseLiver(BasePulseOrgan):
             import config
             return config.LIVER_CONFIG.get("l2_to_l3_threshold", 8)
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLiver::_get_l2_threshold L956")
+            silent_exc(e, where="organs.body.PulseLiver::_get_l2_threshold L956", level="debug")
             return 20
 
     def _get_fuse_cooldown(self) -> float:
@@ -1086,21 +1086,21 @@ class PulseLiver(BasePulseOrgan):
             import config
             return config.LIVER_CONFIG.get("fuse_cooldown", 300.0)
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLiver::_get_fuse_cooldown L963")
+            silent_exc(e, where="organs.body.PulseLiver::_get_fuse_cooldown L963", level="debug")
             return 300.0
     def _get_adaptive_fuse_cooldown(self) -> float:
         try:
             import config
             return config.LIVER_CONFIG.get("adaptive_fuse_cooldown", 600.0)
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLiver::_get_adaptive_fuse_cooldown L969")
+            silent_exc(e, where="organs.body.PulseLiver::_get_adaptive_fuse_cooldown L969", level="debug")
             return 600.0
     def _get_total_threshold(self) -> int:
         try:
             import config
             return config.LIVER_CONFIG.get("total_compress_threshold", 50)
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLiver::_get_total_threshold L975")
+            silent_exc(e, where="organs.body.PulseLiver::_get_total_threshold L975", level="debug")
             return 50
     def _compress_l1_to_l2(self):
         # ★主线第17批 T3/P2-63：旁路事件耗时计数起点（仅计时，不参与逻辑）
@@ -3029,7 +3029,7 @@ class PulseLiver(BasePulseOrgan):
         try:
             self._log(level, message)
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLiver::_m418_try_log")
+            silent_exc(e, where="organs.body.PulseLiver::_m418_try_log", level="debug")
 
     def _m418_seg_is_placeholder(self, seg) -> bool:
         """单个路径段是否占位符（裸形态与 `[段]` 形态都试）。"""
@@ -3041,7 +3041,7 @@ class PulseLiver(BasePulseOrgan):
                 return True
             return bool(self._m377_is_placeholder("[%s]" % _s))
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLiver::_m418_seg_is_placeholder")
+            silent_exc(e, where="organs.body.PulseLiver::_m418_seg_is_placeholder", level="debug")
             return False
 
     def _m377_is_placeholder(self, text) -> bool:
@@ -3061,7 +3061,7 @@ class PulseLiver(BasePulseOrgan):
             )
             return bool(_cpl377(text))
         except Exception as _e377:
-            silent_exc(_e377, where="organs.body.PulseLiver::_m377_is_placeholder")
+            silent_exc(_e377, where="organs.body.PulseLiver::_m377_is_placeholder", level="debug")
             if not getattr(self, "_m377_ph_warned", False):
                 self._m377_ph_warned = True
                 self._log(LogLevel.WARNING,
@@ -4023,7 +4023,7 @@ class PulseLiver(BasePulseOrgan):
             import config as _c
             return bool(getattr(_c, "ENABLE_KAL_CALL_SITES", True))
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLiver::_m70_kal_callsites_on L3677")
+            silent_exc(e, where="organs.body.PulseLiver::_m70_kal_callsites_on L3677", level="debug")
             return True
 
 # ========== 自测 ==========

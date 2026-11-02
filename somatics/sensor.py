@@ -82,7 +82,7 @@ class Sensor:
             from utils.safe_hw_probe import safe_camera_devices
             res = safe_camera_devices()
         except Exception as e:
-            silent_exc(e, where="somatics.sensor::_detect_camera L82")
+            silent_exc(e, where="somatics.sensor::_detect_camera L82", level="debug")
             return
         if not isinstance(res, dict):
             return
@@ -102,7 +102,7 @@ class Sensor:
             from utils.safe_hw_probe import safe_audio_devices
             res = safe_audio_devices(True)
         except Exception as e:
-            silent_exc(e, where="somatics.sensor::_detect_audio L101")
+            silent_exc(e, where="somatics.sensor::_detect_audio L101", level="debug")
             return
         if not isinstance(res, dict):
             return

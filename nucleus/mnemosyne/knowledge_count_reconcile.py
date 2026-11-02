@@ -102,11 +102,11 @@ def count_pool_l1(node_pool) -> dict:
         stats = node_pool.get_stats()
         out["pool_l1_all"] = int(stats.get("evol_distribution", {}).get("L1", 0) or 0)
     except (AttributeError, TypeError, ValueError) as _e:
-        silent_exc(_e, where="knowledge_count_reconcile.count_pool_l1(stats)[424刀2]")
+        silent_exc(_e, where="knowledge_count_reconcile.count_pool_l1(stats)[424刀2]", level="debug")
     try:
         nodes = node_pool.get_all_including_evicted()
     except (AttributeError, TypeError) as _e:
-        silent_exc(_e, where="knowledge_count_reconcile.count_pool_l1(get_all)[424刀2]")
+        silent_exc(_e, where="knowledge_count_reconcile.count_pool_l1(get_all)[424刀2]", level="debug")
         return out
     _l1 = [n for n in nodes if getattr(n, "evol_level", None) == "L1"]
     _persist = [n for n in _l1 if not getattr(n, "ephemeral", False)]
@@ -166,7 +166,7 @@ def count_cold(root: str = ".", with_parquet: bool = True) -> dict:
     try:
         import pyarrow.parquet as _pq
     except Exception as _e:
-        silent_exc(_e, where="knowledge_count_reconcile.count_cold(pyarrow)[424刀2]")
+        silent_exc(_e, where="knowledge_count_reconcile.count_cold(pyarrow)[424刀2]", level="debug")
         return out
     _ids, _lv2 = {}, {}
     for _root, _dn, _fns in os.walk(cold_dir):
@@ -176,7 +176,7 @@ def count_cold(root: str = ".", with_parquet: bool = True) -> dict:
             try:
                 _t = _pq.read_table(os.path.join(_root, _fn), columns=["node_id", "evol_level"])
             except Exception as _e:
-                silent_exc(_e, where="knowledge_count_reconcile.count_cold(read)[424刀2]")
+                silent_exc(_e, where="knowledge_count_reconcile.count_cold(read)[424刀2]", level="debug")
                 continue
             for _r in _t.to_pylist():
                 _nid = str(_r.get("node_id", "") or "")

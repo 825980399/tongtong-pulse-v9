@@ -101,7 +101,7 @@ def enabled() -> bool:
         import config as _c
         return bool(getattr(_c, "ENABLE_M411_MEMORY_BY_ORGAN", True))
     except Exception as _e:
-        silent_exc(_e, where="observability.memory_by_organ:enabled")
+        silent_exc(_e, where="observability.memory_by_organ:enabled", level="debug")
         return True
 
 

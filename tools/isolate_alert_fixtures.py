@@ -57,7 +57,7 @@ def load_records(path: str):
             try:
                 _out.append(json.loads(_line))
             except ValueError as _e:
-                silent_exc(_e, where="tools.isolate_alert_fixtures.load_records")
+                silent_exc(_e, where="tools.isolate_alert_fixtures.load_records", level="debug")
                 # 损坏行保留不动
                 _out.append({"_unparseable": _line})
     return _out

@@ -155,7 +155,7 @@ class RobotBodyDriver:
             if self.info_field and hasattr(self.info_field, 'get_load_level'):
                 return self.info_field.get_load_level() in ("heavy", "critical")
         except Exception as e:
-            silent_exc(e, where="robot_body_driver._is_high_load:152")
+            silent_exc(e, where="robot_body_driver._is_high_load:152", level="debug")
         return False
 
     def get_stats(self) -> dict:

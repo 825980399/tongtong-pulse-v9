@@ -63,7 +63,7 @@ def analyzer_enabled() -> bool:
         import config
         return bool(getattr(config, "ENABLE_LLM_CALL_PATTERN_ANALYSIS", True))
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.call_pattern_analyzer::analyzer_enabled L62")
+        silent_exc(e, where="nucleus.llm.call_pattern_analyzer::analyzer_enabled L62", level="debug")
         return True
 
 
@@ -71,7 +71,7 @@ def _in_test_env() -> bool:
     try:
         return ("pytest" in sys.modules) or bool(os.environ.get("PYTEST_CURRENT_TEST"))
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.call_pattern_analyzer::_in_test_env L69")
+        silent_exc(e, where="nucleus.llm.call_pattern_analyzer::_in_test_env L69", level="debug")
         return False
 
 
@@ -81,7 +81,7 @@ def _is_production_path(path: str) -> bool:
         _r = os.path.abspath(_PROJECT_ROOT).replace("\\", "/").lower()
         return _p.startswith(_r + "/data/")
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.call_pattern_analyzer::_is_production_path L78")
+        silent_exc(e, where="nucleus.llm.call_pattern_analyzer::_is_production_path L78", level="debug")
         return True
 
 

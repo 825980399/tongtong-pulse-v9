@@ -35,7 +35,7 @@ def get_process_memory() -> dict:
         _vms = _mi.vms / 1048576.0
         _pct = _p.memory_percent()
     except Exception as e:
-        silent_exc(e, where="tools.memory_growth_analyzer::get_process_memory L35")
+        silent_exc(e, where="tools.memory_growth_analyzer::get_process_memory L35", level="debug")
     return {"rss_mb": round(_rss, 1), "vms_mb": round(_vms, 1), "percent": round(_pct, 1)}
 
 

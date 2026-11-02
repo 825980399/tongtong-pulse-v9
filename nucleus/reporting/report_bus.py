@@ -274,7 +274,7 @@ class ReportBus:
             return bool(getattr(_cfg, "ENABLE_REPORT_DISPATCH_BEFORE_WRITE",
                                 True))
         except Exception as e:
-            silent_exc(e, where="nucleus.reporting.report_bus::_dispatch_before_write L264")
+            silent_exc(e, where="nucleus.reporting.report_bus::_dispatch_before_write L264", level="debug")
             return True
 
     def _dispatch(self, envelope: ReportEnvelope,
@@ -512,7 +512,7 @@ class ReportBus:
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_REPORT_EXPECTED_CONSUMERS", True))
         except Exception as _e:
-            silent_exc(_e, where="nucleus.reporting.report_bus::_m169_expected_consumers_on")
+            silent_exc(_e, where="nucleus.reporting.report_bus::_m169_expected_consumers_on", level="debug")
             return True
 
     def declare_expected_consumers(self, report_type: str,
@@ -612,7 +612,7 @@ class ReportBus:
             _mv = float(metric_value)
             _th = float(threshold)
         except (TypeError, ValueError) as e:
-            silent_exc(e, where="nucleus.reporting.report_bus::_is_breaching L492")
+            silent_exc(e, where="nucleus.reporting.report_bus::_is_breaching L492", level="debug")
             return False
         if _LOW_HINT_RE.search(anomaly_type or ""):
             return _mv < _th
@@ -705,7 +705,7 @@ class ReportBus:
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_REPORT_DISK_PRUNE", True))
         except Exception as e:
-            silent_exc(e, where="nucleus.reporting.report_bus::_disk_prune_enabled L584")
+            silent_exc(e, where="nucleus.reporting.report_bus::_disk_prune_enabled L584", level="debug")
             return True
 
     def _prune_disk(self) -> dict[str, Any]:

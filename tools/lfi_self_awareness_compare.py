@@ -40,7 +40,7 @@ def _load_frozen_ref(ref_path: str) -> float | None:
             with open(ref_path, "r", encoding="utf-8") as f:
                 return float(json.load(f)["ref"])
         except Exception as e:
-            silent_exc(e, where="lfi_self_awareness_compare._load_frozen_ref")
+            silent_exc(e, where="lfi_self_awareness_compare._load_frozen_ref", level="debug")
     return None
 
 
@@ -50,7 +50,7 @@ def _save_frozen_ref(ref: float, ref_path: str) -> None:
         with open(ref_path, "w", encoding="utf-8") as f:
             json.dump({"ref": ref}, f, ensure_ascii=False, indent=2)
     except Exception as e:
-        silent_exc(e, where="lfi_self_awareness_compare._save_frozen_ref")
+        silent_exc(e, where="lfi_self_awareness_compare._save_frozen_ref", level="debug")
 
 
 def fetch_runtime_activity() -> dict:
@@ -96,18 +96,18 @@ def fetch_runtime_activity() -> dict:
                     _val = float(int(_v.get("sent", 0) or 0)
                                  + int(_v.get("received", 0) or 0))
                 except (TypeError, ValueError) as _ce1:
-                    silent_exc(_ce1, where="lfi_self_awareness_compare::fetch_runtime_activity:dict_pair")
+                    silent_exc(_ce1, where="lfi_self_awareness_compare::fetch_runtime_activity:dict_pair", level="debug")
                     continue
             else:
                 try:
                     _val = float(_v)
                 except (TypeError, ValueError) as _ce2:
-                    silent_exc(_ce2, where="lfi_self_awareness_compare::fetch_runtime_activity:scalar")
+                    silent_exc(_ce2, where="lfi_self_awareness_compare::fetch_runtime_activity:scalar", level="debug")
                     continue
             _remapped[str(_nk)] = _val
         return _remapped
     except Exception as e:
-        silent_exc(e, where="lfi_self_awareness_compare.fetch_runtime_activity")
+        silent_exc(e, where="lfi_self_awareness_compare.fetch_runtime_activity", level="debug")
         return {}
 
 
@@ -169,7 +169,7 @@ def _span_days(curve_path: str) -> float:
             return 0.0
         return (max(ts) - min(ts)) / 86400.0
     except Exception as e:
-        silent_exc(e, where="lfi_self_awareness_compare._span_days")
+        silent_exc(e, where="lfi_self_awareness_compare._span_days", level="debug")
         return 0.0
 
 
@@ -231,7 +231,7 @@ def _load_prev_row(curve_path: str) -> dict | None:
             "sim_mode": _row.get("sim_mode"),
         }
     except Exception as e:
-        silent_exc(e, where="lfi_self_awareness_compare._load_prev_row")
+        silent_exc(e, where="lfi_self_awareness_compare._load_prev_row", level="debug")
         return None
 
 
@@ -330,7 +330,7 @@ def _append_curve(record: dict, curve_path: str) -> None:
         with open(curve_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
     except Exception as e:
-        silent_exc(e, where="lfi_self_awareness_compare._append_curve")
+        silent_exc(e, where="lfi_self_awareness_compare._append_curve", level="debug")
 
 
 # ★第200批 刀3：调度归属 —— 挂 DailyScheduler 每日调度点（不翻生产开关、不改 compare 件本体）
@@ -352,7 +352,7 @@ def register_with_daily_schedule(scheduler=None):
     try:
         from nucleus.self_awareness.DailyScheduler import get_daily_scheduler
     except Exception as e:
-        silent_exc(e, where="lfi_self_awareness_compare.register_with_daily_schedule")
+        silent_exc(e, where="lfi_self_awareness_compare.register_with_daily_schedule", level="debug")
         return None
     _sched = scheduler or get_daily_scheduler()
     try:
@@ -362,7 +362,7 @@ def register_with_daily_schedule(scheduler=None):
             # 兜底（调度器无扩展点时仅记归属，不修改其内部）
             _sched._lfi_compare_attached = True
     except Exception as e:
-        silent_exc(e, where="lfi_self_awareness_compare.register_with_daily_schedule")
+        silent_exc(e, where="lfi_self_awareness_compare.register_with_daily_schedule", level="debug")
         return _sched
     return _sched
 
@@ -376,7 +376,7 @@ def is_scheduled(scheduler=None) -> bool:
             return _sched.has_daily_hook(DAILY_SCHEDULE_HOOK)
         return bool(getattr(_sched, "_lfi_compare_attached", False))
     except Exception as e:
-        silent_exc(e, where="lfi_self_awareness_compare.is_scheduled")
+        silent_exc(e, where="lfi_self_awareness_compare.is_scheduled", level="debug")
         return False
 
 

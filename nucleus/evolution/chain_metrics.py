@@ -75,7 +75,7 @@ def _load_json(path: str) -> dict:
         with open(path, encoding="utf-8") as _f:
             _d = json.load(_f)
     except Exception as _e:                                     # noqa: BLE001
-        silent_exc(_e, where="chain_metrics::_load_json")
+        silent_exc(_e, where="chain_metrics::_load_json", level="debug")
         return {"state": "unreadable", "data": None, "path": path}
     return {"state": "ok", "data": _d, "path": path}
 
@@ -129,7 +129,7 @@ def compute_chain_metrics(root: str | None = None, *,
         if _pool_state == "ok":
             _pool_rows = list(_p.get("entries") or [])
     except Exception as _e:                                     # noqa: BLE001
-        silent_exc(_e, where="chain_metrics::pool")
+        silent_exc(_e, where="chain_metrics::pool", level="debug")
         _pool_state = "import_failed"
     _open_n = sum(1 for x in _pool_rows if str(x.get("status") or "open") == "open")
     _out["raw"]["pool"] = {"state": _pool_state, "rows": len(_pool_rows),
@@ -260,7 +260,7 @@ def write_chain_metrics(path: str, m: dict, *, now: float | None = None) -> dict
         _out["written"] = isinstance(_back, dict) and _back.get("schema") == CHAIN_SCHEMA
         _out["why"] = "saved" if _out["written"] else "readback_mismatch"
     except Exception as _e:                                     # noqa: BLE001
-        silent_exc(_e, where="chain_metrics::write_chain_metrics")
+        silent_exc(_e, where="chain_metrics::write_chain_metrics", level="debug")
         _out["why"] = "%s: %s" % (type(_e).__name__, str(_e)[:200])
     if _out["written"]:
         _module_logger.info("%s", weekly_report_line(_payload))

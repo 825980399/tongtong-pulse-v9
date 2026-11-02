@@ -66,7 +66,7 @@ def enabled() -> bool:
         import config as _c
         return bool(getattr(_c, SWITCH, True))
     except Exception as _e:
-        silent_exc(_e, where="evolution.o3_delete_dryrun:enabled")
+        silent_exc(_e, where="evolution.o3_delete_dryrun:enabled", level="debug")
         return True
 
 

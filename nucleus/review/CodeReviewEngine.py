@@ -132,7 +132,7 @@ class CodeReviewEngine:
             )
             return result.returncode == 0
         except (FileNotFoundError, subprocess.TimeoutExpired) as e:
-            silent_exc(e, where="nucleus.review.CodeReviewEngine::_check_tool L132")
+            silent_exc(e, where="nucleus.review.CodeReviewEngine::_check_tool L132", level="debug")
             return False
 
     def _get_severity(self, rule: str, source: str) -> str:
@@ -323,7 +323,7 @@ class CodeReviewEngine:
                         if mtime > cutoff:
                             modified.append(_safe_relpath(path, self.project_root))
                     except OSError as e:
-                        silent_exc(e, where="nucleus.review.CodeReviewEngine::_get_recently_modified_files L325")
+                        silent_exc(e, where="nucleus.review.CodeReviewEngine::_get_recently_modified_files L325", level="debug")
         return modified
 
     def get_top_issues(self, n: int = 10, severity: str | None = None) -> list:

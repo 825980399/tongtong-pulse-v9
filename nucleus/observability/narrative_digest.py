@@ -53,7 +53,7 @@ def enabled() -> bool:
         import config as _c
         return bool(getattr(_c, SWITCH, True))
     except Exception as _e:
-        silent_exc(_e, where="observability.narrative_digest:enabled")
+        silent_exc(_e, where="observability.narrative_digest:enabled", level="debug")
         return True
 
 

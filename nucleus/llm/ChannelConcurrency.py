@@ -179,7 +179,7 @@ class ChannelConcurrencyManager:
             if isinstance(_paid, (list, tuple)) and _paid:
                 self._cfg["paid_channel_names"] = list(_paid)
         except Exception as _e:
-            silent_exc(_e, where="ChannelConcurrencyManager.__init__:paid_channels")
+            silent_exc(_e, where="ChannelConcurrencyManager.__init__:paid_channels", level="debug")
 
     # ------------------------------------------------------------------
     # 配置
@@ -242,7 +242,7 @@ class ChannelConcurrencyManager:
                 if isinstance(_ch, dict) and _ch.get("name") == name:
                     return int(_ch.get("max_concurrent", 1) or 1)
         except Exception as e:
-            silent_exc(e, where="nucleus.llm.ChannelConcurrency::_read_channel_max L244")
+            silent_exc(e, where="nucleus.llm.ChannelConcurrency::_read_channel_max L244", level="debug")
         return 1
 
     def _clamp(self, name: str, value: int) -> int:

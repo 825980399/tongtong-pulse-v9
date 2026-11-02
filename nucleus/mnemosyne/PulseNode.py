@@ -222,7 +222,7 @@ class PulseNode:
             try:
                 self.trust_score = self.assess_trust()
             except Exception as _e:
-                silent_exc(_e, where="nucleus.mnemosyne.PulseNode::__init__ trust_score L189")
+                silent_exc(_e, where="nucleus.mnemosyne.PulseNode::__init__ trust_score L189", level="debug")
                 self.trust_score = 50.0
         else:
             self.checksum = ""  # from_dict 会从快照恢复
@@ -577,7 +577,7 @@ class PulseNode:
                 _boost = _domain_boost.get(_domain, _default_boost)
                 _source_score = max(0, min(30, _source_score + _boost))
             except Exception as e:
-                silent_exc(e, where="nucleus.mnemosyne.PulseNode::assess_trust L510")
+                silent_exc(e, where="nucleus.mnemosyne.PulseNode::assess_trust L510", level="debug")
 
         score = _source_score  # 直接替换基础分，来源是最重要的维度
         remaining = 70  # 剩余可分配分数
@@ -714,7 +714,7 @@ class PulseNode:
                 _boost = _domain_boost.get(_domain, _default_boost)
                 _trust_base = max(10, min(100, _trust_base + _boost))
             except Exception as e:
-                silent_exc(e, where="nucleus.mnemosyne.PulseNode::evaluate_node_health L647")
+                silent_exc(e, where="nucleus.mnemosyne.PulseNode::evaluate_node_health L647", level="debug")
         # 激活次数加成：每激活1次+1.5分，上限20分
         _activation_bonus = min(20, self.activation_count * 1.5)
         _trust_score = min(100, _trust_base + _activation_bonus)
@@ -891,7 +891,7 @@ class PulseNode:
                 result = result[:max_len]
             return result
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseNode::get_value_str L824")
+            silent_exc(e, where="nucleus.mnemosyne.PulseNode::get_value_str L824", level="debug")
             return ""
     def __repr__(self):
         val_preview = str(self.value)[:50]

@@ -81,4 +81,4 @@ class SilentLogMixin:
             _logger.log(coerce_log_level(level), _text)
         except Exception as e:
             # 日志本身失败绝不能影响主流程 —— 静默到底
-            silent_exc(e, where="nucleus.logging.SilentLogMixin::_log L81")
+            silent_exc(e, where="nucleus.logging.SilentLogMixin::_log L81", level="debug")

@@ -144,7 +144,7 @@ def _in_test_env() -> bool:
     try:
         return ("pytest" in sys.modules) or bool(os.environ.get("PYTEST_CURRENT_TEST"))
     except Exception as e:
-        silent_exc(e, where="nucleus.evolution.patch_quality_evaluator::_in_test_env L91")
+        silent_exc(e, where="nucleus.evolution.patch_quality_evaluator::_in_test_env L91", level="debug")
         return False
 
 
@@ -155,7 +155,7 @@ def _is_production_data_path(path: str) -> bool:
         _r = os.path.abspath(_PROJECT_ROOT).replace("\\", "/").lower()
         return _p.startswith(_r + "/data/")
     except Exception as e:
-        silent_exc(e, where="nucleus.evolution.patch_quality_evaluator::_is_production_data_path L101")
+        silent_exc(e, where="nucleus.evolution.patch_quality_evaluator::_is_production_data_path L101", level="debug")
         return True
 
 
@@ -165,7 +165,7 @@ def evaluator_enabled() -> bool:
         import config
         return bool(getattr(config, "ENABLE_PATCH_QUALITY_EVALUATOR", True))
     except Exception as e:
-        silent_exc(e, where="nucleus.evolution.patch_quality_evaluator::evaluator_enabled L110")
+        silent_exc(e, where="nucleus.evolution.patch_quality_evaluator::evaluator_enabled L110", level="debug")
         return True
 
 
@@ -444,7 +444,7 @@ def summarize(items: list) -> dict[str, Any]:
         _out["fix_rate_gap"] = round(
             _out["no_regression_rate"] - (_out["real_fix_rate"] or 0.0), 4)
     except Exception as e:      # 拆分模块异常不影响既有汇总
-        silent_exc(e, where="nucleus.evolution.patch_quality_evaluator::summarize L305")
+        silent_exc(e, where="nucleus.evolution.patch_quality_evaluator::summarize L305", level="debug")
     return _out
 
 
@@ -492,7 +492,7 @@ def load_history(path: str | None = None) -> list:
             _d = json.loads(_f.read())
         return _d if isinstance(_d, list) else []
     except (OSError, ValueError) as _e:
-        silent_exc(_e, where="patch_quality_evaluator.load_history[424刀1]")
+        silent_exc(_e, where="patch_quality_evaluator.load_history[424刀1]", level="debug")
         return []
 
 

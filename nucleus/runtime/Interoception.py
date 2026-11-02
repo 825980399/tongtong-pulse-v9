@@ -69,7 +69,7 @@ class Interoception(SilentLogMixin):
                 from nucleus.runtime.RuntimeTrajectory import get_runtime_trajectory
                 self.set_trajectory(get_runtime_trajectory())
         except Exception as e:
-            silent_exc(e, where="nucleus.runtime.Interoception::__init__ L66")
+            silent_exc(e, where="nucleus.runtime.Interoception::__init__ L66", level="debug")
 
     # ========== 依赖注入 ==========
 

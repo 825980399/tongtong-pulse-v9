@@ -64,7 +64,7 @@ def _safe_read_json(path):
         with open(path, "r", encoding="utf-8") as _f:
             return json.load(_f)
     except Exception as _e:
-        silent_exc(_e, where="nucleus.evolution.night_orchestration._safe_read_json")
+        silent_exc(_e, where="nucleus.evolution.night_orchestration._safe_read_json", level="debug")
         return {}
 
 
@@ -89,7 +89,7 @@ class NightShutdownChannel:
                 json.dump(_data, _f, ensure_ascii=False, indent=2)
             return True
         except Exception as _e:
-            silent_exc(_e, where="nucleus.evolution.night_orchestration.NightShutdownChannel.request_shutdown")
+            silent_exc(_e, where="nucleus.evolution.night_orchestration.NightShutdownChannel.request_shutdown", level="debug")
             return False
 
     # ---- has：主循环每拍检测（未消费即视为有效指令）----
@@ -100,7 +100,7 @@ class NightShutdownChannel:
             _data = _safe_read_json(self._flag_path)
             return not _data.get("consumed", False)
         except Exception as _e:
-            silent_exc(_e, where="nucleus.evolution.night_orchestration.NightShutdownChannel.has_shutdown_request")
+            silent_exc(_e, where="nucleus.evolution.night_orchestration.NightShutdownChannel.has_shutdown_request", level="debug")
             return False
 
     # ---- consume：主循环消费（标记已消费，返回指令详情供退出流程使用）----
@@ -115,7 +115,7 @@ class NightShutdownChannel:
                 json.dump(_data, _f, ensure_ascii=False, indent=2)
             return _data
         except Exception as _e:
-            silent_exc(_e, where="nucleus.evolution.night_orchestration.NightShutdownChannel.consume_shutdown_request")
+            silent_exc(_e, where="nucleus.evolution.night_orchestration.NightShutdownChannel.consume_shutdown_request", level="debug")
             return None
 
     # ---- read：外部编排脚本轮询用（返回当前指令 dict，无则 {}）----
@@ -129,7 +129,7 @@ class NightShutdownChannel:
                 os.remove(self._flag_path)
                 return True
         except Exception as _e:
-            silent_exc(_e, where="nucleus.evolution.night_orchestration.NightShutdownChannel.clear_stale_request")
+            silent_exc(_e, where="nucleus.evolution.night_orchestration.NightShutdownChannel.clear_stale_request", level="debug")
         return False
 
 
@@ -140,7 +140,7 @@ def _cmdline_is_framework_main(cmdline):
             if os.path.basename(str(_a)).lower() == "main.py":
                 return True
         except Exception as _e:
-            silent_exc(_e, where="nucleus.evolution.night_orchestration._cmdline_is_framework_main")
+            silent_exc(_e, where="nucleus.evolution.night_orchestration._cmdline_is_framework_main", level="debug")
             continue
     return False
 
@@ -156,7 +156,7 @@ def is_framework_running(root=None):
     try:
         import psutil
     except Exception as _e:
-        silent_exc(_e, where="nucleus.evolution.night_orchestration.is_framework_running.import_psutil")
+        silent_exc(_e, where="nucleus.evolution.night_orchestration.is_framework_running.import_psutil", level="debug")
         return None
     _self_pid = os.getpid()
     try:
@@ -168,10 +168,10 @@ def is_framework_running(root=None):
                 if _cmdline_is_framework_main(_cl):
                     return True
             except Exception as _e:
-                silent_exc(_e, where="nucleus.evolution.night_orchestration.is_framework_running.loop")
+                silent_exc(_e, where="nucleus.evolution.night_orchestration.is_framework_running.loop", level="debug")
                 continue
     except Exception as _e:
-        silent_exc(_e, where="nucleus.evolution.night_orchestration.is_framework_running")
+        silent_exc(_e, where="nucleus.evolution.night_orchestration.is_framework_running", level="debug")
         return None
     return False
 
@@ -189,7 +189,7 @@ def count_approved_patches(project_root):
         _pm = PatchManager(project_root)
         return sum(1 for _p in _pm.list_pending_patches() if _p.get("status") == "approved")
     except Exception as _e:
-        silent_exc(_e, where="nucleus.evolution.night_orchestration.count_approved_patches")
+        silent_exc(_e, where="nucleus.evolution.night_orchestration.count_approved_patches", level="debug")
         return 0
 
 
@@ -222,7 +222,7 @@ def write_exit_blocked_report(count, project_root, reason="EXIT_BLOCKED_BY_PATCH
         with open(_path, "w", encoding="utf-8") as _f:
             json.dump(_payload, _f, ensure_ascii=False, indent=2)
     except Exception as _e:
-        silent_exc(_e, where="nucleus.evolution.night_orchestration.write_exit_blocked_report")
+        silent_exc(_e, where="nucleus.evolution.night_orchestration.write_exit_blocked_report", level="debug")
 
 
 
@@ -237,7 +237,7 @@ def _m333_read_state(path):
             _d = json.load(_f)
         return _d if isinstance(_d, dict) else {}
     except Exception as _e:
-        silent_exc(_e, where="night_orchestration._m333_read_state")
+        silent_exc(_e, where="night_orchestration._m333_read_state", level="debug")
         return {}
 
 
@@ -301,7 +301,7 @@ def _m348_impl_maybe_run_night_digest(project_root, now=None, state_path=None,
             import config as _cfg
             enabled = bool(getattr(_cfg, "NIGHT_ORCH_DIGEST_ENABLED", True))
         except Exception as _e:
-            silent_exc(_e, where="night_orchestration.maybe_run_night_digest.cfg")
+            silent_exc(_e, where="night_orchestration.maybe_run_night_digest.cfg", level="debug")
             enabled = True
     if not enabled:
         _out["reason"] = "disabled"
@@ -436,7 +436,7 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
             import config as _cfg
             enabled = getattr(_cfg, "NIGHT_ORCH_DIGEST_ENABLED", True)
         except Exception as _e:
-            silent_exc(_e, where="night_orchestration.generate_night_digest.cfg")
+            silent_exc(_e, where="night_orchestration.generate_night_digest.cfg", level="debug")
             enabled = True
     if not enabled:
         return None
@@ -462,7 +462,7 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
                     try:
                         _rec = _json.loads(_line)
                     except Exception as _je:
-                        silent_exc(_je, where="night_orchestration.generate_night_digest.parse")
+                        silent_exc(_je, where="night_orchestration.generate_night_digest.parse", level="debug")
                         continue
                     if _rec.get("needs_human"):
                         _rows.append(_rec)
@@ -492,7 +492,7 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
             try:
                 return float(r.get("ts", 0) or 0)
             except Exception as _e:
-                silent_exc(_e, where="night_orchestration.generate_night_digest._ts")
+                silent_exc(_e, where="night_orchestration.generate_night_digest._ts", level="debug")
                 return 0.0
         _top = sorted(_deduped, key=_ts, reverse=True)[:5]
 
@@ -554,7 +554,7 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
                 _LAST_SWEEP_RESULT.clear()
                 _LAST_SWEEP_RESULT.update(dict(_led or {}))
             except Exception as _e:
-                silent_exc(_e, where="night_orchestration.generate_night_digest.trace")
+                silent_exc(_e, where="night_orchestration.generate_night_digest.trace", level="debug")
             _L.append("## 五、预期台账（world_model · 只观测不决策）")
             _L.append("")
             _L.append("- 触发：triggered=%s ｜ 新增 **%s** 条 ｜ 幂等跳过 %s 条 ｜ reason=%s"
@@ -566,7 +566,7 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
             _L.append("- 红线：`violated` 不参与入队/动机（本模块只写台账）")
             _L.append("")
         except Exception as _le:
-            silent_exc(_le, where="night_orchestration.generate_night_digest.ledger")
+            silent_exc(_le, where="night_orchestration.generate_night_digest.ledger", level="debug")
 
         # ★411批刀6（410 遗留①）：周期档案自动重建 —— **必须排在命中率报表之前**，
         #   否则报表用的还是旧容差（档案过期后七类会退成 no_coverage，读数直接变假）。
@@ -586,7 +586,7 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
             _L.append("- 容差口径：%s" % _psum.get("tolerance_basis", {}))
             _L.append("")
         except Exception as _pe411:
-            silent_exc(_pe411, where="night_orchestration.generate_night_digest.periodic_profile")
+            silent_exc(_pe411, where="night_orchestration.generate_night_digest.periodic_profile", level="debug")
             _L.append("## 五点五、周期档案重建（world_model · 七类）")
             _L.append("")
             _L.append("- **重建失败**（已留痕，不阻断摘要）：%s: %s"
@@ -616,7 +616,7 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
                                  _t.get("no_coverage", 0)))
             _L.append("")
         except Exception as _he:
-            silent_exc(_he, where="night_orchestration.generate_night_digest.hit_rate")
+            silent_exc(_he, where="night_orchestration.generate_night_digest.hit_rate", level="debug")
 
         # ★412刀1（Step5a 叙事落盘）：挂在**同一 04:00 编译点**，不新建调度器。
         #   落的是**活体器官**的当日叙事摘要（找不到器官就如实报 organ_missing，
@@ -656,7 +656,7 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
                 _L.append("- delta：**空**（digest 未产出）")
             _L.append("")
         except Exception as _ne412:
-            silent_exc(_ne412, where="night_orchestration.generate_night_digest.narrative_store")
+            silent_exc(_ne412, where="night_orchestration.generate_night_digest.narrative_store", level="debug")
             _L.append("## 七、叙事落盘（Step5a · 412刀1）")
             _L.append("")
             _L.append("- **落盘失败**（已留痕，不阻断摘要）：%s: %s"
@@ -686,7 +686,7 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
             _L.append("")
         except Exception as _oe412:
             silent_exc(_oe412,
-                       where="night_orchestration.generate_night_digest.o3_delete_dryrun")
+                       where="night_orchestration.generate_night_digest.o3_delete_dryrun", level="debug")
             _L.append("## 八、O3 删死代码 dry-run（412刀4 · 只统计不 apply）")
             _L.append("")
             _L.append("- **报表失败**（已留痕，不阻断摘要）：%s: %s"
@@ -713,7 +713,7 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
             _L.append("")
         except Exception as _ee413:
             silent_exc(_ee413,
-                       where="night_orchestration.generate_night_digest.experience_governance")
+                       where="night_orchestration.generate_night_digest.experience_governance", level="debug")
             _L.append("## 九、经验池模板标记（413刀4 · 框架进程内写）")
             _L.append("")
             _L.append("- **失败**（已留痕，不阻断摘要）：%s: %s"
@@ -724,7 +724,7 @@ def generate_night_digest(project_root, as_of=None, enabled=None):
             _f.write("\n".join(_L) + "\n")
         return _digest_path
     except Exception as _e:
-        silent_exc(_e, where="night_orchestration.generate_night_digest")
+        silent_exc(_e, where="night_orchestration.generate_night_digest", level="debug")
         return None
 
 
@@ -758,5 +758,5 @@ def maybe_run_night_digest(project_root, now=None, state_path=None,
             (_out or {}).get("ran"), (_out or {}).get("added"),
             NIGHT_DIGEST_HOUR, NIGHT_DIGEST_MINUTE, _tol, _m335_pg())
     except Exception as _le:
-        silent_exc(_le, where="night_orchestration.maybe_run_night_digest.log")
+        silent_exc(_le, where="night_orchestration.maybe_run_night_digest.log", level="debug")
     return _out

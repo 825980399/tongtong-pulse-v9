@@ -50,14 +50,14 @@ def note_semantic_failure(component: str, op: str,
             _rec["count"] = _bucket[_o]
             _LAST[_c] = dict(_rec)
     except Exception as _e:
-        silent_exc(_e, where="sem_failure_note::note_semantic_failure 计数")
+        silent_exc(_e, where="sem_failure_note::note_semantic_failure 计数", level="debug")
     try:
         _MODULE_LOGGER.warning(
             "[语义层故障] %s.%s 失败（累计 %s 次）—— 返回空结果**不代表无召回**，"
             "上层须按失败标记区分：%s: %s",
             _c, _o, _rec.get("count"), type(exc).__name__, exc)
     except Exception as _e:
-        silent_exc(_e, where="sem_failure_note::note_semantic_failure warning")
+        silent_exc(_e, where="sem_failure_note::note_semantic_failure warning", level="debug")
     return _rec
 
 
@@ -67,7 +67,7 @@ def sem_failure_counts() -> dict[str, dict[str, int]]:
         with _LOCK:
             return {_k: dict(_v) for _k, _v in _COUNTS.items()}
     except Exception as _e:
-        silent_exc(_e, where="sem_failure_note::sem_failure_counts")
+        silent_exc(_e, where="sem_failure_note::sem_failure_counts", level="debug")
         return {}
 
 
@@ -78,7 +78,7 @@ def last_failure(component: str) -> dict[str, Any] | None:
             _r = _LAST.get(str(component or ""))
             return dict(_r) if _r else None
     except Exception as _e:
-        silent_exc(_e, where="sem_failure_note::last_failure")
+        silent_exc(_e, where="sem_failure_note::last_failure", level="debug")
         return None
 
 
@@ -89,4 +89,4 @@ def reset_for_test() -> None:
             _COUNTS.clear()
             _LAST.clear()
     except Exception as _e:
-        silent_exc(_e, where="sem_failure_note::reset_for_test")
+        silent_exc(_e, where="sem_failure_note::reset_for_test", level="debug")

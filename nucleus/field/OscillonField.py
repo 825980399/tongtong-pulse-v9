@@ -33,7 +33,7 @@ def _cython_extensions_enabled() -> bool:
         from config import FEATURE
         return bool(FEATURE.get("use_cython_extensions", False))
     except Exception as e:
-        silent_exc(e, where="nucleus.field.OscillonField::_cython_extensions_enabled L33")
+        silent_exc(e, where="nucleus.field.OscillonField::_cython_extensions_enabled L33", level="debug")
         return False
 
 
@@ -74,7 +74,7 @@ def _m169_startup_report_on() -> bool:
         import config as _cfg
         return bool(getattr(_cfg, "ENABLE_OSCILLON_STARTUP_REPORT", True))
     except Exception as _e:
-        silent_exc(_e, where="nucleus.field.OscillonField::_m169_startup_report_on")
+        silent_exc(_e, where="nucleus.field.OscillonField::_m169_startup_report_on", level="debug")
         return True
 
 

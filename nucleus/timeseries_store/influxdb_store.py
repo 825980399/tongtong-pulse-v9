@@ -47,7 +47,7 @@ def _enabled() -> bool:
         import config
         return bool(getattr(config, "ENABLE_INFLUXDB_TIMESERIES", False))
     except Exception as e:
-        silent_exc(e, where="nucleus.timeseries_store.influxdb_store::_enabled L47")
+        silent_exc(e, where="nucleus.timeseries_store.influxdb_store::_enabled L47", level="debug")
         return False
 
 
@@ -125,12 +125,12 @@ class InfluxDBStore:
             try:
                 self.flush()
             except Exception as e:
-                silent_exc(e, where="nucleus.timeseries_store.influxdb_store::close L124")
+                silent_exc(e, where="nucleus.timeseries_store.influxdb_store::close L124", level="debug")
             if self._client is not None:
                 try:
                     self._client.close()
                 except Exception as e:
-                    silent_exc(e, where="nucleus.timeseries_store.influxdb_store::close L129")
+                    silent_exc(e, where="nucleus.timeseries_store.influxdb_store::close L129", level="debug")
                 self._client = None
             self._available = False
 
@@ -160,7 +160,7 @@ class InfluxDBStore:
                 "system_percent": float(_m.get("system_percent") or 0.0),
             }
         except Exception as _e:
-            silent_exc(_e, where="nucleus.timeseries_store.influxdb_store::_sample_rss")
+            silent_exc(_e, where="nucleus.timeseries_store.influxdb_store::_sample_rss", level="debug")
             return None
 
     # ---------- 写入 ----------

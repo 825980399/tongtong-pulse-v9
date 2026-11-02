@@ -36,7 +36,7 @@ def _m380_gate_on() -> bool:
         import config as _c
         return bool(getattr(_c, "ENABLE_M380_TICK_CONSUMER_GATE", True))
     except Exception as _e:
-        silent_exc(_e, where="TimeCore::_m380_gate_on")
+        silent_exc(_e, where="TimeCore::_m380_gate_on", level="debug")
         return True
 
 
@@ -55,7 +55,7 @@ def _m380_tick_consumer_ok(field, event_type: str) -> bool:
             return True
         return bool(_fn(event_type))
     except Exception as _e:
-        silent_exc(_e, where="TimeCore::_m380_tick_consumer_ok")
+        silent_exc(_e, where="TimeCore::_m380_tick_consumer_ok", level="debug")
         return True
 
 
@@ -150,7 +150,7 @@ class TimeCore:
                 try:
                     self._timer.cancel()
                 except Exception as e:
-                    silent_exc(e, where="nucleus.chronos.TimeCore::stop L91")
+                    silent_exc(e, where="nucleus.chronos.TimeCore::stop L91", level="debug")
                 self._timer = None
         self._log("TimeCore 已停止")
 
@@ -165,7 +165,7 @@ class TimeCore:
                     try:
                         _old.cancel()
                     except Exception as _ce:
-                        silent_exc(_ce, where="nucleus.chronos.TimeCore::_schedule_next cancel")
+                        silent_exc(_ce, where="nucleus.chronos.TimeCore::_schedule_next cancel", level="debug")
                 self._timer = threading.Timer(self._interval, self._tick)
                 self._timer.daemon = True
                 self._timer.start()
@@ -179,7 +179,7 @@ class TimeCore:
                 try:
                     self._logger.warning(_msg)
                 except Exception as _le:
-                    silent_exc(_le, where="nucleus.chronos.TimeCore::_schedule_next warn")
+                    silent_exc(_le, where="nucleus.chronos.TimeCore::_schedule_next warn", level="debug")
                     print(_msg)
             else:
                 print(_msg)
@@ -352,7 +352,7 @@ class TimeCore:
         try:
             h = time.localtime().tm_hour
         except Exception as e:
-            silent_exc(e, where="nucleus.chronos.TimeCore::_semantic_phase L234")
+            silent_exc(e, where="nucleus.chronos.TimeCore::_semantic_phase L234", level="debug")
             return "unknown"
         if 5 <= h < 11:
             return "morning"
@@ -371,7 +371,7 @@ class TimeCore:
                 self._logger.info(msg)
                 return
             except Exception as e:
-                silent_exc(e, where="nucleus.chronos.TimeCore::_log L252")
+                silent_exc(e, where="nucleus.chronos.TimeCore::_log L252", level="debug")
         print(f"[TimeCore] {msg}")
 
 

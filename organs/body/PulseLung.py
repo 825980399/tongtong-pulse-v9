@@ -240,7 +240,7 @@ class PulseLung(BasePulseOrgan):
             import config as _c
             return bool(getattr(_c, "ENABLE_LUNG_CALL_SOURCE_FIX", True))
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLung::_m49_source_fix_on L114")
+            silent_exc(e, where="organs.body.PulseLung::_m49_source_fix_on L114", level="debug")
             return True
 
     def _m49_dialogue_presumption_on(self) -> bool:
@@ -249,7 +249,7 @@ class PulseLung(BasePulseOrgan):
             import config as _c
             return bool(getattr(_c, "ENABLE_LUNG_DIALOGUE_PRESUMPTION", True))
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLung::_m49_dialogue_presumption_on L122")
+            silent_exc(e, where="organs.body.PulseLung::_m49_dialogue_presumption_on L122", level="debug")
             return True
 
     def _m49_tls_get(self):
@@ -851,7 +851,7 @@ class PulseLung(BasePulseOrgan):
                 return 1.0
             return q["success"] / total
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLung::_get_model_health L694")
+            silent_exc(e, where="organs.body.PulseLung::_get_model_health L694", level="debug")
             return 1.0
 
     def _pick_best_chat_model(self, local_models: list, task_type: str = "chat",
@@ -961,7 +961,7 @@ class PulseLung(BasePulseOrgan):
                 return None
             return _c
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLung::_channels_config L803")
+            silent_exc(e, where="organs.body.PulseLung::_channels_config L803", level="debug")
             return None
 
     def _select_default_channel(self):
@@ -994,7 +994,7 @@ class PulseLung(BasePulseOrgan):
             import config as _cfg
             _pool = _cfg.get_active_channels()
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLung::_rotate_channel L835")
+            silent_exc(e, where="organs.body.PulseLung::_rotate_channel L835", level="debug")
             return None
         _health = self._get_channel_health()
         for _ch in _pool:
@@ -1202,7 +1202,7 @@ class PulseLung(BasePulseOrgan):
                         caller="lung._call_channel:" + str(_name),
                         payload=_payload)
                 except Exception as _m360be:
-                    silent_exc(_m360be, where="organs.body.PulseLung::_call_channel 埋点 begin")
+                    silent_exc(_m360be, where="organs.body.PulseLung::_call_channel 埋点 begin", level="debug")
                 with urllib.request.urlopen(_req, timeout=_timeout) as _resp:
                     _raw = _resp.read().decode("utf-8", "ignore")
                 try:
@@ -1218,7 +1218,7 @@ class PulseLung(BasePulseOrgan):
                         from nucleus.llm.paid_api_trace import finish as _m360_finish
                         _m360_finish(_m360_rid, False, error="HTTP " + str(_he.code))
                     except Exception as _m360fe:
-                        silent_exc(_m360fe, where="organs.body.PulseLung::_call_channel 埋点 finish")
+                        silent_exc(_m360fe, where="organs.body.PulseLung::_call_channel 埋点 finish", level="debug")
                 # ★主线第25批 T2/P2-162：此前 400 的真实原因被整段吞掉（只留
                 #   「HTTP Error 400: Bad Request」），运维无法定位。现把上游返回的
                 #   错误体（含 code/message）以 WARNING 可见，便于直接对症。
@@ -1265,7 +1265,7 @@ class PulseLung(BasePulseOrgan):
                     from nucleus.llm.paid_api_trace import finish as _m360_finish
                     _m360_finish(_m360_rid, True, _m94_usage)
                 except Exception as _m360fe:
-                    silent_exc(_m360fe, where="organs.body.PulseLung::_call_channel 埋点 finish")
+                    silent_exc(_m360fe, where="organs.body.PulseLung::_call_channel 埋点 finish", level="debug")
             return _adapter.parse_response(_data)
         except Exception as _exc:
             self._log(LogLevel.DEBUG,
@@ -1289,7 +1289,7 @@ class PulseLung(BasePulseOrgan):
                 return False
             return str(_c0.get("finish_reason") or "").lower() == "length"
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLung::_m360_extract_truncated")
+            silent_exc(e, where="organs.body.PulseLung::_m360_extract_truncated", level="debug")
             return False
 
     @staticmethod
@@ -1312,7 +1312,7 @@ class PulseLung(BasePulseOrgan):
             import config as _cfg
             return bool(getattr(_cfg, "DEBUG_CHANNEL_HTTP_DUMP", False))
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLung::_channel_http_dump_enabled L1072")
+            silent_exc(e, where="organs.body.PulseLung::_channel_http_dump_enabled L1072", level="debug")
             return False
 
     def _apply_channel_field_policy(self, channel_name: str, kwargs: dict) -> dict:
@@ -1384,7 +1384,7 @@ class PulseLung(BasePulseOrgan):
                 _mt = min(_mt, int(_override))
             return _mt
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLung::_resolve_ark_seed_max_tokens L1143")
+            silent_exc(e, where="organs.body.PulseLung::_resolve_ark_seed_max_tokens L1143", level="debug")
             return 1024
 
     def _apply_ark_seed_complexity_routing(self, channel_name: str,
@@ -1503,7 +1503,7 @@ class PulseLung(BasePulseOrgan):
             _adv_tasks = (_cfg.REMOTE_API_CONFIG or {}).get("advanced_tasks", []) or []
             return model in _adv_tasks
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLung::_is_advanced_task L1261")
+            silent_exc(e, where="organs.body.PulseLung::_is_advanced_task L1261", level="debug")
             return False
 
     def _build_advanced_channel(self):
@@ -1525,7 +1525,7 @@ class PulseLung(BasePulseOrgan):
                 "priority": -1,
             }
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLung::_build_advanced_channel L1282")
+            silent_exc(e, where="organs.body.PulseLung::_build_advanced_channel L1282", level="debug")
             return None
 
     # ========== ★主线第65批 T2/P1：后台消化自适应 ==========
@@ -1535,7 +1535,7 @@ class PulseLung(BasePulseOrgan):
             import config as _c
             return bool(getattr(_c, "ENABLE_BACKGROUND_DIGEST_ADAPTIVE", True))
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLung::_m65_digest_adaptive_enabled L1291")
+            silent_exc(e, where="organs.body.PulseLung::_m65_digest_adaptive_enabled L1291", level="debug")
             return True
 
     def _m65_get_load_level(self) -> str:
@@ -1548,7 +1548,7 @@ class PulseLung(BasePulseOrgan):
             from nucleus.field.InfoField import get_system_load_level
             return str(get_system_load_level() or "low")
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLung::_m65_get_load_level L323")
+            silent_exc(e, where="organs.body.PulseLung::_m65_get_load_level L323", level="debug")
             return "low"
     def _append_background_learning_requirement(self, prompt: str,
                                                 payload: dict) -> str:
@@ -1589,7 +1589,7 @@ class PulseLung(BasePulseOrgan):
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_CHANNEL_CONCURRENCY", True))
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLung::_m24_enabled L1340")
+            silent_exc(e, where="organs.body.PulseLung::_m24_enabled L1340", level="debug")
             return True
 
     def _m24_ensure_state(self) -> None:
@@ -1660,7 +1660,7 @@ class PulseLung(BasePulseOrgan):
             _mgr.ensure_channel(name)
             return _mgr.get_semaphore(name)
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLung::_get_channel_semaphore L1410")
+            silent_exc(e, where="organs.body.PulseLung::_get_channel_semaphore L1410", level="debug")
             return None
 
     def _adjust_channel_concurrency(self, name: str, success: bool,
@@ -1699,7 +1699,7 @@ class PulseLung(BasePulseOrgan):
         try:
             return _mgr.summary_line()
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLung::summary_channel_concurrency L1448")
+            silent_exc(e, where="organs.body.PulseLung::summary_channel_concurrency L1448", level="debug")
             return "[渠道并发] 摘要生成失败"
 
     # --------------------------------------------------------------
@@ -1805,7 +1805,7 @@ class PulseLung(BasePulseOrgan):
             if _n:
                 return set(str(x) for x in _n)
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLung::_m360_paid_names")
+            silent_exc(e, where="organs.body.PulseLung::_m360_paid_names", level="debug")
         return {"deepseek", "advanced"}
 
     def _m360_is_paid_channel(self, channel) -> bool:
@@ -1815,7 +1815,7 @@ class PulseLung(BasePulseOrgan):
                 return False
             return str(channel.get("name", "")) in self._m360_paid_names()
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLung::_m360_is_paid_channel")
+            silent_exc(e, where="organs.body.PulseLung::_m360_is_paid_channel", level="debug")
             return False
 
     def _m360_order_candidates(self, candidates: list) -> list:
@@ -1835,7 +1835,7 @@ class PulseLung(BasePulseOrgan):
             _paid.sort(key=_key)
             return _free + _paid
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLung::_m360_order_candidates")
+            silent_exc(e, where="organs.body.PulseLung::_m360_order_candidates", level="debug")
             return candidates
 
     def _m418_balance_candidates(self, candidates: list, caller: str = "") -> list:
@@ -1871,7 +1871,7 @@ class PulseLung(BasePulseOrgan):
                     _m418_log(caller, _info)
             return _new
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLung::_m418_balance_candidates")
+            silent_exc(e, where="organs.body.PulseLung::_m418_balance_candidates", level="debug")
             return candidates
 
     @staticmethod
@@ -1881,7 +1881,7 @@ class PulseLung(BasePulseOrgan):
             import config as _cfg360
             return bool(getattr(_cfg360, "ADVANCED_TASK_FREE_FIRST", True))
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLung::_m360_adv_free_first_on")
+            silent_exc(e, where="organs.body.PulseLung::_m360_adv_free_first_on", level="debug")
             return True
 
     @staticmethod
@@ -1892,7 +1892,7 @@ class PulseLung(BasePulseOrgan):
             _n = int(getattr(_cfg360, "ADVANCED_TASK_FREE_MIN_ATTEMPTS", 2) or 2)
             return _n if _n > 0 else 1
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLung::_m360_adv_free_min")
+            silent_exc(e, where="organs.body.PulseLung::_m360_adv_free_min", level="debug")
             return 2
 
     #: ★363刀D1：高级任务「免费档产出不达标」的九类信号（质量门触发链口径）
@@ -2040,7 +2040,7 @@ class PulseLung(BasePulseOrgan):
             import config as _c
             return bool(getattr(_c, "ENABLE_LUNG_CALL_TRACE", True))
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLung::_m40_trace_enabled L1607")
+            silent_exc(e, where="organs.body.PulseLung::_m40_trace_enabled L1607", level="debug")
             return True
 
     @staticmethod
@@ -2050,7 +2050,7 @@ class PulseLung(BasePulseOrgan):
             import config as _c
             return bool(getattr(_c, "ENABLE_SEMANTIC_CACHE_OBSERVE", True))
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLung::_m41_cache_observe_enabled L1616")
+            silent_exc(e, where="organs.body.PulseLung::_m41_cache_observe_enabled L1616", level="debug")
             return True
 
     @staticmethod
@@ -2060,7 +2060,7 @@ class PulseLung(BasePulseOrgan):
             import config as _c
             return bool(getattr(_c, "ENABLE_LUNG_DEPENDENCY_TRACKING", True))
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLung::_m40_dep_tracking_enabled L1625")
+            silent_exc(e, where="organs.body.PulseLung::_m40_dep_tracking_enabled L1625", level="debug")
             return True
 
     @staticmethod
@@ -2089,7 +2089,7 @@ class PulseLung(BasePulseOrgan):
                         _key)
             return ORIGIN_ALIASES.get(_key, ORIGIN_SYSTEM_INTERNAL)
         except Exception as e:
-            silent_exc(e, where="organs.body.PulseLung::_m40_resolve_origin L1640")
+            silent_exc(e, where="organs.body.PulseLung::_m40_resolve_origin L1640", level="debug")
             return "system_internal"
 
     # ★主线第44批 T1（P1-285）：提示词版本号 —— 标识"prompt 由哪个构造点产生"。
@@ -2509,7 +2509,7 @@ class PulseLung(BasePulseOrgan):
                 _observe_shadow(_user, summary=prompt)
             except Exception as _sp_e:
                 from nucleus._silent_except import silent_exc
-                silent_exc(_sp_e, where="organs.body.PulseLung::_observe_remote_call shadow_profile")
+                silent_exc(_sp_e, where="organs.body.PulseLung::_observe_remote_call shadow_profile", level="debug")
             try:
                 return func(self, prompt, model, enable_thinking)
             finally:
@@ -2619,7 +2619,7 @@ class PulseLung(BasePulseOrgan):
                             payload=payload_bytes)
                     except Exception as _m360bse:
                         silent_exc(_m360bse,
-                                   where="organs.body.PulseLung::_call_remote_api 埋点 begin")
+                                   where="organs.body.PulseLung::_call_remote_api 埋点 begin", level="debug")
                     req = urllib.request.Request(api_url, data=payload_bytes, headers=headers, method='POST')
                     with urllib.request.urlopen(req, timeout=EXTERNAL_CALL_TIMEOUTS["http_read"]) as response:
                         response_bytes = response.read()
@@ -2646,7 +2646,7 @@ class PulseLung(BasePulseOrgan):
                                              data.get("usage") if isinstance(data, dict) else None)
                             except Exception as _m360fse:
                                 silent_exc(_m360fse,
-                                           where="organs.body.PulseLung::_call_remote_api 埋点 finish")
+                                           where="organs.body.PulseLung::_call_remote_api 埋点 finish", level="debug")
                         return _result
 
                 except urllib.error.HTTPError as http_err:
@@ -3355,7 +3355,7 @@ class PulseLung(BasePulseOrgan):
                                     model=model, status="success",
                                     channel="ollama_local")
                     except Exception as _rec_e:
-                        silent_exc(_rec_e, where="organs.body.PulseLung::_call_ollama vision record L2840")
+                        silent_exc(_rec_e, where="organs.body.PulseLung::_call_ollama vision record L2840", level="debug")
                 return _reply
         except Exception as e:
             self._log(LogLevel.DEBUG, f"Ollama调用失败({model}): {e}")

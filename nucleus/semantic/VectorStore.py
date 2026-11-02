@@ -76,7 +76,7 @@ def _text_hash(text: str) -> str:
     try:
         return hashlib.md5((text or "").encode("utf-8")).hexdigest()[:16]
     except Exception as e:
-        silent_exc(e, where="nucleus.semantic.VectorStore::_text_hash L68")
+        silent_exc(e, where="nucleus.semantic.VectorStore::_text_hash L68", level="debug")
         return ""
 
 
@@ -199,7 +199,7 @@ class VectorStore:
             _mtime = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(_st.st_mtime))
             return f"mtime={_mtime}, size={_st.st_size}B, age={int(time.time() - _st.st_mtime)}s"
         except Exception as e:
-            silent_exc(e, where="nucleus.semantic.VectorStore::_file_fingerprint L170")
+            silent_exc(e, where="nucleus.semantic.VectorStore::_file_fingerprint L170", level="debug")
             return "mtime=未知"
 
     def _backup_polluted(self) -> None:
@@ -742,7 +742,7 @@ class VectorStore:
             try:
                 self._m360_last_search_failed = True
             except Exception as _m360e:
-                silent_exc(_m360e, where="VectorStore::search_by_vector 失败标记")
+                silent_exc(_m360e, where="VectorStore::search_by_vector 失败标记", level="debug")
             return []
 
     # ---------------- quality_flag 检索消费（主线第3批 任务3）----------------

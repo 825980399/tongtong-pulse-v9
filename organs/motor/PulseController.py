@@ -434,7 +434,7 @@ class PulseController(BasePulseOrgan):
                 self._log(LogLevel.DEBUG, "异步循环运行中，跳过页面链接提取")
                 return []
         except RuntimeError as e:
-            silent_exc(e, where="organs.motor.PulseController::_get_page_links_headless L412")
+            silent_exc(e, where="organs.motor.PulseController::_get_page_links_headless L412", level="debug")
         except Exception as e:
             self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
 
@@ -494,7 +494,7 @@ class PulseController(BasePulseOrgan):
                 for elem in self._headless_page.query_selector_all(sel):
                     _process_element(elem, is_primary=True)
             except Exception as e:
-                silent_exc(e, where="organs/motor/PulseController.py:472")
+                silent_exc(e, where="organs/motor/PulseController.py:472", level="debug")
                 continue
 
         # 2. 处理辅助选择器
@@ -503,7 +503,7 @@ class PulseController(BasePulseOrgan):
                 for elem in self._headless_page.query_selector_all(sel):
                     _process_element(elem, is_primary=False)
             except Exception as e:
-                silent_exc(e, where="organs/motor/PulseController.py:480")
+                silent_exc(e, where="organs/motor/PulseController.py:480", level="debug")
                 continue
 
         # 按得分排序（核心结果得分均为1.0，辅助结果可能更高或更低）
@@ -686,7 +686,7 @@ class PulseController(BasePulseOrgan):
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_SEARCH_KEYWORD_GUARD", True))
         except Exception as e:
-            silent_exc(e, where="organs.motor.PulseController::_search_keyword_guard_enabled L662")
+            silent_exc(e, where="organs.motor.PulseController::_search_keyword_guard_enabled L662", level="debug")
             return True
 
     def _purify_search_keywords(self, keywords: list, topic: str = "",
@@ -2003,7 +2003,7 @@ class PulseController(BasePulseOrgan):
                 _stats = self._search_engine_stats.get(engine_host, {"ema_rate": 0.5})
                 _reachable.append((engine_template, engine_host, _stats.get("ema_rate", 0.5)))
             except Exception as e:
-                silent_exc(e, where="organs/motor/PulseController.py:1962")
+                silent_exc(e, where="organs/motor/PulseController.py:1962", level="debug")
                 continue
         if _reachable:
             # 按历史成功率降序排序，选成功率最高的
@@ -2040,7 +2040,7 @@ class PulseController(BasePulseOrgan):
         try:
             domain = url.split("/")[2] if "://" in url else ""
         except IndexError as e:
-            silent_exc(e, where="organs.motor.PulseController::_check_domain_permission L1997")
+            silent_exc(e, where="organs.motor.PulseController::_check_domain_permission L1997", level="debug")
             return False
 
         blacklist = self._get_headless_config("domain_blacklist", [])
@@ -2160,7 +2160,7 @@ class PulseController(BasePulseOrgan):
         try:
             return bool(self._get_headless_config("headless_owner_thread_mode", True))
         except Exception as e:
-            silent_exc(e, where="organs.motor.PulseController::_owner_thread_mode L2099")
+            silent_exc(e, where="organs.motor.PulseController::_owner_thread_mode L2099", level="debug")
             return True
 
     def _keepalive_signal_mode(self) -> bool:
@@ -2171,7 +2171,7 @@ class PulseController(BasePulseOrgan):
         try:
             return bool(self._get_headless_config("headless_keepalive_signal_mode", True))
         except Exception as e:
-            silent_exc(e, where="organs.motor.PulseController::_keepalive_signal_mode L2109")
+            silent_exc(e, where="organs.motor.PulseController::_keepalive_signal_mode L2109", level="debug")
             return True
 
     def _signal_keepalive(self) -> None:
@@ -3215,7 +3215,7 @@ class PulseController(BasePulseOrgan):
             if not getattr(_cfg, 'ENABLE_WEB_TIME_EXTRACTION', False):
                 return 0.0
         except Exception as e:
-            silent_exc(e, where="organs.motor.PulseController::_extract_web_time L3005")
+            silent_exc(e, where="organs.motor.PulseController::_extract_web_time L3005", level="debug")
             return 0.0
         try:
             from nucleus.knowledge.WebTimeExtractor import get_shared_extractor
@@ -3447,7 +3447,7 @@ class PulseController(BasePulseOrgan):
                         detected = chardet.detect(response.content[:3000])
                         encoding = detected.get('encoding', 'utf-8') or 'utf-8'
                     except ImportError as e:
-                        silent_exc(e, where="organs.motor.PulseController::_fetch_url_text L3181")
+                        silent_exc(e, where="organs.motor.PulseController::_fetch_url_text L3181", level="debug")
                         encoding = 'utf-8'
 
                 response.encoding = encoding
@@ -3459,7 +3459,7 @@ class PulseController(BasePulseOrgan):
                 text = re.sub(r'\s+', ' ', text).strip()
                 return text[:8000]
         except Exception as e:
-            silent_exc(e, where="organs.motor.PulseController::_fetch_url_text L3192")
+            silent_exc(e, where="organs.motor.PulseController::_fetch_url_text L3192", level="debug")
             return None
 
     def _select_best_search_url(self, original_url: str, reason: str = "") -> str:
@@ -3533,7 +3533,7 @@ class PulseController(BasePulseOrgan):
                           "[347网] 探测 host=%s 可达 耗时=%.2fs 判国内=True" % (host, _el))
                 return True
             except Exception as e:
-                silent_exc(e, where="organs/motor/PulseController.py:3242")
+                silent_exc(e, where="organs/motor/PulseController.py:3242", level="debug")
                 continue
 
         _elapsed = time.monotonic() - _t0

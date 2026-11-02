@@ -363,7 +363,7 @@ if __name__ == "__main__":
                 try:
                     result.output_data = json.loads(result.stdout.strip())
                 except (json.JSONDecodeError, ValueError) as e:
-                    silent_exc(e, where="nucleus.review.ScriptExecutor::execute L365")
+                    silent_exc(e, where="nucleus.review.ScriptExecutor::execute L365", level="debug")
 
             # 5. 记录执行历史
             self._execution_history.append({
@@ -381,7 +381,7 @@ if __name__ == "__main__":
             try:
                 os.unlink(tmp_path)
             except OSError as e:
-                silent_exc(e, where="nucleus.review.ScriptExecutor::execute L383")
+                silent_exc(e, where="nucleus.review.ScriptExecutor::execute L383", level="debug")
 
         if result.success:
             _logger.debug(f"脚本执行成功: {result.execution_time:.2f}秒")
@@ -447,7 +447,7 @@ if __name__ == "__main__":
             ):
                 _reg.save()
         except Exception as e:
-            silent_exc(e, where="nucleus.review.ScriptExecutor::save_to_library register")
+            silent_exc(e, where="nucleus.review.ScriptExecutor::save_to_library register", level="debug")
 
         _logger.info(f"脚本已保存到库: {name} ({script_id})")
         return script_id

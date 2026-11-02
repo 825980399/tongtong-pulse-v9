@@ -73,7 +73,7 @@ def _m360_non_code_lines(path):
                     for _r in range(_tk.start[0], _tk.end[0] + 1):
                         _bad.add(_r)
     except Exception as _e:
-        silent_exc(_e, where="tests.test_m360_batch::_m360_non_code_lines tokenize")
+        silent_exc(_e, where="tests.test_m360_batch::_m360_non_code_lines tokenize", level="debug")
         return None          # 解析不了 ⇒ 交回调用方跳过该文件（不臆断）
     return _bad
 
@@ -368,7 +368,7 @@ class TestM360D03Dashboard(unittest.TestCase):
                 try:
                     delattr(config, "DATA_DIR")
                 except Exception as _e:
-                    silent_exc(_e, where="tests.test_m360_batch::还原 DATA_DIR")
+                    silent_exc(_e, where="tests.test_m360_batch::还原 DATA_DIR", level="debug")
             else:
                 config.DATA_DIR = _old
 
@@ -427,7 +427,7 @@ class TestM360D03Dashboard(unittest.TestCase):
                 try:
                     delattr(config, "DATA_DIR")
                 except Exception as _e:
-                    silent_exc(_e, where="tests.test_m360_batch::还原 DATA_DIR")
+                    silent_exc(_e, where="tests.test_m360_batch::还原 DATA_DIR", level="debug")
             else:
                 config.DATA_DIR = _old
 

@@ -50,7 +50,7 @@ def _m90_log_locate_v2_on() -> bool:
         import config as _c
         return bool(getattr(_c, "ENABLE_M90_LOG_LOCATE_V2", True))
     except Exception as e:
-        silent_exc(e, where="nucleus.evolution.LogAnalyzer::_m90_log_locate_v2_on L49")
+        silent_exc(e, where="nucleus.evolution.LogAnalyzer::_m90_log_locate_v2_on L49", level="debug")
         return True
 
 
@@ -119,7 +119,7 @@ class LogAnalyzer(SilentLogMixin):
             self._m343_domain_rel = self._m343_declare_two_domains()
         except Exception as _m343d_e:                            # noqa: BLE001
             self._m343_domain_rel = {"error": type(_m343d_e).__name__}
-            silent_exc(_m343d_e, where="LogAnalyzer::__init__ 343两域声明")
+            silent_exc(_m343d_e, where="LogAnalyzer::__init__ 343两域声明", level="debug")
 
     def _default_log_file(self) -> str:
         return os.path.join(self._project_root, "logs", "pulse.log")
@@ -175,7 +175,7 @@ class LogAnalyzer(SilentLogMixin):
                 return [str(x) for x in _r]
             return [str(x) for x in (getattr(_c343, "TOOL_SCAN_ROOTS", []) or [])]
         except Exception as _e:
-            silent_exc(_e, where="LogAnalyzer::_m343_domain_roots")
+            silent_exc(_e, where="LogAnalyzer::_m343_domain_roots", level="debug")
             return []
 
     @staticmethod
@@ -189,7 +189,7 @@ class LogAnalyzer(SilentLogMixin):
             import config as _c343
             return bool(getattr(_c343, "LOG_SCAN_DOMAIN_FILTER", True))
         except Exception as _e:
-            silent_exc(_e, where="LogAnalyzer::_m343_filter_on")
+            silent_exc(_e, where="LogAnalyzer::_m343_filter_on", level="debug")
             return True
 
 
@@ -239,7 +239,7 @@ class LogAnalyzer(SilentLogMixin):
                 _res["why"] = "guard_write_denied"
                 return _res
         except Exception as _e:  # noqa: BLE001
-            silent_exc(_e, where="LogAnalyzer::dump_two_domains guard")
+            silent_exc(_e, where="LogAnalyzer::dump_two_domains guard", level="debug")
         try:
             _o349d.makedirs(_o349d.path.dirname(_path), exist_ok=True)
             _tmp = _path + ".tmp"
@@ -252,7 +252,7 @@ class LogAnalyzer(SilentLogMixin):
             if not _res["persisted"]:
                 _res["why"] = "readback_schema_mismatch"
         except Exception as _e:  # noqa: BLE001
-            silent_exc(_e, where="LogAnalyzer::dump_two_domains write")
+            silent_exc(_e, where="LogAnalyzer::dump_two_domains write", level="debug")
             _res["why"] = "write_error:%s" % type(_e).__name__
         return _res
 
@@ -291,13 +291,13 @@ class LogAnalyzer(SilentLogMixin):
             if _wlv:
                 _wl, _wl_src = _norm(_wlv), "config"
         except Exception as _e:                                  # noqa: BLE001
-            silent_exc(_e, where="LogAnalyzer::_m343_two_domains config")
+            silent_exc(_e, where="LogAnalyzer::_m343_two_domains config", level="debug")
         if _wl_src == "unavailable":
             try:
                 from nucleus.self_inspector import _M339_WL_DEFAULT as _wld
                 _wl, _wl_src = _norm(_wld), "self_inspector"
             except Exception as _e:                              # noqa: BLE001
-                silent_exc(_e, where="LogAnalyzer::_m343_two_domains wl")
+                silent_exc(_e, where="LogAnalyzer::_m343_two_domains wl", level="debug")
         _st, _sw = set(_tool), set(_wl)
         return {
             "tool_roots": _tool, "intake_wl": _wl, "wl_source": _wl_src,
@@ -411,7 +411,7 @@ class LogAnalyzer(SilentLogMixin):
                 return False, "outside_root"
         except (OSError, ValueError) as _e:
             # 路径归一失败不致命：退回原串继续判域，但要留痕（否则域过滤判定不可追溯）
-            silent_exc(_e, where="LogAnalyzer::_m343_in_domain abspath")
+            silent_exc(_e, where="LogAnalyzer::_m343_in_domain abspath", level="debug")
             _rel = _f
         _segs = [s for s in _rel.split("/") if s and s not in (".",)]
         if not _segs:
@@ -420,7 +420,7 @@ class LogAnalyzer(SilentLogMixin):
             import config as _c343d
             _deny = [str(x) for x in (getattr(_c343d, "LOG_SCAN_DOMAIN_DENY", []) or [])]
         except Exception as _e:
-            silent_exc(_e, where="LogAnalyzer::_m343_in_domain deny")
+            silent_exc(_e, where="LogAnalyzer::_m343_in_domain deny", level="debug")
             _deny = ["tmp", "tests"]
         _low = [s.lower() for s in _segs]
         for _d in _deny:
@@ -563,7 +563,7 @@ class LogAnalyzer(SilentLogMixin):
                     if len(_context_buf) > 20:
                         _context_buf.pop(0)
         except Exception as e:
-            silent_exc(e, where="nucleus.evolution.LogAnalyzer::_scan_log_file L232")
+            silent_exc(e, where="nucleus.evolution.LogAnalyzer::_scan_log_file L232", level="debug")
         # ★343刀2：域过滤汇总行（可 grep；`跳过=0` 也是一条**事实**，
         #   能区分「没有域外崩溃」与「过滤没生效」——铁律166）。
         try:
@@ -587,7 +587,7 @@ class LogAnalyzer(SilentLogMixin):
                           "[353域] 汇总 ERROR行域外丢弃=%d（本次未见域外 ERROR 行）"
                           % self._m353_domain_dropped)
         except Exception as _se:
-            silent_exc(_se, where="LogAnalyzer::_scan_log_file 343域过滤汇总")
+            silent_exc(_se, where="LogAnalyzer::_scan_log_file 343域过滤汇总", level="debug")
 
     def _scan_runtime_metrics(self, issues: dict[str, dict[str, Any]]) -> None:
         """从 runtime_metrics 的 error_snapshots 提取异常现场，关联代码位置。"""
@@ -738,7 +738,7 @@ class LogAnalyzer(SilentLogMixin):
             _dt = datetime.datetime.strptime(_ts_str, "%Y-%m-%d %H:%M:%S")  # 日志时间戳为本地时间
             return _dt.timestamp()
         except Exception as e:
-            silent_exc(e, where="nucleus.evolution.LogAnalyzer::_extract_ts L383")
+            silent_exc(e, where="nucleus.evolution.LogAnalyzer::_extract_ts L383", level="debug")
             return 0.0
 
     def _count_lines(self, log_file: str) -> int:
@@ -748,7 +748,7 @@ class LogAnalyzer(SilentLogMixin):
             with open(log_file, encoding="utf-8", errors="ignore") as _f:
                 return sum(1 for _ in _f)
         except Exception as e:
-            silent_exc(e, where="nucleus.evolution.LogAnalyzer::_count_lines L392")
+            silent_exc(e, where="nucleus.evolution.LogAnalyzer::_count_lines L392", level="debug")
             return 0
 
     def _summarize(self, sorted_issues: list[dict[str, Any]],

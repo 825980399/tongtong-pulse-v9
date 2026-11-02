@@ -78,7 +78,7 @@ def enabled() -> bool:
         import config as _c
         return bool(getattr(_c, "ENABLE_M411_EXPERIENCE_HITS", True))
     except Exception as _e:
-        silent_exc(_e, where="observability.experience_hits:enabled")
+        silent_exc(_e, where="observability.experience_hits:enabled", level="debug")
         return True
 
 

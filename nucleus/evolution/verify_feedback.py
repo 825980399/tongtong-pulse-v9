@@ -71,7 +71,7 @@ def _load_ledger(base_dir: str | None = None) -> dict:
         _module_logger.debug("[350回灌] 台账不存在 path=%s（首次运行）", _p)
         return {"schema": FEEDBACK_SCHEMA, "applied": {}, "_read": "absent", "_path": _p}
     except Exception as _e:                                   # noqa: BLE001
-        silent_exc(_e, where="verify_feedback::_load_ledger")
+        silent_exc(_e, where="verify_feedback::_load_ledger", level="debug")
         return {"schema": FEEDBACK_SCHEMA, "applied": {}, "_read": "unreadable", "_path": _p}
 
 
@@ -103,7 +103,7 @@ def read_verdicts(base_dir: str | None = None) -> dict:
         _module_logger.debug("[350回灌] effect_verify 不存在 path=%s", _p)
         return {"state": "absent", "path": _p, "verdicts": {}, "mtime": None}
     except Exception as _e:                                   # noqa: BLE001
-        silent_exc(_e, where="verify_feedback::read_verdicts")
+        silent_exc(_e, where="verify_feedback::read_verdicts", level="debug")
         return {"state": "unreadable", "path": _p, "verdicts": {}, "mtime": None}
     if not isinstance(_d, dict):
         return {"state": "not_dict", "path": _p, "verdicts": {}, "mtime": None}

@@ -197,7 +197,7 @@ class PulseProprioception(BasePulseOrgan):
                     result["has_output"] = True
                     result["output_devices"].append({"name": "系统默认扬声器", "detected_via": "powershell"})
             except Exception as e:
-                silent_exc(e, where="organs.core.PulseProprioception::_detect_audio_devices L194")
+                silent_exc(e, where="organs.core.PulseProprioception::_detect_audio_devices L194", level="debug")
 
         # 方法3：Linux 系统命令
         if sys.platform.startswith("linux"):
@@ -206,7 +206,7 @@ class PulseProprioception(BasePulseOrgan):
                     result["has_output"] = True
                     result["output_devices"].append({"name": "ALSA音频设备", "detected_via": "/proc/asound"})
             except Exception as e:
-                silent_exc(e, where="organs.core.PulseProprioception::_detect_audio_devices L203")
+                silent_exc(e, where="organs.core.PulseProprioception::_detect_audio_devices L203", level="debug")
 
         # 方法4：macOS
         if sys.platform == "darwin":
@@ -491,7 +491,7 @@ class PulseProprioception(BasePulseOrgan):
                     result["has_camera"] = True
                     result["devices"].append("Mac 内置摄像头")
             except Exception as e:
-                silent_exc(e, where="organs.core.PulseProprioception::_detect_camera L433")
+                silent_exc(e, where="organs.core.PulseProprioception::_detect_camera L433", level="debug")
 
         return result
 
@@ -650,7 +650,7 @@ class PulseProprioception(BasePulseOrgan):
                     try:
                         os.unlink(_tmp)
                     except OSError as _ue:
-                        silent_exc(_ue, where="organs.core.PulseProprioception::_save_report_file 清理")
+                        silent_exc(_ue, where="organs.core.PulseProprioception::_save_report_file 清理", level="debug")
             self._log(LogLevel.INFO, f"报告已保存至 {filepath}")
         except Exception as e:
             self._log(LogLevel.WARNING, f"保存报告失败: {e}")

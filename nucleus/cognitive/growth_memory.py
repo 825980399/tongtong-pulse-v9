@@ -96,7 +96,7 @@ def read_growth_memory(limit: int = 5) -> dict:
                 _src = "provider"
         except Exception as _e:
             from nucleus._silent_except import silent_exc
-            silent_exc(_e, "growth_memory.read_growth_memory provider")
+            silent_exc(_e, "growth_memory.read_growth_memory provider", level="debug")
             _src = "provider_error"
     _out: dict[str, list] = {}
     _total = 0

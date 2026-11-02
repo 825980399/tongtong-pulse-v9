@@ -410,10 +410,10 @@ class ParamPatchManager:
                         source=f"param_patch:{patch.get('source', 'unknown')}"
                     )
             except Exception as e:
-                silent_exc(e, where="nucleus.evolution.ParamPatchManager::apply_patch L382")
+                silent_exc(e, where="nucleus.evolution.ParamPatchManager::apply_patch L382", level="debug")
 
         except Exception as e:
-            silent_exc(e, where="nucleus.evolution.ParamPatchManager::apply_patch L385")
+            silent_exc(e, where="nucleus.evolution.ParamPatchManager::apply_patch L385", level="debug")
             result["error"] = str(e)
             patch["status"] = "failed"
 
@@ -485,7 +485,7 @@ class ParamPatchManager:
                     result["reason"] = f"已执行真实效果验证(effect={_effect}, recommended={_rec})"
             except Exception as _ve:
                 # 真实验证执行异常 → 维持待验证态（不谎报为已验证）
-                silent_exc(_ve, where="ParamPatchManager.verify_effect:real")
+                silent_exc(_ve, where="ParamPatchManager.verify_effect:real", level="debug")
                 result["effect_verified"] = False
                 patch["effect_verified"] = False
                 result["recommended"] = "observe"
@@ -550,10 +550,10 @@ class ParamPatchManager:
                         source="param_patch_rollback"
                     )
             except Exception as e:
-                silent_exc(e, where="nucleus.evolution.ParamPatchManager::rollback_patch L472")
+                silent_exc(e, where="nucleus.evolution.ParamPatchManager::rollback_patch L472", level="debug")
 
         except Exception as e:
-            silent_exc(e, where="nucleus.evolution.ParamPatchManager::rollback_patch L475")
+            silent_exc(e, where="nucleus.evolution.ParamPatchManager::rollback_patch L475", level="debug")
             result["error"] = str(e)
 
         return result
@@ -564,7 +564,7 @@ class ParamPatchManager:
             from config import RUNTIME_PARAMS
             return RUNTIME_PARAMS.get(param_name)
         except Exception as e:
-            silent_exc(e, where="nucleus.evolution.ParamPatchManager::_get_current_value L485")
+            silent_exc(e, where="nucleus.evolution.ParamPatchManager::_get_current_value L485", level="debug")
             return None
 
     def _load_history(self):
@@ -574,7 +574,7 @@ class ParamPatchManager:
                 history = safe_read_json(_PATCH_HISTORY_PATH, default={})
                 self._applied_patches = history.get("applied", [])[-100:]  # 保留最近100条
         except Exception as _e:
-            silent_exc(_e, where="ParamPatchManager._load_history[424刀1]")
+            silent_exc(_e, where="ParamPatchManager._load_history[424刀1]", level="debug")
             self._applied_patches = []
 
     def _save_history(self):
@@ -1227,7 +1227,7 @@ class ParamPatchManager:
                 optimal[param] = info["value"]
 
         except Exception as e:
-            silent_exc(e, where="nucleus.evolution.ParamPatchManager::get_optimal_params L1105")
+            silent_exc(e, where="nucleus.evolution.ParamPatchManager::get_optimal_params L1105", level="debug")
 
         return optimal
 

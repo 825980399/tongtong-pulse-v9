@@ -38,7 +38,7 @@ def _m153_sanitizer_enabled() -> bool:
             return False
         return not bool(getattr(config, "LOG_SANITIZER_DEBUG_MODE", False))
     except Exception as _e:
-        silent_exc(_e, "_m153_sanitizer_enabled")
+        silent_exc(_e, "_m153_sanitizer_enabled", level="debug")
         return True
 
 
@@ -154,7 +154,7 @@ class PulseFormatter(logging.Formatter):
         try:
             _m348_stamp = self._m348_proc_stamp()
         except Exception as _m348_e:
-            silent_exc(_m348_e, where="nucleus.logger::PulseFormatter.format pid")
+            silent_exc(_m348_e, where="nucleus.logger::PulseFormatter.format pid", level="debug")
             _m348_stamp = ""
         return (_m348_line + "  " + _m348_stamp) if _m348_stamp else _m348_line
 
@@ -206,7 +206,7 @@ def _log_in_test_env() -> bool:
     try:
         return ("pytest" in sys.modules) or bool(os.environ.get("PYTEST_CURRENT_TEST"))
     except Exception as e:
-        silent_exc(e, where="nucleus.logger::_log_in_test_env L178")
+        silent_exc(e, where="nucleus.logger::_log_in_test_env L178", level="debug")
         return False
 
 
@@ -218,7 +218,7 @@ def log_retention_days() -> int:
         _d = int(getattr(config, "LOG_RETENTION_DAYS", 7))
         return max(0, _d)
     except Exception as e:
-        silent_exc(e, where="nucleus.logger::log_retention_days L189")
+        silent_exc(e, where="nucleus.logger::log_retention_days L189", level="debug")
         return 0
 
 
@@ -279,7 +279,7 @@ def _fingerprint(path: str):
                 "ino": int(getattr(_st, "st_ino", 0) or 0),
                 "mtime": float(_st.st_mtime)}
     except OSError as e:
-        silent_exc(e, where="nucleus.logger::_fingerprint L245")
+        silent_exc(e, where="nucleus.logger::_fingerprint L245", level="debug")
         return None
 
 
@@ -658,7 +658,7 @@ class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
         try:
             _max = int(getattr(config, "LOG_BACKUP_COUNT", 5))
         except Exception as e:
-            silent_exc(e, where="nucleus.logger::_copy_truncate_rollover L530")
+            silent_exc(e, where="nucleus.logger::_copy_truncate_rollover L530", level="debug")
             _max = 1
         # 1) 推移既有备份（已关闭文件，rename 安全）
         if _max >= 1:
@@ -678,7 +678,7 @@ class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
             if os.path.exists(_backup):
                 os.remove(_backup)
         except OSError as e:
-            silent_exc(e, where="nucleus.logger::_copy_truncate_rollover L549")
+            silent_exc(e, where="nucleus.logger::_copy_truncate_rollover L549", level="debug")
         # ★253批修复：self.stream可能为None（如文件句柄已关闭），先检查再flush
         if self.stream is not None:
             try:
@@ -912,7 +912,7 @@ def install_tree_outside_logger_bridges() -> None:
                     _fh = _h
                     break
         except Exception as _he356:
-            silent_exc(_he356, "logger.install_tree_outside_logger_bridges 复用主handler")
+            silent_exc(_he356, "logger.install_tree_outside_logger_bridges 复用主handler", level="debug")
         _m356_created = False
         if _fh is None:
             _fh = SafeRotatingFileHandler(
@@ -947,7 +947,7 @@ def install_tree_outside_logger_bridges() -> None:
                 "[装配计数] 本窗已点亮=%d 累计装配=%d 树外通道总数=%d"
                 % (_attached, _ASSEMBLY_COUNT, len(_TREE_OUTSIDE_LOGGER_NAMES)))
     except Exception as e:
-        silent_exc(e, where="nucleus.logger::install_tree_outside_logger_bridges")
+        silent_exc(e, where="nucleus.logger::install_tree_outside_logger_bridges", level="debug")
 
 
 def _init_root_logger():
@@ -1075,7 +1075,7 @@ def noise_reduction_enabled() -> bool:
         import config
         return bool(getattr(config, "ENABLE_LOG_NOISE_REDUCTION", True))
     except Exception as e:
-        silent_exc(e, where="nucleus.logger::noise_reduction_enabled L708")
+        silent_exc(e, where="nucleus.logger::noise_reduction_enabled L708", level="debug")
         return True
 
 
@@ -1231,10 +1231,10 @@ def exc_location(depth: int = 1) -> str:
             if not _rel.startswith(".."):
                 _file = _rel
         except Exception as e:
-            silent_exc(e, where="nucleus.logger::exc_location L814")
+            silent_exc(e, where="nucleus.logger::exc_location L814", level="debug")
         return f"{_file}:{_line}"
     except Exception as e:
-        silent_exc(e, where="nucleus.logger::exc_location L817")
+        silent_exc(e, where="nucleus.logger::exc_location L817", level="debug")
         return "<unknown>:0"
 # _m49_t3_3_class_done
 # _m49_t3_3_use_done

@@ -105,7 +105,7 @@ def _framework_looks_running(snapshot: str, threshold_sec: int = 600) -> bool:
             if time.time() - os.path.getmtime(snapshot) < threshold_sec:
                 return True
     except OSError as _e:
-        silent_exc(_e, where="cleanup_alias_placeholder_nodes::_framework_looks_running mtime")
+        silent_exc(_e, where="cleanup_alias_placeholder_nodes::_framework_looks_running mtime", level="debug")
     try:
         import psutil
         for _p in psutil.process_iter(["name", "memory_info"]):
@@ -115,10 +115,10 @@ def _framework_looks_running(snapshot: str, threshold_sec: int = 600) -> bool:
                     if _mi is not None and _mi.rss > 1_000_000_000:
                         return True
             except Exception as _pe:
-                silent_exc(_pe, where="cleanup_alias_placeholder_nodes::process_iter")
+                silent_exc(_pe, where="cleanup_alias_placeholder_nodes::process_iter", level="debug")
                 continue
     except Exception as _e:
-        silent_exc(_e, where="cleanup_alias_placeholder_nodes::_framework_looks_running psutil")
+        silent_exc(_e, where="cleanup_alias_placeholder_nodes::_framework_looks_running psutil", level="debug")
     return False
 
 
@@ -164,7 +164,7 @@ def _rewrite_with_fix(path: str) -> int:
             try:
                 _node = json.loads(_raw.decode("utf-8"))
             except Exception as _e:
-                silent_exc(_e, where="cleanup_alias_placeholder_nodes::_rewrite_with_fix json")
+                silent_exc(_e, where="cleanup_alias_placeholder_nodes::_rewrite_with_fix json", level="debug")
                 continue
             _alias = _marks.get(str(_node.get("node_id", "")))
             if _alias:

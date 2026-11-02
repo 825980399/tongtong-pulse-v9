@@ -36,7 +36,7 @@ def _log_debug(msg: str) -> None:
         try:
             _logger.debug(msg)
         except Exception as e:
-            silent_exc(e, where="nucleus.reasoning.SelfCalibrator::_log_debug L40")
+            silent_exc(e, where="nucleus.reasoning.SelfCalibrator::_log_debug L40", level="debug")
 
 
 class SelfCalibrator:
@@ -68,7 +68,7 @@ class SelfCalibrator:
         try:
             _conf = float(confidence)
         except (TypeError, ValueError) as e:
-            silent_exc(e, where="nucleus.reasoning.SelfCalibrator::calibrate L72")
+            silent_exc(e, where="nucleus.reasoning.SelfCalibrator::calibrate L72", level="debug")
             return 0.0
         with self._lock:
             _offset = self._data.get(source, {}).get("offset", 0.0)
@@ -229,12 +229,12 @@ class EvidenceCalibrator:
                 _save_path = _cand if _cand.lower().endswith(".json") \
                     else os.path.join(_cand, "self_calibration_evidence.json")
         except Exception as e:
-            silent_exc(e, where="nucleus.reasoning.SelfCalibrator::__init__ L243")
+            silent_exc(e, where="nucleus.reasoning.SelfCalibrator::__init__ L243", level="debug")
         self._save_path = _save_path
         try:
             os.makedirs(os.path.dirname(self._save_path), exist_ok=True)
         except Exception as e:
-            silent_exc(e, where="nucleus.reasoning.SelfCalibrator::__init__ L248")
+            silent_exc(e, where="nucleus.reasoning.SelfCalibrator::__init__ L248", level="debug")
         # {rtype: {"samples": int, "success": int}}
         self._buckets: dict[str, dict[str, float]] = {}
         self._load()
@@ -314,7 +314,7 @@ class EvidenceCalibrator:
         try:
             _base = float(base)
         except (TypeError, ValueError) as e:
-            silent_exc(e, where="nucleus.reasoning.SelfCalibrator::compute L328")
+            silent_exc(e, where="nucleus.reasoning.SelfCalibrator::compute L328", level="debug")
             return 0.0
         _hist = 0.7 + 0.3 * self.success_rate(rtype)
         _ev = self.evidence_strength(evidence)
@@ -338,7 +338,7 @@ class EvidenceCalibrator:
             _fallback = float(getattr(_cfg, "CONFIDENCE_EVIDENCE_CONFIG", {}).get(
                 "history_similarity_fallback", 0.5) or 0.5)
         except Exception as e:
-            silent_exc(e, where="nucleus.reasoning.SelfCalibrator::history_similarity L342")
+            silent_exc(e, where="nucleus.reasoning.SelfCalibrator::history_similarity L342", level="debug")
         if not question:
             return _fallback
         try:
@@ -398,7 +398,7 @@ class EvidenceCalibrator:
             if os.path.exists(self._save_path):
                 os.remove(self._save_path)
         except Exception as e:
-            silent_exc(e, where="nucleus.reasoning.SelfCalibrator::reset L411")
+            silent_exc(e, where="nucleus.reasoning.SelfCalibrator::reset L411", level="debug")
 
 
 # ---------- 证据化校准单例 ----------

@@ -955,7 +955,7 @@ class PulseSelfAwareness(BasePulseOrgan):
                     self._dynamic_values[secondary_value] = min(
                         1.0, self._dynamic_values[secondary_value] * 1.02)
         except Exception as e:
-            silent_exc(e, where="organs.identity.PulseSelfAwareness::_generate_life_plan L904")
+            silent_exc(e, where="organs.identity.PulseSelfAwareness::_generate_life_plan L904", level="debug")
 
         return {
             "primary_direction": primary_direction,
@@ -1846,7 +1846,7 @@ class PulseSelfAwareness(BasePulseOrgan):
             from config import get_self_preservation_config
             _sp_cfg = get_self_preservation_config()
         except Exception as e:
-            silent_exc(e, where="organs.identity.PulseSelfAwareness::_maybe_trigger_self_preservation L1729")
+            silent_exc(e, where="organs.identity.PulseSelfAwareness::_maybe_trigger_self_preservation L1729", level="debug")
             return
 
         # 总开关：一键禁用整套动作
@@ -2181,7 +2181,7 @@ class PulseSelfAwareness(BasePulseOrgan):
                                  f"E7a 首次启动声明已注入（{len(_decl)} 字）")
                 except Exception as _de:
                     from nucleus._silent_except import silent_exc
-                    silent_exc(_de, "PulseSelfAwareness.E7a_first_run_declaration")
+                    silent_exc(_de, "PulseSelfAwareness.E7a_first_run_declaration", level="debug")
 
             # 写入InsightBoard
             _board.post(  # type: ignore[possibly-unbound]

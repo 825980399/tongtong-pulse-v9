@@ -109,7 +109,7 @@ def _git_head() -> str:
         return (out.stdout or "").strip()
     except Exception as e:
         # ★纯 return 属静默（铁律176）：git 不可用必须留痕，否则副本「挂哪一笔」无从对账
-        silent_exc(e, where="tools/export_adjudication_artifacts::_git_head")
+        silent_exc(e, where="tools/export_adjudication_artifacts::_git_head", level="debug")
         return "unknown"
 
 
@@ -141,7 +141,7 @@ def export() -> int:
                     obj = json.load(f)
             except Exception as e:
                 item["note"] = f"解析失败({type(e).__name__})，仅记 sha256"
-                silent_exc(e, where="tools/export_adjudication_artifacts::export")
+                silent_exc(e, where="tools/export_adjudication_artifacts::export", level="debug")
         if obj is not None and (kind == "summary" or size > _SUMMARY_LIMIT):
             payload = _summarize(src, obj)
             item["entries"] = payload.get("entries")

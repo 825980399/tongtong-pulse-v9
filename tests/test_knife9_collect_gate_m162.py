@@ -126,7 +126,7 @@ def test_gbk_console_print_no_crash(monkeypatch):
             _wrap.flush()
         except Exception as _fe:
             import nucleus._silent_except as _se
-            _se.silent_exc(_fe, where="test_knife9_collect_gate_m162.gbk_flush")
+            _se.silent_exc(_fe, where="test_knife9_collect_gate_m162.gbk_flush", level="debug")
         sys.stderr = _old
     _out = _buf.getvalue().decode("gbk", "replace")
     assert "[FAIL]" in _out or "[PASS]" in _out or "[WARN]" in _out or "[INFO]" in _out

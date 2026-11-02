@@ -47,7 +47,7 @@ def _m55_unified_excludes() -> bool:
 
         return bool(getattr(_m55_cfg, "ENABLE_EXCLUDE_DIRS_UNIFIED", True))
     except Exception as e:
-        silent_exc(e, where="tools.quality_audit::_m55_unified_excludes L47")
+        silent_exc(e, where="tools.quality_audit::_m55_unified_excludes L47", level="debug")
         return True
 
 _M55_LEGACY__SKIP_DIRS = {".git", "__pycache__", ".workbuddy", "tmp", "node_modules",

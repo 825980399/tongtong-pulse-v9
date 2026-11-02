@@ -38,7 +38,7 @@ def _distributed_enabled() -> bool:
         import config
         return bool(getattr(config, "ENABLE_DISTRIBUTED", False))
     except Exception as e:
-        silent_exc(e, where="nucleus.distributed.sharding::_distributed_enabled L35")
+        silent_exc(e, where="nucleus.distributed.sharding::_distributed_enabled L35", level="debug")
         return False
 
 

@@ -411,7 +411,7 @@ class RssCollector:
         try:
             self._log_fn(f"[RSS采集器] {msg}")
         except Exception as e:
-            silent_exc(e, where="nucleus.knowledge.RssCollector::_log L412")
+            silent_exc(e, where="nucleus.knowledge.RssCollector::_log L412", level="debug")
 
 
 # ========== 模块级单例（供双腿等器官接线使用） ==========

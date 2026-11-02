@@ -49,7 +49,7 @@ def note_drop(source: str, kind: str, detail: str = "") -> dict[str, Any]:
             _emit = _n < _WARN_MAX_PER_KEY
             _WARN_HITS[_key] = _n + 1
     except Exception as _e:
-        silent_exc(_e, where="drop_tracker::note_drop 计数")
+        silent_exc(_e, where="drop_tracker::note_drop 计数", level="debug")
         _emit = False
     if _emit:
         try:
@@ -58,7 +58,7 @@ def note_drop(source: str, kind: str, detail: str = "") -> dict[str, Any]:
                 _s, _k, _out.get("count"),
                 "：%s" % detail if detail else "")
         except Exception as _e:
-            silent_exc(_e, where="drop_tracker::note_drop warning")
+            silent_exc(_e, where="drop_tracker::note_drop warning", level="debug")
     return _out
 
 
@@ -68,7 +68,7 @@ def drop_counts() -> dict[str, dict[str, int]]:
         with _LOCK:
             return {_k: dict(_v) for _k, _v in _COUNTS.items()}
     except Exception as _e:
-        silent_exc(_e, where="drop_tracker::drop_counts")
+        silent_exc(_e, where="drop_tracker::drop_counts", level="debug")
         return {}
 
 
@@ -80,7 +80,7 @@ def drop_total(source: str | None = None) -> int:
                 return sum(int(v) for _b in _COUNTS.values() for v in _b.values())
             return sum(int(v) for v in (_COUNTS.get(str(source)) or {}).values())
     except Exception as _e:
-        silent_exc(_e, where="drop_tracker::drop_total")
+        silent_exc(_e, where="drop_tracker::drop_total", level="debug")
         return 0
 
 
@@ -91,4 +91,4 @@ def reset_for_test() -> None:
             _COUNTS.clear()
             _WARN_HITS.clear()
     except Exception as _e:
-        silent_exc(_e, where="drop_tracker::reset_for_test")
+        silent_exc(_e, where="drop_tracker::reset_for_test", level="debug")

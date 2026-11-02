@@ -94,7 +94,7 @@ class SelfVerifier(SilentLogMixin):
         try:
             os.remove(self._verify_file)
         except OSError as e:
-            silent_exc(e, where="nucleus.reasoning.SelfVerifier::clear_pending L81")
+            silent_exc(e, where="nucleus.reasoning.SelfVerifier::clear_pending L81", level="debug")
 
     def increment_attempt(self):
         """验证失败时增加尝试次数"""

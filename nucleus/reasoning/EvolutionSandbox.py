@@ -153,7 +153,7 @@ class EvolutionSandbox:
                         f"failures={_ft.get_failure_count(_sig)}): {plan['escalation_reason']}"
                     )
             except Exception as e:
-                silent_exc(e, where="nucleus.reasoning.EvolutionSandbox::_generate_plan L154")
+                silent_exc(e, where="nucleus.reasoning.EvolutionSandbox::_generate_plan L154", level="debug")
 
         return plan
 
@@ -311,4 +311,4 @@ def shutdown_evolution_sandbox() -> None:
             try:
                 _sd()
             except Exception as e:
-                silent_exc(e, where="nucleus.reasoning.EvolutionSandbox::shutdown_evolution_sandbox L312")
+                silent_exc(e, where="nucleus.reasoning.EvolutionSandbox::shutdown_evolution_sandbox L312", level="debug")

@@ -267,7 +267,7 @@ def parse_since(value) -> float:
     try:
         return float(value)
     except (TypeError, ValueError) as e:
-        silent_exc(e, where="tools.serp_pollution_analyzer::parse_since L269")
+        silent_exc(e, where="tools.serp_pollution_analyzer::parse_since L269", level="debug")
     for _fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
         try:
             return time.mktime(time.strptime(str(value), _fmt))

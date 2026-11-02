@@ -110,13 +110,13 @@ def register(name: str, executor) -> None:
         import weakref as _wr
         _r = _wr.ref(executor)
     except Exception as _e:
-        silent_exc(_e, where="utils.thread_budget::register")
+        silent_exc(_e, where="utils.thread_budget::register", level="debug")
         return
     try:
         with _lock():
             _REGISTRY.setdefault(str(name), []).append(_r)
     except Exception as _e:
-        silent_exc(_e, where="utils.thread_budget::register/append")
+        silent_exc(_e, where="utils.thread_budget::register/append", level="debug")
 
 
 def inventory() -> dict:
@@ -155,7 +155,7 @@ def inventory() -> dict:
             with _lock():
                 _regs = list(_REGISTRY.get(_k, ()))
         except Exception as _e:
-            silent_exc(_e, where="utils.thread_budget::inventory/registry")
+            silent_exc(_e, where="utils.thread_budget::inventory/registry", level="debug")
         for _r in _regs:
             _ex = _r()
             if _ex is None:
@@ -164,7 +164,7 @@ def inventory() -> dict:
                 _mw = (_mw or 0) + int(getattr(_ex, "_max_workers", 0) or 0)
                 _q = (_q or 0) + int(_ex._work_queue.qsize())
             except Exception as _e:
-                silent_exc(_e, where="utils.thread_budget::inventory/probe")
+                silent_exc(_e, where="utils.thread_budget::inventory/probe", level="debug")
         _pools.append({
             "pool": _k,
             "cap": int(_caps[_k]),
@@ -188,7 +188,7 @@ def _cfg():
         import config as _c
         return _c
     except Exception as _e:
-        silent_exc(_e, where="utils.thread_budget::_cfg")
+        silent_exc(_e, where="utils.thread_budget::_cfg", level="debug")
         return None
 
 
@@ -200,7 +200,7 @@ def slimming_on() -> bool:
     try:
         return bool(getattr(_c, ENABLE_ATTR, True))
     except Exception as _e:
-        silent_exc(_e, where="utils.thread_budget::slimming_on")
+        silent_exc(_e, where="utils.thread_budget::slimming_on", level="debug")
         return True
 
 
@@ -216,12 +216,12 @@ def caps() -> dict:
                     try:
                         _iv = int(_v)
                     except (TypeError, ValueError) as _e:
-                        silent_exc(_e, where="utils.thread_budget::caps/int")
+                        silent_exc(_e, where="utils.thread_budget::caps/int", level="debug")
                         continue
                     if _iv > 0:
                         _out[str(_k)] = _iv
         except Exception as _e:
-            silent_exc(_e, where="utils.thread_budget::caps")
+            silent_exc(_e, where="utils.thread_budget::caps", level="debug")
     return _out
 
 
@@ -233,7 +233,7 @@ def cap(name: str, value: int) -> int:
     try:
         _v = int(value)
     except (TypeError, ValueError) as _e:
-        silent_exc(_e, where="utils.thread_budget::cap")
+        silent_exc(_e, where="utils.thread_budget::cap", level="debug")
         return value
     if not slimming_on():
         return _v

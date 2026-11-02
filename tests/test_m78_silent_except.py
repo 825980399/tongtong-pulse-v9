@@ -59,14 +59,14 @@ class TestSilentExceptM78(unittest.TestCase):
             raise ValueError("probe")
         except ValueError as e:
             # 调用不应再抛出（等价于被吞）
-            self.assertIsNone(silent_exc(e, "test_m78:0"))
+            self.assertIsNone(silent_exc(e, "test_m78:0", level="debug"))
 
     def test_04_helper_importable(self):
         self.assertTrue(callable(silent_exc), "silent_exc 必须是可调用对象")
 
     def test_05_helper_handles_none_gracefully(self):
         # 防御：传入 None 也不抛（避免替换后引入新崩溃）
-        self.assertIsNone(silent_exc(None, "test_m78:0"))
+        self.assertIsNone(silent_exc(None, "test_m78:0", level="debug"))
 
 
 if __name__ == "__main__":

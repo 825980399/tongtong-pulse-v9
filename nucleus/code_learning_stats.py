@@ -88,7 +88,7 @@ def _find_learner(organs: Any = None) -> Any:
             from nucleus.self_awareness.SelfAwarenessEngine import _AWARENESS_ORGANS
             organs = _AWARENESS_ORGANS
         except Exception as e:
-            silent_exc(e, where="nucleus.code_learning_stats::_find_learner:import")
+            silent_exc(e, where="nucleus.code_learning_stats::_find_learner:import", level="debug")
             return None
     if organs is None:
         return None
@@ -96,7 +96,7 @@ def _find_learner(organs: Any = None) -> Any:
         try:
             _o = organs.get(_k) if isinstance(organs, dict) else getattr(organs, _k, None)
         except Exception as e:
-            silent_exc(e, where="nucleus.code_learning_stats::_find_learner:get")
+            silent_exc(e, where="nucleus.code_learning_stats::_find_learner:get", level="debug")
             continue
         if _o is not None:
             return _o

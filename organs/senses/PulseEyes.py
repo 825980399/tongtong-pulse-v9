@@ -52,7 +52,7 @@ class PulseEyes(BasePulseOrgan):
             if 'eyes_reopen_backoff' in _rp and hasattr(self, '_reopen_backoff'):
                 self._reopen_backoff = _rp['eyes_reopen_backoff']
         except Exception as e:
-            silent_exc(e, where="organs.senses.PulseEyes::refresh_runtime_params L54")
+            silent_exc(e, where="organs.senses.PulseEyes::refresh_runtime_params L54", level="debug")
 
 
     def __init__(self, organ_name: str = "眼睛"):

@@ -126,6 +126,6 @@ def sanitize_placeholder_text(text: str, min_length: int | None = None,
                 log(f"出口占位符净化: 剥离后无实质内容(len={len(_cleaned)}<{_min})，"
                     f"降级为未命中引导语（不伪造内容）")
             except Exception as _e:
-                silent_exc(_e, where="PlaceholderSanitizer::sanitize_placeholder_text log")
+                silent_exc(_e, where="PlaceholderSanitizer::sanitize_placeholder_text log", level="debug")
         return PLACEHOLDER_FALLBACK_TEXT
     return _cleaned

@@ -30,7 +30,7 @@ def _v2_quality_score() -> float | None:
         from nucleus.diagnostics import FrameworkDiagnostics
         return FrameworkDiagnostics().get_quality_score_v2().get("score")
     except Exception as _e:
-        silent_exc(_e, where="nucleus.reporting.consumers::_v2_quality_score")
+        silent_exc(_e, where="nucleus.reporting.consumers::_v2_quality_score", level="debug")
         return None
 
 #: 告警落盘位置（相对于项目根）
@@ -67,7 +67,7 @@ def _append_jsonl(rel_path: str, record: dict[str, Any]) -> bool:
             _f.write(json.dumps(record, ensure_ascii=False) + "\n")
         return True
     except (OSError, TypeError, ValueError) as e:
-        silent_exc(e, where="nucleus.reporting.consumers::_append_jsonl L55")
+        silent_exc(e, where="nucleus.reporting.consumers::_append_jsonl L55", level="debug")
         return False
 
 

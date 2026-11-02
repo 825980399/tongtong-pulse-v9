@@ -164,7 +164,7 @@ class ToolAutoInstaller:
                 __import__(tool.pip_package.replace("-", "_"))
                 tool.installed = True
             except ImportError as e:
-                silent_exc(e, where="nucleus.review.ToolAutoInstaller::check_tool L167")
+                silent_exc(e, where="nucleus.review.ToolAutoInstaller::check_tool L167", level="debug")
                 tool.installed = False
 
         # 获取版本
@@ -178,7 +178,7 @@ class ToolAutoInstaller:
                 if result.returncode == 0:
                     tool.version = result.stdout.strip().split("\n")[0][:50]
             except Exception as e:
-                silent_exc(e, where="nucleus.review.ToolAutoInstaller::check_tool L180")
+                silent_exc(e, where="nucleus.review.ToolAutoInstaller::check_tool L180", level="debug")
 
         # 更新缓存
         self._installed_cache[tool_name] = (time.time(), tool)
@@ -289,7 +289,7 @@ class ToolAutoInstaller:
             ):
                 _reg.save()  # 仅新注册时持久化（重启可恢复）
         except Exception as e:
-            silent_exc(e, where="nucleus.review.ToolAutoInstaller::ensure_tool register")
+            silent_exc(e, where="nucleus.review.ToolAutoInstaller::ensure_tool register", level="debug")
         return tool
 
     def get_tools_by_category(self, category: str) -> list:

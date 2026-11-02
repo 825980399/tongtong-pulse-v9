@@ -118,7 +118,7 @@ class AlertJsonlHandler(logging.Handler):
         try:
             self.setLevel(self.policy.min_levelno)
         except (OSError, ValueError, TypeError) as e:
-            silent_exc(e, where="alert_log_bridge::AlertJsonlHandler.__init__")
+            silent_exc(e, where="alert_log_bridge::AlertJsonlHandler.__init__", level="debug")
             self.setLevel(logging.WARNING)
         self.setFormatter(logging.Formatter("%(message)s"))
 
@@ -128,7 +128,7 @@ class AlertJsonlHandler(logging.Handler):
         try:
             _msg = self.format(record)
         except (OSError, ValueError, TypeError, AttributeError) as e:
-            silent_exc(e, where="alert_log_bridge::emit.format")
+            silent_exc(e, where="alert_log_bridge::emit.format", level="debug")
             return
         if not self.policy.should_emit(record.name, record.levelno, _msg):
             return
@@ -147,7 +147,7 @@ class AlertJsonlHandler(logging.Handler):
             try:
                 self._sink(_doc)
             except (OSError, ValueError, TypeError) as e:
-                silent_exc(e, where="alert_log_bridge::emit.sink")
+                silent_exc(e, where="alert_log_bridge::emit.sink", level="debug")
             return
         self._default_write(_doc)
 
@@ -162,7 +162,7 @@ class AlertJsonlHandler(logging.Handler):
             with open(_p, "a", encoding="utf-8") as _f:
                 _f.write(json.dumps(doc, ensure_ascii=False) + "\n")
         except (OSError, ValueError, TypeError) as e:
-            silent_exc(e, where="alert_log_bridge::_default_write")
+            silent_exc(e, where="alert_log_bridge::_default_write", level="debug")
 
 
 _INSTALLED = False
@@ -200,7 +200,7 @@ def install_alert_log_bridge(logger: logging.Logger | None = None,
             _INSTALLED = True
             return True
         except (OSError, ValueError, TypeError, AttributeError) as e:
-            silent_exc(e, where="alert_log_bridge::install")
+            silent_exc(e, where="alert_log_bridge::install", level="debug")
             return False
 
 

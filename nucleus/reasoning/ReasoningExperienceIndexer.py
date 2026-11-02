@@ -297,7 +297,7 @@ class ReasoningExperienceIndexer:
                 })
                 _seen_questions.add(_eq)
         except Exception as e:
-            silent_exc(e, where="nucleus.reasoning.ReasoningExperienceIndexer::search_with_semantic L200")
+            silent_exc(e, where="nucleus.reasoning.ReasoningExperienceIndexer::search_with_semantic L200", level="debug")
 
         # ---- 2. 语义检索知识树 /推理经验/ 节点（需双写开启 + 有向量库）----
         if self._double_write_enabled and self._store is not None:
@@ -327,7 +327,7 @@ class ReasoningExperienceIndexer:
                         "node_id": _nid,
                     })
             except Exception as e:
-                silent_exc(e, where="nucleus.reasoning.ReasoningExperienceIndexer::search_with_semantic L230")
+                silent_exc(e, where="nucleus.reasoning.ReasoningExperienceIndexer::search_with_semantic L230", level="debug")
 
         # ---- 3. 合并排序 ----
         results.sort(key=lambda r: r["score"], reverse=True)
@@ -628,7 +628,7 @@ class ReasoningExperienceIndexer:
                 self._base_nodes = int(_s.get('nodes_written', 0) or 0)
                 self._base_failure = int(_s.get('failure_mode_total', 0) or 0)
         except Exception as _e:
-            silent_exc(_e, "nucleus.reasoning.ReasoningExperienceIndexer::_load_state")
+            silent_exc(_e, "nucleus.reasoning.ReasoningExperienceIndexer::_load_state", level="debug")
 
     def _persist_state(self) -> None:
         """原子写回累计计数（基线 + 本会话增量）。"""

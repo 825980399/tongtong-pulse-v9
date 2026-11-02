@@ -63,7 +63,7 @@ def _cfg(name: str, default: Any) -> Any:
         import config
         return getattr(config, name, default)
     except Exception as _e:
-        silent_exc(_e, where="dialogue_process_trace::_cfg")
+        silent_exc(_e, where="dialogue_process_trace::_cfg", level="debug")
         return default
 
 
@@ -102,7 +102,7 @@ def _clip(value: Any, limit: int = _MAX_TEXT) -> str:
     try:
         _s = value if isinstance(value, str) else str(value)
     except Exception as _e:
-        silent_exc(_e, where="dialogue_process_trace::_clip")
+        silent_exc(_e, where="dialogue_process_trace::_clip", level="debug")
         return ""
     return _s[:limit]
 
@@ -116,7 +116,7 @@ def _list_of(value: Any, limit: int = _MAX_LIST, item_limit: int = 40) -> list:
     try:
         _it = list(value)
     except TypeError as _e:
-        silent_exc(_e, where="dialogue_process_trace::_list_of")
+        silent_exc(_e, where="dialogue_process_trace::_list_of", level="debug")
         return [_clip(value, item_limit)]
     return [_clip(x, item_limit) for x in _it[:limit]]
 
@@ -128,7 +128,7 @@ def _sweep(now: float) -> None:
         try:
             _finish_one(_k, stage="dropped_stale")
         except Exception as _e:
-            silent_exc(_e, where="dialogue_process_trace::_sweep")
+            silent_exc(_e, where="dialogue_process_trace::_sweep", level="debug")
 
 
 def begin(correlation_id: str, question: str, user_name: str = "", **extra) -> None:
@@ -169,7 +169,7 @@ def begin(correlation_id: str, question: str, user_name: str = "", **extra) -> N
             _rec[str(_k)] = _v
         _pending[_cid] = _rec
     except Exception as _e:
-        silent_exc(_e, where="dialogue_process_trace::begin")
+        silent_exc(_e, where="dialogue_process_trace::begin", level="debug")
 
 
 def stamp(correlation_id: str, **fields) -> None:
@@ -185,7 +185,7 @@ def stamp(correlation_id: str, **fields) -> None:
                 continue
             _rec[str(_k)] = _v
     except Exception as _e:
-        silent_exc(_e, where="dialogue_process_trace::stamp")
+        silent_exc(_e, where="dialogue_process_trace::stamp", level="debug")
 
 
 def _sanitize(rec: dict) -> dict:
@@ -232,7 +232,7 @@ def _finish_one(correlation_id: str, stage: str = "finished", **fields) -> dict 
         try:
             _rec["latency_ms"] = round((time.time() - float(_rec["_t0"])) * 1000, 1)
         except (TypeError, ValueError) as _e:
-            silent_exc(_e, where="dialogue_process_trace::_finish_one:latency")
+            silent_exc(_e, where="dialogue_process_trace::_finish_one:latency", level="debug")
     _rec["stage"] = stage
     _row = _sanitize(_rec)
     _path = out_path(_rec.get("ts"))
@@ -242,13 +242,13 @@ def _finish_one(correlation_id: str, stage: str = "finished", **fields) -> dict 
                    component="DialogueProcessTrace"):
             return _row
     except Exception as _e:
-        silent_exc(_e, where="dialogue_process_trace::_finish_one:guard")
+        silent_exc(_e, where="dialogue_process_trace::_finish_one:guard", level="debug")
     try:
         os.makedirs(os.path.dirname(_path), exist_ok=True)
         with open(_path, "a", encoding="utf-8", newline="\n") as _f:
             _f.write(json.dumps(_row, ensure_ascii=False) + "\n")
     except Exception as _e:
-        silent_exc(_e, where="dialogue_process_trace::_finish_one:write")
+        silent_exc(_e, where="dialogue_process_trace::_finish_one:write", level="debug")
         _module_logger.debug("[426刀5] 对话过程落盘失败: %s", _e)
     return _row
 
@@ -260,7 +260,7 @@ def finish(correlation_id: str, **fields) -> dict | None:
     try:
         return _finish_one(correlation_id, stage="finished", **fields)
     except Exception as _e:
-        silent_exc(_e, where="dialogue_process_trace::finish")
+        silent_exc(_e, where="dialogue_process_trace::finish", level="debug")
         return None
 
 
@@ -275,7 +275,7 @@ def stats() -> dict:
                     if _.strip():
                         _n += 1
     except Exception as _e:
-        silent_exc(_e, where="dialogue_process_trace::stats")
+        silent_exc(_e, where="dialogue_process_trace::stats", level="debug")
     return {"enabled": enabled(), "pending": len(_pending), "path": _path, "lines": _n}
 
 

@@ -255,7 +255,7 @@ def import_nodes(nodes, writer, checkpoint_path=None, mode="full",
             try:
                 os.remove(checkpoint_path)
             except Exception as e:
-                silent_exc(e, where="tools.import_nodes_to_neo4j::import_nodes L253")
+                silent_exc(e, where="tools.import_nodes_to_neo4j::import_nodes L253", level="debug")
 
     for node in nodes:
         node_id = node.get("node_id") or node.get("id")
@@ -288,7 +288,7 @@ def import_nodes(nodes, writer, checkpoint_path=None, mode="full",
         try:
             writer.flush()
         except Exception as e:
-            silent_exc(e, where="tools.import_nodes_to_neo4j::import_nodes L286")
+            silent_exc(e, where="tools.import_nodes_to_neo4j::import_nodes L286", level="debug")
         if checkpoint_path:
             save_checkpoint(checkpoint_path, imported_ids, meta)
 

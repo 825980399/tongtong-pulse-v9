@@ -90,7 +90,7 @@ class TestA5S2Tiering:
         except Exception:
             # S3 实际执行异常（如 git 不可用）不在本用例关注范围，但须留痕
             from nucleus._silent_except import silent_exc
-            silent_exc(Exception("s3 exec"), "test_a5.test_10")
+            silent_exc(Exception("s3 exec"), "test_a5.test_10", level="debug")
 
     def test_11_in_package_criterion_exists(self):
         """S2 的进包判据须复用导出器 should_skip（与 S1 同口径）。"""

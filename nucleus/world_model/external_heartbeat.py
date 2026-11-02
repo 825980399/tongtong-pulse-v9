@@ -71,7 +71,7 @@ def _read_json(path: str):
         with open(path, encoding="utf-8", errors="replace") as _f:
             return json.load(_f)
     except (OSError, ValueError) as e:
-        silent_exc(e, where="nucleus.world_model.external_heartbeat::_read_json")
+        silent_exc(e, where="nucleus.world_model.external_heartbeat::_read_json", level="debug")
         return None
 
 
@@ -85,13 +85,13 @@ def read_health_snapshot(root: str | None = None) -> dict:
     try:
         _mt = os.path.getmtime(_p)
     except OSError as e:
-        silent_exc(e, where="nucleus.world_model.external_heartbeat::mtime")
+        silent_exc(e, where="nucleus.world_model.external_heartbeat::mtime", level="debug")
         _mt = 0.0
     _ts = _d.get("timestamp")
     try:
         _ts = float(_ts) if _ts is not None else 0.0
     except (TypeError, ValueError) as e:
-        silent_exc(e, where="nucleus.world_model.external_heartbeat::timestamp")
+        silent_exc(e, where="nucleus.world_model.external_heartbeat::timestamp", level="debug")
         _ts = 0.0
     _now = time.time()
     # 年龄取「文件 mtime」与「快照自报 timestamp」中**更保守**的那个：
@@ -156,7 +156,7 @@ def read_alert_tail(root: str | None = None, max_lines: int = _ALERT_TAIL_LINES)
                 if _s:
                     _tail.append(_s)
     except OSError as e:
-        silent_exc(e, where="nucleus.world_model.external_heartbeat::alerts")
+        silent_exc(e, where="nucleus.world_model.external_heartbeat::alerts", level="debug")
         return {"available": False, "path": _p, "reason": "读失败: %s" % type(e).__name__}
     _last = _tail[-1] if _tail else None
     _ts = None
@@ -164,7 +164,7 @@ def read_alert_tail(root: str | None = None, max_lines: int = _ALERT_TAIL_LINES)
         try:
             _ts = float(json.loads(_last).get("ts") or 0) or None
         except (TypeError, ValueError) as e:
-            silent_exc(e, where="nucleus.world_model.external_heartbeat::alerts ts")
+            silent_exc(e, where="nucleus.world_model.external_heartbeat::alerts ts", level="debug")
     return {
         "available": True,
         "path": _p,
@@ -242,7 +242,7 @@ def external_heartbeat_verdict(root: str | None = None,
         try:
             _delta = int(_beat) - int(prev_sample.get("beat_count"))
         except (TypeError, ValueError) as e:
-            silent_exc(e, where="nucleus.world_model.external_heartbeat::delta")
+            silent_exc(e, where="nucleus.world_model.external_heartbeat::delta", level="debug")
             _delta = None
         if _delta is not None:
             if _delta > 0:
@@ -331,7 +331,7 @@ def w1_verdict_brief(prev_sample: dict | None = None,
                 "basis": str(_r.get("basis") or ""),
                 "raw": _r}
     except Exception as _e:
-        silent_exc(_e, where="external_heartbeat.w1_verdict_brief")
+        silent_exc(_e, where="external_heartbeat.w1_verdict_brief", level="debug")
         return {"verdict": "unavailable", "age_sec": None,
                 "basis": "W1 取数异常: %s" % type(_e).__name__, "raw": {}}
 

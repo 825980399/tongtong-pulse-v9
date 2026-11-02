@@ -1130,4 +1130,4 @@ def shutdown_context_snapshot() -> None:
             try:
                 _sd()
             except Exception as e:
-                silent_exc(e, where="nucleus.mnemosyne.ContextSnapshot::shutdown_context_snapshot L1119")
+                silent_exc(e, where="nucleus.mnemosyne.ContextSnapshot::shutdown_context_snapshot L1119", level="debug")

@@ -318,7 +318,7 @@ class Reflex:
         try:
             value = float(value)
         except (ValueError, TypeError) as e:
-            silent_exc(e, where="somatics.reflex::_check_condition L315")
+            silent_exc(e, where="somatics.reflex::_check_condition L315", level="debug")
             return False
 
         # 比较判断

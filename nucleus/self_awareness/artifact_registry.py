@@ -161,7 +161,7 @@ def save_registry(specs: list[dict], path: str | None = None) -> str:
             sys.stderr.write(f"[artifact_registry] 测试环境跳过生产写入: {_p}\n")
             return _p
     except Exception as _e:
-        silent_exc(_e, where="nucleus.self_awareness.artifact_registry::save_registry env")
+        silent_exc(_e, where="nucleus.self_awareness.artifact_registry::save_registry env", level="debug")
     try:
         os.makedirs(os.path.dirname(_p), exist_ok=True)
         with open(_p, "w", encoding="utf-8") as _f:

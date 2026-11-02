@@ -28,7 +28,7 @@ class MediaPipeEngine(SilentLogMixin):
                 self._vision = vision
                 self._available = True
         except ImportError as e:
-            silent_exc(e, where="organs.senses.visual_engines.mediapipe_engine::__init__ L29")
+            silent_exc(e, where="organs.senses.visual_engines.mediapipe_engine::__init__ L29", level="debug")
 
     def is_available(self) -> bool:
         return self._available

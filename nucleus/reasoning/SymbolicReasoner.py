@@ -732,7 +732,7 @@ class SymbolicReasoner:
                     return int(_result)
                 return round(_result, 6) if isinstance(_result, float) else _result
         except Exception as e:
-            silent_exc(e, where="nucleus.reasoning.SymbolicReasoner::_safe_eval L733")
+            silent_exc(e, where="nucleus.reasoning.SymbolicReasoner::_safe_eval L733", level="debug")
             return None
         return None
 

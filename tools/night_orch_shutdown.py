@@ -35,7 +35,7 @@ def _read_config(name, default):
         import config as _cfg
         return getattr(_cfg, name, default)
     except Exception as _e:
-        silent_exc(_e, where="tools.night_orch_shutdown._read_config")
+        silent_exc(_e, where="tools.night_orch_shutdown._read_config", level="debug")
         return default
 
 
@@ -46,7 +46,7 @@ def _acquire_pid_lock(lock_path):
             with open(lock_path, "r", encoding="utf-8") as _f:
                 _old = int((_f.read() or "0").strip() or 0)
         except Exception as _e:
-            silent_exc(_e, where="tools.night_orch_shutdown._acquire_pid_lock.read")
+            silent_exc(_e, where="tools.night_orch_shutdown._acquire_pid_lock.read", level="debug")
             _old = None
         if _old:
             try:
@@ -54,13 +54,13 @@ def _acquire_pid_lock(lock_path):
                 if psutil.pid_exists(_old):
                     return False  # 另一编排仍存活
             except Exception as _e:
-                silent_exc(_e, where="tools.night_orch_shutdown._acquire_pid_lock.check")
+                silent_exc(_e, where="tools.night_orch_shutdown._acquire_pid_lock.check", level="debug")
                 return False  # 无法判定 → 保守拒绝
     try:
         with open(lock_path, "w", encoding="utf-8") as _f:
             _f.write(str(_pid))
     except Exception as _e:
-        silent_exc(_e, where="tools.night_orch_shutdown._acquire_pid_lock.write")
+        silent_exc(_e, where="tools.night_orch_shutdown._acquire_pid_lock.write", level="debug")
         return False
     return True
 
@@ -70,7 +70,7 @@ def _release_pid_lock(lock_path):
         if os.path.exists(lock_path):
             os.remove(lock_path)
     except Exception as _e:
-        silent_exc(_e, where="tools.night_orch_shutdown._release_pid_lock")
+        silent_exc(_e, where="tools.night_orch_shutdown._release_pid_lock", level="debug")
 
 
 def _write_report(path, ok, status):
@@ -79,7 +79,7 @@ def _write_report(path, ok, status):
         with open(path, "w", encoding="utf-8") as _f:
             json.dump(_d, _f, ensure_ascii=False, indent=2)
     except Exception as _e:
-        silent_exc(_e, where="tools.night_orch_shutdown._write_report")
+        silent_exc(_e, where="tools.night_orch_shutdown._write_report", level="debug")
 
 
 def main():
@@ -150,7 +150,7 @@ def main():
                         _write_report(_report, True, "consumed_then_gone")
                         return 0
             except Exception as _e:
-                silent_exc(_e, where="tools.night_orch_shutdown.main.poll")
+                silent_exc(_e, where="tools.night_orch_shutdown.main.poll", level="debug")
             time.sleep(2)
 
         print(f"[night_orch] 等待超时（{_timeout:.0f}s），框架仍未退出。")

@@ -396,7 +396,7 @@ class PulseRiskPerception(BasePulseOrgan):
                 "violence_threat", ["杀了你", "要你死"])
         except Exception as _e:
             from nucleus._silent_except import silent_exc
-            silent_exc(_e, "PulseRiskPerception._load_crisis_patterns")
+            silent_exc(_e, "PulseRiskPerception._load_crisis_patterns", level="debug")
             self.SELF_HARM_PATTERNS = crisis_self_harm_keywords()
             self.VIOLENCE_THREAT_PATTERNS = ["杀了你", "要你死"]
         # ★第169批 C7'：无论上面走哪条分支，最后统一与单一来源取**并集**
@@ -492,7 +492,7 @@ class PulseRiskPerception(BasePulseOrgan):
             return bool(getattr(_cfg, "ENABLE_CRISIS_REFERRAL", True))
         except Exception as _e:
             from nucleus._silent_except import silent_exc
-            silent_exc(_e, "PulseRiskPerception._is_crisis_enabled")
+            silent_exc(_e, "PulseRiskPerception._is_crisis_enabled", level="debug")
             return True
 
     def _classify_crisis_level(self, risks: list[dict[str, Any]]) -> str | None:

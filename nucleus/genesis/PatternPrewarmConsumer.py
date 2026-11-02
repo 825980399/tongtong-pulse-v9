@@ -73,7 +73,7 @@ class PatternPrewarmConsumer:
                 if _r:
                     return list(_r)
             except Exception as e:
-                silent_exc(e, where="nucleus.genesis.PatternPrewarmConsumer::_resolve_hints L74")
+                silent_exc(e, where="nucleus.genesis.PatternPrewarmConsumer::_resolve_hints L74", level="debug")
         return list(EVENT_KNOWLEDGE_HINTS.get(event_type, []))
 
     # ---- 核心消费入口 ----

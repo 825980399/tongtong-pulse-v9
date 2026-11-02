@@ -122,7 +122,7 @@ def _m396_timer_alive(timer) -> bool:
         #   用 bool() 会让假 Timer 被误判成"存活"从而永久跳过调度。
         return _alive() is True
     except Exception as _e:  # 已停止的线程/已析构对象
-        silent_exc(_e, where="PulseHeart::_m396_timer_alive")
+        silent_exc(_e, where="PulseHeart::_m396_timer_alive", level="debug")
         return False
 
 
@@ -705,7 +705,7 @@ class PulseHeart(BasePulseOrgan):
                       f"interval={float(getattr(self, 'current_interval', 0) or 0):.2f}s"
                       f"{'（状态变化）' if _changed else ''}")
         except Exception as _e:
-            silent_exc(_e, where="PulseHeart::_m396_trace_enter")
+            silent_exc(_e, where="PulseHeart::_m396_trace_enter", level="debug")
 
     def _m396_beat_status(self) -> str:
         """★396刀2 ①：心跳体内发的状态串也按 gap 现算，不再硬编码"搏动中"。
@@ -774,7 +774,7 @@ class PulseHeart(BasePulseOrgan):
             return _path
         except Exception as _e:
             self._m374_last_dump = None
-            silent_exc(_e, where="PulseHeart::_m374_dump_stall")
+            silent_exc(_e, where="PulseHeart::_m374_dump_stall", level="debug")
             return None
 
     # ========== ★365刀C1：心跳链看门狗 ==========
@@ -913,7 +913,7 @@ class PulseHeart(BasePulseOrgan):
                     with open(_p, encoding="utf-8") as _f:
                         _snap = json.load(_f) or {}
                 except Exception as _re:
-                    silent_exc(_re, where="PulseHeart::_m396_stall_snapshot read")
+                    silent_exc(_re, where="PulseHeart::_m396_stall_snapshot read", level="debug")
                     _snap = {}
             if not isinstance(_snap, dict):
                 _snap = {}
@@ -941,7 +941,7 @@ class PulseHeart(BasePulseOrgan):
                           error_code="heartbeat_stall_snapshot_failed")
             return {"ok": bool(_ok), "path": _p, "gap_s": round(_gap, 2)}
         except Exception as _e:
-            silent_exc(_e, where="PulseHeart::_m396_stall_snapshot")
+            silent_exc(_e, where="PulseHeart::_m396_stall_snapshot", level="debug")
             self._log(LogLevel.WARNING,
                       f"[396刀2] 停搏快照写入异常：{type(_e).__name__}: {_e}",
                       error_code="heartbeat_stall_snapshot_failed")

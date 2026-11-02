@@ -101,7 +101,7 @@ def test_m379_d3_replay_real_day_meets_15pct():
             try:
                 d = json.loads(line)
             except Exception as _je:
-                silent_exc(_je, where="test_m379_d3.replay json")
+                silent_exc(_je, where="test_m379_d3.replay json", level="debug")
                 continue
             if d.get("type", "emit") != "emit":
                 continue

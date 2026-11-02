@@ -70,7 +70,7 @@ def enabled() -> bool:
         import config as _c
         return bool(getattr(_c, "ENABLE_M411_CODE_PROGRESS", True))
     except Exception as _e:
-        silent_exc(_e, where="observability.code_progress_store:enabled")
+        silent_exc(_e, where="observability.code_progress_store:enabled", level="debug")
         return True
 
 
@@ -111,7 +111,7 @@ def _atomic_write(path: str, payload: dict) -> tuple[bool, str]:
     try:
         os.makedirs(_dir, exist_ok=True)
     except Exception as _e:
-        silent_exc(_e, where="observability.code_progress_store:_atomic_write:mkdir")
+        silent_exc(_e, where="observability.code_progress_store:_atomic_write:mkdir", level="debug")
         return False, "mkdir_failed:%s" % type(_e).__name__
     _tmp = path + ".tmp411"
     try:

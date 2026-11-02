@@ -327,14 +327,14 @@ class PulseLegs(BasePulseOrgan):
             from utils.thread_budget import cap as _m426_cap
             _m426_n = int(_m426_cap("legs_learn", self._learn_pool_size))
         except Exception as _m426_e:
-            silent_exc(_m426_e, where="PulseLegs::_start_learn_engine 426刀1")
+            silent_exc(_m426_e, where="PulseLegs::_start_learn_engine 426刀1", level="debug")
             _m426_n = self._learn_pool_size
         self._learn_pool = ThreadPoolExecutor(max_workers=_m426_n, thread_name_prefix="legs_learn")
         try:
             from utils.thread_budget import register as _m426_reg
             _m426_reg("legs_learn", self._learn_pool)
         except Exception as _m426_e:
-            silent_exc(_m426_e, where="PulseLegs::register 426刀1")
+            silent_exc(_m426_e, where="PulseLegs::register 426刀1", level="debug")
         # 启动学习工作线程（从队列取任务分发给线程池）
         threading.Thread(target=self._learn_worker_loop, daemon=True).start()
         self._schedule_learn_timer()
@@ -411,7 +411,7 @@ class PulseLegs(BasePulseOrgan):
                 from utils.thread_budget import cap as _m426_cap2
                 _m426_n2 = int(_m426_cap2("legs_learn", self._learn_pool_size))
             except Exception as _m426_e:
-                silent_exc(_m426_e, where="PulseLegs::_rebuild_learn_pool 426刀1")
+                silent_exc(_m426_e, where="PulseLegs::_rebuild_learn_pool 426刀1", level="debug")
                 _m426_n2 = self._learn_pool_size
             self._learn_pool = ThreadPoolExecutor(
                 max_workers=_m426_n2,
@@ -421,7 +421,7 @@ class PulseLegs(BasePulseOrgan):
                 from utils.thread_budget import register as _m426_reg2
                 _m426_reg2("legs_learn", self._learn_pool)
             except Exception as _m426_e:
-                silent_exc(_m426_e, where="PulseLegs::register_rebuild 426刀1")
+                silent_exc(_m426_e, where="PulseLegs::register_rebuild 426刀1", level="debug")
         if old_pool:
             try:
                 old_pool.shutdown(wait=False)
@@ -448,7 +448,7 @@ class PulseLegs(BasePulseOrgan):
             import config as _c
             return bool(getattr(_c, "ENABLE_LEARNING_TOPIC_DEDUP", True))
         except Exception as e:
-            silent_exc(e, where="organs.motor.PulseLegs::_m49_topic_dedup_on L405")
+            silent_exc(e, where="organs.motor.PulseLegs::_m49_topic_dedup_on L405", level="debug")
             return True
 
     def _m49_topic_filter_on(self) -> bool:
@@ -456,7 +456,7 @@ class PulseLegs(BasePulseOrgan):
             import config as _c
             return bool(getattr(_c, "ENABLE_LEARNING_TOPIC_FILTER", True))
         except Exception as e:
-            silent_exc(e, where="organs.motor.PulseLegs::_m49_topic_filter_on L412")
+            silent_exc(e, where="organs.motor.PulseLegs::_m49_topic_filter_on L412", level="debug")
             return True
 
     def _m49_digest_feedback_on(self) -> bool:
@@ -464,7 +464,7 @@ class PulseLegs(BasePulseOrgan):
             import config as _c
             return bool(getattr(_c, "ENABLE_LEARNING_DIGEST_FEEDBACK", True))
         except Exception as e:
-            silent_exc(e, where="organs.motor.PulseLegs::_m49_digest_feedback_on L419")
+            silent_exc(e, where="organs.motor.PulseLegs::_m49_digest_feedback_on L419", level="debug")
             return True
 
     def _m49_dedup_cfg(self):
@@ -931,7 +931,7 @@ class PulseLegs(BasePulseOrgan):
             if not getattr(_cfg, 'ENABLE_WEB_TIME_EXTRACTION', False):
                 return 0.0
         except Exception as e:
-            silent_exc(e, where="organs.motor.PulseLegs::_extract_web_time L861")
+            silent_exc(e, where="organs.motor.PulseLegs::_extract_web_time L861", level="debug")
             return 0.0
         try:
             from nucleus.knowledge.WebTimeExtractor import get_shared_extractor
@@ -1199,7 +1199,7 @@ class PulseLegs(BasePulseOrgan):
             get_intent_classifier().set_llm_callback(callback)
         except Exception as e:
             # 注入失败不影响主搜索链路（分类器仍走本地规则快路径）
-            silent_exc(e, where="organs.motor.PulseLegs::set_llm_callback L1119")
+            silent_exc(e, where="organs.motor.PulseLegs::set_llm_callback L1119", level="debug")
     # ========== 熔断与资源检查 ==========
 
     def _handle_failure(self, source: str, error: str):
@@ -1516,7 +1516,7 @@ class PulseLegs(BasePulseOrgan):
                         try:
                             os.unlink(_tmp)
                         except OSError as _ue:
-                            silent_exc(_ue, where="organs.motor.PulseLegs::_write_learn_log 清理")
+                            silent_exc(_ue, where="organs.motor.PulseLegs::_write_learn_log 清理", level="debug")
         except Exception as e:
             self._log(LogLevel.DEBUG, f"数据处理异常已忽略: {type(e).__name__}: {e}")
 

@@ -65,7 +65,7 @@ def enabled() -> bool:
         import config as _c
         return bool(getattr(_c, "ENABLE_M411_EFFECT_VERIFY_HEALTH", True))
     except Exception as _e:
-        silent_exc(_e, where="evolution.effect_verify_health:enabled")
+        silent_exc(_e, where="evolution.effect_verify_health:enabled", level="debug")
         return True
 
 

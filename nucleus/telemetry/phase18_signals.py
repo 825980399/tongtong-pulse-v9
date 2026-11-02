@@ -269,7 +269,7 @@ class Phase18Signals:
                 cb(snap)
                 sent += 1
             except Exception as _e:  # 消费方异常不应影响采集器
-                silent_exc(_e, where="nucleus.telemetry.phase18_signals.dispatch_snapshot")
+                silent_exc(_e, where="nucleus.telemetry.phase18_signals.dispatch_snapshot", level="debug")
         return sent
 
 

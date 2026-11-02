@@ -239,7 +239,7 @@ class PulsePersonalityKernel(BasePulseOrgan):
         try:
             from nucleus.mnemosyne.PulseNode import PulseNode
         except Exception as e:
-            silent_exc(e, where="organs.identity.PulsePersonalityKernel::_ensure_identity_seeds L188")
+            silent_exc(e, where="organs.identity.PulsePersonalityKernel::_ensure_identity_seeds L188", level="debug")
             return 0
 
         # 与 PulseSelfAwareness._core_identity_keywords 一一对应的校验关键词
@@ -269,7 +269,7 @@ class PulsePersonalityKernel(BasePulseOrgan):
                 self.node_pool.add(_node)
                 _added += 1
             except Exception as e:
-                silent_exc(e, where="organs/identity/PulsePersonalityKernel.py:219")
+                silent_exc(e, where="organs/identity/PulsePersonalityKernel.py:219", level="debug")
                 continue
         return _added
 
@@ -564,7 +564,7 @@ class PulsePersonalityKernel(BasePulseOrgan):
                         "time": _mem.get("posted_at", time.time()),
                     })
         except Exception as e:
-            silent_exc(e, where="organs.identity.PulsePersonalityKernel::_on_boundary_scan L511")
+            silent_exc(e, where="organs.identity.PulsePersonalityKernel::_on_boundary_scan L511", level="debug")
 
         if _erosion_detected:
             # 记录侵蚀事件

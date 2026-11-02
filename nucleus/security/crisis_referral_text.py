@@ -87,7 +87,7 @@ def _sanitizer_enabled() -> bool:
     except Exception as _e:
         # 脱敏开关不可用时按「启用」处理，fail-safe 偏向保护
         from nucleus._silent_except import silent_exc
-        silent_exc(_e, "crisis_referral_text._sanitizer_enabled")
+        silent_exc(_e, "crisis_referral_text._sanitizer_enabled", level="debug")
         return True
 
 

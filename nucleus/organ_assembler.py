@@ -489,4 +489,4 @@ class OrganAssembler:
             try:
                 setattr(framework, meta.attr_name, organ)
             except Exception as e:
-                silent_exc(e, where="nucleus.organ_assembler::_set_attr L405")
+                silent_exc(e, where="nucleus.organ_assembler::_set_attr L405", level="debug")

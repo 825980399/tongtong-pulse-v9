@@ -110,7 +110,7 @@ def tail_rows(path: str, window_s: float = WINDOW_S,
             _buf = _f.read()
         _out["bytes"] = len(_buf)
     except OSError as _e:
-        silent_exc(_e, where="utils.causal_chain.tail_rows[read]")
+        silent_exc(_e, where="utils.causal_chain.tail_rows[read]", level="debug")
         _out["reason"] = "read_failed"
         return _out
 
@@ -371,7 +371,7 @@ def tick_from_heartbeat(now: float | None = None) -> dict:
     try:
         return run_once(now=_now)
     except Exception as _e:
-        silent_exc(_e, where="utils.causal_chain.tick_from_heartbeat")
+        silent_exc(_e, where="utils.causal_chain.tick_from_heartbeat", level="debug")
         return {"ok": False, "error": "%s: %s" % (type(_e).__name__, _e)}
 
 
@@ -596,7 +596,7 @@ def _write_json_atomic(record: dict, path: str) -> bool:
             _f.flush()
             os.fsync(_f.fileno())
     except OSError as _e:
-        silent_exc(_e, where="utils.causal_chain._write_json_atomic[write]")
+        silent_exc(_e, where="utils.causal_chain._write_json_atomic[write]", level="debug")
         return False
     _last = None
     for _i in range(3):
@@ -1237,7 +1237,7 @@ def _scan_chain_history(event_name: str, root: str | None = None,
                     if _h and _h not in _hours:
                         _hours.append(_h)
         except OSError as _e:
-            silent_exc(_e, where="utils.causal_chain._scan_chain_history[read]")
+            silent_exc(_e, where="utils.causal_chain._scan_chain_history[read]", level="debug")
             continue
         _out["files"] += 1
     _out["hours"] = sorted(_hours)
@@ -1306,7 +1306,7 @@ def get_causal_chain_for_event(event_name: str, pulse_id=None, *,
                 _res["event"], root=root,
                 day=time.strftime("%Y%m%d", time.localtime(_now)))
         except Exception as _e:
-            silent_exc(_e, where="utils.causal_chain.get_causal_chain_for_event[history]")
+            silent_exc(_e, where="utils.causal_chain.get_causal_chain_for_event[history]", level="debug")
             _res["history"] = {"files": 0, "hours": [], "mentions": 0,
                                "reason": "scan_failed", "days_back": 0}
     _res["generated_at"] = round(time.time(), 3)

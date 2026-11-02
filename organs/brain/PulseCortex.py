@@ -732,7 +732,7 @@ class PulseCortex(BasePulseOrgan):
                 _parts.append(f" 建议：{_sug}")
             return "".join(_parts)
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseCortex::_self_state_render L487")
+            silent_exc(e, where="organs.brain.PulseCortex::_self_state_render L487", level="debug")
             return ""
 
     def on_pulse(self, pulse: dict[str, Any]) -> dict[str, Any] | None:
@@ -1081,7 +1081,7 @@ class PulseCortex(BasePulseOrgan):
             if not getattr(_cfg, "ENABLE_DIALOG_SELECT_MODEL_DEDUP", True):
                 return True
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseCortex::_claim_select_model_emit L808")
+            silent_exc(e, where="organs.brain.PulseCortex::_claim_select_model_emit L808", level="debug")
             return True
         try:
             import hashlib as _hashlib
@@ -2114,7 +2114,7 @@ class PulseCortex(BasePulseOrgan):
         except Exception as _e:
             # 文案模块不可用时用最小兜底（同样遵守红线：不自称「我」、不提身份）
             from nucleus._silent_except import silent_exc
-            silent_exc(_e, "PulseCortex._build_crisis_referral_text")
+            silent_exc(_e, "PulseCortex._build_crisis_referral_text", level="debug")
             return "这一点先记下了。如果你愿意，可以再多说一些。"
 
     def _on_risk_alert(self, payload: dict) -> dict[str, Any]:
@@ -2288,7 +2288,7 @@ class PulseCortex(BasePulseOrgan):
             from nucleus.observability.experience_hits import tokens_of
             return sorted(tokens_of(content))[:10]
         except Exception as _e:
-            silent_exc(_e, where="PulseCortex::_m426_keywords")
+            silent_exc(_e, where="PulseCortex::_m426_keywords", level="debug")
             return []
 
     def _m426_interest_brief(self) -> list:
@@ -2593,7 +2593,7 @@ class PulseCortex(BasePulseOrgan):
             if _reg_tools:
                 tool_hint["registry_consulted"] = True
         except Exception as _te:
-            silent_exc(_te, where="organs.brain.PulseCortex::_assess_tool_suitability C-1 registry consult L2036")
+            silent_exc(_te, where="organs.brain.PulseCortex::_assess_tool_suitability C-1 registry consult L2036", level="debug")
 
         # ★工具创造元能力：现有工具无法覆盖的未知意图 → 设计并注册新工具
         if intent in ("未分类", "unknown", ""):
@@ -2622,7 +2622,7 @@ class PulseCortex(BasePulseOrgan):
             # ★第162批 刀10：统一写后持久化（重启可恢复）；失败由外层 except 兜
             _reg.save()
         except Exception as _te:
-            silent_exc(_te, where="organs.brain.PulseCortex::_register_tool C-1 unify L2046")
+            silent_exc(_te, where="organs.brain.PulseCortex::_register_tool C-1 unify L2046", level="debug")
         self._tool_registry[name] = {
             "description": description,
             "capabilities": list(capabilities or []),
@@ -3260,7 +3260,7 @@ class PulseCortex(BasePulseOrgan):
                 raise RuntimeError("pulse bus is not available")
             return bus.request("parallel_scheduler.get_parallelism")
         except Exception as e:
-            silent_exc(e, where="organs.brain.PulseCortex::get_parallelism L2650")
+            silent_exc(e, where="organs.brain.PulseCortex::get_parallelism L2650", level="debug")
             return 2
     def _on_status_request(self) -> dict[str, Any]:
         return self.get_stats()

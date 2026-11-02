@@ -46,7 +46,7 @@ def _md5_of(path: str) -> str | None:
                 h.update(_chunk)
         return h.hexdigest()
     except Exception as e:  # 读不到不阻断隔离
-        silent_exc(e, where="tools.test_isolation_shim::_md5_of L58")
+        silent_exc(e, where="tools.test_isolation_shim::_md5_of L58", level="debug")
         return None
 
 
@@ -63,7 +63,7 @@ class _Isolation:
         try:
             self.production_intact = _check_production_intact(self)
         except Exception as e:
-            silent_exc(e, where="tools.test_isolation_shim::_Isolation.cleanup Lchk")
+            silent_exc(e, where="tools.test_isolation_shim::_Isolation.cleanup Lchk", level="debug")
             self.production_intact = True
 
 
@@ -89,7 +89,7 @@ def _patch(mod_name: str, attr: str, val) -> None:
         _PATCHED.append((_m, attr, getattr(_m, attr, None)))
         setattr(_m, attr, val)
     except Exception as e:
-        silent_exc(e, where=f"tools.test_isolation_shim::_patch L{mod_name}")
+        silent_exc(e, where=f"tools.test_isolation_shim::_patch L{mod_name}", level="debug")
 
 
 def _restore_all(iso: _Isolation | None = None) -> None:
@@ -99,7 +99,7 @@ def _restore_all(iso: _Isolation | None = None) -> None:
         try:
             setattr(_m, _attr, _orig)
         except Exception as e:  # 还原失败不阻断
-            silent_exc(e, where="tools.test_isolation_shim::_restore_all Lset")
+            silent_exc(e, where="tools.test_isolation_shim::_restore_all Lset", level="debug")
     _PATCHED.clear()
     if _CFG_ORIG is not None:
         try:
@@ -107,7 +107,7 @@ def _restore_all(iso: _Isolation | None = None) -> None:
             _CFG.SEMANTIC_KERNEL_CONFIG.clear()
             _CFG.SEMANTIC_KERNEL_CONFIG.update(_CFG_ORIG)
         except Exception as e:
-            silent_exc(e, where="tools.test_isolation_shim::_restore_all Lcfg")
+            silent_exc(e, where="tools.test_isolation_shim::_restore_all Lcfg", level="debug")
         _CFG_ORIG = None
 
 
@@ -123,7 +123,7 @@ def _redirect_all(iso: _Isolation) -> None:
         import nucleus.semantic.VectorStore as _VS
         _VS.VectorStore._instance = None
     except Exception as e:
-        silent_exc(e, where="tools.test_isolation_shim::_redirect_all LVS")
+        silent_exc(e, where="tools.test_isolation_shim::_redirect_all LVS", level="debug")
 
     # 2) CFG 向量库路径 → 隔离目录
     _CFG.SEMANTIC_KERNEL_CONFIG["vector_file"] = os.path.join(ISO_DIR, "vectors.npz")
@@ -141,7 +141,7 @@ def _redirect_all(iso: _Isolation) -> None:
         if hasattr(_LDM, "reset_llm_dependency_metrics"):
             _LDM.reset_llm_dependency_metrics()
     except Exception as e:
-        silent_exc(e, where="tools.test_isolation_shim::_redirect_all Lldm")
+        silent_exc(e, where="tools.test_isolation_shim::_redirect_all Lldm", level="debug")
 
     # 5) 日志目录 best-effort 重定向（config.LOG_DIR + nucleus.logger._log_dir）
     try:
@@ -150,7 +150,7 @@ def _redirect_all(iso: _Isolation) -> None:
         _patch("config", "LOG_DIR", _log_dir)
         _patch("nucleus.logger", "_log_dir", _log_dir)
     except Exception as e:
-        silent_exc(e, where="tools.test_isolation_shim::_redirect_all Llog")
+        silent_exc(e, where="tools.test_isolation_shim::_redirect_all Llog", level="debug")
 
     # 生产向量库 MD5（cleanup 时校验 production_intact）
     _prod_vec = _CFG_ORIG.get("vector_file")
@@ -167,7 +167,7 @@ def _check_production_intact(iso: _Isolation) -> bool:
         import config as _CFG
         _prod_vec = _CFG.SEMANTIC_KERNEL_CONFIG.get("vector_file")
     except Exception as e:
-        silent_exc(e, where="tools.test_isolation_shim::_check_production_intact Lcfg")
+        silent_exc(e, where="tools.test_isolation_shim::_check_production_intact Lcfg", level="debug")
     if not _prod_vec or not os.path.exists(_prod_vec):
         return True
     return _md5_of(_prod_vec) == iso._prod_md5

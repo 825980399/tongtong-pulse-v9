@@ -860,7 +860,7 @@ class HealthHandler(BaseHTTPRequestHandler):
                 self.send_response(404)
                 self.end_headers()
         except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError) as e:
-            silent_exc(e, where="functions.health_ui::do_GET L850")
+            silent_exc(e, where="functions.health_ui::do_GET L850", level="debug")
 
     def _is_same_origin(self) -> bool:
         """同源校验：仅允许来自本面板的请求，防御 CSRF。"""
@@ -881,7 +881,7 @@ class HealthHandler(BaseHTTPRequestHandler):
                 if _op.netloc and _op.netloc.split(':')[0] == _host and _host:
                     return True
             except Exception as e:
-                silent_exc(e, where="functions.health_ui::_is_same_origin L864")
+                silent_exc(e, where="functions.health_ui::_is_same_origin L864", level="debug")
                 return False
             return False
         if _referer:
@@ -890,7 +890,7 @@ class HealthHandler(BaseHTTPRequestHandler):
                 if _rp.netloc and _rp.netloc.split(':')[0] == _host and _host:
                     return True
             except Exception as e:
-                silent_exc(e, where="functions.health_ui::_is_same_origin L872")
+                silent_exc(e, where="functions.health_ui::_is_same_origin L872", level="debug")
                 return False
         # 无 Origin/Referer 的同源简单请求（如同源 fetch、测试）放行
         return True
@@ -909,7 +909,7 @@ class HealthHandler(BaseHTTPRequestHandler):
                 self.send_response(404)
                 self.end_headers()
         except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError) as e:
-            silent_exc(e, where="functions.health_ui::do_POST L890")
+            silent_exc(e, where="functions.health_ui::do_POST L890", level="debug")
 
     def _serve_html(self):
         self.send_response(200)
@@ -970,13 +970,13 @@ class HealthHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(_body)
         except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError) as e:
-            silent_exc(e, where="functions.health_ui::_serve_json_file L945")
+            silent_exc(e, where="functions.health_ui::_serve_json_file L945", level="debug")
         except Exception:
             try:
                 self.send_response(500)
                 self.end_headers()
             except Exception as e:
-                silent_exc(e, where="functions.health_ui::_serve_json_file L951")
+                silent_exc(e, where="functions.health_ui::_serve_json_file L951", level="debug")
 
     def _serve_jsonl(self, subdir: str, filename: str):
         """★157 T-报告契约-3：提供 data/{subdir}/{filename} JSONL 的只读端点。
@@ -999,7 +999,7 @@ class HealthHandler(BaseHTTPRequestHandler):
                         try:
                             _rows.append(json.loads(_line))
                         except Exception as e:
-                            silent_exc(e, where="functions.health_ui::_serve_jsonl Lparse")
+                            silent_exc(e, where="functions.health_ui::_serve_jsonl Lparse", level="debug")
                 _body = json.dumps(_rows, ensure_ascii=False).encode('utf-8')
             else:
                 _body = b'[]'
@@ -1009,13 +1009,13 @@ class HealthHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(_body)
         except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError) as e:
-            silent_exc(e, where="functions.health_ui::_serve_jsonl Lconn")
+            silent_exc(e, where="functions.health_ui::_serve_jsonl Lconn", level="debug")
         except Exception:
             try:
                 self.send_response(500)
                 self.end_headers()
             except Exception as e:
-                silent_exc(e, where="functions.health_ui::_serve_jsonl L500")
+                silent_exc(e, where="functions.health_ui::_serve_jsonl L500", level="debug")
 
     def _serve_probe_data(self):
         """★第158批 第5刀（P2·空转#1/#4/#5/#9 观测查询入口）：提供 data/probe/ 探针产物只读端点。
@@ -1042,16 +1042,16 @@ class HealthHandler(BaseHTTPRequestHandler):
                                 "ext": os.path.splitext(_name)[1].lower(),
                             })
                     except Exception as e:
-                        silent_exc(e, where="functions.health_ui::_serve_probe_data Lstat")
+                        silent_exc(e, where="functions.health_ui::_serve_probe_data Lstat", level="debug")
             _items.sort(key=lambda x: x.get("mtime", 0), reverse=True)
             _body = json.dumps(
                 {"count": len(_items), "items": _items[:200]},
                 ensure_ascii=False).encode('utf-8')
         except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError) as e:
-            silent_exc(e, where="functions.health_ui::_serve_probe_data Lconn")
+            silent_exc(e, where="functions.health_ui::_serve_probe_data Lconn", level="debug")
             return
         except Exception as e:
-            silent_exc(e, where="functions.health_ui::_serve_probe_data Lgen")
+            silent_exc(e, where="functions.health_ui::_serve_probe_data Lgen", level="debug")
             _body = json.dumps(
                 {"count": 0, "items": [], "error": str(e)[:80]},
                 ensure_ascii=False).encode('utf-8')
@@ -1088,9 +1088,9 @@ class HealthHandler(BaseHTTPRequestHandler):
                                 try:
                                     _records.append(json.loads(_line))
                                 except Exception as e:
-                                    silent_exc(e, where="functions.health_ui::_serve_param_tuning_data Lparse")
+                                    silent_exc(e, where="functions.health_ui::_serve_param_tuning_data Lparse", level="debug")
                     except Exception as e:
-                        silent_exc(e, where="functions.health_ui::_serve_param_tuning_data Lopen")
+                        silent_exc(e, where="functions.health_ui::_serve_param_tuning_data Lopen", level="debug")
                     _loops.append({
                         "loop": _fn.removesuffix('.jsonl'),
                         "records": _records[-50:],
@@ -1100,10 +1100,10 @@ class HealthHandler(BaseHTTPRequestHandler):
                 {"loops": _loops, "loop_count": len(_loops)},
                 ensure_ascii=False).encode('utf-8')
         except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError) as e:
-            silent_exc(e, where="functions.health_ui::_serve_param_tuning_data Lconn")
+            silent_exc(e, where="functions.health_ui::_serve_param_tuning_data Lconn", level="debug")
             return
         except Exception as e:
-            silent_exc(e, where="functions.health_ui::_serve_param_tuning_data Lgen")
+            silent_exc(e, where="functions.health_ui::_serve_param_tuning_data Lgen", level="debug")
             _body = json.dumps(
                 {"loops": [], "loop_count": 0, "error": str(e)[:80]},
                 ensure_ascii=False).encode('utf-8')
@@ -1212,7 +1212,7 @@ class HealthHandler(BaseHTTPRequestHandler):
             _issues = get_self_inspector().detect_code_issues()
             _code_score = max(50, 95 - len(_issues))
         except Exception as e:
-            silent_exc(e, where="functions.health_ui::_compute_module_scores L1049")
+            silent_exc(e, where="functions.health_ui::_compute_module_scores L1049", level="debug")
         _modules.append({"name": "代码健康", "score": _code_score})
 
         # 运行稳定性：脉冲错误数 + 重入次数
@@ -1224,7 +1224,7 @@ class HealthHandler(BaseHTTPRequestHandler):
             _reentry = _rt.get("reentry_count", 0)
             _runtime_score = max(40, 95 - _errors * 2 - _reentry * 3)
         except Exception as e:
-            silent_exc(e, where="functions.health_ui::_compute_module_scores L1061")
+            silent_exc(e, where="functions.health_ui::_compute_module_scores L1061", level="debug")
         _modules.append({"name": "运行稳定性", "score": _runtime_score})
 
         # 资源管理：队列峰值深度
@@ -1235,7 +1235,7 @@ class HealthHandler(BaseHTTPRequestHandler):
             _depth = _rt.get("queue_max_depth", 0)
             _resource_score = max(50, 95 - max(0, _depth - 200) // 20)
         except Exception as e:
-            silent_exc(e, where="functions.health_ui::_compute_module_scores L1072")
+            silent_exc(e, where="functions.health_ui::_compute_module_scores L1072", level="debug")
         _modules.append({"name": "资源管理", "score": _resource_score})
 
         # 知识质量：知识节点总数
@@ -1245,7 +1245,7 @@ class HealthHandler(BaseHTTPRequestHandler):
                 _total = len(_node_pool.get_all())
                 _knowledge_score = 75 if _total > 0 else 50
         except Exception as e:
-            silent_exc(e, where="functions.health_ui::_compute_module_scores L1082")
+            silent_exc(e, where="functions.health_ui::_compute_module_scores L1082", level="debug")
         _modules.append({"name": "知识质量", "score": _knowledge_score})
 
         return _modules
@@ -1448,7 +1448,7 @@ setInterval(loadData, 60000);
                             "event": _it.get("content", "")[:120],
                         })
                 except Exception as e:
-                    silent_exc(e, where="functions/health_ui.py:1277")
+                    silent_exc(e, where="functions/health_ui.py:1277", level="debug")
                     continue
 
             # ★FIX: 模块评分由真实运行时指标 + 静态审查推导（替代硬编码假数据）
@@ -1702,13 +1702,13 @@ setInterval(loadKGData, 30000);
             presets = ParamPresets()
             data["presets"] = presets.list_presets()
         except Exception as e:
-            silent_exc(e, where="functions.health_ui::_serve_params_data L1530")
+            silent_exc(e, where="functions.health_ui::_serve_params_data L1530", level="debug")
             data["param_error"] = str(e)[:80]
         try:
             import config
             data["runtime_params_count"] = len(getattr(config, 'RUNTIME_PARAMS', {}))
         except Exception as e:
-            silent_exc(e, where="functions.health_ui::_serve_params_data L1535")
+            silent_exc(e, where="functions.health_ui::_serve_params_data L1535", level="debug")
         try:
             changes = []
             log_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs', 'config_changes.log')
@@ -1720,11 +1720,11 @@ setInterval(loadKGData, 30000);
                             try:
                                 changes.append(json.loads(line))
                             except Exception as e:
-                                silent_exc(e, where="functions.health_ui::_serve_params_data L1547")
+                                silent_exc(e, where="functions.health_ui::_serve_params_data L1547", level="debug")
             data["change_history"] = changes[-30:][::-1]
             data["config_changes"] = len(changes)
         except Exception as e:
-            silent_exc(e, where="functions.health_ui::_serve_params_data L1551")
+            silent_exc(e, where="functions.health_ui::_serve_params_data L1551", level="debug")
         try:
             override_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'config_override.json')
             if os.path.exists(override_path):
@@ -1732,7 +1732,7 @@ setInterval(loadKGData, 30000);
                 data["current_preset"] = override.get("_last_preset_applied", "custom")
                 data["preset_time"] = override.get("_last_preset_time", "--")
         except Exception as e:
-            silent_exc(e, where="functions.health_ui::_serve_params_data L1559")
+            silent_exc(e, where="functions.health_ui::_serve_params_data L1559", level="debug")
         result = json.dumps(data, ensure_ascii=False)
         self.send_response(200)
         self.send_header('Content-Type', 'application/json; charset=utf-8')

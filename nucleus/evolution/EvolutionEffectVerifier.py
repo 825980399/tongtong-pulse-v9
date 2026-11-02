@@ -37,7 +37,7 @@ def _log(level: str, msg: str) -> None:
     try:
         getattr(_logger, level)(msg)
     except Exception as e:
-        silent_exc(e, where="nucleus.evolution.EvolutionEffectVerifier::_log L39")
+        silent_exc(e, where="nucleus.evolution.EvolutionEffectVerifier::_log L39", level="debug")
 
 
 # 低风险补丁的代码特征：只动日志/注释/字符串常量/数值参数
@@ -144,7 +144,7 @@ class EvolutionEffectVerifier:
             low = float(_c.get("low_risk_min_trust", low) or low)
             high = float(_c.get("high_risk_min_trust", high) or high)
         except Exception as e:
-            silent_exc(e, where="nucleus.evolution.EvolutionEffectVerifier::trust_threshold_for L135")
+            silent_exc(e, where="nucleus.evolution.EvolutionEffectVerifier::trust_threshold_for L135", level="debug")
         return low if cls.is_low_risk_patch(patch) else high
 
     # ==================== 效果验证 ====================
@@ -326,7 +326,7 @@ class EvolutionEffectVerifier:
             _window = float(getattr(_cfg, "EVOLUTION_EFFECT_VERIFY_CONFIG", {}).get(
                 "recurrence_window_sec", _window) or _window)
         except Exception as e:
-            silent_exc(e, where="nucleus.evolution.EvolutionEffectVerifier::check_recurrence L269")
+            silent_exc(e, where="nucleus.evolution.EvolutionEffectVerifier::check_recurrence L269", level="debug")
         with self._lock:
             _e = self._issues.get(signature)
             if _e is None:
@@ -401,7 +401,7 @@ class EvolutionEffectVerifier:
                     os.path.abspath(__file__)))), "data", "evolution",
                     "effect_verify.json"))
         except Exception as e:
-            silent_exc(e, where="EvolutionEffectVerifier::_m418_production_path")
+            silent_exc(e, where="EvolutionEffectVerifier::_m418_production_path", level="debug")
             return False
 
     def _m418_strip_stubs(self) -> tuple:
@@ -455,7 +455,7 @@ class EvolutionEffectVerifier:
             if os.path.exists(self._save_path):
                 os.remove(self._save_path)
         except Exception as e:
-            silent_exc(e, where="nucleus.evolution.EvolutionEffectVerifier::reset L338")
+            silent_exc(e, where="nucleus.evolution.EvolutionEffectVerifier::reset L338", level="debug")
 
 
 # ==================== 单例 ====================

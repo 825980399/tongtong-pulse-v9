@@ -54,7 +54,7 @@ def _rate_limit_enabled() -> bool:
         import config as _cfg
         return bool(getattr(_cfg, "ENABLE_WIKI_QUERIER_RATE_LIMIT", True))
     except Exception as e:
-        silent_exc(e, where="nucleus.knowledge.WikiQuerier::_rate_limit_enabled L57")
+        silent_exc(e, where="nucleus.knowledge.WikiQuerier::_rate_limit_enabled L57", level="debug")
         return True
 
 
@@ -79,7 +79,7 @@ def _get_min_interval() -> float:
         _v = float(getattr(_cfg, "WIKI_QUERIER_MIN_INTERVAL", 1.0))
         return max(0.0, _v)
     except Exception as e:
-        silent_exc(e, where="nucleus.knowledge.WikiQuerier::_get_min_interval L81")
+        silent_exc(e, where="nucleus.knowledge.WikiQuerier::_get_min_interval L81", level="debug")
         return 1.0
 
 
@@ -330,7 +330,7 @@ class WikiQuerier:
                 if _punct > 2:
                     return False, f"A-12收紧:标点>2(={_punct})"
         except Exception as e:
-            silent_exc(e, where="nucleus.knowledge.WikiQuerier::_should_query_reason L331")
+            silent_exc(e, where="nucleus.knowledge.WikiQuerier::_should_query_reason L331", level="debug")
         # 时效/方法类 → 不是实体查询
         if any(_k in _q for _k in ("最新", "新闻", "今天", "现在", "动态", "热点",
                                    "怎么", "如何", "教程", "步骤")):
@@ -487,7 +487,7 @@ class WikiQuerier:
         try:
             self._log_fn(f"[百科查询器] {msg}")
         except Exception as e:
-            silent_exc(e, where="nucleus.knowledge.WikiQuerier::_log L488")
+            silent_exc(e, where="nucleus.knowledge.WikiQuerier::_log L488", level="debug")
 
 
 # ========== 模块级单例（供控制器等器官接线使用） ==========

@@ -298,7 +298,7 @@ class PulseFileDigester(BasePulseOrgan):
             try:
                 file_size = os.path.getsize(file_path)
             except Exception as e:
-                silent_exc(e, where="organs.motor.PulseFileDigester::_digest_file L299")
+                silent_exc(e, where="organs.motor.PulseFileDigester::_digest_file L299", level="debug")
 
         if ext in self.TEXT_FORMATS:
             return self._handle_text_file(file_path, file_content, file_name, ext,
@@ -628,10 +628,10 @@ class PulseFileDigester(BasePulseOrgan):
                     with open(file_path, encoding=encoding) as f:
                         return f.read()
                 except UnicodeDecodeError as e:
-                    silent_exc(e, where="organs/motor/PulseFileDigester.py:629")
+                    silent_exc(e, where="organs/motor/PulseFileDigester.py:629", level="debug")
                     continue
                 except Exception as e:
-                    silent_exc(e, where="organs.motor.PulseFileDigester::_get_content L631")
+                    silent_exc(e, where="organs.motor.PulseFileDigester::_get_content L631", level="debug")
                     return None
         return None
 

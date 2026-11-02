@@ -272,7 +272,7 @@ class CausalVerifier(SilentLogMixin):
                 _trust = getattr(_node, "trust", 50.0)
             return not (_trust < self.MIN_SOURCE_TRUST)
         except Exception as e:
-            silent_exc(e, where="nucleus.reasoning.CausalVerifier::_check_source L274")
+            silent_exc(e, where="nucleus.reasoning.CausalVerifier::_check_source L274", level="debug")
             return None
 
     def _summary(self, status: str, broken_at: int | None) -> str:

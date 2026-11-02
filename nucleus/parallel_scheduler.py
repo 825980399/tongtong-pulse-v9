@@ -69,7 +69,7 @@ class ParallelScheduler(SilentLogMixin):
             from config import FEATURE
             return bool(FEATURE.get("use_runtime_adaptive_tuning", False))
         except Exception as e:
-            silent_exc(e, where="nucleus.parallel_scheduler::_read_adaptive_flag L57")
+            silent_exc(e, where="nucleus.parallel_scheduler::_read_adaptive_flag L57", level="debug")
             return False
 
     def update_hardware_capability(self, tier: str | None = None, cores: int | None = None,
@@ -174,7 +174,7 @@ class ParallelScheduler(SilentLogMixin):
             _queue_depth = _snap.get("queue_max_depth", 0)
             _pulse_avg_ms = _snap.get("pulse_avg_ms", 0.0)
         except Exception as e:
-            silent_exc(e, where="nucleus.parallel_scheduler::_maybe_adjust L163")
+            silent_exc(e, where="nucleus.parallel_scheduler::_maybe_adjust L163", level="debug")
             _queue_depth = 0
             _pulse_avg_ms = 0.0
 
@@ -229,7 +229,7 @@ class ParallelScheduler(SilentLogMixin):
                                   f"{_old_parallelism} → {_target} "
                                   f"（压力={_hw_pressure}）")
                 except Exception as e:
-                    silent_exc(e, where="nucleus.parallel_scheduler::_maybe_adjust L217")
+                    silent_exc(e, where="nucleus.parallel_scheduler::_maybe_adjust L217", level="debug")
                 # ★三期：记录本次调整周期，接下来 _adjust_cooldown_cycles 个周期不再调整
                 self._last_adjust_cycle = self._adjust_cycle_counter
 
@@ -335,7 +335,7 @@ class ParallelScheduler(SilentLogMixin):
             from utils.thread_budget import cap as _m426_cap
             return int(_m426_cap("cortex_parallel", self._current_parallelism))
         except Exception as _e:
-            silent_exc(_e, where="nucleus.parallel_scheduler::_pool_workers L426")
+            silent_exc(_e, where="nucleus.parallel_scheduler::_pool_workers L426", level="debug")
             return int(self._current_parallelism)
 
     def _new_pool(self) -> ThreadPoolExecutor:
@@ -347,7 +347,7 @@ class ParallelScheduler(SilentLogMixin):
             from utils.thread_budget import register as _m426_reg
             _m426_reg("cortex_parallel", _p)
         except Exception as _e:
-            silent_exc(_e, where="nucleus.parallel_scheduler::_new_pool register L426")
+            silent_exc(_e, where="nucleus.parallel_scheduler::_new_pool register L426", level="debug")
         return _p
 
     def _rebuild_pool(self):
@@ -456,4 +456,4 @@ def shutdown_parallel_scheduler() -> None:
             try:
                 _sd()
             except Exception as e:
-                silent_exc(e, where="nucleus.parallel_scheduler::shutdown_parallel_scheduler L396")
+                silent_exc(e, where="nucleus.parallel_scheduler::shutdown_parallel_scheduler L396", level="debug")

@@ -163,7 +163,7 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError as _e:
             # 日志时间戳格式异常 ⇒ 如实报"判不了"，不退化成 PASS（铁律 276）。
             # 走 silent_exc 留痕：except 里只做赋值的 handler 在 cw2 口径里算静默。
-            silent_exc(_e, where="m396_verify_heartbeat::main gap 解析")
+            silent_exc(_e, where="m396_verify_heartbeat::main gap 解析", level="debug")
             _gap_detail = f"时间戳解析失败：{type(_e).__name__}: {_e}"
     j3 = _verdict(_gap_ok, _gap_detail)
 

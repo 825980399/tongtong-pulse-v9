@@ -143,7 +143,7 @@ def _normalize_path(path: str, project_root: str) -> str:
             try:
                 _p = os.path.relpath(_p, project_root)
             except ValueError as e:
-                silent_exc(e, where="nucleus.self_awareness.ProductionConsumptionMatcher::_normalize_path L147")
+                silent_exc(e, where="nucleus.self_awareness.ProductionConsumptionMatcher::_normalize_path L147", level="debug")
         return _p.replace("\\", "/")
     except Exception as e:
         _logger.debug("路径归一化失败 %r: %s: %s", path, type(e).__name__, e)
@@ -1097,7 +1097,7 @@ def _disk_max_depth() -> int:
         import config
         return int(getattr(config, "PRODUCTION_CONSUMPTION_DISK_MAX_DEPTH", 0) or 0)
     except Exception as e:
-        silent_exc(e, where="nucleus.self_awareness.ProductionConsumptionMatcher::_disk_max_depth L1101")
+        silent_exc(e, where="nucleus.self_awareness.ProductionConsumptionMatcher::_disk_max_depth L1101", level="debug")
         return 0
 
 

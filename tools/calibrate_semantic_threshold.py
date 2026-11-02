@@ -92,7 +92,7 @@ def _cosine(a: Any, b: Any) -> float:
             return 0.0
         return _dot / (math.sqrt(_na) * math.sqrt(_nb))
     except Exception as e:
-        silent_exc(e, where="tools.calibrate_semantic_threshold::_cosine L94")
+        silent_exc(e, where="tools.calibrate_semantic_threshold::_cosine L94", level="debug")
         return 0.0
 
 
@@ -101,7 +101,7 @@ def resolve_encoder(wait_sec: float = 120.0) -> Any:
     try:
         from nucleus.semantic.VectorEncoder import get_vector_encoder
     except Exception as e:
-        silent_exc(e, where="tools.calibrate_semantic_threshold::resolve_encoder L103")
+        silent_exc(e, where="tools.calibrate_semantic_threshold::resolve_encoder L103", level="debug")
         return None
     _enc = get_vector_encoder()
     if _enc is None:
@@ -111,7 +111,7 @@ def resolve_encoder(wait_sec: float = 120.0) -> Any:
         try:
             _v = _enc.encode_one("就绪探测")
         except Exception as e:
-            silent_exc(e, where="tools.calibrate_semantic_threshold::resolve_encoder L112")
+            silent_exc(e, where="tools.calibrate_semantic_threshold::resolve_encoder L112", level="debug")
             _v = None
         if _v is not None and len(_v) > 0:
             return _enc

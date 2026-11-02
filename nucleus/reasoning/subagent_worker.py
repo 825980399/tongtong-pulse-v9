@@ -71,7 +71,7 @@ def _open_stderr_log(stderr_file: str | None):
     try:
         return open(stderr_file, "a", encoding="utf-8")
     except OSError as exc:
-        silent_exc(exc, where="_open_stderr_log")
+        silent_exc(exc, where="_open_stderr_log", level="debug")
         return None
 
 
@@ -86,7 +86,7 @@ def _handle_llm_op(spec: dict, task: dict, result: dict, model_fallback) -> int:
     try:
         from nucleus.reasoning.channel_client import call_channel
     except Exception as _imp_e:
-        silent_exc(_imp_e, where="subagent_worker::_handle_llm_op(import)")
+        silent_exc(_imp_e, where="subagent_worker::_handle_llm_op(import)", level="debug")
         result["error"] = "channel_client 不可用: %s" % type(_imp_e).__name__
         return 4
     _rep = call_channel(spec.get("channel") or {}, _prompt,
@@ -149,7 +149,7 @@ def run_once(spec: Any) -> tuple[dict, int]:
             try:
                 result["sum"] = sum(int(x) for x in _nums)
             except (TypeError, ValueError) as exc:
-                silent_exc(exc, where="run_once.sum")
+                silent_exc(exc, where="run_once.sum", level="debug")
                 result["sum"] = None
         elif op == "hash":
             result["sha256"] = hashlib.sha256(

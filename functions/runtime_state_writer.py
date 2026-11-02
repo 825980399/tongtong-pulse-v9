@@ -88,7 +88,7 @@ class RuntimeStateWriter:
                 metrics = metrics_obj.get_snapshot()
                 state["runtime_metrics"] = metrics
         except Exception as e:
-            silent_exc(e, where="functions.runtime_state_writer::_collect_state L89")
+            silent_exc(e, where="functions.runtime_state_writer::_collect_state L89", level="debug")
 
         # 2. 自检器（代码问题统计）
         try:
@@ -102,7 +102,7 @@ class RuntimeStateWriter:
                     "by_category": issues.get("by_category", {}),
                 }
         except Exception as e:
-            silent_exc(e, where="functions.runtime_state_writer::_collect_state L103")
+            silent_exc(e, where="functions.runtime_state_writer::_collect_state L103", level="debug")
 
         # 3. 任务管道
         try:
@@ -113,7 +113,7 @@ class RuntimeStateWriter:
                 "recent": pipelines[:5] if pipelines else [],
             }
         except Exception as e:
-            silent_exc(e, where="functions.runtime_state_writer::_collect_state L114")
+            silent_exc(e, where="functions.runtime_state_writer::_collect_state L114", level="debug")
 
         # 4. 洞察板
         try:
@@ -126,7 +126,7 @@ class RuntimeStateWriter:
                     "recent": insights[:5] if insights else [],
                 }
         except Exception as e:
-            silent_exc(e, where="functions.runtime_state_writer::_collect_state L127")
+            silent_exc(e, where="functions.runtime_state_writer::_collect_state L127", level="debug")
 
         # 5. 进化状态（从健康快照读取，避免直接访问进化引擎）
         try:
@@ -161,7 +161,7 @@ class RuntimeStateWriter:
                 "names": [p.get("name", "") for p in presets[:10]] if presets else [],
             }
         except Exception as e:
-            silent_exc(e, where="functions.runtime_state_writer::_collect_state L154")
+            silent_exc(e, where="functions.runtime_state_writer::_collect_state L154", level="debug")
 
         return state
 

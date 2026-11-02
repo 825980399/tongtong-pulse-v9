@@ -168,7 +168,7 @@ class CodeAnalyzer:
                 if current_mtime == cached_mtime:
                     return cached_result
             except OSError as e:
-                silent_exc(e, where="nucleus.review.CodeAnalyzer::analyze_file L168")
+                silent_exc(e, where="nucleus.review.CodeAnalyzer::analyze_file L168", level="debug")
 
         result = FileAnalysis(file_path=_safe_relpath(abs_path, self.project_root))
         result.analyzed_at = time.time()
@@ -177,7 +177,7 @@ class CodeAnalyzer:
             with open(abs_path, encoding="utf-8") as f:
                 source = f.read()
         except (OSError, UnicodeDecodeError) as e:
-            silent_exc(e, where="nucleus.review.CodeAnalyzer::analyze_file L177")
+            silent_exc(e, where="nucleus.review.CodeAnalyzer::analyze_file L177", level="debug")
             result.has_syntax_error = True
             result.syntax_error = str(e)
             return result
@@ -198,7 +198,7 @@ class CodeAnalyzer:
         try:
             tree = ast.parse(source, filename=abs_path)
         except SyntaxError as e:
-            silent_exc(e, where="nucleus.review.CodeAnalyzer::analyze_file L197")
+            silent_exc(e, where="nucleus.review.CodeAnalyzer::analyze_file L197", level="debug")
             result.has_syntax_error = True
             result.syntax_error = str(e)
             return result
@@ -246,7 +246,7 @@ class CodeAnalyzer:
         try:
             self._cache[abs_path] = (os.path.getmtime(abs_path), result)
         except OSError as e:
-            silent_exc(e, where="nucleus.review.CodeAnalyzer::analyze_file L244")
+            silent_exc(e, where="nucleus.review.CodeAnalyzer::analyze_file L244", level="debug")
 
         return result
 

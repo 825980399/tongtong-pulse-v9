@@ -209,7 +209,7 @@ class SemanticIndexer:
                             progress_cb({"done": done, "total": total,
                                          "pct": pct, "speed": speed, "eta_sec": eta})
                         except Exception as e:
-                            silent_exc(e, where="nucleus.semantic.SemanticIndexer::build L212")
+                            silent_exc(e, where="nucleus.semantic.SemanticIndexer::build L212", level="debug")
 
             result["ok"] = not result["cancelled"]
         except KeyboardInterrupt:
@@ -253,7 +253,7 @@ class SemanticIndexer:
                 json.dump(data, f, ensure_ascii=False)
             os.replace(tmp, _PROGRESS_FILE)
         except Exception as e:
-            silent_exc(e, where="nucleus.semantic.SemanticIndexer::_write_progress L255")
+            silent_exc(e, where="nucleus.semantic.SemanticIndexer::_write_progress L255", level="debug")
 
     @staticmethod
     def read_progress() -> dict[str, Any]:

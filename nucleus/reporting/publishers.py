@@ -79,7 +79,7 @@ def _v2_quality() -> tuple[float | None, str]:
         _r = FrameworkDiagnostics().get_quality_score_v2()
         return _r.get("score"), quality_level(_r.get("score"))
     except Exception as _e:
-        silent_exc(_e, where="nucleus.reporting.publishers::_v2_quality")
+        silent_exc(_e, where="nucleus.reporting.publishers::_v2_quality", level="debug")
         return None, ""
 
 
@@ -109,7 +109,7 @@ def bus_enabled() -> bool:
         import config as _c
         return bool(getattr(_c, "ENABLE_REPORT_BUS", True))
     except Exception as e:
-        silent_exc(e, where="nucleus.reporting.publishers::bus_enabled L74")
+        silent_exc(e, where="nucleus.reporting.publishers::bus_enabled L74", level="debug")
         return True
 
 

@@ -288,7 +288,7 @@ def _m422_k4_run_persist(now: float | None = None) -> dict[str, Any]:
     try:
         from nucleus.observability import narrative_store as _ns
     except Exception as _e:
-        silent_exc(_e, where="observability.narrative_flush:_m422_k4_run_persist.import")
+        silent_exc(_e, where="observability.narrative_flush:_m422_k4_run_persist.import", level="debug")
         return {"ok": False, "reason": f"import_failed:{type(_e).__name__}"}
     try:
         return dict(_ns.persist_from_organ(now=now) or {})

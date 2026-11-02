@@ -34,7 +34,7 @@ def _run_isolated(script: str, timeout: float = _PROBE_TIMEOUT):
             encoding="utf-8", errors="replace",
         )
     except Exception as e:
-        silent_exc(e, where="safe_hw_probe._run_isolated:spawn")
+        silent_exc(e, where="safe_hw_probe._run_isolated:spawn", level="debug")
         return None
 
     try:
@@ -44,14 +44,14 @@ def _run_isolated(script: str, timeout: float = _PROBE_TIMEOUT):
         try:
             proc.kill()
         except Exception as e:
-            silent_exc(e, where="safe_hw_probe._run_isolated:kill")
+            silent_exc(e, where="safe_hw_probe._run_isolated:kill", level="debug")
         try:
             proc.communicate()
         except Exception as e:
-            silent_exc(e, where="safe_hw_probe._run_isolated:drain")
+            silent_exc(e, where="safe_hw_probe._run_isolated:drain", level="debug")
         return None
     except Exception as e:
-        silent_exc(e, where="safe_hw_probe._run_isolated:final")
+        silent_exc(e, where="safe_hw_probe._run_isolated:final", level="debug")
         return None
 
     if not out:

@@ -171,7 +171,7 @@ class TestPclRiskThresholdM54(unittest.TestCase):
             try:
                 txt = open(path, encoding="utf-8", errors="replace").read()
             except OSError as e:
-                silent_exc(e, where="tests/test_pcl_risk_threshold_m54.py 读文件")
+                silent_exc(e, where="tests/test_pcl_risk_threshold_m54.py 读文件", level="debug")
                 continue
             try:
                 tree = ast.parse(txt)

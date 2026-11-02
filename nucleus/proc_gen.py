@@ -36,7 +36,7 @@ def get_proc_gen() -> dict:
         _ct = float(psutil.Process(_pid).create_time())
     except Exception as _e:
         # ★cw2 铁律150：不可用必须留痕；且**不得**退成 0（见模块 docstring）
-        silent_exc(_e, where="nucleus.proc_gen::get_proc_gen")
+        silent_exc(_e, where="nucleus.proc_gen::get_proc_gen", level="debug")
         _ct = None
     _cs = time.strftime("%Y%m%d-%H%M%S", time.localtime(_ct)) if _ct else ""
     _gen = ("pid%d@%s" % (_pid, _cs)) if _cs else ("pid%d@unknown" % _pid)
