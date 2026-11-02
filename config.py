@@ -5915,7 +5915,15 @@ PARQUET_AS_PRIMARY_STORAGE = True  # ★灰度第一步 2026-09-19 星轨开启�
 #   "dual"   =Parquet + JSON 双源加载并按 R1-R6 合并（A案 dual），任一源缺失自动回落。
 #   非法值回落 "parquet"；键缺失 → 按 PARQUET_AS_PRIMARY_STORAGE 映射（兼容别名）。
 SNAPSHOT_LOAD_SOURCE = "parquet"
-SNAPSHOT_SAVE_JSON_BACKUP = True
+# ★第429批刀1（裁决：关）：JSON 兼容备份**关闭**。
+#   事实：`data/knowledge/pulse_knowledge_snapshot.json` 实测 801,040,866 B（≈757 MiB），
+#   占一次全量保存的绝大部分耗时；而加载源是 Parquet（`SNAPSHOT_LOAD_SOURCE="parquet"`，
+#   parquet/ 目录实测 24 MiB 量级）⇒ 这份 JSON **只写不读**，是纯冗余。
+#   影响面（改前已 grep 全仓）：唯一读取点是 `PulseSnapshot._m68_json_backup_enabled()`；
+#   tests/ 里 `test_incremental_checkpoint_m81b2.py` / `test_parquet_cold_json_m68.py`
+#   都用 `_CfgSwitch` 显式设定本键 ⇒ **不受默认值改动影响**。
+#   回退：把下面这一行改回 True 即可（代码路径一字未删）。
+SNAPSHOT_SAVE_JSON_BACKUP = False
 PARQUET_COMPRESSION = "snappy"
 PARQUET_SHARD_BY_EVOL_LEVEL = True
 PARQUET_BATCH_SIZE = 5000

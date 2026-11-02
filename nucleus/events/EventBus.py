@@ -69,7 +69,7 @@ def _m360_queue_alarm_depth() -> int:
         import config as _cfg
         return max(1, int(getattr(_cfg, "EVENTBUS_QUEUE_ALARM_DEPTH", 1000) or 1000))
     except Exception as _e:
-        silent_exc(_e, where="EventBus::_m360_queue_alarm_depth 读阈值")
+        silent_exc(_e, where="EventBus::_m360_queue_alarm_depth 读阈值", level="debug")
         return 1000
 
 
@@ -389,14 +389,14 @@ class EventBus:
                     _out["queue_depth"] = int(self._queue.qsize())
                 except Exception as _e:
                     # ★铁律176：纯赋值也是静默 —— 取不到水位要说一声
-                    silent_exc(_e, where="EventBus::m360_event_metrics 队列水位")
+                    silent_exc(_e, where="EventBus::m360_event_metrics 队列水位", level="debug")
                     _out["queue_depth"] = None
                 _out["queue_alarm_threshold"] = int(_m360_queue_alarm_depth())
                 _out["queue_alarm"] = bool(
                     _out["queue_depth"] is not None
                     and _out["queue_depth"] >= _out["queue_alarm_threshold"])
         except Exception as _e:
-            silent_exc(_e, where="EventBus::m360_event_metrics")
+            silent_exc(_e, where="EventBus::m360_event_metrics", level="debug")
         return _out
 
     def m360_check_queue_alarm(self) -> dict:
@@ -419,7 +419,7 @@ class EventBus:
                 ",".join("%s(%s)" % (d.get("event"), d.get("zero"))
                          for d in (_m.get("top_dead_events") or [])[:3]) or "-")
         except Exception as _e:
-            silent_exc(_e, where="EventBus::m360_check_queue_alarm warning")
+            silent_exc(_e, where="EventBus::m360_check_queue_alarm warning", level="debug")
         return {"alarm": True, "depth": _m.get("queue_depth"),
                 "threshold": _m.get("queue_alarm_threshold")}
 
@@ -441,7 +441,7 @@ class EventBus:
                         return True
             return False
         except Exception as _e:
-            silent_exc(_e, where="EventBus::has_subscribers")
+            silent_exc(_e, where="EventBus::has_subscribers", level="debug")
             return True
 
     def _deliver(self, event: Event) -> int:
@@ -735,7 +735,7 @@ def has_subscribers(name: str) -> bool:
     try:
         return bool(get_event_bus().has_subscribers(name))
     except Exception as _e:
-        silent_exc(_e, where="EventBus::has_subscribers(module)")
+        silent_exc(_e, where="EventBus::has_subscribers(module)", level="debug")
         return True
 
 

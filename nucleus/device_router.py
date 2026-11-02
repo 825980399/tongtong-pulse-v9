@@ -56,6 +56,22 @@ _STATE: dict[str, Any] = {
 }
 
 
+def _m429_gpu_probe_enabled() -> bool:
+    """★429刀5：GPU 探测总开关（`config.GPU_PROBE_ENABLED`，与 GPUCore 同源）。
+
+    取不到配置时返回 True（**保持改造前行为**）—— 与
+    `GPUCore._m353_probe_enabled()` 同一纪律：不能因为配置模块异常
+    而静默改变硬件能力判定（铁律 156：禁静默降级）。
+    """
+    try:
+        import config as _cfg429
+        return bool(getattr(_cfg429, "GPU_PROBE_ENABLED", True))
+    except Exception as e:
+        silent_exc(e, "nucleus/device_router.py:_m429_gpu_probe_enabled",
+                   level="warning")
+        return True
+
+
 def _safe_float(v: Any, default: float) -> float:
     try:
         _f = float(v)
@@ -183,6 +199,34 @@ def get_capability(force: bool = False) -> dict[str, Any]:
             "cpu_flops": _FALLBACK["cpu_flops"],
             "probe_error": "",
         }
+        # ★429刀5：与 `GPUCore.probe_gpu()` 的开关**对齐**。
+        #   实测（2026-11-02，pid 33156）：`GPU_PROBE_ENABLED=False` 只拦住了 GPUCore，
+        #   本条路径不受管 ⇒ 运行约 1 小时（首次向量检索）时会 `import torch` +
+        #   `torch.cuda.is_available()`，把 CUDA 栈（cudnn/cublas/cufft…）装进进程：
+        #     image_mb 566.6(15:03) → 4322.2(16:00) → 4322.2(18:00)  ← 常驻不释放
+        #     RSS     3901MB      → 6502MB      → 7093MB
+        #     heap_mb 3334.8      → 2176.6      → 2771.9             ← GC 有效，非泄漏
+        #   故按同一开关短路：不探测 ⇒ cap 全走 `_FALLBACK`（与「torch 不可用」等价），
+        #   `_measure_cpu()` 也一并不做（它内部同样 `import torch`）。
+        #   `force=True` 是显式强制通道，不受开关限制。
+        if not force and not _m429_gpu_probe_enabled():
+            if not _STATE.get("m429_skip_logged"):
+                _STATE["m429_skip_logged"] = True
+                try:
+                    import logging as _lg429
+                    _lg429.getLogger("pulse").info(
+                        "[429GPU] device_router 探测=skipped"
+                        " reason=GPU_PROBE_ENABLED=False 未 import torch"
+                        "（CUDA 栈不加载；如需探测请置 True 或调用"
+                        " get_capability(force=True)）")
+                except Exception as _e429l:
+                    silent_exc(_e429l, "nucleus/device_router.py:429GPU 留痕",
+                               level="debug")
+            cap["probe_skipped"] = True
+            cap["probe_error"] = "GPU_PROBE_ENABLED=False"
+            _STATE["cap"] = cap
+            _STATE["cap_probed"] = True
+            return dict(cap)
         try:
             import torch  # type: ignore
             cap["torch_version"] = str(getattr(torch, "__version__", ""))

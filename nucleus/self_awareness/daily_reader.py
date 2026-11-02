@@ -97,7 +97,7 @@ def _read_latest_report(output_dir: str, now_fn: Callable[[], datetime],
                 try:
                     _cands.append((os.path.getmtime(_p), _p))
                 except OSError as e:
-                    silent_exc(e, "daily_reader._read_latest_report:mtime")
+                    silent_exc(e, "daily_reader._read_latest_report:mtime", level="debug")
         if not _cands:
             return None
         _cands.sort(key=lambda _x: _x[0], reverse=True)
@@ -120,7 +120,7 @@ def _read_latest_report(output_dir: str, now_fn: Callable[[], datetime],
             try:
                 _generated_at = datetime.fromisoformat(_s[len("生成时间:"):].strip())
             except ValueError as e:
-                silent_exc(e, "daily_reader._read_latest_report:生成时间解析")
+                silent_exc(e, "daily_reader._read_latest_report:生成时间解析", level="debug")
                 _generated_at = None
     if _score is None and _dims is None:
         logger.warning("[晨读] 日报解析失败（【总结】与【综合评分】均缺失），不注入: %s", _path)
@@ -217,9 +217,9 @@ def cleanup_stale_tmp(project_root: str,
                         os.remove(_p)
                         _deleted += 1
                 except OSError as e:
-                    silent_exc(e, "daily_reader.cleanup_stale_tmp:删除")
+                    silent_exc(e, "daily_reader.cleanup_stale_tmp:删除", level="debug")
         except Exception as e:
-            silent_exc(e, "daily_reader.cleanup_stale_tmp:目录")
+            silent_exc(e, "daily_reader.cleanup_stale_tmp:目录", level="debug")
     _log.info("[清理·临时文件] 删除%d个.tmp文件", _deleted)
     return {"deleted": _deleted}
 
@@ -246,9 +246,9 @@ def _list_reports(output_dir):
                 try:
                     _out.append((os.path.getmtime(_p), _p))
                 except OSError as e:
-                    silent_exc(e, "daily_reader._list_reports:mtime")
+                    silent_exc(e, "daily_reader._list_reports:mtime", level="debug")
     except Exception as e:
-        silent_exc(e, "daily_reader._list_reports")
+        silent_exc(e, "daily_reader._list_reports", level="debug")
         return []
     _out.sort(key=lambda _x: _x[0], reverse=True)
     return [_p for _, _p in _out]
@@ -260,7 +260,7 @@ def _read_report_score(path):
         with io.open(path, encoding="utf-8") as _f:
             _text = _f.read(_REPORT_MAX_CHARS)
     except Exception as e:
-        silent_exc(e, "daily_reader._read_report_score:读取")
+        silent_exc(e, "daily_reader._read_report_score:读取", level="debug")
         return None
     for _line in _text.splitlines():
         _s = _line.strip()
@@ -574,7 +574,7 @@ def _m313_fmt_as_of(as_of: Any) -> str:
     try:
         return datetime.fromtimestamp(float(as_of)).isoformat(timespec="seconds")
     except (OverflowError, OSError, ValueError) as e:
-        silent_exc(e, "daily_reader._m313_fmt_as_of")
+        silent_exc(e, "daily_reader._m313_fmt_as_of", level="debug")
         return "非法时间戳(%s)" % as_of
 
 
@@ -613,7 +613,7 @@ def append_global_awareness_section(report_path: str, logger: Any = None) -> dic
         try:
             _goal_txt = json.dumps(_goal, ensure_ascii=False)[:200]
         except (TypeError, ValueError) as e:
-            silent_exc(e, "daily_reader.append_global_awareness_section:goal")
+            silent_exc(e, "daily_reader.append_global_awareness_section:goal", level="debug")
             _goal_txt = str(_goal)[:200]
     try:
         _lines = ["", "【全局认知】",

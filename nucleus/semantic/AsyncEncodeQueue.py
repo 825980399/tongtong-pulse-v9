@@ -130,7 +130,7 @@ class AsyncEncodeQueue:
             store, _ = self._ensure_deps()
             store.flush(force=True)
         except Exception as e:
-            silent_exc(e, where="nucleus.semantic.AsyncEncodeQueue::stop L124")
+            silent_exc(e, where="nucleus.semantic.AsyncEncodeQueue::stop L124", level="debug")
 
     # ---------------- 入队 ----------------
     def submit(self, node_id: str, text: str) -> bool:
@@ -318,7 +318,7 @@ class AsyncEncodeQueue:
                 value = value + " " + " ".join(str(k) for k in kws)
             return value.strip()
         except Exception as e:
-            silent_exc(e, where="nucleus.semantic.AsyncEncodeQueue::_node_text L302")
+            silent_exc(e, where="nucleus.semantic.AsyncEncodeQueue::_node_text L302", level="debug")
             return ""
 
     def stats(self) -> dict[str, Any]:
@@ -339,4 +339,4 @@ def shutdown_encode_queue() -> None:
         if AsyncEncodeQueue._instance is not None:
             AsyncEncodeQueue._instance.stop()
     except Exception as e:
-        silent_exc(e, where="nucleus.semantic.AsyncEncodeQueue::shutdown_encode_queue L322")
+        silent_exc(e, where="nucleus.semantic.AsyncEncodeQueue::shutdown_encode_queue L322", level="debug")

@@ -374,7 +374,7 @@ class VerificationLearningHub:
                 "distill_threshold": self._distill_threshold,
             }
         except Exception as e:
-            silent_exc(e, where="verification_learning_hub.get_stats[424刀1]")
+            silent_exc(e, where="verification_learning_hub.get_stats[424刀1]", level="debug")
             return {"total": 0, "remediation_count": 0, "remediation_rate": 0.0, "top_failure_reasons": []}
 
     def should_verify(self, organ: str, task_type: str,
@@ -974,4 +974,4 @@ def shutdown_verification_learning_hub() -> None:
             try:
                 _sd()
             except Exception as e:
-                silent_exc(e, where="nucleus.mnemosyne.verification_learning_hub::shutdown_verification_learning_hub L543")
+                silent_exc(e, where="nucleus.mnemosyne.verification_learning_hub::shutdown_verification_learning_hub L543", level="debug")

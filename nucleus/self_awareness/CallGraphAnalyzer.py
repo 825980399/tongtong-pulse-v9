@@ -764,7 +764,7 @@ def _m401_keep_latest_default() -> bool:
         import config as _cfg401
         return bool(getattr(_cfg401, "ENABLE_M401_GRAPH_KEEP_LATEST", True))
     except Exception as _e:
-        silent_exc(_e, where="CallGraphAnalyzer::_m401_keep_latest_default")
+        silent_exc(_e, where="CallGraphAnalyzer::_m401_keep_latest_default", level="debug")
         return True
 
 
@@ -2599,7 +2599,7 @@ class CallGraphAnalyzer:
             from nucleus.self_inspector import SelfInspector as _SI330
             return str(getattr(_SI330, "_DEAD_CODE_CRITERIA_VERSION", "") or "unknown")
         except Exception as _e:
-            silent_exc(_e, where="CallGraphAnalyzer::_m330_judge_criteria_version")
+            silent_exc(_e, where="CallGraphAnalyzer::_m330_judge_criteria_version", level="debug")
             return "unknown"
 
     A6_CRITERIA_VERSION = "328.a6.v1"
@@ -2632,7 +2632,7 @@ class CallGraphAnalyzer:
         try:
             _r = self.a6_edge_kind_consistency(graph_path=graph_path)
         except Exception as _e:
-            silent_exc(_e, where="CallGraphAnalyzer::_m331_auto_a6")
+            silent_exc(_e, where="CallGraphAnalyzer::_m331_auto_a6", level="debug")
             _logger.warning("[A6] 落盘自检异常（**不阻断落盘**）: %s proc_gen=%s",
                             type(_e).__name__, _m335_pg())
             return None
@@ -2670,7 +2670,7 @@ class CallGraphAnalyzer:
             _r["verdict_final"] = _fin.get("verdict")
             _r["arbitration_basis"] = _fin.get("basis")
         except Exception as _e:
-            silent_exc(_e, where="CallGraphAnalyzer::_m331_auto_a6 w1_arbitrate")
+            silent_exc(_e, where="CallGraphAnalyzer::_m331_auto_a6 w1_arbitrate", level="debug")
             _logger.warning("[A6+W1] W1 仲裁不可用（不阻断 A6）: %s proc_gen=%s",
                             type(_e).__name__, _m335_pg())
         if _folded > 0:
@@ -2711,9 +2711,9 @@ class CallGraphAnalyzer:
                         try:
                             _cands.append((os.path.getmtime(_p), _f, _p))
                         except OSError as _me:
-                            silent_exc(_me, where="CallGraphAnalyzer::a6 candidate mtime")
+                            silent_exc(_me, where="CallGraphAnalyzer::a6 candidate mtime", level="debug")
             except OSError as _le:
-                silent_exc(_le, where="CallGraphAnalyzer::a6 listdir")
+                silent_exc(_le, where="CallGraphAnalyzer::a6 listdir", level="debug")
             if not _cands:
                 return {"assertion": "A6", "verdict": "UNAVAILABLE",
                         "reason": "无 graph_*.json（没落盘 ⇒ 不等于没有边）",
@@ -2722,7 +2722,7 @@ class CallGraphAnalyzer:
         try:
             _mt = os.path.getmtime(_gp)
         except OSError as _e:
-            silent_exc(_e, where="CallGraphAnalyzer::a6 graph mtime")
+            silent_exc(_e, where="CallGraphAnalyzer::a6 graph mtime", level="debug")
             _mt = 0.0
         _ck = (_gp, _mt)
         if self._A6_CACHE.get("key") == _ck and isinstance(self._A6_CACHE.get("val"), dict):
@@ -2731,7 +2731,7 @@ class CallGraphAnalyzer:
             with open(_gp, encoding="utf-8", errors="replace") as _f:
                 _gd = json.load(_f)
         except (OSError, ValueError) as _e:
-            silent_exc(_e, where="CallGraphAnalyzer::a6 read graph")
+            silent_exc(_e, where="CallGraphAnalyzer::a6 read graph", level="debug")
             return {"assertion": "A6", "verdict": "UNAVAILABLE",
                     "reason": "图不可解析: %s" % type(_e).__name__,
                     "graph_file": os.path.basename(_gp),
@@ -2781,7 +2781,7 @@ class CallGraphAnalyzer:
                 try:
                     _agg[str(_k)] = int(_v)
                 except (TypeError, ValueError) as _ve:
-                    silent_exc(_ve, where="CallGraphAnalyzer::a6 agg value")
+                    silent_exc(_ve, where="CallGraphAnalyzer::a6 agg value", level="debug")
         _per_total = sum(_per.values())
         _agg_sum = sum(_agg.values())
         _mismatch: dict = {}
@@ -2867,7 +2867,7 @@ class CallGraphAnalyzer:
             try:
                 _a5 = self.a5_growth_intake_assertion()
             except Exception as _a5e:
-                silent_exc(_a5e, where="CallGraphAnalyzer::mastery_assertion_check A5")
+                silent_exc(_a5e, where="CallGraphAnalyzer::mastery_assertion_check A5", level="debug")
                 _a5 = {"assertion": "A5", "verdict": "UNAVAILABLE",
                        "reason": "异常: %s" % type(_a5e).__name__}
         # ★328批刀1：A6 聚合口径自检 —— 与 A5 同样**单独一栏**，不进下面三项计数
@@ -2876,7 +2876,7 @@ class CallGraphAnalyzer:
             try:
                 _a6 = self.a6_edge_kind_consistency()
             except Exception as _a6e:
-                silent_exc(_a6e, where="CallGraphAnalyzer::mastery_assertion_check A6")
+                silent_exc(_a6e, where="CallGraphAnalyzer::mastery_assertion_check A6", level="debug")
                 _a6 = {"assertion": "A6", "verdict": "UNAVAILABLE",
                        "reason": "异常: %s" % type(_a6e).__name__}
         _failed = _a1_failed + (1 if _a4["status"] == "failed" else 0)
@@ -2966,7 +2966,7 @@ class CallGraphAnalyzer:
                         silent_exc(_m369_e, where="nucleus/self_awareness/CallGraphAnalyzer.py:a5_growth_intake_assertion", level="debug")
                         continue
         except OSError as _e:
-            silent_exc(_e, where="CallGraphAnalyzer::a5_growth_intake_assertion 读台账")
+            silent_exc(_e, where="CallGraphAnalyzer::a5_growth_intake_assertion 读台账", level="debug")
             _out["reason"] = "台账读取失败: %s" % type(_e).__name__
             return _out
         _max_tick = 0
@@ -2990,7 +2990,7 @@ class CallGraphAnalyzer:
                     _k = "%s::%s" % (str(_p.get("file") or ""), str(_p.get("method") or ""))
                     _landed[_k] = str(_p.get("status") or "")
         except Exception as _e:
-            silent_exc(_e, where="CallGraphAnalyzer::a5_growth_intake_assertion 读台账")
+            silent_exc(_e, where="CallGraphAnalyzer::a5_growth_intake_assertion 读台账", level="debug")
         _refs = set(handbook_refs or [])
         for _e in _entries:
             for _it in (_e.get("growth_items") or []):

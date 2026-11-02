@@ -201,7 +201,7 @@ class AutonomousDeriver:
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_CAUSAL_INFERENCE", False))
         except Exception as e:
-            silent_exc(e, where="nucleus.reasoning.AutonomousDeriver::_causal_inference_enabled L201")
+            silent_exc(e, where="nucleus.reasoning.AutonomousDeriver::_causal_inference_enabled L201", level="debug")
             return False
 
     def _verify_deductions_with_graph(self, causal_pairs: list[dict],
@@ -270,7 +270,7 @@ class AutonomousDeriver:
             else:
                 _lg.info(msg)
         except Exception as e:
-            silent_exc(e, where="nucleus.reasoning.AutonomousDeriver::_log L272")
+            silent_exc(e, where="nucleus.reasoning.AutonomousDeriver::_log L272", level="debug")
 
     def _inductive_derive(self, node_pool, knowledge_tree) -> list[dict[str, Any]]:
         """
@@ -953,6 +953,6 @@ def shutdown_autonomous_deriver() -> None:
             try:
                 _sd()
             except Exception as e:
-                silent_exc(e, where="nucleus.reasoning.AutonomousDeriver::shutdown_autonomous_deriver L943")
+                silent_exc(e, where="nucleus.reasoning.AutonomousDeriver::shutdown_autonomous_deriver L943", level="debug")
 
 # _m51_t4_e

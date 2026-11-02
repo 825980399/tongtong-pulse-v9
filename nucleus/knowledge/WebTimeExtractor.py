@@ -233,7 +233,7 @@ class WebTimeExtractor:
             _dt = datetime.fromisoformat(_s)
             return _dt.timestamp()
         except Exception as e:
-            silent_exc(e, where="nucleus.knowledge.WebTimeExtractor::_parse_iso L235")
+            silent_exc(e, where="nucleus.knowledge.WebTimeExtractor::_parse_iso L235", level="debug")
         for _fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M",
                      "%Y-%m-%d", "%Y/%m/%d %H:%M:%S", "%Y/%m/%d",
                      "%Y年%m月%d日", "%Y年%m月%d日 %H:%M", "%Y-%m-%dT%H:%M:%S.%f"):
@@ -260,14 +260,14 @@ class WebTimeExtractor:
             try:
                 return datetime(_y, _mo, _d, _h, _mi).timestamp()
             except Exception as e:
-                silent_exc(e, where="nucleus.knowledge.WebTimeExtractor::_parse_absolute L260")
+                silent_exc(e, where="nucleus.knowledge.WebTimeExtractor::_parse_absolute L260", level="debug")
                 return 0.0
         _m = re.search(r'(20\d{2})\s*[-/年.]\s*(\d{1,2})', _s)
         if _m:
             try:
                 return datetime(int(_m.group(1)), int(_m.group(2)), 1).timestamp()
             except Exception as e:
-                silent_exc(e, where="nucleus.knowledge.WebTimeExtractor::_parse_absolute L266")
+                silent_exc(e, where="nucleus.knowledge.WebTimeExtractor::_parse_absolute L266", level="debug")
                 return 0.0
         # 无年份（上下文前缀可能只给"5月1日"）→ 用当前年兜底
         if default_year is None:
@@ -277,7 +277,7 @@ class WebTimeExtractor:
                     _now_dt = datetime.now()
                     return datetime(_now_dt.year, int(_m.group(1)), int(_m.group(2))).timestamp()
                 except Exception as e:
-                    silent_exc(e, where="nucleus.knowledge.WebTimeExtractor::_parse_absolute L275")
+                    silent_exc(e, where="nucleus.knowledge.WebTimeExtractor::_parse_absolute L275", level="debug")
                     return 0.0
         return 0.0
 
@@ -288,7 +288,7 @@ class WebTimeExtractor:
             try:
                 self._log_fn(level, msg)
             except Exception as e:
-                silent_exc(e, where="nucleus.knowledge.WebTimeExtractor::_log L285")
+                silent_exc(e, where="nucleus.knowledge.WebTimeExtractor::_log L285", level="debug")
 
 
 # ========== 模块级共享实例（与 RssCollector / WikiQuerier 同风格）==========

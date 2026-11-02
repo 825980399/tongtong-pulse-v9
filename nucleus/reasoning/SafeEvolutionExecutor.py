@@ -507,7 +507,7 @@ def _m91_indent_repair_on() -> bool:
         import config as _c
         return bool(getattr(_c, "ENABLE_M91_LLM_INDENT_REPAIR", True))
     except Exception as e:
-        silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_m91_indent_repair_on L98")
+        silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_m91_indent_repair_on L98", level="debug")
         return True
 
 
@@ -569,20 +569,20 @@ def _sandbox_syntax_precheck(code: str) -> tuple[bool, str]:
     except SyntaxError as _e0:
         # ★158-α-2：静默捕获可见化（silent_exc）—— 完整解析失败属预期 fallthrough，
         #   仍经 silent_exc 登记，满足 cw2 门禁（LOG_FUNCS 排除）。
-        silent_exc(_e0, where="nucleus.reasoning.SafeEvolutionExecutor::_sandbox_syntax_precheck[full]")
+        silent_exc(_e0, where="nucleus.reasoning.SafeEvolutionExecutor::_sandbox_syntax_precheck[full]", level="debug")
     try:
         _ded = _tw_sp.dedent(code or "").strip()
         _ast_sp.parse("class _PatchQC:\n    def _check(self):\n" + _tw_sp.indent(_ded, "        "),
                       filename="<llm-patch>")
         return True, ""
     except SyntaxError as _e1:
-        silent_exc(_e1, where="nucleus.reasoning.SafeEvolutionExecutor::_sandbox_syntax_precheck[class]")
+        silent_exc(_e1, where="nucleus.reasoning.SafeEvolutionExecutor::_sandbox_syntax_precheck[class]", level="debug")
     try:
         _ast_sp.parse("def _patch_qc_check():\n" + _tw_sp.indent(_ded, "    "),
                       filename="<llm-patch>")
         return True, ""
     except SyntaxError as _e3:
-        silent_exc(_e3, where="nucleus.reasoning.SafeEvolutionExecutor::_sandbox_syntax_precheck[func]")
+        silent_exc(_e3, where="nucleus.reasoning.SafeEvolutionExecutor::_sandbox_syntax_precheck[func]", level="debug")
         return False, f"{_e3.msg} (line {_e3.lineno})"
 
 # ★W4修复：高危问题类型永不自动修复（含 LLM 回退）。
@@ -634,7 +634,7 @@ def _normalize_issue_type(raw_type: Any) -> str:
     try:
         _name = str(raw_type).strip()
     except Exception as e:
-        silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_normalize_issue_type L188")
+        silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_normalize_issue_type L188", level="debug")
         return ""
     if not _name:
         return ""
@@ -995,7 +995,7 @@ class SafeEvolutionExecutor:
                 return bool(self._patch_manager.has_pending_patch_for(
                     file_path, method_name))
             except Exception as e:
-                silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_m94_pending_blocks_regeneration L539")
+                silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_m94_pending_blocks_regeneration L539", level="debug")
                 return False
 
     @staticmethod
@@ -1011,7 +1011,7 @@ class SafeEvolutionExecutor:
             import config  # type: ignore[possibly-unbound]
             return bool(getattr(config, 'EVOLUTION_CONFIG', {}).get("allow_core_auto_apply", False))
         except Exception as e:
-            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_core_auto_apply_allowed L552")
+            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_core_auto_apply_allowed L552", level="debug")
             return False
 
     def _resolve_core_auto_apply_status(self, is_core: bool) -> str:
@@ -1055,7 +1055,7 @@ class SafeEvolutionExecutor:
                 _i -= 1
             return "\n---\n".join(reversed(_related[-limit:]))
         except Exception as e:
-            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_find_related_logs L595")
+            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_find_related_logs L595", level="debug")
             return ""
 
     @staticmethod
@@ -1550,7 +1550,7 @@ class SafeEvolutionExecutor:
             import config as _c96
             return bool(getattr(_c96, "ENABLE_EVOLUTION_USE_CHANNEL_POOL", False))
         except Exception as e:
-            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_m96_channel_pool_on L1095")
+            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_m96_channel_pool_on L1095", level="debug")
             return False
 
     @staticmethod
@@ -1674,13 +1674,13 @@ class SafeEvolutionExecutor:
                 if isinstance(_ch, dict) and _ch.get("api_url") == url:
                     return str(_ch.get("name") or "single_endpoint")
         except Exception as _e360a:
-            silent_exc(_e360a, where="SafeEvolutionExecutor::_m360_channel_of_url 池反查")
+            silent_exc(_e360a, where="SafeEvolutionExecutor::_m360_channel_of_url 池反查", level="debug")
         try:
             from nucleus.llm.paid_api_trace import is_paid_endpoint as _m360_paid
             if _m360_paid(url):
                 return "deepseek"
         except Exception as _e360b:
-            silent_exc(_e360b, where="SafeEvolutionExecutor::_m360_channel_of_url 付费判定")
+            silent_exc(_e360b, where="SafeEvolutionExecutor::_m360_channel_of_url 付费判定", level="debug")
         return "single_endpoint"
 
     def _m96_record_channel_result(self, channel_name: str, success: bool,
@@ -1811,7 +1811,7 @@ class SafeEvolutionExecutor:
             from nucleus.evolution.AestheticJudge import get_aesthetic_judge
             return get_aesthetic_judge().feedback_guidance()
         except Exception as e:
-            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_aesthetic_guidance L1325")
+            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_aesthetic_guidance L1325", level="debug")
             return ""
 
     # ===== ★主线第58批 T1（P1）：自主进化健康度监控 =====
@@ -2809,7 +2809,7 @@ class SafeEvolutionExecutor:
             import config as _c
             return bool(getattr(_c, "ENABLE_EVOLUTION_BASELINE_FIX", True))
         except Exception as e:
-            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_m41_baseline_fix_on L2291")
+            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_m41_baseline_fix_on L2291", level="debug")
             return True
 
     @staticmethod
@@ -4052,7 +4052,7 @@ class SafeEvolutionExecutor:
                     break
             return "\n".join(_summary)
         except Exception as e:
-            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_load_pulse_metadata_summary L3465")
+            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_load_pulse_metadata_summary L3465", level="debug")
             return ""
 
     def _call_llm_for_review(self, pulse_type: str, traceback_text: str,
@@ -4139,7 +4139,7 @@ class SafeEvolutionExecutor:
             with open(_p, encoding="utf-8", errors="ignore") as _f:
                 _lines = _f.read().splitlines()   # 全量（≈5MB，只读一次）
         except Exception as _e:
-            silent_exc(_e, where="SafeEvolutionExecutor._k1_build_task_face.read")
+            silent_exc(_e, where="SafeEvolutionExecutor._k1_build_task_face.read", level="debug")
             return _out
         for _ln in reversed(_lines):
             _ln = _ln.strip()
@@ -4208,7 +4208,7 @@ class SafeEvolutionExecutor:
                     _detail = self_inspector.get_method_body(_organ, _method)
                     _snippet = (_detail or {}).get("body", "") or ""
                 except Exception as _e:
-                    silent_exc(_e, where="SafeEvolutionExecutor._k1_review_with_task_face.body")
+                    silent_exc(_e, where="SafeEvolutionExecutor._k1_review_with_task_face.body", level="debug")
             _reviewed += 1
             _report.append({
                 "pulse_type": _it.get("pulse_type"),
@@ -4255,7 +4255,7 @@ class SafeEvolutionExecutor:
                                    "skipped": f"child_rc={_cp.returncode}",
                                    "stderr": (_cp.stderr or "")[-300:]}
             except Exception as _e:
-                silent_exc(_e, where="SafeEvolutionExecutor.k1_task_face_probe.subprocess")
+                silent_exc(_e, where="SafeEvolutionExecutor.k1_task_face_probe.subprocess", level="debug")
                 _res_child = {"fed": len(_face), "reviewed": 0,
                               "skipped": type(_e).__name__}
         _verdict = ("task_face_enables_review"
@@ -4299,7 +4299,7 @@ class SafeEvolutionExecutor:
                     _mp[os.path.relpath(_p, _root).replace(os.sep, "/")] = round(
                         os.stat(_p).st_mtime, 3)
                 except OSError as _e:
-                    silent_exc(_e, where="SafeEvolutionExecutor._m321_data_snapshot.stat")
+                    silent_exc(_e, where="SafeEvolutionExecutor._m321_data_snapshot.stat", level="debug")
         return {"exists": True, "files": _n, "map": _mp}
 
     @staticmethod
@@ -4328,7 +4328,7 @@ class SafeEvolutionExecutor:
         try:
             os.makedirs(_root, exist_ok=True)
         except OSError as _e:
-            silent_exc(_e, where="SafeEvolutionExecutor._m321_isolated_root")
+            silent_exc(_e, where="SafeEvolutionExecutor._m321_isolated_root", level="debug")
         return _root
 
     @staticmethod
@@ -4359,7 +4359,7 @@ class SafeEvolutionExecutor:
                     _m = os.stat(os.path.join(_dp, _f)).st_mtime
                     _mx = max(_mx, _m)
                 except OSError as _e:
-                    silent_exc(_e, where="SafeEvolutionExecutor._m321_data_fingerprint.stat")
+                    silent_exc(_e, where="SafeEvolutionExecutor._m321_data_fingerprint.stat", level="debug")
         return {"exists": True, "files": _n, "max_mtime": round(_mx, 3)}
 
     def k1_task_face_probe_rerun(self, fed_min: int = 10, rounds: int = 3,
@@ -4446,7 +4446,7 @@ class SafeEvolutionExecutor:
             from nucleus.evolution.patch_execution_dispatch import blast_radius_of as _br
             return _br(qualified, file)
         except Exception as _e:
-            silent_exc(_e, where="SafeEvolutionExecutor._k2_blast")
+            silent_exc(_e, where="SafeEvolutionExecutor._k2_blast", level="debug")
             return None
 
     @staticmethod
@@ -4464,7 +4464,7 @@ class SafeEvolutionExecutor:
                 with open(_abs, encoding="utf-8", errors="ignore") as _f:
                     _tree = _ast.parse(_f.read())
             except (SyntaxError, OSError, ValueError) as _e:
-                silent_exc(_e, where="SafeEvolutionExecutor._k2_classes_from_ast")
+                silent_exc(_e, where="SafeEvolutionExecutor._k2_classes_from_ast", level="debug")
                 continue
             for _n in _tree.body:
                 if not isinstance(_n, _ast.ClassDef):
@@ -4605,11 +4605,11 @@ class SafeEvolutionExecutor:
         try:
             _out, _err = proc.communicate(timeout=180)
         except Exception as _e:
-            silent_exc(_e, where="SafeEvolutionExecutor._k2_collect.communicate")
+            silent_exc(_e, where="SafeEvolutionExecutor._k2_collect.communicate", level="debug")
             try:
                 proc.kill()
             except OSError as _e2:
-                silent_exc(_e2, where="SafeEvolutionExecutor._k2_collect.kill")
+                silent_exc(_e2, where="SafeEvolutionExecutor._k2_collect.kill", level="debug")
             return {"tag": tag, "scanned": 0, "reviewed": 0, "findings": 0,
                     "error": "timeout"}
         if proc.returncode != 0 or not (_out or "").strip():
@@ -4619,7 +4619,7 @@ class SafeEvolutionExecutor:
         try:
             _d = _json.loads((_out or "").strip().splitlines()[-1])
         except ValueError as _e:
-            silent_exc(_e, where="SafeEvolutionExecutor._k2_collect.parse")
+            silent_exc(_e, where="SafeEvolutionExecutor._k2_collect.parse", level="debug")
             return {"tag": tag, "scanned": 0, "reviewed": 0, "findings": 0,
                     "error": "unparsable"}
         _d["tag"] = tag
@@ -5338,7 +5338,7 @@ class SafeEvolutionExecutor:
                 return bool(_cfg.get("learning_attempt_enabled", True))
             return True
         except Exception as e:
-            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_m85_learning_attempt_enabled L4053")
+            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_m85_learning_attempt_enabled L4053", level="debug")
             return True
 
     @staticmethod
@@ -6559,7 +6559,7 @@ class SafeEvolutionExecutor:
                 f"跨文件补丁验证通过({patch['status']}): {patch['id'][:16]}... → {patch['diff_summary'][:50]}")
             return True
         except Exception as e:
-            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_verify_and_save_patch L5269")
+            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_verify_and_save_patch L5269", level="debug")
             return False
 
     def _generate_diff_summary(self, original: str, modified: str) -> str:
@@ -6680,7 +6680,7 @@ class SafeEvolutionExecutor:
             shutil.copy2(file_path, backup_path)
             return backup_path
         except Exception as e:
-            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_create_backup_before_apply L5449")
+            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_create_backup_before_apply L5449", level="debug")
             return ""
 
     def _apply_patch_to_file(self, file_path: str,
@@ -6769,7 +6769,7 @@ class SafeEvolutionExecutor:
             with open(path, encoding="utf-8", errors="replace") as f:
                 return f.read()[-limit:]
         except Exception as e:
-            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_read_text_tail L5535")
+            silent_exc(e, where="nucleus.reasoning.SafeEvolutionExecutor::_read_text_tail L5535", level="debug")
             return ""
 
     def _record_crash(self, mode: str, reason: str, detail: str = "") -> None:

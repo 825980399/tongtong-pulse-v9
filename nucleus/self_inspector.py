@@ -278,7 +278,7 @@ def _m90_locate_v2_on() -> bool:
         import config as _c
         return bool(getattr(_c, "ENABLE_M90_LOG_LOCATE_V2", True))
     except Exception as e:
-        silent_exc(e, where="nucleus.self_inspector::_m90_locate_v2_on L69")
+        silent_exc(e, where="nucleus.self_inspector::_m90_locate_v2_on L69", level="debug")
         return True
 # ★第91批 T-91a：日志调用点定位 v3（logger 名 / 器官别名 两级**数据驱动**索引）。
 #   开启（默认）→ 在 v2（类索引 + 中文名包含）之上再接入两级新索引：
@@ -301,7 +301,7 @@ def _m91_log_locate_v3_on() -> bool:
         import config as _c
         return bool(getattr(_c, "ENABLE_M91_LOG_LOCATE_V3", True))
     except Exception as e:
-        silent_exc(e, where="nucleus.self_inspector::_m91_log_locate_v3_on L91")
+        silent_exc(e, where="nucleus.self_inspector::_m91_log_locate_v3_on L91", level="debug")
         return True
 
 
@@ -367,7 +367,7 @@ def _body_loc_tick(kind: str, offset: float | None = None) -> None:
             _s["offset_dist"] = {}
             _s["since"] = _t.time()
     except Exception as _se:
-        silent_exc(_se, "self_inspector.py:100")
+        silent_exc(_se, "self_inspector.py:100", level="debug")
 
 
 def _issue_file_in_backup_dir(file_path: str) -> bool:
@@ -663,7 +663,7 @@ def _m348_tests_corpus() -> list:
                 with open(os.path.join(_dp, _tf), encoding="utf-8", errors="replace") as _fh:
                     _tsrc = _fh.read()
             except OSError as _te:
-                silent_exc(_te, where="self_inspector._m348_tests_corpus")
+                silent_exc(_te, where="self_inspector._m348_tests_corpus", level="debug")
                 continue
             _rows.append(_tsrc)
             _n += 1
@@ -854,7 +854,7 @@ class SelfInspector(SilentLogMixin):
         try:
             self._m303_wire_verification_hub()
         except Exception as e:
-            silent_exc(e, where="nucleus.self_inspector::__init__ wire hub")
+            silent_exc(e, where="nucleus.self_inspector::__init__ wire hub", level="debug")
 
     # ========== 假阳性库持久化 ==========
     def _load_false_positives(self):
@@ -973,7 +973,7 @@ class SelfInspector(SilentLogMixin):
             self._log("INFO", "[303刀5] self_inspector 已注册 hub applier（审查结论→规则回灌接通）")
             return True
         except Exception as e:
-            silent_exc(e, where="nucleus.self_inspector::_m303_wire_verification_hub")
+            silent_exc(e, where="nucleus.self_inspector::_m303_wire_verification_hub", level="debug")
             return False
 
     def report_issues_to_hub(self, issues: list[dict[str, Any]], max_items: int = 20) -> int:
@@ -1007,7 +1007,7 @@ class SelfInspector(SilentLogMixin):
                 )
                 _sent += 1
         except Exception as e:
-            silent_exc(e, where="nucleus.self_inspector::report_issues_to_hub")
+            silent_exc(e, where="nucleus.self_inspector::report_issues_to_hub", level="debug")
         return _sent
 
     def absorb_growth_rules(self, rules: list[dict[str, Any]]) -> int:
@@ -1583,7 +1583,7 @@ class SelfInspector(SilentLogMixin):
             return None
 
         except Exception as e:
-            silent_exc(e, where="nucleus.self_inspector::_read_method_body_fallback L988")
+            silent_exc(e, where="nucleus.self_inspector::_read_method_body_fallback L988", level="debug")
             return None
     def _analyze_method_calls(self, file_path: str, method_name: str,
                                start_line: int) -> list[str]:
@@ -1665,7 +1665,7 @@ class SelfInspector(SilentLogMixin):
                 for m in cls.get("methods", []):
                     all_methods[m["name"]] = m.get("line_number", 0)
         except Exception as _se:
-            silent_exc(_se, "self_inspector.py:987")
+            silent_exc(_se, "self_inspector.py:987", level="debug")
 
         call_chain = []
         for called in direct_calls:
@@ -1704,7 +1704,7 @@ class SelfInspector(SilentLogMixin):
                         if target_method in calls:
                             callers.add(mname)
         except Exception as _se:
-            silent_exc(_se, "self_inspector.py:1026")
+            silent_exc(_se, "self_inspector.py:1026", level="debug")
         return sorted(callers)
 
     # ================================================================ 379刀1
@@ -1944,7 +1944,7 @@ class SelfInspector(SilentLogMixin):
                         "doc": cls.get("doc", ""),
                     }
         except Exception as _se:
-            silent_exc(_se, "self_inspector.py:1052")
+            silent_exc(_se, "self_inspector.py:1052", level="debug")
         return {"class_name": class_name, "error": "class not found"}
 
     # ===== ★PHASE12-P1-2扩展：全项目类索引（get_method_body 的兜底数据源）=====
@@ -2055,7 +2055,7 @@ class SelfInspector(SilentLogMixin):
                         self._project_class_index = self._build_project_class_index()
             return (self._project_class_index or {}).get(class_name)
         except Exception as e:
-            silent_exc(e, where="nucleus.self_inspector::_lookup_class_in_project L1226")
+            silent_exc(e, where="nucleus.self_inspector::_lookup_class_in_project L1226", level="debug")
             return None
 
     # ========== ★主线第65批 T3/P2：get_method_body 文件级缓存 ==========
@@ -2072,7 +2072,7 @@ class SelfInspector(SilentLogMixin):
                     self._method_body_hits += 1
                     return dict(_result)   # 独立副本，避免调用方改脏缓存
             except Exception as _se:
-                silent_exc(_se, "self_inspector.py:1160")
+                silent_exc(_se, "self_inspector.py:1160", level="debug")
             self._method_body_cache.pop(_key, None)   # mtime 变化/读取失败→失效
         self._method_body_misses += 1
         return None
@@ -2084,14 +2084,14 @@ class SelfInspector(SilentLogMixin):
         try:
             _mtime = os.path.getmtime(file_path)
         except Exception as e:
-            silent_exc(e, where="nucleus.self_inspector::_put_method_body_cached L1258")
+            silent_exc(e, where="nucleus.self_inspector::_put_method_body_cached L1258", level="debug")
             return
         self._method_body_cache[(file_path, method_name)] = (dict(result), _mtime)
         if len(self._method_body_cache) > 1000:
             try:
                 self._method_body_cache.pop(next(iter(self._method_body_cache)))
             except Exception as _se:
-                silent_exc(_se, "self_inspector.py:1178")
+                silent_exc(_se, "self_inspector.py:1178", level="debug")
 
     def get_method_body(self, organ_name: str, method_name: str) -> dict[str, Any] | None:
         """
@@ -2235,7 +2235,7 @@ class SelfInspector(SilentLogMixin):
                                 idx[_cn] = os.path.relpath(
                                     _fp, _base).replace(_bs, "/")
         except Exception as _se:
-            silent_exc(_se, "self_inspector.py:1294")
+            silent_exc(_se, "self_inspector.py:1294", level="debug")
         self._organ_name_index = idx
         return idx
 
@@ -2356,7 +2356,7 @@ class SelfInspector(SilentLogMixin):
                 if len(_lst) > 1:
                     _ambig.add(_tag)
         except Exception as _se:
-            silent_exc(_se, "self_inspector.py:_build_logger_tag_index")
+            silent_exc(_se, "self_inspector.py:_build_logger_tag_index", level="debug")
         self._m91_logger_tag_index = idx
         self._m91_logger_tag_ambig = _ambig
         return idx
@@ -2399,7 +2399,7 @@ class SelfInspector(SilentLogMixin):
                                 if _cn and _cn not in idx:
                                     idx[_cn] = _rel
         except Exception as _se:
-            silent_exc(_se, "self_inspector.py:_build_organ_alias_index")
+            silent_exc(_se, "self_inspector.py:_build_organ_alias_index", level="debug")
         self._m91_organ_alias_index = idx
         return idx
 
@@ -2412,7 +2412,7 @@ class SelfInspector(SilentLogMixin):
             if os.path.isfile(os.path.join(self._m91_project_base(), _rel)):
                 return _rel
         except Exception as e:
-            silent_exc(e, where="nucleus.self_inspector::_m91_lookup_logger_tag L1575")
+            silent_exc(e, where="nucleus.self_inspector::_m91_lookup_logger_tag L1575", level="debug")
             return None
         return None
 
@@ -2425,7 +2425,7 @@ class SelfInspector(SilentLogMixin):
             if os.path.isfile(os.path.join(self._m91_project_base(), _rel)):
                 return _rel
         except Exception as e:
-            silent_exc(e, where="nucleus.self_inspector::_m91_lookup_organ_alias L1587")
+            silent_exc(e, where="nucleus.self_inspector::_m91_lookup_organ_alias L1587", level="debug")
             return None
         return None
 
@@ -2466,7 +2466,7 @@ class SelfInspector(SilentLogMixin):
                             _file, _conf = _p, 0.8
                             break
         except Exception as _se:
-            silent_exc(_se, "self_inspector.py:1366")
+            silent_exc(_se, "self_inspector.py:1366", level="debug")
 
         # 1b. file_hint
         if not _file and file_hint:
@@ -2507,7 +2507,7 @@ class SelfInspector(SilentLogMixin):
                             if os.path.isfile(os.path.join(_base, _crel)):
                                 _file, _conf = _crel, 0.75
                 except Exception as _se:
-                    silent_exc(_se, "self_inspector.py:1351")
+                    silent_exc(_se, "self_inspector.py:1351", level="debug")
             _idx = self._build_organ_name_index()
             if not _file and organ in _idx:
                 _file, _conf = _idx[organ], 0.7
@@ -2624,7 +2624,7 @@ class SelfInspector(SilentLogMixin):
                             "category": os.path.basename(os.path.dirname(_rel)),
                         })
         except Exception as _se:
-            silent_exc(_se, "self_inspector.py:1480")
+            silent_exc(_se, "self_inspector.py:1480", level="debug")
 
         _cls_of = {o["class_name"]: o for o in organs}
 
@@ -2654,7 +2654,7 @@ class SelfInspector(SilentLogMixin):
             for (_from, _to), _cnt in sorted(_pair_count.items()):
                 dependencies.append({"from": _from, "to": _to, "refs": _cnt})
         except Exception as _se:
-            silent_exc(_se, "self_inspector.py:1509")
+            silent_exc(_se, "self_inspector.py:1509", level="debug")
 
         # ---- 3) 健康指标（异常次数取 LogAnalyzer；响应时间待埋点） ----
         _blast = self._build_event_graph_adjacency()
@@ -2713,7 +2713,7 @@ class SelfInspector(SilentLogMixin):
             return {_o: len(_affects.get(_o, set()) | _driven.get(_o, set()))
                     for _o in (set(_affects) | set(_driven))}
         except Exception as _e:
-            silent_exc(_e, "self_inspector.py:_build_event_graph_adjacency")
+            silent_exc(_e, "self_inspector.py:_build_event_graph_adjacency", level="debug")
             return {}
 
     def query_event_graph_adjacency(self, organ: str) -> "dict[str, Any]":
@@ -2743,7 +2743,7 @@ class SelfInspector(SilentLogMixin):
                 "blast_radius": len(_affects | _driven),
             }
         except Exception as _e:
-            silent_exc(_e, "self_inspector.py:query_event_graph_adjacency")
+            silent_exc(_e, "self_inspector.py:query_event_graph_adjacency", level="debug")
             return {"organ": organ, "affects": [], "driven_by": [],
                     "blast_radius": 0, "error": str(_e)[:80]}
 
@@ -2976,7 +2976,7 @@ class SelfInspector(SilentLogMixin):
             if not _ctrl.should_execute("organ_scan"):
                 return {}
         except Exception as _se:
-            silent_exc(_se, "self_inspector.py:1612")
+            silent_exc(_se, "self_inspector.py:1612", level="debug")
         return self._scan_all_organs()
 
     def _scan_all_organs(self) -> dict[str, dict[str, Any]]:
@@ -3143,7 +3143,7 @@ class SelfInspector(SilentLogMixin):
                     _module_logger.debug(f"[SelfInspector] 检测到器官文件变化，缓存失效: {_fp}")
                     return True
             except OSError as e:
-                silent_exc(e, where="nucleus.self_inspector::_check_files_changed L2083")
+                silent_exc(e, where="nucleus.self_inspector::_check_files_changed L2083", level="debug")
                 return True
         return False
 
@@ -3165,7 +3165,7 @@ class SelfInspector(SilentLogMixin):
                 try:
                     self._scan_cache_file_mtimes[_fpp] = os.path.getmtime(_fpp)
                 except OSError as _se:
-                    silent_exc(_se, "self_inspector.py:1800")
+                    silent_exc(_se, "self_inspector.py:1800", level="debug")
 
     def _get_adaptive_cache_ttl(self) -> float:
         """★第64批 T3/T4：自适应缓存 TTL（根据 CPU 负载 + 队列深度延长）。
@@ -3208,7 +3208,7 @@ class SelfInspector(SilentLogMixin):
                 _crit = float(getattr(_m64_cfg2, "QUEUE_DEPTH_CRITICAL_THRESHOLD", 10000.0))
                 _low = float(getattr(_m64_cfg2, "QUEUE_DEPTH_LOW_THRESHOLD", 2000.0))
             except Exception as _se:
-                silent_exc(_se, "self_inspector.py:1843")
+                silent_exc(_se, "self_inspector.py:1843", level="debug")
             if _depth > _crit:
                 _ttl = max(_ttl, 900.0)
             elif _depth > _high:
@@ -3327,7 +3327,7 @@ class SelfInspector(SilentLogMixin):
                         return _file
             return None
         except Exception as e:
-            silent_exc(e, where="nucleus.self_inspector::resolve_organ_file L2255")
+            silent_exc(e, where="nucleus.self_inspector::resolve_organ_file L2255", level="debug")
             return None
         finally:
             if self._scan_cache_enabled and _file is not None:
@@ -3599,7 +3599,7 @@ class SelfInspector(SilentLogMixin):
                 return
             def_line = _lines[start_line - 1]
         except Exception as e:
-            silent_exc(e, where="nucleus.self_inspector::_check_mutable_default L2526")
+            silent_exc(e, where="nucleus.self_inspector::_check_mutable_default L2526", level="debug")
             return
         # 提取 def 签名括号内的参数串（兼容多行签名：取 def 行 + 后续补全括号）
         _sig = def_line
@@ -4601,7 +4601,7 @@ class SelfInspector(SilentLogMixin):
         try:
             self.report_issues_to_hub(all_issues)
         except Exception as _rpt_e:
-            silent_exc(_rpt_e, where="nucleus.self_inspector::detect_code_issues 回灌hub")
+            silent_exc(_rpt_e, where="nucleus.self_inspector::detect_code_issues 回灌hub", level="debug")
         return _safe_issues
 
     def _apply_code_learning_memory(self, issues: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -4980,7 +4980,7 @@ class SelfInspector(SilentLogMixin):
         try:
             _tree = ast.parse(textwrap.dedent(body))
         except (SyntaxError, ValueError) as _pe:
-            silent_exc(_pe, where="self_inspector::_check_lock_with_emit parse")
+            silent_exc(_pe, where="self_inspector::_check_lock_with_emit parse", level="debug")
             return
         _ranges: list[tuple[int, int]] = []
         for _n in ast.walk(_tree):
@@ -6019,7 +6019,7 @@ class SelfInspector(SilentLogMixin):
                 )
                 _my_gcv = str(getattr(_CGA330, "CODE_VERSION", "") or "")
             except Exception as _iv:
-                silent_exc(_iv, where="self_inspector::m330 graph version import")
+                silent_exc(_iv, where="self_inspector::m330 graph version import", level="debug")
                 _my_gcv = ""
             _v_why = ""
             if not _gcv or not _gcrv:
@@ -6111,7 +6111,7 @@ class SelfInspector(SilentLogMixin):
                     "graph_code_version": _gcv, "graph_criteria_version": _gcrv,
                     "judge_criteria_version": _my_cv, "judge_code_version": _my_gcv}
         except Exception as e:
-            silent_exc(e, where="nucleus.self_inspector::_m305_load_graph_index")
+            silent_exc(e, where="nucleus.self_inspector::_m305_load_graph_index", level="debug")
             return _empty
 
     def _detect_dead_code(self, _a1_failed_rate: float | None = None) \
@@ -6657,7 +6657,7 @@ class SelfInspector(SilentLogMixin):
                 import config as _cfg
                 _dirs = list(getattr(_cfg, "CALL_GRAPH_SCAN_DIRS", []) or [])
             except Exception as e:
-                silent_exc(e, where="nucleus.self_inspector::detect_structure_changes:dirs")
+                silent_exc(e, where="nucleus.self_inspector::detect_structure_changes:dirs", level="debug")
                 _dirs = []
         _rel_files: list[str] = []
         for _d in _dirs:
@@ -6687,7 +6687,7 @@ class SelfInspector(SilentLogMixin):
             try:
                 _st = os.stat(_abs)
             except OSError as e:
-                silent_exc(e, where="nucleus.self_inspector::detect_structure_changes:stat")
+                silent_exc(e, where="nucleus.self_inspector::detect_structure_changes:stat", level="debug")
                 continue
             _prev = _cache.get(_rel)
             if (_prev and _prev.get("mtime") == round(_st.st_mtime, 3)
@@ -7136,7 +7136,7 @@ def _m342_load_latest_graph(project_root=None):
         with open(_f, "r", encoding="utf-8", errors="replace") as _fh:
             _d = json.load(_fh)
     except (OSError, ValueError) as _e342g:
-        silent_exc(_e342g, where="nucleus.self_inspector::_m342_load_latest_graph")
+        silent_exc(_e342g, where="nucleus.self_inspector::_m342_load_latest_graph", level="debug")
         return None, "graph_parse_failed:%s" % type(_e342g).__name__
     if not isinstance(_d, dict):
         return None, "graph_not_object"
@@ -7291,13 +7291,13 @@ def _m331_framework_hook_names(root: str | None = None) -> set:
                     _tree = ast.parse(_src)
                 except (SyntaxError, ValueError, OSError) as _pe:
                     silent_exc(_pe, where="self_inspector::_m331_framework_hook_names"
-                                          " parse %s" % _f)
+                                          " parse %s" % _f, level="debug")
                     continue
                 for _n in ast.walk(_tree):
                     if isinstance(_n, (ast.FunctionDef, ast.AsyncFunctionDef)):
                         _names.add(_n.name)
     except OSError as _oe:
-        silent_exc(_oe, where="self_inspector::_m331_framework_hook_names listdir")
+        silent_exc(_oe, where="self_inspector::_m331_framework_hook_names listdir", level="debug")
     _M331_FRAMEWORK_HOOK_CACHE["names"] = _names
     return set(_names)
 
@@ -7355,7 +7355,7 @@ def _m348_protocol_iface_declared(item: dict) -> bool:
                 return True
         return False
     except Exception as _e:
-        silent_exc(_e, where="self_inspector._m348_protocol_iface_declared")
+        silent_exc(_e, where="self_inspector._m348_protocol_iface_declared", level="debug")
         return False
 
 
@@ -7609,7 +7609,7 @@ def _m339_code_version() -> str:
         _v = str(getattr(_cga, "CODE_VERSION", "") or "")
         return _v or "unknown"
     except Exception as _e:
-        silent_exc(_e, where="self_inspector::_m339_code_version")
+        silent_exc(_e, where="self_inspector::_m339_code_version", level="debug")
         return "unknown"
 
 
@@ -7686,7 +7686,7 @@ def _m339_consumer_connected(o3_items: list, project_root: str | None = None,
             proc_gen = _pgs()
             _out["proc_gen"] = proc_gen
         except Exception as _e:
-            silent_exc(_e, where="self_inspector::_m339_consumer_connected proc_gen")
+            silent_exc(_e, where="self_inspector::_m339_consumer_connected proc_gen", level="debug")
             proc_gen = "unknown"
             _out["proc_gen"] = "unknown"
     _trace, _state = _m339_read_trace(project_root, trace_path)
@@ -7788,7 +7788,7 @@ def _m348_quota_exempt(entry: dict) -> tuple[bool, str]:
                 return True, "history:%s" % _ls
         return False, ""
     except Exception as _e:
-        silent_exc(_e, where="self_inspector._m348_quota_exempt")
+        silent_exc(_e, where="self_inspector._m348_quota_exempt", level="debug")
         return False, "error"
 
 
@@ -8435,7 +8435,7 @@ def o3_open_gate_report(min_graph_mtime: float | None = None, k: int = 20,
                 _al["count"], _al["threshold"],
                 ",".join(str(x.get("item")) for x in _al["items"])[:200])
     except Exception as _cw_e:
-        silent_exc(_cw_e, where="self_inspector::o3_open_gate_report 343不可判告警")
+        silent_exc(_cw_e, where="self_inspector::o3_open_gate_report 343不可判告警", level="debug")
         _rep["unjudged_alarm"] = {"verdict": "UNAVAILABLE",
                                   "reason": type(_cw_e).__name__}
     # ★344批刀2：把段B读数**接进报表**（343 只落了判据，没落数据源）
@@ -8537,7 +8537,7 @@ def _m311_count_methods(path: str) -> int:
         return sum(1 for _n in ast.walk(_tree)
                    if isinstance(_n, (ast.FunctionDef, ast.AsyncFunctionDef)))
     except (OSError, SyntaxError) as e:
-        silent_exc(e, where="nucleus.self_inspector::_m311_count_methods")
+        silent_exc(e, where="nucleus.self_inspector::_m311_count_methods", level="debug")
         return -1
 
 
@@ -8565,7 +8565,7 @@ def _m311_emit_structure_event(payload: dict) -> bool:
         _fi.publish(_pulse)
         return True
     except Exception as e:
-        silent_exc(e, where="nucleus.self_inspector::_m311_emit_structure_event")
+        silent_exc(e, where="nucleus.self_inspector::_m311_emit_structure_event", level="debug")
         return False
 
 
@@ -8821,7 +8821,7 @@ def _m339_cfg_prefixes(name: str, default: tuple) -> tuple:
         import config as _c
         _v = getattr(_c, name, None)
     except Exception as _e:
-        silent_exc(_e, where="self_inspector::_m339_cfg_prefixes %s" % name)
+        silent_exc(_e, where="self_inspector::_m339_cfg_prefixes %s" % name, level="debug")
         return tuple(default)
     if isinstance(_v, (list, tuple)) and _v:
         return tuple(str(_x).replace("\\", "/") for _x in _v)
@@ -9144,7 +9144,7 @@ def shutdown_self_inspector() -> None:
             try:
                 _sd()
             except Exception as _se:
-                silent_exc(_se, "self_inspector.py:3966")
+                silent_exc(_se, "self_inspector.py:3966", level="debug")
 # ========== 自测 ==========
 if __name__ == "__main__":
     print("=== SelfInspector v9.5 自测 ===\n")

@@ -180,7 +180,7 @@ class PerformanceProfiler:
             with open(log_file, encoding='utf-8', errors='ignore') as _f:
                 _content = _f.read()
         except Exception as _e:
-            silent_exc(_e, where="PerformanceProfiler.find_slow_operations[424刀1]")
+            silent_exc(_e, where="PerformanceProfiler.find_slow_operations[424刀1]", level="debug")
             return _ops
 
         # 匹配 "耗时 Xms" 或 "X.XXs" 模式

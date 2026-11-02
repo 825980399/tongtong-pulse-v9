@@ -341,7 +341,7 @@ class EvolutionLoop(SilentLogMixin):
                         min_severity="medium",
                     )
                 except TypeError as _e:
-                    silent_exc(_e, where="EvolutionLoop.discover_all_issues[424刀1]")
+                    silent_exc(_e, where="EvolutionLoop.discover_all_issues[424刀1]", level="debug")
                     _inspector_issues = _inspector.detect_code_issues()
                 if _inspector_issues:
                     # 只取 high/medium 级（low/info 是 long_method/print_debug 等
@@ -986,7 +986,7 @@ class EvolutionLoop(SilentLogMixin):
                 _f.write(record)
             return _path
         except Exception as e:
-            silent_exc(e, where="nucleus.evolution.EvolutionLoop::write_evolution_record L614")
+            silent_exc(e, where="nucleus.evolution.EvolutionLoop::write_evolution_record L614", level="debug")
             return ""
 
     def update_panorama_status(self, completed_items: list[dict[str, Any]],
@@ -1023,7 +1023,7 @@ class EvolutionLoop(SilentLogMixin):
                 _json.dump(_update, _f, ensure_ascii=False, indent=2)
             return _path
         except Exception as e:
-            silent_exc(e, where="nucleus.evolution.EvolutionLoop::update_panorama_status L650")
+            silent_exc(e, where="nucleus.evolution.EvolutionLoop::update_panorama_status L650", level="debug")
             return ""
 
 

@@ -179,7 +179,7 @@ class ResonanceEngine:
             if kw:
                 return " ".join(str(k) for k in kw)
         except Exception as e:
-            silent_exc(e, where="nucleus.synapsys.ResonanceEngine::_extract_query_text L177")
+            silent_exc(e, where="nucleus.synapsys.ResonanceEngine::_extract_query_text L177", level="debug")
         return ""
 
     def _build_semantic_map(self, query: dict, candidate_nodes: list[dict]) -> dict[str, float]:
@@ -361,7 +361,7 @@ class ResonanceEngine:
             if not getattr(_cfg, "ENABLE_POLLUTION_TAGGING", False):
                 return None
         except Exception as e:
-            silent_exc(e, where="nucleus.synapsys.ResonanceEngine::_get_pollution_tagger L355")
+            silent_exc(e, where="nucleus.synapsys.ResonanceEngine::_get_pollution_tagger L355", level="debug")
             return None
         try:
             from nucleus.knowledge.PollutionTagger import get_shared_tagger
@@ -419,7 +419,7 @@ class ResonanceEngine:
             if not getattr(_cfg, "ENABLE_DATA_QUALITY_GUARD", False):
                 return None
         except Exception as e:
-            silent_exc(e, where="nucleus.synapsys.ResonanceEngine::_get_data_quality_guard L412")
+            silent_exc(e, where="nucleus.synapsys.ResonanceEngine::_get_data_quality_guard L412", level="debug")
             return None
         try:
             from nucleus.knowledge.DataQualityGuard import get_data_quality_guard
@@ -432,7 +432,7 @@ class ResonanceEngine:
                     try:
                         _nodes = _pool.get_all()
                     except Exception as e:
-                        silent_exc(e, where="nucleus.synapsys.ResonanceEngine::_get_data_quality_guard L424")
+                        silent_exc(e, where="nucleus.synapsys.ResonanceEngine::_get_data_quality_guard L424", level="debug")
                         _nodes = None
                 try:
                     _report = _guard.scan_all(
@@ -672,7 +672,7 @@ class ResonanceEngine:
             if not getattr(_cfg, 'ENABLE_KNOWLEDGE_GRAPH_CONSUMPTION', False):
                 return 0
         except Exception as e:
-            silent_exc(e, where="nucleus.synapsys.ResonanceEngine::_expand_by_association L654")
+            silent_exc(e, where="nucleus.synapsys.ResonanceEngine::_expand_by_association L654", level="debug")
             return 0
         _pool = getattr(self, "node_pool", None)
         if _pool is None or not hasattr(_pool, "get_related_nodes"):
@@ -881,7 +881,7 @@ class ResonanceEngine:
                     from nucleus.reasoning.PolarityGuard import GLOBAL_RULE_KEY
                     rule_sim = rule_map.get(GLOBAL_RULE_KEY)
                 except Exception as e:
-                    silent_exc(e, where="nucleus.synapsys.ResonanceEngine::_fuse_memory_channels L858")
+                    silent_exc(e, where="nucleus.synapsys.ResonanceEngine::_fuse_memory_channels L858", level="debug")
 
         # ---- 规则通道关闭：走阶段一双通道路径（与改造前逐字节等价） ----
         if not rule_enabled:
@@ -1219,7 +1219,7 @@ class ResonanceEngine:
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_KNOWLEDGE_TIMELINESS", False))
         except Exception as e:
-            silent_exc(e, where="nucleus.synapsys.ResonanceEngine::_knowledge_timeliness_enabled L1203")
+            silent_exc(e, where="nucleus.synapsys.ResonanceEngine::_knowledge_timeliness_enabled L1203", level="debug")
             return False
 
     def _is_potentially_stale(self, node: dict) -> bool:

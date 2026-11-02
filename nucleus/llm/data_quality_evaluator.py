@@ -108,7 +108,7 @@ def evaluator_enabled() -> bool:
         import config
         return bool(getattr(config, "ENABLE_LLM_DATA_QUALITY_EVAL", True))
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.data_quality_evaluator::evaluator_enabled L109")
+        silent_exc(e, where="nucleus.llm.data_quality_evaluator::evaluator_enabled L109", level="debug")
         return True
 
 
@@ -119,7 +119,7 @@ def _trace_dir() -> str:
         if _rel:
             return _rel if os.path.isabs(_rel) else os.path.join(_PROJECT_ROOT, _rel)
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.data_quality_evaluator::_trace_dir L119")
+        silent_exc(e, where="nucleus.llm.data_quality_evaluator::_trace_dir L119", level="debug")
     return DEFAULT_TRACE_DIR
 
 
@@ -127,7 +127,7 @@ def _in_test_env() -> bool:
     try:
         return ("pytest" in sys.modules) or bool(os.environ.get("PYTEST_CURRENT_TEST"))
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.data_quality_evaluator::_in_test_env L127")
+        silent_exc(e, where="nucleus.llm.data_quality_evaluator::_in_test_env L127", level="debug")
         return False
 
 
@@ -137,7 +137,7 @@ def _is_production_path(path: str) -> bool:
         _r = os.path.abspath(_PROJECT_ROOT).replace("\\", "/").lower()
         return _p.startswith(_r + "/data/")
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.data_quality_evaluator::_is_production_path L136")
+        silent_exc(e, where="nucleus.llm.data_quality_evaluator::_is_production_path L136", level="debug")
         return True
 
 
@@ -153,7 +153,7 @@ def channel_whitelist() -> set:
         if (getattr(config, "REMOTE_API_CHANNELS", {}) or {}).get("advanced_api_key"):
             _out.add("advanced")
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.data_quality_evaluator::channel_whitelist L151")
+        silent_exc(e, where="nucleus.llm.data_quality_evaluator::channel_whitelist L151", level="debug")
     return _out
 
 
@@ -166,7 +166,7 @@ def _stub_thresholds() -> tuple:
         _r = int(getattr(_c, "LLM_DATA_QUALITY_STUB_REPEAT_MIN", _STUB_REPEAT_MIN_DEFAULT))
         _l = int(getattr(_c, "LLM_DATA_QUALITY_STUB_LEN_MAX", _STUB_LEN_MAX_DEFAULT))
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.data_quality_evaluator::_stub_thresholds L164")
+        silent_exc(e, where="nucleus.llm.data_quality_evaluator::_stub_thresholds L164", level="debug")
     return (_r if isinstance(_r, int) and _r > 0 else _STUB_REPEAT_MIN_DEFAULT,
             _l if isinstance(_l, int) and _l > 0 else _STUB_LEN_MAX_DEFAULT)
 
@@ -458,7 +458,7 @@ def save_report(report: dict, path: str | None = None) -> str | None:
             _f.write(json.dumps(report, ensure_ascii=False, indent=2))
         return _p
     except OSError as e:
-        silent_exc(e, where="nucleus.llm.data_quality_evaluator::save_report L456")
+        silent_exc(e, where="nucleus.llm.data_quality_evaluator::save_report L456", level="debug")
         return None
 
 

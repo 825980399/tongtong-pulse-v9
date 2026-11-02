@@ -70,7 +70,7 @@ def _dispatch_interval_sec() -> float:
         if _v is not None:
             _iv = float(_v)
     except Exception as _e:
-        silent_exc(_e, where="patch_execution_dispatch._dispatch_interval_sec")
+        silent_exc(_e, where="patch_execution_dispatch._dispatch_interval_sec", level="debug")
     return max(60.0, _iv)
 
 
@@ -703,7 +703,7 @@ def _m331_rf_ttl_sweep(pending_path: str | None = None, ttl_sec: float | None = 
         with open(_pp, encoding="utf-8") as _fh:
             _d = json.load(_fh)
     except Exception as e:
-        silent_exc(e, where="patch_execution_dispatch::_m331_rf_ttl_sweep read")
+        silent_exc(e, where="patch_execution_dispatch::_m331_rf_ttl_sweep read", level="debug")
         _out["error"] = f"read_failed:{type(e).__name__}"
         return _out
     if not isinstance(_d, list):
@@ -757,7 +757,7 @@ def _m331_rf_ttl_sweep(pending_path: str | None = None, ttl_sec: float | None = 
         _out["written"] = True
         _out["archive_file"] = _arch
     except Exception as e:
-        silent_exc(e, where="patch_execution_dispatch::_m331_rf_ttl_sweep write")
+        silent_exc(e, where="patch_execution_dispatch::_m331_rf_ttl_sweep write", level="debug")
         _out["error"] = f"write_failed:{type(e).__name__}"
     return _out
 
@@ -861,7 +861,7 @@ def _m422_norm_file(file_norm) -> str:
             if _s.lower().startswith(_root.lower()):
                 _s = _s[len(_root):]
         except Exception as e:
-            silent_exc(e, where="patch_execution_dispatch::_m422_norm_file root")
+            silent_exc(e, where="patch_execution_dispatch::_m422_norm_file root", level="debug")
     return _s
 
 
@@ -1163,7 +1163,7 @@ def _extract_def_name(code: str) -> str:
         _m = re.search(r"^\s*(?:async\s+)?def\s+([A-Za-z_]\w*)\s*\(", code, re.MULTILINE)
         return _m.group(1) if _m else ""
     except Exception as e:
-        silent_exc(e, where="nucleus.evolution.patch_execution_dispatch::_extract_def_name")
+        silent_exc(e, where="nucleus.evolution.patch_execution_dispatch::_extract_def_name", level="debug")
         return ""
 
 
@@ -1308,7 +1308,7 @@ def load_call_graph_cache(force: bool = False,
                              "out_adj": _out_adj, "in_adj": _in_adj}
         return _gd
     except Exception as e:
-        silent_exc(e, where="nucleus.evolution.patch_execution_dispatch::load_call_graph_cache")
+        silent_exc(e, where="nucleus.evolution.patch_execution_dispatch::load_call_graph_cache", level="debug")
         return None
 
 
@@ -1551,7 +1551,7 @@ def sandbox_keywords() -> list:
         from organs.motor.PulseCodeSandbox import PulseCodeSandbox as _S
         return list(getattr(_S, "DANGEROUS_KEYWORDS", []) or [])
     except Exception as e:
-        silent_exc(e, where="patch_execution_dispatch::sandbox_keywords")
+        silent_exc(e, where="patch_execution_dispatch::sandbox_keywords", level="debug")
         return []
 
 
@@ -2057,7 +2057,7 @@ def _m338_evidence_gate_on() -> bool:
 
         return bool(getattr(_cfg_ev, "ENABLE_PATCH_EVIDENCE_GATE", False))
     except Exception as _e:
-        silent_exc(_e, where="patch_execution_dispatch::_m338_evidence_gate_on")
+        silent_exc(_e, where="patch_execution_dispatch::_m338_evidence_gate_on", level="debug")
         return False
 
 
@@ -2145,7 +2145,7 @@ def _m381_trust_sentinel() -> float:
         import config as _c381
         return float(getattr(_c381, "AUTO_TRIAGE_TRUST_DEFAULT", 70.0))
     except Exception as _e:
-        silent_exc(_e, where="patch_execution_dispatch::_m381_trust_sentinel")
+        silent_exc(_e, where="patch_execution_dispatch::_m381_trust_sentinel", level="debug")
         return 70.0
 
 
@@ -2390,7 +2390,7 @@ def build_reusable_candidates(patch_history: list, limit: int = 20,
                 json.dump(_out, _f, ensure_ascii=False, indent=2)
             os.replace(_tmp, out_path)
         except Exception as _e:
-            silent_exc(_e, where="patch_execution_dispatch::build_reusable_candidates 落盘")
+            silent_exc(_e, where="patch_execution_dispatch::build_reusable_candidates 落盘", level="debug")
     _module_logger.info(
         "[338刀4] 可复用候选清单: 条数=%d 可复用=%d 主因分布=%s",
         _out["total"], _out["reusable"], _by_reason)
@@ -2482,7 +2482,7 @@ def _m337_boot_time() -> float | None:
         _ct = get_proc_gen().get("create_time")
         return float(_ct) if _ct else None
     except Exception as _e:
-        silent_exc(_e, where="patch_execution_dispatch::_m337_boot_time")
+        silent_exc(_e, where="patch_execution_dispatch::_m337_boot_time", level="debug")
         return None
 
 
@@ -2936,7 +2936,7 @@ def dispatch_and_verify(sandbox: Any, patch: dict,
                         "user_name": "patch_dispatch_295", "task_id": _pid},
         })
     except Exception as e:
-        silent_exc(e, where="nucleus.evolution.patch_execution_dispatch::dispatch_and_verify sandbox")
+        silent_exc(e, where="nucleus.evolution.patch_execution_dispatch::dispatch_and_verify sandbox", level="debug")
         return {"patch_id": _pid, "success": False,
                 "error": f"sandbox_exc:{type(e).__name__}"}
     _ok = bool(isinstance(_res, dict) and _res.get("success"))
@@ -3112,7 +3112,7 @@ def dispatch_runtime_verified_patches(limit: int = 1, framework: Any = None) -> 
         with open(_hp, encoding="utf-8") as _fh:
             _hist = json.load(_fh)
     except Exception as e:
-        silent_exc(e, where="nucleus.evolution.patch_execution_dispatch::dispatch load history")
+        silent_exc(e, where="nucleus.evolution.patch_execution_dispatch::dispatch load history", level="debug")
         return {"status": "load_failed", "dispatched": 0}
     if isinstance(_hist, dict):
         _hist = _hist.get("patches") or []
@@ -3200,7 +3200,7 @@ def dispatch_runtime_verified_patches(limit: int = 1, framework: Any = None) -> 
                 json.dump(_hist, _f, ensure_ascii=False, indent=2)
             os.replace(_tmp, _hp)
         except Exception as e:
-            silent_exc(e, where="nucleus.evolution.patch_execution_dispatch::dispatch save history")
+            silent_exc(e, where="nucleus.evolution.patch_execution_dispatch::dispatch save history", level="debug")
     _module_logger.info("[行动面通电] 回扫=%d 可疑=%d 派单=%d 结果=%s",
                         len(_rv_cands), _suspect_n, len(_results),
                         [(r.get("patch_id"), r.get("success")) for r in _results])
@@ -3265,7 +3265,7 @@ def _m350_read_history_rows(project_root: str | None = None) -> list:
             _d = _d.get("patches") or _d.get("history") or []
         return _d if isinstance(_d, list) else []
     except Exception as _e:
-        silent_exc(_e, where="patch_execution_dispatch::_m350_read_history_rows")
+        silent_exc(_e, where="patch_execution_dispatch::_m350_read_history_rows", level="debug")
         return []
 
 
@@ -3334,7 +3334,7 @@ def _m378_ttl_freeze_on() -> bool:
         import config as _c
         return bool(getattr(_c, "ENABLE_M378_SANDBOX_TTL_FREEZE", True))
     except Exception as _e:
-        silent_exc(_e, where="patch_execution_dispatch::_m378_ttl_freeze_on")
+        silent_exc(_e, where="patch_execution_dispatch::_m378_ttl_freeze_on", level="debug")
         return True
 
 
@@ -3348,7 +3348,7 @@ def _m378_sandbox_age_sec(patch) -> float | None:
     try:
         return max(0.0, time.time() - float(_at))
     except (TypeError, ValueError) as _e:
-        silent_exc(_e, where="patch_execution_dispatch::_m378_sandbox_age_sec")
+        silent_exc(_e, where="patch_execution_dispatch::_m378_sandbox_age_sec", level="debug")
         return None
 
 #: 沙箱验证并发上限（裁决⑦：试点 2-3；**派单仍串行**，只并发验证环节）
@@ -3494,7 +3494,7 @@ def verify_patches_concurrent(sandbox: Any, patches: list,
                 len(_sub), sum(1 for _x in _sub if _x.get("success")))
             return _sub
         except Exception as _e:
-            silent_exc(_e, where="patch_execution_dispatch.verify_patches_concurrent subproc")
+            silent_exc(_e, where="patch_execution_dispatch.verify_patches_concurrent subproc", level="debug")
             _module_logger.warning(
                 "[349刀11] 子进程池不可用，回落线程池（不静默）: %s: %s",
                 type(_e).__name__, _e)
@@ -3521,7 +3521,7 @@ def verify_patches_concurrent(sandbox: Any, patches: list,
                 try:
                     _v = _f.result()
                 except Exception as _e:  # 单个补丁失败不得拖垮整批
-                    silent_exc(_e, where="patch_execution_dispatch.verify_patches_concurrent")
+                    silent_exc(_e, where="patch_execution_dispatch.verify_patches_concurrent", level="debug")
                     _v = {"patch_id": patches[_i].get("id", ""), "success": False,
                           "error": f"verify_exc:{type(_e).__name__}"}
                 _m345_note_attempt(patches[_i], _v, project_root=project_root, attempt=_att)

@@ -68,7 +68,7 @@ def judge_zero_break(record: dict,
     try:
         _ex = int(record.get("executed") or 0)
     except (TypeError, ValueError) as _e:
-        silent_exc(_e, where="zero_break_judge.executed")
+        silent_exc(_e, where="zero_break_judge.executed", level="debug")
         _ex = 0
     _checks["executed_ge_1"] = {"ok": _ex >= 1, "got": _ex, "expect": ">=1"}
 
@@ -176,7 +176,7 @@ def monitor_dispatch_chain(patch_history: list,
                   "rate_ok": _q.get("rate_ok"),
                   "quota_exempt": _q.get("quota_exempt")}
     except Exception as _e:
-        silent_exc(_e, where="zero_break_judge.monitor_dispatch_chain quota")
+        silent_exc(_e, where="zero_break_judge.monitor_dispatch_chain quota", level="debug")
     return {
         "wont_fix_removed": _wont,
         "wont_fix_all_unready": all(w.get("ready") is not True for w in _wont),
@@ -569,7 +569,7 @@ def reference_truth(project_root: str, file: str, method: str, *,
         import re as _re_mod
         _re = _re_mod.compile(r"\b" + _re_mod.escape(_m) + r"\b")
     except Exception as _e:
-        silent_exc(_e, where="zero_break_judge.reference_truth regex")
+        silent_exc(_e, where="zero_break_judge.reference_truth regex", level="debug")
         return {"dead": None, "refs": None, "why": "正则构造失败",
                 "truth_source": TRUTH_SOURCE}
     _self_abs = os.path.abspath(os.path.join(project_root, str(file or "")))
@@ -756,7 +756,7 @@ def write_calibration_ledger(path: str, decision: dict, *,
                     try:
                         _seen.add(str(_json.loads(_ln).get("key") or ""))
                     except Exception as _e:
-                        silent_exc(_e, where="zero_break_judge.write_calibration_ledger[424刀1]")
+                        silent_exc(_e, where="zero_break_judge.write_calibration_ledger[424刀1]", level="debug")
                         continue
         except OSError as _e:
             silent_exc(_e, "zero_break_judge.write_calibration_ledger read",
@@ -840,7 +840,7 @@ def collect_death_samples(project_root: str | None = None,
             if _p.get("state") == "ok":
                 _rows = _p["entries"]
         except Exception as _e:
-            silent_exc(_e, where="zero_break_judge.collect_death_samples pool")
+            silent_exc(_e, where="zero_break_judge.collect_death_samples pool", level="debug")
             _rows = []
     _cands = []
     for _e in _rows:
@@ -884,7 +884,7 @@ def collect_death_samples(project_root: str | None = None,
                     _df["by_verdict"][_r["verdict"]] = (
                         _df["by_verdict"].get(_r["verdict"], 0) + 1)
         except Exception as _e:
-            silent_exc(_e, where="zero_break_judge.collect_death_samples drift")
+            silent_exc(_e, where="zero_break_judge.collect_death_samples drift", level="debug")
             # 预检不可用：**如实标未过滤**，不假装“没有漂移”（铁律156）
             _df["applied"] = False
             _df["boundary"] = "预检不可用 ⇒ 未过滤（非“无漂移”）"
@@ -973,7 +973,7 @@ def _m407_alive_check_on() -> bool:
         import config as _c
         return bool(getattr(_c, "WATCH_HEAL_ALIVE_ONLY", True))
     except Exception as e:
-        silent_exc(e, where="zero_break_judge::_m407_alive_check_on")
+        silent_exc(e, where="zero_break_judge::_m407_alive_check_on", level="debug")
         return True
 
 
@@ -1286,5 +1286,5 @@ def production_patch_history(project_root: str | None = None) -> list:
             _d = json.load(_f)
         return _d if isinstance(_d, list) else []
     except Exception as _e:
-        silent_exc(_e, where="zero_break_judge.production_patch_history")
+        silent_exc(_e, where="zero_break_judge.production_patch_history", level="debug")
         return []

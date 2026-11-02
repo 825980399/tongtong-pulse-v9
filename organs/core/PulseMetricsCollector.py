@@ -298,6 +298,16 @@ def _m421_patch_chain_read(root: str | None = None) -> dict:
     _out: dict = {f: None for f in _M421_PC_FIELDS}
     _out["last_gen_at"] = None
     _out["last_apply_at"] = None
+    # ★429刀2：把「最后生成」拆成两源分别留值，再取 max 合成 `last_gen_at`。
+    #   为什么必须拆（实测 2026-11-02）：`PatchManager.save_pending_patch()` 只把
+    #   新补丁写进 `pending_patches.json`，**不写 patch_history.json**（history 只在
+    #   审批/应用后才落行）。于是单读 history 会把「一直在生成」读成「两周没生成」：
+    #     history 最新 generated_at = 10-22 17:59
+    #     pending 最新 generated_at = 11-02 01:31（且 11 条 pending 与 history 交集为 0）
+    #   留两源值 + `gen_seen_source` 是为了让读数可被反查，而不是只给一个黑盒数。
+    _out["last_gen_at_history"] = None
+    _out["last_gen_at_pending"] = None
+    _out["gen_seen_source"] = None
 
     # --- 源1/2：patch_history（生成 / 应用）---
     _hp = os.path.join(_root, "data", "patches", "patch_history.json")
@@ -307,7 +317,8 @@ def _m421_patch_chain_read(root: str | None = None) -> dict:
             if isinstance(_rows, list):
                 _out["gen"] = _m421_count_today(_rows, "generated_at", _lo, _hi)
                 _out["apply"] = _m421_count_today(_rows, "applied_at", _lo, _hi)
-                _out["last_gen_at"] = _m421_max_ts(_rows, "generated_at")
+                # ★429刀2：这里只填 history 侧的原始值，合成放到函数末尾统一做
+                _out["last_gen_at_history"] = _m421_max_ts(_rows, "generated_at")
                 _out["last_apply_at"] = _m421_max_ts(_rows, "applied_at")
             else:
                 _errs["patch_history"] = "读不出列表"
@@ -324,6 +335,14 @@ def _m421_patch_chain_read(root: str | None = None) -> dict:
             _pend = safe_read_json(_pp, default=None)
             if isinstance(_pend, list):
                 _out["queue"] = len(_pend)
+                # ★429刀2：待审批队列里的「最后生成」——补丁入队即在这里落时间戳，
+                #   不依赖它是否走完审批（这正是原口径看不到的那段）。
+                #   三个候选键按落盘先后取：generated_at > created_at > saved_at。
+                for _k429 in ("generated_at", "created_at", "saved_at"):
+                    _t429 = _m421_max_ts(_pend, _k429)
+                    if _t429 is not None:
+                        _out["last_gen_at_pending"] = _t429
+                        break
             else:
                 _errs["pending_patches"] = "读不出列表"
         else:
@@ -358,6 +377,24 @@ def _m421_patch_chain_read(root: str | None = None) -> dict:
     except Exception as _e3:
         silent_exc(_e3, where="PulseMetricsCollector::_m421_patch_chain_read[ledger]")
         _errs["verify_feedback_ledger"] = type(_e3).__name__
+
+    # ★429刀2：合成 `last_gen_at` = history 与 pending 两源的 max
+    _m429_h = _out.get("last_gen_at_history")
+    _m429_p = _out.get("last_gen_at_pending")
+    if _m429_h is not None and _m429_p is not None:
+        if float(_m429_p) > float(_m429_h):
+            _out["last_gen_at"] = _m429_p
+            _out["gen_seen_source"] = "pending"
+        else:
+            _out["last_gen_at"] = _m429_h
+            _out["gen_seen_source"] = "history"
+    elif _m429_h is not None:
+        _out["last_gen_at"] = _m429_h
+        _out["gen_seen_source"] = "history"
+    elif _m429_p is not None:
+        _out["last_gen_at"] = _m429_p
+        _out["gen_seen_source"] = "pending"
+    # 两源都读不到 ⇒ 保持 None（不填 0：铁律 156，读不到 ≠ 是 0）
 
     _miss = sum(1 for _f in _M421_PC_FIELDS if _out[_f] is None)
     _out["state"] = ("ok" if _miss == 0

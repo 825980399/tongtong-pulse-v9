@@ -48,7 +48,7 @@ from nucleus.logger import get_module_logger  # ★340刀4：取数行留痕
 try:  # ★190刀1：接入 188刀4 内在模型产出判据（防御性兜底，避免导入环）
     from nucleus.llm.model_self_updater import is_internal_model_output as _is_internal_model_output
 except Exception as _imp_e:  # pragma: no cover
-    silent_exc(_imp_e, where="nucleus.llm.call_recorder::import is_internal_model_output")
+    silent_exc(_imp_e, where="nucleus.llm.call_recorder::import is_internal_model_output", level="debug")
     _is_internal_model_output = None  # 兜底：判据不可用时退化为仅 origin 排除
 
 # ★340批刀4：模块日志器（`[340预算]` 取数行落 logs/pulse.log；文件 handler 级别
@@ -122,7 +122,7 @@ def _in_test_env() -> bool:
         import sys as _sys
         return ("pytest" in _sys.modules) or bool(os.environ.get("PYTEST_CURRENT_TEST"))
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.call_recorder::_in_test_env L108")
+        silent_exc(e, where="nucleus.llm.call_recorder::_in_test_env L108", level="debug")
         return False
 
 
@@ -134,7 +134,7 @@ def _is_production_trace_dir(path: str) -> bool:
             os.path.abspath(__file__)))).replace("\\", "/").lower()
         return _p.startswith(_root + "/data/")
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.call_recorder::_is_production_trace_dir L119")
+        silent_exc(e, where="nucleus.llm.call_recorder::_is_production_trace_dir L119", level="debug")
         return True
 
 
@@ -345,7 +345,7 @@ def _m352b_paid_channels() -> frozenset:
         if _v:
             return frozenset(str(_x) for _x in _v)
     except Exception as e:
-        silent_exc(e, where="call_recorder::_m352b_paid_channels")
+        silent_exc(e, where="call_recorder::_m352b_paid_channels", level="debug")
     return _M352B_DEFAULT_PAID
 
 
@@ -355,7 +355,7 @@ def _m418_replace(tmp: str, dst: str) -> bool:
         from utils.atomic_io import replace_with_retry as _r
         return bool(_r(tmp, dst))
     except Exception as e:
-        silent_exc(e, where="call_recorder::_m418_replace")
+        silent_exc(e, where="call_recorder::_m418_replace", level="debug")
         return False
 
 
@@ -366,7 +366,7 @@ def _m352b_alert_threshold() -> int:
         return int(getattr(_cfg_mod, "DAILY_PAID_TOKEN_ALERT", _M352B_DEFAULT_ALERT)
                    or _M352B_DEFAULT_ALERT)
     except Exception as e:
-        silent_exc(e, where="call_recorder::_m352b_alert_threshold")
+        silent_exc(e, where="call_recorder::_m352b_alert_threshold", level="debug")
         return _M352B_DEFAULT_ALERT
 
 
@@ -471,7 +471,7 @@ def _m352b_accumulate(prev: dict, rec: dict, day: str,
     try:
         out = json.loads(json.dumps(prev or {}, ensure_ascii=False))
     except Exception as e:
-        silent_exc(e, where="call_recorder::_m352b_accumulate 深拷贝")
+        silent_exc(e, where="call_recorder::_m352b_accumulate 深拷贝", level="debug")
         out = {}
     if not isinstance(out, dict) or out.get("date") != day:
         out = _m352b_empty_day(day)
@@ -481,7 +481,7 @@ def _m352b_accumulate(prev: dict, rec: dict, day: str,
     try:
         _tk = int(rec.get("tokens") or 0)
     except (TypeError, ValueError) as e:
-        silent_exc(e, where="call_recorder::_m352b_accumulate tokens 非数值")
+        silent_exc(e, where="call_recorder::_m352b_accumulate tokens 非数值", level="debug")
         _tk = 0
 
     # ★375刀10：本条的错误面（给 `by_channel` 用；`by_model` 不加 ——
@@ -547,7 +547,7 @@ def _m352b_accumulate(prev: dict, rec: dict, day: str,
         _dts = float(_ts) if _ts is not None else time.time()
         out["updated_at"] = _dt.datetime.fromtimestamp(_dts).isoformat(timespec="seconds")
     except (TypeError, ValueError, OSError) as e:
-        silent_exc(e, where="call_recorder::_m352b_accumulate 时间戳")
+        silent_exc(e, where="call_recorder::_m352b_accumulate 时间戳", level="debug")
         out["updated_at"] = ""
     return out
 
@@ -609,7 +609,7 @@ def convert_calls_to_training_pairs(src_path: str, out_path: str) -> int:
                 _of.write(json.dumps(_pair, ensure_ascii=False, default=str) + "\n")
                 _n += 1
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.call_recorder::convert_calls_to_training_pairs")
+        silent_exc(e, where="nucleus.llm.call_recorder::convert_calls_to_training_pairs", level="debug")
     return _n
 
 
@@ -652,14 +652,14 @@ class LLMCallRecorder:
         try:
             return int(_cfg("LLM_TRACE_MAX_TEXT_LEN", 8000) or 0)
         except Exception as e:
-            silent_exc(e, where="nucleus.llm.call_recorder::max_text_len L227")
+            silent_exc(e, where="nucleus.llm.call_recorder::max_text_len L227", level="debug")
             return 8000
 
     def retention_days(self) -> int:
         try:
             return int(_cfg("LLM_TRACE_RETENTION_DAYS", 90) or 0)
         except Exception as e:
-            silent_exc(e, where="nucleus.llm.call_recorder::retention_days L233")
+            silent_exc(e, where="nucleus.llm.call_recorder::retention_days L233", level="debug")
             return 90
 
     def sanitize_enabled(self) -> bool:
@@ -700,7 +700,7 @@ class LLMCallRecorder:
                 return ""
             return self.default_prompt_version()
         except Exception as e:
-            silent_exc(e, where="nucleus.llm.call_recorder::_resolve_prompt_version L273")
+            silent_exc(e, where="nucleus.llm.call_recorder::_resolve_prompt_version L273", level="debug")
             return ""
 
     def _resolve_error(self, error: Any, status: str) -> str:
@@ -722,7 +722,7 @@ class LLMCallRecorder:
             _lim = self.error_max_len() if _cap else self.max_text_len()
             return _truncate(_raw, _lim or 0)
         except Exception as e:
-            silent_exc(e, where="nucleus.llm.call_recorder::_resolve_error L294")
+            silent_exc(e, where="nucleus.llm.call_recorder::_resolve_error L294", level="debug")
             return ""
 
     # ------------------------------------------------------------------
@@ -924,7 +924,7 @@ class LLMCallRecorder:
                 _f.write(_line + "\n")
             self._materialized += 1
         except Exception as e:
-            silent_exc(e, where="nucleus.llm.call_recorder::_materialize_training_pair")
+            silent_exc(e, where="nucleus.llm.call_recorder::_materialize_training_pair", level="debug")
             self._materialized_failed += 1
 
     def _m352b_update_daily(self, rec: dict, ts: float) -> None:
@@ -954,7 +954,7 @@ class LLMCallRecorder:
                             _prev = json.load(_f) or {}
                     except Exception as e:
                         # 旧文件坏了不能让本次调用丢失：按空骨架重建并留痕
-                        silent_exc(e, where="call_recorder::_m352b_update_daily 读旧汇总")
+                        silent_exc(e, where="call_recorder::_m352b_update_daily 读旧汇总", level="debug")
                         _prev = {}
                 _data = _m352b_accumulate(_prev, rec, _day)
                 if int(_data.get("paid_tokens") or 0) >= _thr and not _data.get("alerted"):
@@ -982,7 +982,7 @@ class LLMCallRecorder:
                     json.dumps(_fire.get("by_channel") or {}, ensure_ascii=False),
                     json.dumps(_fire.get("paid_by_model") or {}, ensure_ascii=False))
         except Exception as e:
-            silent_exc(e, where="call_recorder::_m352b_update_daily")
+            silent_exc(e, where="call_recorder::_m352b_update_daily", level="debug")
 
     def stats(self) -> dict[str, Any]:
         """运行期统计（不触发任何 IO 扫描）。"""
@@ -1069,7 +1069,7 @@ def get_call_recorder() -> LLMCallRecorder | None:
                 _recorder = LLMCallRecorder()
             return _recorder
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.call_recorder::get_call_recorder L463")
+        silent_exc(e, where="nucleus.llm.call_recorder::get_call_recorder L463", level="debug")
         return None
 
 
@@ -1112,7 +1112,7 @@ def get_daily_tokens(base_dir: str | None = None) -> dict:
         _d["source"] = "current" if _d.get("date") == _today else "stale_yesterday"
         return _d
     except Exception as e:
-        silent_exc(e, where="call_recorder::get_daily_tokens")
+        silent_exc(e, where="call_recorder::get_daily_tokens", level="debug")
         _bad = _m352b_empty_day(_today)
         _bad["source"] = "unreadable"
         return _bad
@@ -1162,7 +1162,7 @@ def record_evolution_call(*, prompt: Any, response: Any,
                            duration=duration, tokens=tokens, status=status,
                            error=error, ts=ts, usage=usage)
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.call_recorder::record_evolution_call L510")
+        silent_exc(e, where="nucleus.llm.call_recorder::record_evolution_call L510", level="debug")
         return None
 
 
@@ -1207,7 +1207,7 @@ def trace_evolution_call(prompt_pos: int = 2, version: str = ""):
                 try:
                     _err = format_error(_e)
                 except Exception as e:
-                    silent_exc(e, where="nucleus.llm.call_recorder::_wrapper L563")
+                    silent_exc(e, where="nucleus.llm.call_recorder::_wrapper L563", level="debug")
                     _err = f"{type(_e).__name__}: {_e}"
                 raise
             finally:
@@ -1239,7 +1239,7 @@ def trace_evolution_call(prompt_pos: int = 2, version: str = ""):
                         if hasattr(_self, "_m44_last_channel"):
                             _self._m44_last_channel = ""
                 except Exception as e:
-                    silent_exc(e, where="nucleus.llm.call_recorder::_wrapper L587")
+                    silent_exc(e, where="nucleus.llm.call_recorder::_wrapper L587", level="debug")
         return _wrapper
     return _deco
 
@@ -1403,7 +1403,7 @@ def paid_usage_line(base_dir: str | None = None, log: bool = True) -> dict:
                 ",".join("%s=%d" % (k, int((v or {}).get("tokens") or 0))
                          for k, v in _top) or "-")
     except Exception as e:
-        silent_exc(e, where="call_recorder::paid_usage_line")
+        silent_exc(e, where="call_recorder::paid_usage_line", level="debug")
     return _out
 
 
@@ -1520,7 +1520,7 @@ def read_daily_tokens_report(base_dir: str | None = None) -> dict:
                      f"(限流{v['rate_limit']})"
                      for k, v in _health.items()) or "-")
     except Exception as _le:
-        silent_exc(_le, where="call_recorder::read_daily_tokens_report trace")
+        silent_exc(_le, where="call_recorder::read_daily_tokens_report trace", level="debug")
     return _out
 
 
@@ -1547,7 +1547,7 @@ def evaluate_pool_expansion(daily_rows: list) -> dict:
             _module_logger.info("[354渠道] 入池判据 数据不足(%d日) ⇒ 不可判（非不达标）"
                                 % len(_rows))
         except Exception as _le2:
-            silent_exc(_le2, where="call_recorder::evaluate_pool_expansion insufficient")
+            silent_exc(_le2, where="call_recorder::evaluate_pool_expansion insufficient", level="debug")
         return _out
     _last2 = _rows[-2:]
     _shares = []
@@ -1646,5 +1646,5 @@ def evaluate_pool_expansion(daily_rows: list) -> dict:
             "[354渠道] 入池判据 TokenHub=%s 千帆=%s 判据值=%s（key 已设不浪费，未达即暂缓）",
             _v1, _v2, ";".join(_out["trace"]))
     except Exception as _le3:
-        silent_exc(_le3, where="call_recorder::evaluate_pool_expansion trace")
+        silent_exc(_le3, where="call_recorder::evaluate_pool_expansion trace", level="debug")
     return _out

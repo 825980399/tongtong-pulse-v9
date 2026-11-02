@@ -191,7 +191,7 @@ def _patch_true_fix_rate() -> float | None:
         if isinstance(_n9, dict) and isinstance(_n9.get("fix_rate"), (int, float)):
             _vals.append(float(_n9["fix_rate"]))
     except Exception as e:
-        silent_exc(e, where="nucleus.self_awareness.quality_score_v2::_patch_true_fix_rate N9")
+        silent_exc(e, where="nucleus.self_awareness.quality_score_v2::_patch_true_fix_rate N9", level="debug")
     # ② 主动复现口径（保留作对照）
     try:
         from nucleus.evolution.patch_active_reprobe import true_fix_rate
@@ -204,7 +204,7 @@ def _patch_true_fix_rate() -> float | None:
                 if isinstance(_tf, (int, float)):
                     _vals.append(float(_tf))
     except Exception as e:
-        silent_exc(e, where="nucleus.self_awareness.quality_score_v2::_patch_true_fix_rate reprobe")
+        silent_exc(e, where="nucleus.self_awareness.quality_score_v2::_patch_true_fix_rate reprobe", level="debug")
     if not _vals:
         return None
     return round(min(_vals), 4)
@@ -387,7 +387,7 @@ def count_ruff_f() -> int | None:
         _lines = [x for x in (_r.stdout or "").splitlines() if ": F" in x]
         return len(_lines)
     except Exception as e:
-        silent_exc(e, where="nucleus.self_awareness.quality_score_v2::count_ruff_f L362")
+        silent_exc(e, where="nucleus.self_awareness.quality_score_v2::count_ruff_f L362", level="debug")
         return None
 
 

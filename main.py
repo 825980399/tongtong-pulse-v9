@@ -31,7 +31,7 @@ try:
     # 未来所有 json 操作可替换为 orjson
     print("[性能] orjson 可用，JSON 解析性能将大幅提升")
 except ImportError as _se:
-    silent_exc(_se, "main.py:29")
+    silent_exc(_se, "main.py:29", level="debug")
 
 # 正则表达式缓存（避免重复编译）
 import re as _re  # noqa: I001
@@ -111,14 +111,14 @@ def _safe_get_insight_board():
     try:
         _b = get_insight_board
     except NameError as e:
-        silent_exc(e, where="main::_safe_get_insight_board L103")
+        silent_exc(e, where="main::_safe_get_insight_board L103", level="debug")
         return None
     if not callable(_b):
         return None
     try:
         return _b()
     except Exception as e:
-        silent_exc(e, where="main::_safe_get_insight_board L109")
+        silent_exc(e, where="main::_safe_get_insight_board L109", level="debug")
         return None
 
 from nucleus.mnemosyne.ContextSnapshot import (
@@ -363,7 +363,7 @@ class PulseFramework:
                 from nucleus.logger import get_module_logger
                 _budget.set_logger(get_module_logger("ResourceBudget"))
             except Exception as _se:
-                silent_exc(_se, "main.py:297")
+                silent_exc(_se, "main.py:297", level="debug")
         except Exception as _e:
             self._log(LogLevel.WARNING, f"资源预算中枢初始化失败（不影响主链路）: {_e}")
         # ResonanceEngine: 五维共振检索引擎
@@ -473,12 +473,12 @@ class PulseFramework:
                 from nucleus.semantic.VectorStore import get_vector_store
                 _rei.set_dependencies(vector_store=get_vector_store())
             except Exception as _se:
-                silent_exc(_se, "main.py:407")
+                silent_exc(_se, "main.py:407", level="debug")
             try:
                 from nucleus.semantic.AsyncEncodeQueue import get_encode_queue
                 _rei.set_dependencies(encode_queue=get_encode_queue())
             except Exception as _se:
-                silent_exc(_se, "main.py:412")
+                silent_exc(_se, "main.py:412", level="debug")
             # ★第250批 刀1：修复蒸馏断链根因——enable_reasoning_double_write 实际位于
             #   config 顶层（config.py:1104），而 _rei_cfg 来自子节
             #   REASONING_EXPERIENCE_INDEX_CONFIG，子节无该键导致 .get 恒返 False，
@@ -701,7 +701,7 @@ class PulseFramework:
             )
             get_reasoning_experience_indexer().set_dependencies(knowledge_tree=self.knowledge_tree)
         except Exception as _e:
-            silent_exc(_e, "main.py:A5 indexer knowledge_tree wiring")
+            silent_exc(_e, "main.py:A5 indexer knowledge_tree wiring", level="debug")
         # ★v23.0新增：梯度追踪器——激活v10预埋的场梯度感知能力
         from nucleus.field.GradientTracker import GradientTracker
         self.gradient_tracker = GradientTracker(window_size=120, sample_interval_seconds=10.0)
@@ -757,7 +757,7 @@ class PulseFramework:
                 self._log(LogLevel.WARNING,
                           f"自认知报告总线注册失败（已忽略）: {type(_m50_re).__name__}")
             except Exception as _se:
-                silent_exc(_se, "main.py:634")
+                silent_exc(_se, "main.py:634", level="debug")
         self._log(LogLevel.INFO, "体验记忆池已初始化")
 
         # ★v23.0新增：振荡场监视器——衔接OscillonField与GradientTracker
@@ -1088,7 +1088,7 @@ class PulseFramework:
                         f"若需实测显卡加速效果，运行 python verify_gpu_bench.py"
                         + ("" if _gs.get("enabled", True) else "（当前已在 config 中关闭）"))
                 except Exception as _se:
-                    silent_exc(_se, "main.py:908")
+                    silent_exc(_se, "main.py:908", level="debug")
             else:
                 self._log(LogLevel.DEBUG, "GPU计算加速不可用（torch探测），回退CPU")
         except Exception as _e:
@@ -1612,7 +1612,7 @@ class PulseFramework:
 
                     self.legs.set_llm_callback(_m49_legs_llm)
             except Exception as _se:
-                silent_exc(_se, "main.py:1223")
+                silent_exc(_se, "main.py:1223", level="debug")
         # 控制器权限配置加载（初始化动作，非依赖注入）
         if hasattr(self, 'controller') and self.controller:
             self.controller.load_permission_config()
@@ -1650,7 +1650,7 @@ class PulseFramework:
             _vl_hub.register_applier("code_learner", _code_learner_applier,
                                      tag="code_learner_intake")
         except Exception as _se:
-            silent_exc(_se, "main.py:1257")
+            silent_exc(_se, "main.py:1257", level="debug")
 
     def _init_organs_legacy(self):
         """硬编码装配（原 _init_organs，作为声明式装配的回退路径）。
@@ -1711,7 +1711,7 @@ class PulseFramework:
             from nucleus.reasoning.ReasoningWorkerPool import get_reasoning_pool
             self.liver.set_reasoning_pool(get_reasoning_pool())
         except Exception as _se:
-            silent_exc(_se, "main.py:1281")
+            silent_exc(_se, "main.py:1281", level="debug")
         self.kidney = self._create_organ(PulseKidney, "肾",
                                          node_pool=self.node_pool,
                                          knowledge_tree=self.knowledge_tree,
@@ -1795,7 +1795,7 @@ class PulseFramework:
             _vl_hub.register_applier("code_learner", _code_learner_applier,
                                      tag="code_learner_intake")
         except Exception as _se:
-            silent_exc(_se, "main.py:1359")
+            silent_exc(_se, "main.py:1359", level="debug")
         # ★v22.0重构：注入节点池和知识树到QICA，用于动态知识路径映射
         if hasattr(self.qica, 'set_node_pool'):
             self.qica.set_node_pool(self.node_pool)
@@ -1858,7 +1858,7 @@ class PulseFramework:
                 if _m49_st is not None and callable(_m49_set):
                     _m49_set(_m49_st)
             except Exception as _se:
-                silent_exc(_se, "main.py:1418")
+                silent_exc(_se, "main.py:1418", level="debug")
             # ★R3修复：注入 LLM 兜底回调到搜索意图分类器（复用肺的远程调用封装），
             # 使 SearchIntentClassifier 的「本地规则 + LLM 兜底 + 规则自进化」闭环生效。
             # 回调签名需满足 (prompt: str) -> str | None，此处用 lambda 适配肺的
@@ -1878,7 +1878,7 @@ class PulseFramework:
 
                     self.legs.set_llm_callback(_m49_legs_llm)
             except Exception as _se:
-                silent_exc(_se, "main.py:1438")
+                silent_exc(_se, "main.py:1438", level="debug")
             self.code_sandbox = self._create_organ(PulseCodeSandbox, "代码沙箱")
             self.file_digester = self._create_organ(PulseFileDigester, "文件消化器")
         else:
@@ -2042,7 +2042,7 @@ class PulseFramework:
             if hasattr(self.inner_world, 'set_reasoning_pool'):
                 self.inner_world.set_reasoning_pool(_reasoning_pool)
         except Exception as _se:
-            silent_exc(_se, "main.py:1600")
+            silent_exc(_se, "main.py:1600", level="debug")
         # ===== 推理进程池注入结束 =====
         if FEATURE.get("enable_evolution", True):
             # ★v18.0修复：遗传系统改为OrganLoader动态加载
@@ -2331,7 +2331,7 @@ class PulseFramework:
             else:
                 self._log(LogLevel.DEBUG, "任务态账本恢复: 无需改判")
         except Exception as _tl_e:
-            silent_exc(_tl_e, where="main.py:start 任务态账本恢复（不阻断启动）")
+            silent_exc(_tl_e, where="main.py:start 任务态账本恢复（不阻断启动）", level="debug")
         # ★第159批 上B 刀A（P1）：补丁段生命周期对账（启动期）。
         #   reconcile_patches 与 task_ledger.reconcile_on_startup **解耦**：只读写
         #   patch_lifecycle.json、不动任务态枚举（验收 c）；仅对 activated/observing
@@ -2347,7 +2347,7 @@ class PulseFramework:
             else:
                 self._log(LogLevel.DEBUG, "补丁段生命周期对账: 无超期补丁")
         except Exception as _pl_e:
-            silent_exc(_pl_e, where="main.py:start 补丁段生命周期对账（不阻断启动）")
+            silent_exc(_pl_e, where="main.py:start 补丁段生命周期对账（不阻断启动）", level="debug")
         # ===== 新增: 恢复生命连续性状态 =====
         extra_state = self.snapshot.get_extra_state()
         if extra_state:
@@ -2597,11 +2597,11 @@ class PulseFramework:
                 try:
                     get_verification_learning_hub().run_startup_distill()
                 except Exception as _se:
-                    silent_exc(_se, "main.py:2050")
+                    silent_exc(_se, "main.py:2050", level="debug")
             _distill_t = threading.Thread(target=_run_distill, name="启动蒸馏", daemon=True)
             _distill_t.start()
         except Exception as _se:
-            silent_exc(_se, "main.py:2054")
+            silent_exc(_se, "main.py:2054", level="debug")
 
         # ★v24.0新增：注册自动保存事件处理器
         self._auto_save_cond_id = self.info_field.register_condition(
@@ -2852,7 +2852,7 @@ class PulseFramework:
             if hasattr(self, 'risk_perception') and self.risk_perception:
                 self.risk_perception.seed_intuition_patterns()
         except Exception as _se:
-            silent_exc(_se, "main.py:2299")
+            silent_exc(_se, "main.py:2299", level="debug")
         # ===== 直觉冷启动结束 =====
 
         # ===== 启动同步确认：验证所有器官的共振条件已正确注册 =====
@@ -2888,7 +2888,7 @@ class PulseFramework:
             )
             self.info_field.publish(_assess_pulse)
         except Exception as _se:
-            silent_exc(_se, "main.py:2335")
+            silent_exc(_se, "main.py:2335", level="debug")
 
         # 步骤10: 系统就绪，输出状态摘要
         stats_node = self.node_pool.get_stats()
@@ -3108,19 +3108,19 @@ class PulseFramework:
                 if _r1:
                     extra_state["life_state"] = _r1
             except Exception as _se:
-                silent_exc(_se, "main.py:2552")
+                silent_exc(_se, "main.py:2552", level="debug")
             try:
                 _r2 = _cf2.result(timeout=5.0)
                 if _r2:
                     extra_state.update(_r2)
             except Exception as _se:
-                silent_exc(_se, "main.py:2558")
+                silent_exc(_se, "main.py:2558", level="debug")
             try:
                 _r3 = _cf3.result(timeout=5.0)
                 if _r3:
                     extra_state.update(_r3)
             except Exception as _se:
-                silent_exc(_se, "main.py:2564")
+                silent_exc(_se, "main.py:2564", level="debug")
         self.snapshot.set_extra_state(extra_state)
         # ★神经递质状态持久化
         if hasattr(self, 'neurotransmitters') and self.neurotransmitters:
@@ -3129,7 +3129,7 @@ class PulseFramework:
                 if _nt_state:
                     self.snapshot.merge_organ_extra_state("神经递质", _nt_state)
             except Exception as _se:
-                silent_exc(_se, "main.py:2573")
+                silent_exc(_se, "main.py:2573", level="debug")
         # 合并内在世界的额外状态
         if hasattr(self, 'inner_world') and self.inner_world:
             try:
@@ -3137,7 +3137,7 @@ class PulseFramework:
                 if _iw_state:
                     self.snapshot.merge_organ_extra_state("内在世界", _iw_state)
             except Exception as _se:
-                silent_exc(_se, "main.py:2581")
+                silent_exc(_se, "main.py:2581", level="debug")
         # ★v16.0: 收集代码学习器官的进度状态
         if hasattr(self, 'code_learner') and self.code_learner is not None:
             try:
@@ -3145,7 +3145,7 @@ class PulseFramework:
                 if _cl_state:
                     self.snapshot.merge_organ_extra_state("代码学习", _cl_state)
             except Exception as _se:
-                silent_exc(_se, "main.py:2589")
+                silent_exc(_se, "main.py:2589", level="debug")
         # ★FIX(规则4): 收集兴趣模型/QICA领域库/赫布连接三处常驻状态，随快照持久化
         try:
             if hasattr(self, 'interest_model') and self.interest_model and hasattr(self.interest_model, 'get_state_snapshot'):
@@ -3153,21 +3153,21 @@ class PulseFramework:
                 if _im_state:
                     self.snapshot.merge_organ_extra_state("兴趣模型", _im_state)
         except Exception as _se:
-            silent_exc(_se, "main.py:2597")
+            silent_exc(_se, "main.py:2597", level="debug")
         try:
             if hasattr(self, 'qica') and self.qica and hasattr(self.qica, 'get_state_snapshot'):
                 _qica_state = self.qica.get_state_snapshot()
                 if _qica_state:
                     self.snapshot.merge_organ_extra_state("QICA", _qica_state)
         except Exception as _se:
-            silent_exc(_se, "main.py:2604")
+            silent_exc(_se, "main.py:2604", level="debug")
         try:
             if hasattr(self, 'hebbian_learner') and self.hebbian_learner and hasattr(self.hebbian_learner, 'get_state_snapshot'):
                 _hb_state = self.hebbian_learner.get_state_snapshot()
                 if _hb_state:
                     self.snapshot.merge_organ_extra_state("赫布学习", _hb_state)
         except Exception as _se:
-            silent_exc(_se, "main.py:2611")
+            silent_exc(_se, "main.py:2611", level="debug")
         # ★F2：持久化肝脏融合/压缩冷却计时器，避免重启后冷却失效导致重试风暴
         try:
             if hasattr(self, 'liver') and self.liver and hasattr(self.liver, 'get_state_snapshot'):
@@ -3175,7 +3175,7 @@ class PulseFramework:
                 if _liver_state:
                     self.snapshot.merge_organ_extra_state("肝", _liver_state)
         except Exception as _se:
-            silent_exc(_se, "main.py:2619")
+            silent_exc(_se, "main.py:2619", level="debug")
         # ★P4修复（退出挂起）：保存快照前先关闭并行调度线程池与探查器。
         # 背景：大脑皮层并行审查/探查任务提交到 parallel_scheduler 线程池，退出时若仍在写
         # node_pool，会与 snapshot.save() 争抢锁导致退出挂起（10:16 重启需强制退出）。
@@ -3186,7 +3186,7 @@ class PulseFramework:
             from nucleus.self_inspector import shutdown_self_inspector
             shutdown_self_inspector()
         except Exception as _se:
-            silent_exc(_se, "main.py:2630")
+            silent_exc(_se, "main.py:2630", level="debug")
 
         # ★P0-1修复：快照保存前提前关闭推理进程池，避免保存期间仍有任务提交导致子进程异常
         try:
@@ -3196,7 +3196,7 @@ class PulseFramework:
                 _pool.shutdown()
                 self._log(LogLevel.INFO, f"推理进程池已提前关闭 (耗时{time.time()-_stop_t0:.1f}s)")
         except Exception as _se:
-            silent_exc(_se, "main.py:2640")
+            silent_exc(_se, "main.py:2640", level="debug")
 
         self._log(LogLevel.INFO, f"开始保存快照 (耗时{time.time()-_stop_t0:.1f}s)")
 
@@ -3236,7 +3236,7 @@ class PulseFramework:
             if _pool:
                 _pool.shutdown()
         except Exception as _se:
-            silent_exc(_se, "main.py:2678")
+            silent_exc(_se, "main.py:2678", level="debug")
 
         # v9.5新增: 优雅关闭信息场所有分层线程池
         if hasattr(self, 'info_field') and self.info_field:
@@ -3302,14 +3302,14 @@ class PulseFramework:
                 _m = __import__(_mod, fromlist=[_fn])
                 getattr(_m, _fn)()
             except Exception as _se:
-                silent_exc(_se, "main.py:2744")
+                silent_exc(_se, "main.py:2744", level="debug")
         with _TPE(max_workers=min(8, len(_shutdown_singletons))) as _singexec:
             _singfutures = [_singexec.submit(_shutdown_one, _m, _f) for _m, _f in _shutdown_singletons]
             for _sf in _singfutures:
                 try:
                     _sf.result(timeout=10.0)
                 except Exception as _se:
-                    silent_exc(_se, "main.py:2751")
+                    silent_exc(_se, "main.py:2751", level="debug")
         self._log(LogLevel.INFO, f"单例并行关闭完成: {len(_shutdown_singletons)}个")
 
         # 输出运行统计
@@ -3344,7 +3344,7 @@ class PulseFramework:
                     try:
                         _c.terminate()
                     except Exception as _se:
-                        silent_exc(_se, "main.py:2786")
+                        silent_exc(_se, "main.py:2786", level="debug")
         except Exception as _diag_e:
             self._log(LogLevel.DEBUG, f"退出诊断异常: {_diag_e}")
         # ★第176批段1 A2（乙）：停止序列末尾显式置「停止后拒绝复活」持久旗。
@@ -3375,7 +3375,7 @@ class PulseFramework:
                 _c.terminate()
                 _killed += 1
             except Exception as _se:
-                silent_exc(_se, "main.py:stop[A2]强制终止残留子进程")
+                silent_exc(_se, "main.py:stop[A2]强制终止残留子进程", level="debug")
         self._log(LogLevel.INFO,
                   f"停止序列清点[A2]: 推理池拒绝复活={_rp_refused}, "
                   f"关后get_reasoning_pool()={_rp_pool}, "
@@ -3543,7 +3543,7 @@ class PulseFramework:
                         )
                         self.info_field.publish(_narrative_pulse)
                     except Exception as _se:
-                        silent_exc(_se, "main.py:2934")
+                        silent_exc(_se, "main.py:2934", level="debug")
                     # ★v18.0新增：记录修复里程碑到洞察黑板
                     try:
                         _board = _safe_get_insight_board()
@@ -3558,7 +3558,7 @@ class PulseFramework:
                                 keywords=["代码质量", "修复验证", "趋势好转"]
                             )
                     except Exception as _se:
-                        silent_exc(_se, "main.py:2951")
+                        silent_exc(_se, "main.py:2951", level="debug")
                 elif _delta > 0:
                     self._log(LogLevel.WARNING, f"  代码趋势: ⚠️ 问题增加了{_delta}个，需关注")
                 else:
@@ -3604,7 +3604,7 @@ class PulseFramework:
             self._log(LogLevel.INFO, f"  上下文: 对话记忆={_ctx_stats.get('conversation_count', 0)}条, "
                      f"推理链={_ctx_stats.get('trace_count', 0)}条")
         except Exception as _se:
-            silent_exc(_se, "main.py:2997")
+            silent_exc(_se, "main.py:2997", level="debug")
 
         # 5. ★往期批次 相关任务③a：启动即锁死WARNING
         #    棘轮锁死状态此前仅在 apply_all_pending 运行时落日志，重启后若未触发
@@ -3614,7 +3614,7 @@ class PulseFramework:
             _pm = PatchManager(os.path.dirname(os.path.abspath(__file__)))
             _pm._m114b_emit_ratchet_lock_warning()
         except Exception as _re:
-            silent_exc(_re, "main.py:启动锁死WARNING")
+            silent_exc(_re, "main.py:启动锁死WARNING", level="debug")
 
         # 汇总
         if _issues_found > 0:
@@ -3634,7 +3634,7 @@ class PulseFramework:
                             keywords=["启动诊断", "健康检查"]
                         )
             except Exception as _se:
-                silent_exc(_se, "main.py:3016")
+                silent_exc(_se, "main.py:3016", level="debug")
         else:
             self._log(LogLevel.INFO, "健康诊断完成: ✅ 所有检查项通过")
             # ★P3 自主深度探查：启动首轮（异步，不阻塞启动）+ 低频周期巡检
@@ -3711,7 +3711,7 @@ class PulseFramework:
             _reason = pulse.get("payload", {}).get("reason", "未知原因")
             self._log(LogLevel.WARNING, f"自我修改约束触发(300s): {_reason}")
         except Exception as _se:
-            silent_exc(_se, "main.py:3071")
+            silent_exc(_se, "main.py:3071", level="debug")
         return {"status": "constraint_set"}
 
     def _on_motivation_urge(self, pulse):
@@ -3725,7 +3725,7 @@ class PulseFramework:
             _intensity = pulse.get("payload", {}).get("intensity", 0.0)
             self._log(LogLevel.INFO, f"动机冲动接收: {_desc}(强度{_intensity:.2f})")
         except Exception as _se:
-            silent_exc(_se, "main.py:3085")
+            silent_exc(_se, "main.py:3085", level="debug")
         return {"status": "motivation_stored"}
 
     def _on_emotion_signal(self, pulse):
@@ -3753,7 +3753,7 @@ class PulseFramework:
                 else:
                     self._log(LogLevel.INFO, f"情绪输出接收: {_emotion}(强度{_intensity:.2f})")
         except Exception as _se:
-            silent_exc(_se, "main.py:3113")
+            silent_exc(_se, "main.py:3113", level="debug")
         return {"status": "emotion_stored"}
 
     def _on_launch_plan(self, pulse):
@@ -3763,7 +3763,7 @@ class PulseFramework:
             _tier = pulse.get("payload", {}).get("tier", "unknown")
             self._log(LogLevel.INFO, f"硬件启动计划接收: tier={_tier}")
         except Exception as _se:
-            silent_exc(_se, "main.py:3123")
+            silent_exc(_se, "main.py:3123", level="debug")
         return {"status": "launch_plan_stored"}
 
     def get_latest_framework_signals(self) -> dict[str, Any]:
@@ -3872,7 +3872,7 @@ def _is_self_restart_child(pid) -> bool:
         with _SELF_RESTART_PIDS_LOCK:
             return pid in _SELF_RESTART_CHILD_PIDS
     except Exception as e:
-        silent_exc(e, where="main::_is_self_restart_child L3327")
+        silent_exc(e, where="main::_is_self_restart_child L3327", level="debug")
         return False
 
 
@@ -4193,7 +4193,7 @@ def _m422_periodic_apply_tick(framework, now: float | None = None) -> dict:
         if framework is not None and hasattr(framework, "stop"):
             framework.stop()
     except Exception as _se:
-        silent_exc(_se, "main.py:_m422_periodic_apply_tick stop")
+        silent_exc(_se, "main.py:_m422_periodic_apply_tick stop", level="debug")
     _st["last_result"] = None
     _restarting = False
     try:
@@ -4338,7 +4338,7 @@ def _prompt_with_timeout(prompt: str, timeout: float):
             _logger.debug("[补丁] 退出确认被用户中断（EOF/Ctrl+C）")
             _box["v"] = None
         except Exception as _we:
-            silent_exc(_we, "main.py:3397")
+            silent_exc(_we, "main.py:3397", level="debug")
             _box["v"] = None
         finally:
             _ev.set()
@@ -4479,7 +4479,7 @@ def main():
         from nucleus.runtime_metrics import install_error_capture
         install_error_capture()
     except Exception as _se:
-        silent_exc(_se, "main.py:3384")
+        silent_exc(_se, "main.py:3384", level="debug")
     try:
         framework = PulseFramework()
     except RuntimeError as e:
@@ -4499,7 +4499,7 @@ def main():
                         try:
                             framework.stop()
                         except Exception as e:
-                            silent_exc(e, "main.py:3328")
+                            silent_exc(e, "main.py:3328", level="debug")
                     time.sleep(3)
                     # ★P0-3: 统一自重启入口（独立会话 + PID 登记）
                     _spawn_self_restart()
@@ -4507,13 +4507,13 @@ def main():
                 else:
                     _logger.info("[自验证] 回退失败，请人工介入")
         except Exception as _se:
-            silent_exc(_se, "main.py:3336")
+            silent_exc(_se, "main.py:3336", level="debug")
         # 如果初始化中途失败但framework对象已创建，尝试清理
         if framework is not None:
             try:
                 framework.stop()
             except Exception as _se:
-                silent_exc(_se, "main.py:3342")
+                silent_exc(_se, "main.py:3342", level="debug")
         sys.exit(1)
 
     exit_requested = False
@@ -4548,11 +4548,11 @@ def main():
             with open("logs/pulse_crash.log", "a", encoding="utf-8") as _f:
                 _f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] UNCAUGHT {exc_type.__name__}:\n{_msg}\n")
         except Exception as _se:
-            silent_exc(_se, "main.py:3368")
+            silent_exc(_se, "main.py:3368", level="debug")
         try:
             _tb.print_exception(exc_type, exc_value, exc_tb)
         except Exception as _se:
-            silent_exc(_se, "main.py:3372")
+            silent_exc(_se, "main.py:3372", level="debug")
         # ★406 刀2：把未捕获异常接到免疫系统（system.error_report）。
         #   这里**只上报**，是否修复、怎么修由 `PulseWhiteCell._on_error_report` 决定；
         #   本块任何失败都不得影响崩溃日志与堆栈打印 —— 那是最后的取证途径。
@@ -4583,7 +4583,7 @@ def main():
                 )
                 _if406.publish(_pulse406)
         except Exception as _se406:
-            silent_exc(_se406, "main.py:3378")
+            silent_exc(_se406, "main.py:3378", level="debug")
 
     sys.excepthook = _crash_hook
     threading.excepthook = lambda args: _crash_hook(
@@ -4597,7 +4597,7 @@ def main():
         if hasattr(framework, 'inner_world') and framework.inner_world:
             framework.inner_world.set_framework_ref(framework)
     except Exception as _se:
-        silent_exc(_se, "main.py:3385")
+        silent_exc(_se, "main.py:3385", level="debug")
 
     # ★v23.0新增：企业微信对话桥接器（对话+通知，单一长连接）
     # ★安全修复：凭证改为从 config（环境变量）读取，不再硬编码明文
@@ -4710,7 +4710,7 @@ def main():
                         try:
                             framework.stop()
                         except Exception as _se:
-                            silent_exc(_se, "main.py:3490")
+                            silent_exc(_se, "main.py:3490", level="debug")
                     # ★v23.0新增：发送回退通知（复用桥接器连接）
                     if hasattr(framework, 'wecom_bridge') and framework.wecom_bridge:
                         framework.wecom_bridge.send_notification(
@@ -4809,7 +4809,7 @@ def main():
             try:
                 _fh.enable()
             except Exception as _se:
-                silent_exc(_se, "main.py:3576")
+                silent_exc(_se, "main.py:3576", level="debug")
     except Exception as e:
         _fh = None
         _crash_fh = None
@@ -4896,7 +4896,7 @@ def main():
             logging.getLogger("pulse").warning(
                 "[374刀9] 线程引导看门狗未能启动（thread_guard 已留痕，观测面不可用）")
     except Exception as _tg_e:
-        silent_exc(_tg_e, "main.py[374刀9-线程引导看门狗]")
+        silent_exc(_tg_e, "main.py[374刀9-线程引导看门狗]", level="debug")
 
     # ★第162批刀7：启动清场——移除上一轮遗留的 shutdown_request.json，防粘滞触发
     try:
@@ -4904,7 +4904,7 @@ def main():
         _night_orch_mod.NightShutdownChannel(
             os.path.dirname(os.path.abspath(__file__))).clear_stale_request()
     except Exception as _sd_clear_e:
-        silent_exc(_sd_clear_e, "main.py:startup[刀7-clear]")
+        silent_exc(_sd_clear_e, "main.py:startup[刀7-clear]", level="debug")
 
     # 主循环：等待退出信号 + 周期检测「立即应用补丁」请求 + 第162批刀7 shutdown_request 退出通道
     try:
@@ -4948,7 +4948,7 @@ def main():
                 _m422_cu.get("status"), _m422_cu.get("digest_day"),
                 _m422_cu.get("landed"), _m422_cu.get("reason") or "ok")
         except Exception as _m422_cu_e:
-            silent_exc(_m422_cu_e, "main.py[422刀4-叙事启动补跑]")
+            silent_exc(_m422_cu_e, "main.py[422刀4-叙事启动补跑]", level="debug")
         # ★423刀3：归档回收 —— 把 archive 里「运行时验过但没应用」的件重新入池。
         #   为什么放启动时一次性做：归档目前是"只写不读"的黑洞，
         #   回收只在对列被重建时才有意义；放循环内要靠标记位防重，多一个会错的状态。
@@ -4966,7 +4966,7 @@ def main():
                 _m423_rec.get("pending_before"), _m423_rec.get("pending_after"),
                 ",".join(_m423_rec.get("recovered_ids") or [])[:200])
         except Exception as _m423_ar_e:
-            silent_exc(_m423_ar_e, "main.py[423刀3-归档回收]")
+            silent_exc(_m423_ar_e, "main.py[423刀3-归档回收]", level="debug")
         # ★422刀4：周期 flush 的墙钟节流（与夜间编排同款 60s，避免每拍 stat 状态文件）
         _m422_fl_last_ts = 0.0
         while not exit_requested:
@@ -5017,12 +5017,12 @@ def main():
                                     _approved_n, _pool_consume_counter)
                                 continue
                         except Exception as _pg_e:
-                            silent_exc(_pg_e, "main.py:3965[刀8-patch-gate]")
+                            silent_exc(_pg_e, "main.py:3965[刀8-patch-gate]", level="debug")
                     print(f"[夜间编排] 检测到 shutdown_request.json（reason={_req.get('reason')}），进入优雅退出流程...")
                     exit_requested = True
                     break
             except Exception as _sd_e:
-                silent_exc(_sd_e, "main.py:3965[刀7-shutdown]")
+                silent_exc(_sd_e, "main.py:3965[刀7-shutdown]", level="debug")
                 # ★367刀1③：异常分支分类标签（不新增行为、异常仍吞）
                 _logger.debug("[351节拍] branch=shutdown_exc err=%s",
                               type(_sd_e).__name__)
@@ -5039,7 +5039,7 @@ def main():
                     _nd_orch.maybe_run_night_digest(
                         os.path.dirname(os.path.abspath(__file__)))
             except Exception as _nd_e:
-                silent_exc(_nd_e, "main.py[333批刀2-night-digest]")
+                silent_exc(_nd_e, "main.py[333批刀2-night-digest]", level="debug")
                 # ★367刀1③：同一分类标签口径
                 _logger.debug("[351节拍] branch=night_digest_exc err=%s",
                               type(_nd_e).__name__)
@@ -5061,7 +5061,7 @@ def main():
                             _m422_fr.get("status"), _m422_fr.get("slot"),
                             _m422_fr.get("digest_day"), _m422_fr.get("reason") or "ok")
             except Exception as _m422_fr_e:
-                silent_exc(_m422_fr_e, "main.py[422刀4-叙事周期flush]")
+                silent_exc(_m422_fr_e, "main.py[422刀4-叙事周期flush]", level="debug")
             # ★374刀4（T-存量重算机制-1）：存量 `verifiable_rate` 重算。
             #   存量历史补丁的派生字段只在「补丁应用时」与「人工跑回填工具」两个
             #   时刻写过，之后哪怕探针/基线给出了新证据也没人回去重算 ⇒ 比率冻结。
@@ -5070,7 +5070,7 @@ def main():
                 from nucleus.evolution import verifiable_recompute as _vr
                 _vr.maybe_recompute(os.path.dirname(os.path.abspath(__file__)))
             except Exception as _vr_e:
-                silent_exc(_vr_e, "main.py[374刀4-存量重算]")
+                silent_exc(_vr_e, "main.py[374刀4-存量重算]", level="debug")
             # ★346批刀 1（P0）：问题池消费口——「发现→行动」的那一段。
             #   与审查主链**解耦**：审查照原节拍跑，消费在这里按自己的节拍认领。
             #   池空 / 未开启都在 consume_pool 里如实返回，这里只负责节流与兜底。
@@ -5111,7 +5111,7 @@ def main():
                         _logger.warning("[363A3] heartbeat_non_dict type=%s",
                                         type(_m363_cv).__name__)
             except Exception as _pc_e:
-                silent_exc(_pc_e, "main.py[346刀1-pool-consume]")
+                silent_exc(_pc_e, "main.py[346刀1-pool-consume]", level="debug")
             # ★进化闭环升级(完美级): 周期检测「验证通过即应用」请求。
             #   审视生成的补丁若已批准，会写入 apply_now.json 标记，
             #   此处检测到后走「应用+重启」流程，不再被动等待框架退出。
@@ -5136,7 +5136,7 @@ def main():
                             if framework and hasattr(framework, 'stop'):
                                 framework.stop()
                         except Exception as _se:
-                            silent_exc(_se, "main.py:3639")
+                            silent_exc(_se, "main.py:3639", level="debug")
                         # 应用补丁并重启
                         if _apply_pending_patches_and_restart(framework):
                             sys.exit(0)
@@ -5151,7 +5151,7 @@ def main():
                     logging.getLogger("pulse").warning(
                         f"[422刀3][周期apply] 节拍异常(忽略): {_m422_ae}")
     except KeyboardInterrupt as _se:
-        silent_exc(_se, "main.py:3646")
+        silent_exc(_se, "main.py:3646", level="debug")
     except Exception as _main_loop_e:
         # ★P3-4修复：全局异常兜底
         print(f"[框架] [CRITICAL] 运行时异常，触发紧急保存: {_main_loop_e}")
@@ -5161,24 +5161,24 @@ def main():
                 framework.snapshot.save()
                 framework.snapshot.save_l1()
         except Exception as _se:
-            silent_exc(_se, "main.py:3656")
+            silent_exc(_se, "main.py:3656", level="debug")
     finally:
         # ===== 步骤1: 停止功能模块 =====
         if framework.function_loader:
             try:
                 framework.function_loader.stop_all()
             except Exception as _se:
-                silent_exc(_se, "main.py:3663")
+                silent_exc(_se, "main.py:3663", level="debug")
 
         # ===== 步骤2: 停止HTTP服务 =====
         try:
             health_ui.stop()
         except Exception as _se:
-            silent_exc(_se, "main.py:3669")
+            silent_exc(_se, "main.py:3669", level="debug")
         try:
             web_chat.stop()
         except Exception as _se:
-            silent_exc(_se, "main.py:3673")
+            silent_exc(_se, "main.py:3673", level="debug")
 
         # 给 HTTP 服务器一点时间释放 socket
         time.sleep(0.3)
@@ -5191,7 +5191,7 @@ def main():
                 print("[框架] 参数补丁自动应用线程已停止")
             config.stop_config_watcher()
         except Exception as _se:
-            silent_exc(_se, "main.py:3686")
+            silent_exc(_se, "main.py:3686", level="debug")
 
         # ★PHASE17-1.5：语义内核显式落盘。
         #   ★关键：本框架退出走 os._exit（见下方），会**跳过所有 atexit 钩子**，
@@ -5203,7 +5203,7 @@ def main():
             )
             _shutdown_semantic_kernel()
         except Exception as _se:
-            silent_exc(_se, "main.py:3698")
+            silent_exc(_se, "main.py:3698", level="debug")
 
         # ===== 步骤3: 停止框架 =====
         framework.stop()
@@ -5259,9 +5259,9 @@ def main():
                         _child.terminate()
                         _child.join(timeout=0.5)
                 except Exception as _se:
-                    silent_exc(_se, "main.py:3754")
+                    silent_exc(_se, "main.py:3754", level="debug")
         except Exception as _se:
-            silent_exc(_se, "main.py:3756")
+            silent_exc(_se, "main.py:3756", level="debug")
         # 关闭 ProcessPoolExecutor（如果 stop 流程未关闭）
         try:
             from nucleus.reasoning.ReasoningWorkerPool import get_reasoning_pool
@@ -5269,7 +5269,7 @@ def main():
             if _pool:
                 _pool.shutdown()
         except Exception as _se:
-            silent_exc(_se, "main.py:3764")
+            silent_exc(_se, "main.py:3764", level="debug")
         # 用 psutil 列出所有子进程并 terminate（如果可用）
         try:
             import psutil
@@ -5285,11 +5285,11 @@ def main():
                         continue
                     _child.terminate()
                 except (psutil.NoSuchProcess, psutil.AccessDenied) as _se:
-                    silent_exc(_se, "main.py:3780")
+                    silent_exc(_se, "main.py:3780", level="debug")
         except ImportError as _se:
-            silent_exc(_se, "main.py:3782")
+            silent_exc(_se, "main.py:3782", level="debug")
         except Exception as _se:
-            silent_exc(_se, "main.py:3784")
+            silent_exc(_se, "main.py:3784", level="debug")
 
         # ★FIX(进程残留): 用 os._exit 强制退出，不等待任何非 daemon 线程/子进程
         #   相比 sys.exit，os._exit 立即终止进程，跳过所有 atexit 清理
@@ -5298,7 +5298,7 @@ def main():
             sys.stdout.flush()
             sys.stderr.flush()
         except Exception as _se:
-            silent_exc(_se, "main.py:3793")
+            silent_exc(_se, "main.py:3793", level="debug")
         print("[框架] [INFO] 进程退出")
         os._exit(0)
         sys.exit(0)

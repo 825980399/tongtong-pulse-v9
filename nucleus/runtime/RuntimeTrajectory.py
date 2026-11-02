@@ -196,7 +196,7 @@ class RuntimeTrajectory:
         try:
             os.makedirs(self._persist_dir, exist_ok=True)
         except Exception as e:
-            silent_exc(e, where="nucleus.runtime.RuntimeTrajectory::_ensure_dir L198")
+            silent_exc(e, where="nucleus.runtime.RuntimeTrajectory::_ensure_dir L198", level="debug")
 
     def load(self) -> int:
         """启动回读：从持久化目录加载历史轨迹，返回加载条数。
@@ -251,7 +251,7 @@ class RuntimeTrajectory:
                     self._stats[_et] = self._stats.get(_et, 0) + 1
             return len(_loaded)
         except Exception as e:
-            silent_exc(e, where="nucleus.runtime.RuntimeTrajectory::load L253")
+            silent_exc(e, where="nucleus.runtime.RuntimeTrajectory::load L253", level="debug")
             return 0
 
     def _persist(self) -> None:
@@ -279,7 +279,7 @@ class RuntimeTrajectory:
                 self._persist_count += 1
             self._maybe_compact()
         except Exception as e:
-            silent_exc(e, where="nucleus.runtime.RuntimeTrajectory::_persist L280")
+            silent_exc(e, where="nucleus.runtime.RuntimeTrajectory::_persist L280", level="debug")
 
     def _maybe_compact(self) -> None:
         """每小时合并+去重+截断最近7天，写回 active（避免文件无限增长）。"""
@@ -319,7 +319,7 @@ class RuntimeTrajectory:
                 self._records = deque(_loaded[-self._max_records:], maxlen=self._max_records)
                 self._persisted_total = len(_loaded)
         except Exception as e:
-            silent_exc(e, where="nucleus.runtime.RuntimeTrajectory::_maybe_compact L319")
+            silent_exc(e, where="nucleus.runtime.RuntimeTrajectory::_maybe_compact L319", level="debug")
 
     def export(self, filepath: str,
                event_type: str | None = None,
@@ -352,13 +352,13 @@ def get_runtime_trajectory() -> RuntimeTrajectory:
             import config as _cfg
             _enabled = getattr(_cfg, "ENABLE_RUNTIME_TRAJECTORY_PERSIST", False)
         except Exception as e:
-            silent_exc(e, where="nucleus.runtime.RuntimeTrajectory::get_runtime_trajectory L352")
+            silent_exc(e, where="nucleus.runtime.RuntimeTrajectory::get_runtime_trajectory L352", level="debug")
             _enabled = False
         _trajectory = RuntimeTrajectory(enabled=_enabled)
         try:
             _trajectory.load()  # lazy-load 历史轨迹（启用时）；未启用则直接空启动
         except Exception as e:
-            silent_exc(e, where="nucleus.runtime.RuntimeTrajectory::get_runtime_trajectory L357")
+            silent_exc(e, where="nucleus.runtime.RuntimeTrajectory::get_runtime_trajectory L357", level="debug")
     return _trajectory
 
 

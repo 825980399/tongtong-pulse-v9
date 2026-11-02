@@ -74,11 +74,24 @@ class TestParquetPrimary(unittest.TestCase):
         self.assertTrue(s._m68_parquet_dir().endswith("parquet"))
 
     def test_12_switches_default_on(self):
-        """第80批 T1 止血后：Parquet 主存储默认开（G0 分层塌缩根因，第81批重开并星轨2026-09-19开启），
-        JSON 兼容备份默认仍开（双写安全兜底，防止 Parquet 失败时无回退）。"""
+        """Parquet 主存储默认开；★429 起 JSON 兼容备份默认**关**。
+
+        · Parquet 主存储：第80批 T1 止血后默认开（G0 分层塌缩根因，第81批重开并
+          星轨 2026-09-19 开启）—— 本条**未变**。
+        · JSON 兼容备份：68 批引入时的理由是「Parquet 失败时的双写兜底」，
+          **429 批裁决关闭**（星轨 2026-11-02）。依据（生产实测）：
+            - `data/knowledge/pulse_knowledge_snapshot.json` = 801,040,866 B（≈757 MiB）
+            - 全量保存 24.55s 里 **JSON 写占 23.43s**（21:43:10 日志原话）
+              另一次 14.67s 里 JSON 写 14.64s（21:29:16）⇒ 占比 95.4%~99.8%
+            - 加载侧走 Parquet 且明写「JSON 未读取」（21:42:29 日志原话）
+          ⇒ 这份 JSON **只写不读**，是纯冗余。
+        · 回滚点：`config.SNAPSHOT_SAVE_JSON_BACKUP = True`（代码路径一字未删）。
+        · 测试名保留历史语义（外部按 node id 引用不会断）。
+        """
         s = _mk_snap(self._d())
         self.assertTrue(s._m68_parquet_primary_enabled())
-        self.assertTrue(s._m68_json_backup_enabled())
+        # ★429：默认值由 True 改钉 False（规格断言改钉，非放水）
+        self.assertFalse(s._m68_json_backup_enabled())
 
     def test_13_switches_can_be_disabled(self):
         """两个开关均可关闭（回退 JSON 主存储）。"""

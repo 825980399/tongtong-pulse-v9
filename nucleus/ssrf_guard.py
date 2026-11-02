@@ -210,12 +210,12 @@ def safe_http_json(
                 _m360_model = str((json.loads(data.decode("utf-8", "ignore")) or {})
                                   .get("model", "") or "")
         except Exception as _m360me:
-            silent_exc(_m360me, where="nucleus.ssrf_guard::safe_http_json 埋点取 model")
+            silent_exc(_m360me, where="nucleus.ssrf_guard::safe_http_json 埋点取 model", level="debug")
             _m360_model = ""
         _m360_rid = _m360_begin(url, _m360_model,
                                 caller="ssrf_guard.safe_http_json", payload=data)
     except Exception as _m360e:
-        silent_exc(_m360e, where="nucleus.ssrf_guard::safe_http_json 埋点 begin")
+        silent_exc(_m360e, where="nucleus.ssrf_guard::safe_http_json 埋点 begin", level="debug")
     try:
         _req = urllib.request.Request(
             url, data=data, headers=headers or {}, method=method
@@ -228,7 +228,7 @@ def safe_http_json(
                 _m360_finish(_m360_rid, True,
                              _parsed.get("usage") if isinstance(_parsed, dict) else None)
             except Exception as _m360e:
-                silent_exc(_m360e, where="nucleus.ssrf_guard::safe_http_json 埋点 finish")
+                silent_exc(_m360e, where="nucleus.ssrf_guard::safe_http_json 埋点 finish", level="debug")
         return True, _parsed
     except urllib.error.URLError as _e:
         if _m360_rid:
@@ -236,7 +236,7 @@ def safe_http_json(
                 from nucleus.llm.paid_api_trace import finish as _m360_finish
                 _m360_finish(_m360_rid, False, error="URLError")
             except Exception as _m360e:
-                silent_exc(_m360e, where="nucleus.ssrf_guard::safe_http_json 埋点 finish")
+                silent_exc(_m360e, where="nucleus.ssrf_guard::safe_http_json 埋点 finish", level="debug")
         return False, f"请求失败: {_e}"
     except (ValueError, json.JSONDecodeError) as _e:
         if _m360_rid:
@@ -244,7 +244,7 @@ def safe_http_json(
                 from nucleus.llm.paid_api_trace import finish as _m360_finish
                 _m360_finish(_m360_rid, False, error="响应解析失败")
             except Exception as _m360e:
-                silent_exc(_m360e, where="nucleus.ssrf_guard::safe_http_json 埋点 finish")
+                silent_exc(_m360e, where="nucleus.ssrf_guard::safe_http_json 埋点 finish", level="debug")
         return False, f"响应解析失败: {_e}"
 
 

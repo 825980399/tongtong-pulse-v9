@@ -58,7 +58,7 @@ class ContradictionResolver:
                 try:
                     return float(ts())
                 except Exception as e:
-                    silent_exc(e, where="nucleus.reasoning.ContradictionResolver::_timestamp_of L60")
+                    silent_exc(e, where="nucleus.reasoning.ContradictionResolver::_timestamp_of L60", level="debug")
             try:
                 return float(v)
             except (TypeError, ValueError) as _m369_e:
@@ -76,7 +76,7 @@ class ContradictionResolver:
             try:
                 return float(st)
             except (TypeError, ValueError) as e:
-                silent_exc(e, where="nucleus.reasoning.ContradictionResolver::_source_rank L76")
+                silent_exc(e, where="nucleus.reasoning.ContradictionResolver::_source_rank L76", level="debug")
         src = (str(getattr(node, "source_organ", "")) or "").lower()
         if not src:
             return 0.5
@@ -105,7 +105,7 @@ class ContradictionResolver:
                 reason=str(result.get("reason", "")),
             )
         except Exception as e:
-            silent_exc(e, where="nucleus.reasoning.ContradictionResolver::resolve L105")
+            silent_exc(e, where="nucleus.reasoning.ContradictionResolver::resolve L105", level="debug")
         return result
 
     @staticmethod
@@ -196,7 +196,7 @@ class ContradictionResolver:
                                 "reason": f"命中矛盾，旧陈述按策略胜出（{r['reason']}）"}
                     # 无法裁决（如 manual 无标记）→ 保守保留两者，照常写入
         except Exception as e:
-            silent_exc(e, where="nucleus.reasoning.ContradictionResolver::precheck_on_write L196")
+            silent_exc(e, where="nucleus.reasoning.ContradictionResolver::precheck_on_write L196", level="debug")
         return result_add
 
     # ------------------------------------------------------------------
@@ -260,11 +260,11 @@ def _to_ts(value) -> float | None:
         try:
             return float(ts())
         except Exception as e:
-            silent_exc(e, where="nucleus.reasoning.ContradictionResolver::_to_ts L260")
+            silent_exc(e, where="nucleus.reasoning.ContradictionResolver::_to_ts L260", level="debug")
     try:
         return float(value)
     except (TypeError, ValueError) as e:
-        silent_exc(e, where="nucleus.reasoning.ContradictionResolver::_to_ts L264")
+        silent_exc(e, where="nucleus.reasoning.ContradictionResolver::_to_ts L264", level="debug")
         return None
 
 
@@ -387,7 +387,7 @@ def resolve_batch(tracking, node_getter=None, now=None,
                 try:
                     logger("矛盾待裁决: " + str(_item))
                 except Exception as e:
-                    silent_exc(e, where="nucleus.reasoning.ContradictionResolver::resolve_batch L386")
+                    silent_exc(e, where="nucleus.reasoning.ContradictionResolver::resolve_batch L386", level="debug")
             _human_n += 1
     _aged = apply_aging(tracking, now=now, demote_days=demote_days, archive_days=archive_days)
     return {"auto_resolved": _auto_n, "human_routed": _human_n,

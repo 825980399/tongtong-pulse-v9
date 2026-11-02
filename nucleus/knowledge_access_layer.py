@@ -50,7 +50,7 @@ def _kal_enabled() -> bool:
         import config
         return bool(getattr(config, "ENABLE_KAL", True))
     except Exception as e:
-        silent_exc(e, where="nucleus.knowledge_access_layer::_kal_enabled L48")
+        silent_exc(e, where="nucleus.knowledge_access_layer::_kal_enabled L48", level="debug")
         return True
 
 
@@ -358,13 +358,13 @@ class KnowledgeAccessLayer:
                 import config
                 _path = getattr(config, "KNOWLEDGE_SNAPSHOT_PATH", None)
             except Exception as e:
-                silent_exc(e, where="nucleus.knowledge_access_layer::get_storage_size L351")
+                silent_exc(e, where="nucleus.knowledge_access_layer::get_storage_size L351", level="debug")
                 _path = None
         if _path and os.path.isfile(_path):
             try:
                 return os.path.getsize(_path)
             except OSError as e:
-                silent_exc(e, where="nucleus.knowledge_access_layer::get_storage_size L356")
+                silent_exc(e, where="nucleus.knowledge_access_layer::get_storage_size L356", level="debug")
                 return 0
         return 0
 
@@ -416,7 +416,7 @@ class KnowledgeAccessLayer:
             return bool(getattr(config, "ENABLE_NEO4J_GRAPH_STORE", False)
                        and getattr(config, "ENABLE_NEO4J_DUAL_WRITE", False))
         except Exception as e:
-            silent_exc(e, where="nucleus.knowledge_access_layer::neo4j_dual_write_enabled L406")
+            silent_exc(e, where="nucleus.knowledge_access_layer::neo4j_dual_write_enabled L406", level="debug")
             return False
 
     def get_neo4j_dual_write_stats(self) -> dict:
@@ -453,7 +453,7 @@ class KnowledgeAccessLayer:
                        and getattr(config, "ENABLE_NEO4J_DUAL_WRITE", False)
                        and getattr(config, "ENABLE_NEO4J_READ", False))
         except Exception as e:
-            silent_exc(e, where="nucleus.knowledge_access_layer::neo4j_read_enabled L442")
+            silent_exc(e, where="nucleus.knowledge_access_layer::neo4j_read_enabled L442", level="debug")
             return False
 
     def query_relationships(self, node_id: str, direction: str = "both") -> list[dict]:

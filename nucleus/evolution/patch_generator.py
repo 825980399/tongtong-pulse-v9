@@ -122,7 +122,7 @@ def _m349_cfg(name: str, default: Any) -> Any:
 
         return getattr(_cfg, name, default)
     except Exception as _e:
-        silent_exc(_e, where="patch_generator::_m349_cfg %s" % name)
+        silent_exc(_e, where="patch_generator::_m349_cfg %s" % name, level="debug")
         return default
 
 
@@ -188,7 +188,7 @@ def dedup_key_matches_pool(file: str, method: str, issue_type: str) -> bool:
 
         return _ref(file, method, issue_type) == make_dedup_key(file, method, issue_type)
     except Exception as _e:
-        silent_exc(_e, where="patch_generator::dedup_key_matches_pool")
+        silent_exc(_e, where="patch_generator::dedup_key_matches_pool", level="debug")
         return False
 
 
@@ -227,7 +227,7 @@ def _precheck_index(file_abs: str) -> tuple:
     try:
         _st = os.stat(file_abs)
     except OSError as _e:
-        silent_exc(_e, where="patch_generator::_precheck_index stat %s" % file_abs)
+        silent_exc(_e, where="patch_generator::_precheck_index stat %s" % file_abs, level="debug")
         return None, "%s: %s" % (type(_e).__name__, _e)
     _key = (os.path.abspath(file_abs), int(_st.st_mtime_ns), int(_st.st_size))
     _hit = _PRECHECK_CACHE.get(_key)
@@ -238,10 +238,10 @@ def _precheck_index(file_abs: str) -> tuple:
             _src = _f.read()
         _tree = ast.parse(_src)
     except SyntaxError as _se:
-        silent_exc(_se, where="patch_generator::_precheck_index parse %s" % file_abs)
+        silent_exc(_se, where="patch_generator::_precheck_index parse %s" % file_abs, level="debug")
         _res = (None, "SyntaxError: %s" % _se)
     except OSError as _oe:
-        silent_exc(_oe, where="patch_generator::_precheck_index read %s" % file_abs)
+        silent_exc(_oe, where="patch_generator::_precheck_index read %s" % file_abs, level="debug")
         _res = (None, "%s: %s" % (type(_oe).__name__, _oe))
     else:
         _mod = set()
@@ -379,7 +379,7 @@ def precheck_target_v2(project_root: str | None, file: str, method: str,
                          errors="ignore") as _f:
                 _src = _f.read()
         except Exception as _oe:
-            silent_exc(_oe, where="patch_generator::precheck_target_v2 read_source")
+            silent_exc(_oe, where="patch_generator::precheck_target_v2 read_source", level="debug")
             _src = ""
         _hit = bool(_src) and _norm(_oc) and (_norm(_oc) in _norm(_src))
         _tried.append({"anchor": "original_code", "method": "-",
@@ -432,7 +432,7 @@ def check_body_integrity(project_root: str | None, file: str, method: str,
                 _src = _f.read()
             _tree = _ast.parse(_src)
         except Exception as _pe:
-            silent_exc(_pe, where="patch_generator::check_body_integrity parse")
+            silent_exc(_pe, where="patch_generator::check_body_integrity parse", level="debug")
             return None
         for _n in _ast.walk(_tree):
             if isinstance(_n, (_ast.FunctionDef, _ast.AsyncFunctionDef)) \
@@ -498,7 +498,7 @@ def check_tail_coverage(project_root: str | None, file: str, method: str,
             _src = "\n".join(_lines)
             _tree = _ast.parse(_src)
         except Exception as _pe:
-            silent_exc(_pe, where="patch_generator::check_tail_coverage parse")
+            silent_exc(_pe, where="patch_generator::check_tail_coverage parse", level="debug")
             return None
         for _n in _ast.walk(_tree):
             if isinstance(_n, (_ast.FunctionDef, _ast.AsyncFunctionDef)) \
@@ -664,7 +664,7 @@ def route_generation_lane(entry: dict, project_root: str | None = None) -> dict:
             with open(_p, encoding="utf-8", errors="replace") as _fh:
                 _nlines = sum(1 for _ in _fh)
         except OSError as _oe:
-            silent_exc(_oe, where="patch_generator::route_generation_lane lines")
+            silent_exc(_oe, where="patch_generator::route_generation_lane lines", level="debug")
     _core = _m349_is_core_file(_f) if _f else True
     _o["signals"] = {"issue_type": _it, "file": _f, "file_lines": _nlines,
                      "is_core": bool(_core),
@@ -707,7 +707,7 @@ def _tpl_file_imports(file_path: str, symbol: str) -> bool:
         with open(file_path, encoding="utf-8", errors="replace") as _f:
             _src = _f.read()
     except OSError as _e:
-        silent_exc(_e, where="patch_generator::_tpl_file_imports %s" % file_path)
+        silent_exc(_e, where="patch_generator::_tpl_file_imports %s" % file_path, level="debug")
         return False
     for _line in _src.split("\n"):
         _s = _line.strip()
@@ -740,7 +740,7 @@ def _tpl_silent_exception(project_root: str, entry: dict) -> dict:
         with open(_p, encoding="utf-8", errors="replace") as _f:
             _lines = _f.read().replace("\r\n", "\n").split("\n")
     except OSError as _e:
-        silent_exc(_e, where="patch_generator::_tpl_silent_exception read")
+        silent_exc(_e, where="patch_generator::_tpl_silent_exception read", level="debug")
         _base["why"] = "read_error"
         return _base
     _orig = "\n".join(_lines[_span["start"]:_span["end"]])
@@ -902,7 +902,7 @@ def extract_source_snippet(project_root: str, file: str, method: str,
         with open(_p, encoding="utf-8", errors="replace") as _f:
             _lines = _f.read().splitlines()
     except OSError as _e:
-        silent_exc(_e, where="patch_generator::extract_source_snippet read")
+        silent_exc(_e, where="patch_generator::extract_source_snippet read", level="debug")
         return {"ok": False, "code": "", "start_line": 0, "end_line": 0,
                 "why": "read_error:%s" % type(_e).__name__}
     _m = str(method or "").strip()
@@ -973,7 +973,7 @@ def _project_root_guess() -> str:
         return os.path.dirname(os.path.dirname(
             os.path.dirname(os.path.abspath(__file__))))
     except Exception as _e:
-        silent_exc(_e, where="patch_generator::_project_root_guess")
+        silent_exc(_e, where="patch_generator::_project_root_guess", level="debug")
         return os.getcwd()
 # 负样本来源（只读）：审计池终态 + 补丁台账拒收件
 NEGATIVE_POOL_STATUSES = ("wontfix",)
@@ -1015,7 +1015,7 @@ def load_feedback_examples(base_dir: str | None = None,
     try:
         from nucleus.evolution.verify_feedback import read_verdicts as _rv
     except Exception as _e:                                    # noqa: BLE001
-        silent_exc(_e, where="patch_generator::load_feedback_examples import")
+        silent_exc(_e, where="patch_generator::load_feedback_examples import", level="debug")
         _o["state"] = "import_failed"
         return _o
     _v = _rv(base_dir)
@@ -1094,7 +1094,7 @@ def load_negative_examples(root: str | None = None,
                 "reason": _why[:_NEG_REASON_MAX],
             })
     except Exception as _e:
-        silent_exc(_e, where="patch_generator::load_negative_examples pool")
+        silent_exc(_e, where="patch_generator::load_negative_examples pool", level="debug")
 
     # ---- B. 补丁台账拒收件 ----
     try:
@@ -1108,7 +1108,7 @@ def load_negative_examples(root: str | None = None,
                 with open(_p, "r", encoding="utf-8") as _f:
                     _d = json.load(_f)
             except Exception as _e:
-                silent_exc(_e, where="patch_generator::load_negative_examples 读 %s" % _p)
+                silent_exc(_e, where="patch_generator::load_negative_examples 读 %s" % _p, level="debug")
                 continue
             _items = _d.get("items") if isinstance(_d, dict) else _d
             if not isinstance(_items, list):
@@ -1129,7 +1129,7 @@ def load_negative_examples(root: str | None = None,
                 })
         _o["sources"].append("rejected:%s" % ("found" if _found else "absent"))
     except Exception as _e:
-        silent_exc(_e, where="patch_generator::load_negative_examples rejected")
+        silent_exc(_e, where="patch_generator::load_negative_examples rejected", level="debug")
 
     _o["total"] = len(_rows)
     if not _rows:
@@ -1327,7 +1327,7 @@ def _m349_is_core_file(file: str) -> bool:
 
         return bool(_SEE._is_core_file(str(file or "")))
     except Exception as _e:
-        silent_exc(_e, where="patch_generator::_m349_is_core_file")
+        silent_exc(_e, where="patch_generator::_m349_is_core_file", level="debug")
         return True  # 判不出来 ⇒ 当核心处理（宁可转人工）
 
 
@@ -1392,7 +1392,7 @@ def _m349_method_span(project_root: str, file: str, method: str) -> dict:
         with open(_p, encoding="utf-8", errors="replace") as _f:
             _lines = _f.read().replace("\r\n", "\n").split("\n")
     except OSError as _e:
-        silent_exc(_e, where="patch_generator::_m349_method_span read")
+        silent_exc(_e, where="patch_generator::_m349_method_span read", level="debug")
         return {"ok": False, "start": 0, "end": 0, "why": "read_error"}
     for _i, _s in enumerate(_lines):
         _t = _s.strip()
@@ -1433,7 +1433,7 @@ def check_splice_parses(project_root: str, file: str, original: str,
         with open(_p, encoding="utf-8", errors="replace") as _f:
             _lines = _f.read().replace("\r\n", "\n").split("\n")
     except OSError as _e:
-        silent_exc(_e, where="patch_generator::check_splice_parses read")
+        silent_exc(_e, where="patch_generator::check_splice_parses read", level="debug")
         return {"ok": False, "why": "read_error:%s" % type(_e).__name__,
                 "occurrences": 0, "mode": "none"}
     _whole = "\n".join(_lines)
@@ -1463,7 +1463,7 @@ def check_splice_parses(project_root: str, file: str, original: str,
                                 "occurrences": 1, "mode": "line_no",
                                 "realigned": _realigned, "line_no": _ln}
                     except SyntaxError as _se:
-                        silent_exc(_se, where="patch_generator.py::line472")
+                        silent_exc(_se, where="patch_generator.py::line472", level="debug")
                         _last = "syntax_error:%s(line %s)" % (_se.msg, _se.lineno)
                 return {"ok": False, "why": _last, "occurrences": 1,
                         "mode": "line_no", "line_no": _ln}
@@ -1490,7 +1490,7 @@ def check_splice_parses(project_root: str, file: str, original: str,
                                 "occurrences": _n, "mode": "method_scope",
                                 "realigned": _realigned}
                     except SyntaxError as _se:
-                        silent_exc(_se, where="patch_generator.py::line498")
+                        silent_exc(_se, where="patch_generator.py::line498", level="debug")
                         _last = "syntax_error:%s(line %s)" % (_se.msg, _se.lineno)
                 return {"ok": False, "why": _last, "occurrences": _n,
                         "mode": "method_scope"}
@@ -1512,7 +1512,7 @@ def check_splice_parses(project_root: str, file: str, original: str,
             return {"ok": True, "why": "parse_ok_after_splice", "occurrences": _n,
                     "mode": "global", "realigned": _realigned}
         except SyntaxError as _se:
-            silent_exc(_se, where="patch_generator.py::line519")
+            silent_exc(_se, where="patch_generator.py::line519", level="debug")
             _last = "syntax_error:%s(line %s)" % (_se.msg, _se.lineno)
     return {"ok": False, "why": _last, "occurrences": _n, "mode": "global"}
 
@@ -1540,7 +1540,7 @@ def _m349_compose_from_anchor(project_root: str, file: str, anchor: str,
         with open(_p, encoding="utf-8", errors="replace") as _f:
             _lines = _f.read().replace("\r\n", "\n").split("\n")
     except OSError as _e:
-        silent_exc(_e, where="patch_generator::_m349_compose_from_anchor read")
+        silent_exc(_e, where="patch_generator::_m349_compose_from_anchor read", level="debug")
         return {"ok": False, "why": "read_error:%s" % type(_e).__name__}
     _hits = [_i for _i, _s in enumerate(_lines) if _s.strip() == _a.strip()]
     _scope = ""
@@ -1760,7 +1760,7 @@ def generate_from_candidates(limit: int = 5, project_root: str | None = None,
     try:
         from nucleus.evolution.patch_candidates_consumer import consume_patch_candidates
     except Exception as _e:
-        silent_exc(_e, where="patch_generator::generate_from_candidates import")
+        silent_exc(_e, where="patch_generator::generate_from_candidates import", level="debug")
         return {"status": "import_failed", "why": "%s: %s" % (type(_e).__name__, _e),
                 "generated": 0, "entries": 0}
     _c = consume_patch_candidates(limit=limit, project_root=project_root,
@@ -1934,7 +1934,7 @@ def check_method_contract(draft: dict, project_root: str | None = None) -> dict:
                 _tree = _ast.parse(_ded)
                 _dedented = True
             except SyntaxError as _dse:
-                silent_exc(_dse, where="patch_generator.check_method_contract dedent")
+                silent_exc(_dse, where="patch_generator.check_method_contract dedent", level="debug")
                 _tree = None
         if _tree is None:
             _module_logger.info("[350生成] 整方法契约 AST 不通过: %s", _se)
@@ -1960,7 +1960,7 @@ def check_method_contract(draft: dict, project_root: str | None = None) -> dict:
                              if (ln.startswith("+") or ln.startswith("-"))
                              and not ln.startswith("+++") and not ln.startswith("---"))
         except Exception as _e:                                # noqa: BLE001
-            silent_exc(_e, where="patch_generator.check_method_contract diff")
+            silent_exc(_e, where="patch_generator.check_method_contract diff", level="debug")
             _n_changed = None
     if _n_changed is not None and _n_changed > METHOD_CONTRACT_MAX_LINES:
         return {"ok": False, "mode": "method",
@@ -2006,7 +2006,7 @@ def ollama_transport(prompt: str, *, model: str, base_url: str,
             return {"ok": False, "text": "", "err": "empty_response"}
         return {"ok": True, "text": _txt, "err": ""}
     except Exception as _e:
-        silent_exc(_e, where="patch_generator::ollama_transport")
+        silent_exc(_e, where="patch_generator::ollama_transport", level="debug")
         return {"ok": False, "text": "",
                 "err": "%s: %s" % (type(_e).__name__, str(_e)[:200])}
 
@@ -2044,7 +2044,7 @@ def _m366_entry_evidence(entry: dict) -> dict:
             _m338_derive_evidence, _m338_evidence_ok)
         from nucleus.reasoning.PatchManager import PatchManager as _PM
     except Exception as _e:
-        silent_exc(_e, where="patch_generator::_m366_entry_evidence import")
+        silent_exc(_e, where="patch_generator::_m366_entry_evidence import", level="debug")
         _res["evidence_meta"] = {"ok": False, "reason": "import_failed"}
         return _res
 
@@ -2053,7 +2053,7 @@ def _m366_entry_evidence(entry: dict) -> dict:
     try:
         _risk, _rbasis = _PM._m344_merge_risk(_exp, _it)
     except Exception as _e:
-        silent_exc(_e, where="patch_generator::_m366_entry_evidence risk")
+        silent_exc(_e, where="patch_generator::_m366_entry_evidence risk", level="debug")
         _risk, _rbasis = "", "unavailable"
     # trust：条目自带优先（非 70 才算有信息量，由派生侧判），否则按 issue_type 派生
     _raw_t = entry.get("trust_score")
@@ -2062,7 +2062,7 @@ def _m366_entry_evidence(entry: dict) -> dict:
             _trust = float(_PM._m280_trust_by_issue_type(_it))
             _tbasis = "_m280_trust_by_issue_type"
         except Exception as _e:
-            silent_exc(_e, where="patch_generator::_m366_entry_evidence trust")
+            silent_exc(_e, where="patch_generator::_m366_entry_evidence trust", level="debug")
             _trust, _tbasis = 70.0, "unavailable"
     else:
         try:
@@ -2082,7 +2082,7 @@ def _m366_entry_evidence(entry: dict) -> dict:
         _ev = _m338_derive_evidence(_probe)
         _ok, _why, _ = _m338_evidence_ok({"patch_evidence": _ev})
     except Exception as _e:
-        silent_exc(_e, where="patch_generator::_m366_entry_evidence derive")
+        silent_exc(_e, where="patch_generator::_m366_entry_evidence derive", level="debug")
         _res["evidence_meta"] = {"ok": False, "reason": "derive_failed",
                                  "risk_source": _rbasis, "trust_source": _tbasis}
         return _res
@@ -2105,7 +2105,7 @@ def _m427_method_cooldown(entry: dict, now: float | None = None) -> dict | None:
         _st = _m422_method_state(entry, now=now)
         return _st if isinstance(_st, dict) and _st.get("cooling") else None
     except Exception as e:
-        silent_exc(e, where="patch_generator::_m427_method_cooldown")
+        silent_exc(e, where="patch_generator::_m427_method_cooldown", level="debug")
         return None
 
 
@@ -2168,7 +2168,7 @@ def generate_patch_draft(entry: dict,
 
         _out["proc_gen"] = str(_pgs())
     except Exception as _e:
-        silent_exc(_e, where="patch_generator::generate_patch_draft proc_gen")
+        silent_exc(_e, where="patch_generator::generate_patch_draft proc_gen", level="debug")
     if not isinstance(entry, dict) or not entry:
         _out["error"] = "empty_entry"
         return _out
@@ -2475,7 +2475,7 @@ def route_draft_to_approval(draft: dict, project_root: str | None = None,
             _out["queued_method_level"] = any(
                 isinstance(x, dict) and x.get("id") == _pid for x in _hist)
         except Exception as _qe:
-            silent_exc(_qe, where="patch_generator::route_draft_to_approval also_queue")
+            silent_exc(_qe, where="patch_generator::route_draft_to_approval also_queue", level="debug")
             _out["queued_method_level"] = False
     try:
         _rows: list = []
@@ -2487,7 +2487,7 @@ def route_draft_to_approval(draft: dict, project_root: str | None = None,
                     _rows = [x for x in _raw if isinstance(x, dict)]
             except (ValueError, OSError) as _re:
                 # 读不出来**不能当空表覆盖**（那会静默丢历史草稿）
-                silent_exc(_re, where="patch_generator::route_draft_to_approval read")
+                silent_exc(_re, where="patch_generator::route_draft_to_approval read", level="debug")
                 _out["ok"] = False
                 _out["why"] = "drafts_unreadable:%s" % type(_re).__name__
                 return _out
@@ -2507,7 +2507,7 @@ def route_draft_to_approval(draft: dict, project_root: str | None = None,
             #   `explicit`（不是数据），于是"允许写"被当成"已写"。
             _ok_w = bool(guard_write(_path, component="PatchGenerator"))
         except ImportError as _ie:
-            silent_exc(_ie, where="patch_generator::route_draft_to_approval guard")
+            silent_exc(_ie, where="patch_generator::route_draft_to_approval guard", level="debug")
             _ok_w = True
         if not _ok_w:
             # 守卫拒绝写（生产 data/ 默认只读）⇒ 如实上报，**不当成功**
@@ -2545,7 +2545,7 @@ def route_draft_to_approval(draft: dict, project_root: str | None = None,
                 _tier["tier"], _tier["score"], _tier["changed_lines"],
                 ";".join(_tier["reasons"])[:200] or "无", _pid)
     except Exception as _e:
-        silent_exc(_e, where="patch_generator::route_draft_to_approval")
+        silent_exc(_e, where="patch_generator::route_draft_to_approval", level="debug")
         _out["ok"] = False
         _out["written"] = False
         _out["why"] = "%s: %s" % (type(_e).__name__, str(_e)[:200])

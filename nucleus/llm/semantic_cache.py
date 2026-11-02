@@ -99,7 +99,7 @@ class CacheEntry:
                        hit_count=int(d.get("hit_count", 0) or 0),
                        vec=[float(x) for x in (d.get("vec") or [])])
         except Exception as e:
-            silent_exc(e, where="nucleus.llm.semantic_cache::from_dict L91")
+            silent_exc(e, where="nucleus.llm.semantic_cache::from_dict L91", level="debug")
             return None
 
 
@@ -242,7 +242,7 @@ class SemanticCache:
                         continue
                     self._entries[_e.hash] = _e
         except Exception as e:
-            silent_exc(e, where="nucleus.llm.semantic_cache::_load L232")
+            silent_exc(e, where="nucleus.llm.semantic_cache::_load L232", level="debug")
             return
         self._evict()
 
@@ -292,7 +292,7 @@ class SemanticCache:
                 f.writelines(json.dumps(_r, ensure_ascii=False, default=str) + "\n" for _r in _rows)
             return len(_rows)
         except Exception as e:
-            silent_exc(e, where="nucleus.llm.semantic_cache::flush")
+            silent_exc(e, where="nucleus.llm.semantic_cache::flush", level="debug")
             return 0
 
     # ------------------------------------------------------------------
@@ -462,7 +462,7 @@ class SemanticCache:
         try:
             self.flush()  # ★B156-10：退出前把内存命中数落盘
         except Exception as e:
-            silent_exc(e, where="nucleus.llm.semantic_cache::close")
+            silent_exc(e, where="nucleus.llm.semantic_cache::close", level="debug")
         _w = self._worker
         if _w is not None and _w.is_alive():
             _w.join(timeout=timeout)
@@ -498,7 +498,7 @@ def get_semantic_cache() -> SemanticCache | None:
                 _cache = SemanticCache()
             return _cache
     except Exception as e:
-        silent_exc(e, where="nucleus.llm.semantic_cache::get_semantic_cache L452")
+        silent_exc(e, where="nucleus.llm.semantic_cache::get_semantic_cache L452", level="debug")
         return None
 
 
@@ -510,7 +510,7 @@ def reset_semantic_cache() -> None:
             try:
                 _cache.close()
             except Exception as e:
-                silent_exc(e, where="nucleus.llm.semantic_cache::reset_semantic_cache L463")
+                silent_exc(e, where="nucleus.llm.semantic_cache::reset_semantic_cache L463", level="debug")
         _cache = None
 
 
@@ -718,7 +718,7 @@ class SemanticCacheL2:
             import config as _c
             return bool(getattr(_c, "ENABLE_L2_ADMIT_SYSTEM_INTERNAL", True))
         except Exception as _e:
-            silent_exc(_e, where="SemanticCacheL2::_m377_system_internal_on")
+            silent_exc(_e, where="SemanticCacheL2::_m377_system_internal_on", level="debug")
             return True
 
     @classmethod
@@ -752,7 +752,7 @@ class SemanticCacheL2:
             _b = self._m377_adm.setdefault(_k, {})
             _b[why] = _b.get(why, 0) + 1
         except Exception as _e:
-            silent_exc(_e, where="SemanticCacheL2::_m377_adm_note")
+            silent_exc(_e, where="SemanticCacheL2::_m377_adm_note", level="debug")
 
     def __init__(self, cache: SemanticCache | None = None, encoder: Any = None) -> None:
         self._lock = threading.RLock()
@@ -906,7 +906,7 @@ class SemanticCacheL2:
                     _slot["distinct_keys"].append(_h[:16])
             _b["total"] = int(_b.get("total", 0)) + 1
         except Exception as _e:
-            silent_exc(_e, where="SemanticCacheL2::_m331_shadow_note")
+            silent_exc(_e, where="SemanticCacheL2::_m331_shadow_note", level="debug")
 
     @classmethod
     def _m331_shadow_flush(cls, root: str | None = None) -> bool:
@@ -927,7 +927,7 @@ class SemanticCacheL2:
             os.replace(_tmp, _p)
             return True
         except Exception as _e:
-            silent_exc(_e, where="SemanticCacheL2::_m331_shadow_flush")
+            silent_exc(_e, where="SemanticCacheL2::_m331_shadow_flush", level="debug")
             return False
 
     # ---------------- 写入 ----------------
@@ -1056,7 +1056,7 @@ class SemanticCacheL2:
             self._telemetry[_s][_key] += 1
             self._telemetry["overall"][_key] += 1
         except Exception as e:
-            silent_exc(e, where="nucleus.llm.semantic_cache::_tele_bump")
+            silent_exc(e, where="nucleus.llm.semantic_cache::_tele_bump", level="debug")
 
     def record_feedback(self, entry_hash: str, negative: bool = True) -> None:
         """★188刀1：下游对一次 L2 命中（已返回缓存响应）的负反馈回填。
@@ -1091,7 +1091,7 @@ class SemanticCacheL2:
                 return "no_calls"
             return "ok" if _h > 0 else "calls_no_hit"
         except Exception as _e:
-            silent_exc(_e, where="SemanticCacheL2::_m380_idle_state")
+            silent_exc(_e, where="SemanticCacheL2::_m380_idle_state", level="debug")
             return "unknown"
 
     def telemetry(self) -> dict:
@@ -1125,7 +1125,7 @@ class SemanticCacheL2:
                         "明细=%s", _adm_a, _adm_r, _adm377)
         except Exception as _adm_e:
             silent_exc(_adm_e,
-                       where="SemanticCacheL2::telemetry admission")
+                       where="SemanticCacheL2::telemetry admission", level="debug")
         # ★191刀2：INFO 日志输出（命中率/污染率·按场景分布），方便观测共窗收证。
         #   仅新增日志，不改任何命中判定 / 存储 / 返回。
         try:
@@ -1153,7 +1153,7 @@ class SemanticCacheL2:
                 ),
             )
         except Exception as e:
-            silent_exc(e, where="nucleus.llm.semantic_cache::SemanticCacheL2.telemetry.log")
+            silent_exc(e, where="nucleus.llm.semantic_cache::SemanticCacheL2.telemetry.log", level="debug")
         return _t
 
     # ---------------- 观测 ----------------

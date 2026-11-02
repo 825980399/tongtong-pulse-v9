@@ -186,13 +186,13 @@ class DataQualityGuard:
         try:
             _flag, _reason = self._tagger.classify(node)
         except Exception as e:
-            silent_exc(e, where="nucleus.knowledge.DataQualityGuard::check_node L187")
+            silent_exc(e, where="nucleus.knowledge.DataQualityGuard::check_node L187", level="debug")
             _flag, _reason = FLAG_CLEAN, "检查异常(降级clean)"
         _bad = _flag in (FLAG_SUSPECT, FLAG_POLLUTED)
         try:
             self._check_bad_counter = getattr(self, "_check_bad_counter", 0) + (1 if _bad else 0)
         except Exception as e:
-            silent_exc(e, where="nucleus.knowledge.DataQualityGuard::check_node L192")
+            silent_exc(e, where="nucleus.knowledge.DataQualityGuard::check_node L192", level="debug")
         _every = getattr(self, "_check_sample_every", 20)
         _logged = False
         if _bad or (self._check_counter % max(1, _every) == 0):
@@ -205,7 +205,7 @@ class DataQualityGuard:
                     f"（累计异常 {getattr(self, '_check_bad_counter', 0)}/"
                     f"{self._check_counter}）")
             except Exception as e:
-                silent_exc(e, where="nucleus.knowledge.DataQualityGuard::check_node L205")
+                silent_exc(e, where="nucleus.knowledge.DataQualityGuard::check_node L205", level="debug")
         return {"flag": _flag, "reason": _reason,
                 "checked": self._check_counter, "logged": _logged}
 
@@ -236,7 +236,7 @@ class DataQualityGuard:
                     node.duplicate_of = None
             return True
         except Exception as e:
-            silent_exc(e, where="nucleus.knowledge.DataQualityGuard::clear_flag L235")
+            silent_exc(e, where="nucleus.knowledge.DataQualityGuard::clear_flag L235", level="debug")
             return False
 
     # ---------------- 内部 ----------------
@@ -253,7 +253,7 @@ class DataQualityGuard:
                 node.quality_flag = flag
                 node.quality_reason = reason
         except Exception as e:
-            silent_exc(e, where="nucleus.knowledge.DataQualityGuard::_write_flag L251")
+            silent_exc(e, where="nucleus.knowledge.DataQualityGuard::_write_flag L251", level="debug")
 
 
 # ========== 模块级单例 ==========

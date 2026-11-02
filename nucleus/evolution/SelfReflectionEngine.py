@@ -67,7 +67,7 @@ class SelfReflectionEngine:
                         "[352接线] engine=reflection source=%s channel=%s model=%s host=%s",
                         _tgt.get("source"), _tgt.get("channel"), _model, _host)
                 except Exception as _le:
-                    silent_exc(_le, where="SelfReflectionEngine::_call_llm route_log")
+                    silent_exc(_le, where="SelfReflectionEngine::_call_llm route_log", level="debug")
                 _payload_bytes = json.dumps({
                     "model": _model,
                     "messages": [

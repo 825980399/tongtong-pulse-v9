@@ -77,7 +77,7 @@ def _pick_organ(organs: Any, *keys: str) -> Any:
             if _v is not None:
                 return _v
         except Exception as e:  # 取器官失败按「没有」处理，不污染刷新
-            silent_exc(e, where="nucleus.self_awareness.SelfAwarenessEngine::_pick_organ")
+            silent_exc(e, where="nucleus.self_awareness.SelfAwarenessEngine::_pick_organ", level="debug")
     return None
 
 
@@ -94,7 +94,7 @@ def _call_getter(organ: Any, name: str, gaps: list, tag: str,
     try:
         return _fn(**(kwargs or {}))
     except Exception as e:
-        silent_exc(e, where="nucleus.self_awareness.SelfAwarenessEngine::_call_getter")
+        silent_exc(e, where="nucleus.self_awareness.SelfAwarenessEngine::_call_getter", level="debug")
         gaps.append("%s:error(%s)" % (tag, type(e).__name__))
         return None
 
@@ -226,7 +226,7 @@ def get_analyzer_pool() -> ThreadPoolExecutor | None:
                 from utils.thread_budget import register as _m426_reg
                 _m426_reg("self_awareness", _POOL)
             except Exception as _m426_e:
-                silent_exc(_m426_e, where="SelfAwarenessEngine::register 426刀1")
+                silent_exc(_m426_e, where="SelfAwarenessEngine::register 426刀1", level="debug")
             _logger.info("[405刀1] 分析器线程池已建立：%d worker", _n)
         return _POOL
 
@@ -897,7 +897,7 @@ class SelfAwarenessEngine:
                 "weighted": False,
             }
         except Exception as _lfi_e:
-            silent_exc(_lfi_e, where="nucleus.self_awareness.SelfAwarenessEngine::run_all_analyses LFI_raw_shadow L393")
+            silent_exc(_lfi_e, where="nucleus.self_awareness.SelfAwarenessEngine::run_all_analyses LFI_raw_shadow L393", level="debug")
 
         # ★主线第38批 T1（P2-213）：汇总后计算综合评分 / 健康等级 / 最严重问题
         if _overall_enabled():
@@ -2310,7 +2310,7 @@ def _top_issues_limit() -> int:
         import config
         return max(1, int(getattr(config, "SELF_AWARENESS_TOP_ISSUES_LIMIT", 5) or 5))
     except Exception as e:
-        silent_exc(e, where="nucleus.self_awareness.SelfAwarenessEngine::_top_issues_limit L1596")
+        silent_exc(e, where="nucleus.self_awareness.SelfAwarenessEngine::_top_issues_limit L1596", level="debug")
         return 5
 
 
@@ -2647,7 +2647,7 @@ def _m114b_patch_state_snapshot(executor: Any) -> dict:
     try:
         _pending = _pm.load_json(_pm.get_pending_file(), [])
     except Exception as e:
-        silent_exc(e, where="nucleus.self_awareness.SelfAwarenessEngine::_m114b_patch_state_snapshot L1936")
+        silent_exc(e, where="nucleus.self_awareness.SelfAwarenessEngine::_m114b_patch_state_snapshot L1936", level="debug")
         _pending = []
     if not isinstance(_pending, list):
         _pending = []
@@ -2676,7 +2676,7 @@ def _m114b_patch_state_snapshot(executor: Any) -> dict:
             _elapsed = (_now - _blocked_at) if _blocked_at > 0 else float("inf")
             _snap["ratchet_locked"] = not (_blocked_at > 0 and _elapsed >= _cd)
     except Exception as e:
-        silent_exc(e, where="nucleus.self_awareness.SelfAwarenessEngine::_m114b_patch_state_snapshot L1964")
+        silent_exc(e, where="nucleus.self_awareness.SelfAwarenessEngine::_m114b_patch_state_snapshot L1964", level="debug")
     return _snap
 
 

@@ -101,7 +101,7 @@ def _checksum_debug_mode() -> bool:
         import config as _cfg
         return bool(getattr(_cfg, "ENABLE_SNAPSHOT_CHECKSUM_DEBUG", True))
     except Exception as e:
-        silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_checksum_debug_mode L93")
+        silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_checksum_debug_mode L93", level="debug")
         return True
 
 
@@ -131,7 +131,7 @@ def _m41_backup_keep() -> int:
     except Exception as _e:
         # ★338刀1：这里不能真静默——读不到配置就退 2，但“为什么退”必须可查
         #   （否则备份份数靠运气，且与 config 改动看不出因果）。
-        silent_exc(_e, where="nucleus.mnemosyne.PulseSnapshot::_m41_backup_keep")
+        silent_exc(_e, where="nucleus.mnemosyne.PulseSnapshot::_m41_backup_keep", level="debug")
         _n = 2
     return max(1, _n)      # 至少保留 1 份，防止配置为 0 时删光全部备份
 
@@ -145,7 +145,7 @@ def _snapshot_path_whitelist_enabled() -> bool:
         import config as _cfg
         return bool(getattr(_cfg, "ENABLE_SNAPSHOT_PATH_WHITELIST", True))
     except Exception as e:
-        silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_snapshot_path_whitelist_enabled L129")
+        silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_snapshot_path_whitelist_enabled L129", level="debug")
         return True
 
 
@@ -155,7 +155,7 @@ def _temp_snapshot_cleanup_enabled() -> bool:
         import config as _cfg
         return bool(getattr(_cfg, "ENABLE_TEMP_SNAPSHOT_CLEANUP", True))
     except Exception as e:
-        silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_temp_snapshot_cleanup_enabled L138")
+        silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_temp_snapshot_cleanup_enabled L138", level="debug")
         return True
 
 
@@ -179,7 +179,7 @@ def _is_temp_snapshot_path(path: str) -> bool:
         _lower = _p_n.replace("/", os.sep)
         return any(_kw in _lower for _kw in ("\\appdata\\local\\temp\\", "/tmp/", "\\temp\\snap_t4_"))
     except Exception as e:
-        silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_is_temp_snapshot_path L161")
+        silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_is_temp_snapshot_path L161", level="debug")
         return False
 
 
@@ -214,10 +214,10 @@ def cleanup_temp_snapshot_residue(min_age_seconds: float = 60.0) -> int:
                 os.remove(_fpath)
                 _removed += 1
             except Exception as _e:
-                silent_exc(_e, where="PulseSnapshot.cleanup_temp_snapshot_residue[424刀1]")
+                silent_exc(_e, where="PulseSnapshot.cleanup_temp_snapshot_residue[424刀1]", level="debug")
                 continue  # 单个删除失败不影响其它
     except Exception as _e:
-        silent_exc(_e, where="PulseSnapshot.cleanup_temp_snapshot_residue[424刀1]")
+        silent_exc(_e, where="PulseSnapshot.cleanup_temp_snapshot_residue[424刀1]", level="debug")
         return _removed
     return _removed
 
@@ -350,7 +350,7 @@ class PulseSnapshot:
             return _m44_gw(getattr(self, "snapshot_path", "") or "",
                            component="PulseSnapshot")
         except ImportError as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m44_write_allowed L314")
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m44_write_allowed L314", level="debug")
             return True
 
     def save(self, force_full: bool = False) -> bool:
@@ -773,7 +773,7 @@ class PulseSnapshot:
             import config as _cfg67
             return bool(getattr(_cfg67, "SNAPSHOT_ASYNC_SAVE", True))
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m67_async_save_enabled L744")
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m67_async_save_enabled L744", level="debug")
             return True
 
     def _m67_batch_size(self) -> int:
@@ -782,7 +782,7 @@ class PulseSnapshot:
             import config as _cfg67
             return int(getattr(_cfg67, "SNAPSHOT_BATCH_SIZE", 1000))
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m67_batch_size L752")
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m67_batch_size L752", level="debug")
             return 1000
 
     def _m67_full_save_interval(self) -> int:
@@ -944,7 +944,7 @@ class PulseSnapshot:
             import config as _cfg67
             return bool(getattr(_cfg67, "SNAPSHOT_USE_INCREMENTAL_LOG", True))
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m67_incremental_log_enabled L908")
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m67_incremental_log_enabled L908", level="debug")
             return True
 
     def _m67_incremental_log_path(self) -> str:
@@ -956,7 +956,7 @@ class PulseSnapshot:
             import config as _cfg67
             return int(getattr(_cfg67, "SNAPSHOT_INCREMENTAL_LOG_MAX_LINES", 10000))
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m67_incremental_log_max L919")
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m67_incremental_log_max L919", level="debug")
             return 10000
 
     def _m67_incremental_delete_ratio_max(self) -> float:
@@ -965,7 +965,7 @@ class PulseSnapshot:
             import config as _cfg67
             return float(getattr(_cfg67, "SNAPSHOT_INCREMENTAL_LOG_DELETE_RATIO_MAX", 0.5))
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m67_incremental_delete_ratio_max L927")
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m67_incremental_delete_ratio_max L927", level="debug")
             return 0.5
 
     def _m67_incremental_delete_abs_max(self) -> int:
@@ -974,7 +974,7 @@ class PulseSnapshot:
             import config as _cfg67
             return int(getattr(_cfg67, "SNAPSHOT_INCREMENTAL_LOG_DELETE_ABS_MAX", 500))
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m67_incremental_delete_abs_max L935")
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m67_incremental_delete_abs_max L935", level="debug")
             return 500
 
     def _m67_incremental_log_lines(self) -> int:
@@ -989,7 +989,7 @@ class PulseSnapshot:
                         _n += 1
             return _n
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m67_incremental_log_lines L949")
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m67_incremental_log_lines L949", level="debug")
             return 0
 
     def _m67_incremental_log_save(self, saved_nodes: list, current_checksum: str,
@@ -1140,7 +1140,7 @@ class PulseSnapshot:
                     _new_rows = self._m68_verify_parquet()
                 except Exception as _e:
                     _new_rows = -1
-                    silent_exc(_e, where="PulseSnapshot._m67_full_checkpoint[425刀1-校验新Parquet]")
+                    silent_exc(_e, where="PulseSnapshot._m67_full_checkpoint[425刀1-校验新Parquet]", level="debug")
                 _pq_verify_sec = time.time() - _t_pqv0
                 if _new_rows < 0:
                     _parquet_ok = False
@@ -1185,7 +1185,7 @@ class PulseSnapshot:
                 if _nid:
                     _by_id[_nid] = _n
         except Exception as _e:
-            silent_exc(_e, where="PulseSnapshot._m67_apply_incremental_log[424刀1]")
+            silent_exc(_e, where="PulseSnapshot._m67_apply_incremental_log[424刀1]", level="debug")
             return nodes
         # ★先收集再按 (node_id, ts) 折叠，保证乱序幂等
         _recs = {}
@@ -1266,7 +1266,7 @@ class PulseSnapshot:
             import config as _cfg68
             return bool(getattr(_cfg68, "PARQUET_AS_PRIMARY_STORAGE", True))
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m68_parquet_primary_enabled L1197")
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m68_parquet_primary_enabled L1197", level="debug")
             return True
 
     def _m160_load_source(self) -> str:
@@ -1285,7 +1285,7 @@ class PulseSnapshot:
                 _raw = "parquet" if _legacy else "json"
             return _raw
         except Exception as _e:
-            silent_exc(_e, where="nucleus.mnemosyne.PulseSnapshot::_m160_load_source")
+            silent_exc(_e, where="nucleus.mnemosyne.PulseSnapshot::_m160_load_source", level="debug")
             return "parquet"
 
     @staticmethod
@@ -1370,7 +1370,7 @@ class PulseSnapshot:
             import config as _cfg68
             return bool(getattr(_cfg68, "SNAPSHOT_SAVE_JSON_BACKUP", True))
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m68_json_backup_enabled L1207")
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m68_json_backup_enabled L1207", level="debug")
             return True
 
     def _m68_parquet_dir(self) -> str:
@@ -1385,7 +1385,7 @@ class PulseSnapshot:
             import config as _cfg81
             return bool(getattr(_cfg81, "PARQUET_SCHEMA_M81_COMPLETE", True))
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m81_parquet_schema_complete_enabled L1221")
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m81_parquet_schema_complete_enabled L1221", level="debug")
             return True
 
     def _m81_parquet_expected_schema_version(self) -> str:
@@ -1393,7 +1393,7 @@ class PulseSnapshot:
             import config as _cfg81
             return str(getattr(_cfg81, "PARQUET_VERIFY_SCHEMA_VERSION", "m81.v1"))
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m81_parquet_expected_schema_version L1228")
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m81_parquet_expected_schema_version L1228", level="debug")
             return "m81.v1"
 
     def _m81_parquet_required_columns(self) -> list[str]:
@@ -1477,7 +1477,7 @@ class PulseSnapshot:
         try:
             import pyarrow.parquet as _pq81
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m81_load_parquet_unified L1281")
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m81_load_parquet_unified L1281", level="debug")
             return None
         _base = self._m68_parquet_dir()
         if not os.path.isdir(_base):
@@ -1546,7 +1546,7 @@ class PulseSnapshot:
                     _exp_n = int((_meta.get((f"{_k.lower()}_count").encode())
                                  or b"0").decode("utf-8", "replace") or 0)
                 except Exception as e:
-                    silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m81_load_parquet_unified L1345")
+                    silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m81_load_parquet_unified L1345", level="debug")
                     _exp_n = 0
                 if _exp_n > 0 and _lv_loaded[_k] == 0:
                     self._log(LogLevel.ERROR,
@@ -1589,7 +1589,7 @@ class PulseSnapshot:
             import config as _cfg425
             _fast_on = bool(getattr(_cfg425, "SNAPSHOT_PARQUET_VERIFY_FASTPATH", True))
         except Exception as _e:
-            silent_exc(_e, where="PulseSnapshot._m68_verify_parquet[425刀1-读快路径开关]")
+            silent_exc(_e, where="PulseSnapshot._m68_verify_parquet[425刀1-读快路径开关]", level="debug")
         if not _fast_on:
             return self._m68_verify_parquet_deep(_pq68, _base, _req, _exp_ver)
         try:
@@ -1597,7 +1597,7 @@ class PulseSnapshot:
             if _fast is not None:
                 return _fast
         except Exception as _e:
-            silent_exc(_e, where="PulseSnapshot._m68_verify_parquet[425刀1-快路径转深校验]")
+            silent_exc(_e, where="PulseSnapshot._m68_verify_parquet[425刀1-快路径转深校验]", level="debug")
         return self._m68_verify_parquet_deep(_pq68, _base, _req, _exp_ver)
 
     def _m425_verify_parquet_meta(self, pq_mod, base: str, required: set,
@@ -1653,7 +1653,7 @@ class PulseSnapshot:
             try:
                 _exp_n = int(_mc.decode("utf-8", "replace") or 0)
             except Exception as _e:
-                silent_exc(_e, where="PulseSnapshot._m425_verify_parquet_meta[425刀1]")
+                silent_exc(_e, where="PulseSnapshot._m425_verify_parquet_meta[425刀1]", level="debug")
                 _exp_n = 0
             if _exp_n > 0 and _lv_counts[_k] == 0:
                 self._log(LogLevel.ERROR,
@@ -1701,7 +1701,7 @@ class PulseSnapshot:
                 try:
                     _exp_n = int(_mc.decode("utf-8", "replace") or 0)
                 except Exception as _e425:
-                    silent_exc(_e425, where="PulseSnapshot._m68_verify_parquet_deep[425刀1]")
+                    silent_exc(_e425, where="PulseSnapshot._m68_verify_parquet_deep[425刀1]", level="debug")
                     _exp_n = 0
                 if _exp_n > 0 and _lv_counts[_k] == 0:
                     self._log(LogLevel.ERROR,
@@ -1720,7 +1720,7 @@ class PulseSnapshot:
         try:
             import pyarrow.parquet as _pq68
         except Exception as _e:
-            silent_exc(_e, where="PulseSnapshot._m68_parquet_level_counts[424刀1]")
+            silent_exc(_e, where="PulseSnapshot._m68_parquet_level_counts[424刀1]", level="debug")
             return {}
         _base = self._m68_parquet_dir()
         if not os.path.isdir(_base):
@@ -1828,7 +1828,7 @@ class PulseSnapshot:
                               "[424刀2] L1 落盘对账不一致: %s"
                               % [d["code"] for d in _m424_res.get("diffs", [])])
             except Exception as _e:
-                silent_exc(_e, where="PulseSnapshot._save_l1_locked[424刀2-对账]")
+                silent_exc(_e, where="PulseSnapshot._save_l1_locked[424刀2-对账]", level="debug")
             return True
         except Exception as e:
             self._log(LogLevel.ERROR, f"L1快照保存失败: {e}")
@@ -1955,7 +1955,7 @@ class PulseSnapshot:
                     fpath = os.path.join(snapshot_dir, fname)
                     backups.append((os.path.getmtime(fpath), fpath))
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_cleanup_old_backups L1628")
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_cleanup_old_backups L1628", level="debug")
             return
 
         backups.sort(reverse=True)  # 按时间倒序
@@ -2081,7 +2081,7 @@ class PulseSnapshot:
                 _view.close()
             except Exception as _ce342:
                 silent_exc(_ce342,
-                           where="nucleus.mnemosyne.PulseSnapshot::_m342_try_lazy_load close")
+                           where="nucleus.mnemosyne.PulseSnapshot::_m342_try_lazy_load close", level="debug")
             return None
         self._log(LogLevel.INFO,
                   f"[342刀1] 懒加载生效 src={src} nodes={_n342} "
@@ -2100,7 +2100,7 @@ class PulseSnapshot:
             from nucleus.mnemosyne.lazy_snapshot import LazySnapshotView
         except Exception as _ie342:
             silent_exc(_ie342,
-                       where="nucleus.mnemosyne.PulseSnapshot::_m342_is_lazy_view import")
+                       where="nucleus.mnemosyne.PulseSnapshot::_m342_is_lazy_view import", level="debug")
             return False
         return isinstance(nodes, LazySnapshotView)
 
@@ -2110,7 +2110,7 @@ class PulseSnapshot:
             import config as _m70c
             return bool(getattr(_m70c, "SNAPSHOT_HOT_COLD_LOAD", True))
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m70_hot_cold_enabled L1680")
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m70_hot_cold_enabled L1680", level="debug")
             return True
 
     def _m70_apply_hot_cold_load(self, nodes):
@@ -2175,7 +2175,7 @@ class PulseSnapshot:
                     self._m70_lazy_node_map[getattr(_n, "node_id", "")] = _n
                     self._m70_hot_load_stats["lazy"] += 1
                 except Exception as e:
-                    silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m70_apply_hot_cold_load L1748")
+                    silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m70_apply_hot_cold_load L1748", level="debug")
                 if not _is_view:
                     _out.append(_n)
             _st = self._m70_hot_load_stats
@@ -2188,7 +2188,7 @@ class PulseSnapshot:
                 return nodes
             return _out
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m70_apply_hot_cold_load L1756")
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m70_apply_hot_cold_load L1756", level="debug")
             return nodes
 
     def _m70_resolve_node_iterable(self, nodes):
@@ -2211,7 +2211,7 @@ class PulseSnapshot:
             from nucleus.mnemosyne.lazy_snapshot import LazySnapshotView
         except Exception as _imp_err:
             silent_exc(_imp_err,
-                      where="nucleus.mnemosyne.PulseSnapshot::_m70_resolve_node_iterable import")
+                      where="nucleus.mnemosyne.PulseSnapshot::_m70_resolve_node_iterable import", level="debug")
             return None, False
         if isinstance(nodes, LazySnapshotView):
             # ★337批刀3：撤"抬全量"，改固定上限；**只降不升**（任何路径不得再抬全量）
@@ -2246,7 +2246,7 @@ class PulseSnapshot:
                         _cur, _cur, _total, _M337_LAZY_CACHE_MAX)
             except Exception as _mc_err:
                 silent_exc(_mc_err,
-                          where="nucleus.mnemosyne.PulseSnapshot::_m70_resolve_node_iterable max_cache")
+                          where="nucleus.mnemosyne.PulseSnapshot::_m70_resolve_node_iterable max_cache", level="debug")
             return nodes.iter_nodes(), True
         if isinstance(nodes, (list, tuple)):
             return nodes, False
@@ -2254,7 +2254,7 @@ class PulseSnapshot:
             _iter = list(nodes)
         except TypeError as _te:
             silent_exc(_te,
-                      where="nucleus.mnemosyne.PulseSnapshot::_m70_resolve_node_iterable non-iterable")
+                      where="nucleus.mnemosyne.PulseSnapshot::_m70_resolve_node_iterable non-iterable", level="debug")
             return None, False
         return _iter, False
 
@@ -2282,12 +2282,12 @@ class PulseSnapshot:
                 try:
                     node.value = _keep["value"]
                 except Exception as e:
-                    silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_materialize_lazy_node L1782")
+                    silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_materialize_lazy_node L1782", level="debug")
             if "linked_nodes" in _keep:
                 try:
                     node.linked_nodes = _keep["linked_nodes"]
                 except Exception as e:
-                    silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_materialize_lazy_node L1787")
+                    silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_materialize_lazy_node L1787", level="debug")
             node._m70_blanked = False
             _lazy_ids = getattr(self, "_m70_lazy_ids", None)
             if _lazy_ids is not None and _nid in _lazy_ids:
@@ -2303,11 +2303,11 @@ class PulseSnapshot:
                     try:
                         node.value = getattr(_rn, "value", node.value)
                     except Exception as e:
-                        silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_materialize_lazy_node L1803")
+                        silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_materialize_lazy_node L1803", level="debug")
                     try:
                         node.linked_nodes = getattr(_rn, "linked_nodes", node.linked_nodes)
                     except Exception as e:
-                        silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_materialize_lazy_node L1807")
+                        silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_materialize_lazy_node L1807", level="debug")
                     node._m70_blanked = False
                     _lazy_ids = getattr(self, "_m70_lazy_ids", None)
                     if _lazy_ids is not None and _nid in _lazy_ids:
@@ -2393,7 +2393,7 @@ class PulseSnapshot:
                     try:
                         self._last_saved_checksum = self._compute_node_list_checksum(_pq_nodes)
                     except Exception as _e:
-                        silent_exc(_e, where="PulseSnapshot._load_internal[424刀1]")
+                        silent_exc(_e, where="PulseSnapshot._load_internal[424刀1]", level="debug")
                         self._last_saved_checksum = ""
                     self._last_save_nodes = len(_pq_nodes)
                     elapsed = time.time() - start_time
@@ -2616,7 +2616,7 @@ class PulseSnapshot:
                 try:
                     _declared = int(expected_count)
                 except Exception as _e:
-                    silent_exc(_e, where="PulseSnapshot._verify_integrity[424刀1]")
+                    silent_exc(_e, where="PulseSnapshot._verify_integrity[424刀1]", level="debug")
                     _declared = -1
                 if _declared == 0:
                     # 快照自己声明 0 个节点（首次启动 / 空知识库）→ 正常，不应报 ERROR
@@ -2665,7 +2665,7 @@ class PulseSnapshot:
             import config as _cfg
             return bool(getattr(_cfg, "ENABLE_SNAPSHOT_DIAGNOSTIC", True))
         except Exception as e:
-            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_snapshot_diagnostic_enabled L2139")
+            silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_snapshot_diagnostic_enabled L2139", level="debug")
             return True
 
     def _snapshot_diagnostic(self, data: dict[str, Any] | None = None) -> str:
@@ -2880,7 +2880,7 @@ class PulseSnapshot:
                     fpath = os.path.join(snapshot_dir, fname)
                     backups.append((os.path.getmtime(fpath), fpath))
         except Exception as _e:
-            silent_exc(_e, where="PulseSnapshot._cleanup_old_backups_count[424刀1]")
+            silent_exc(_e, where="PulseSnapshot._cleanup_old_backups_count[424刀1]", level="debug")
             return removed
 
         backups.sort(reverse=True)
@@ -3308,7 +3308,7 @@ class PulseSnapshot:
             try:
                 _checksum = self._compute_node_list_checksum(_saved)
             except Exception as _e:
-                silent_exc(_e, where="PulseSnapshot._save_parquet_locked[424刀1]")
+                silent_exc(_e, where="PulseSnapshot._save_parquet_locked[424刀1]", level="debug")
                 _checksum = ""
             try:
                 _table = _table.replace_schema_metadata({
@@ -3580,7 +3580,7 @@ def _m102_sidecar_node_ids(self) -> set:
     try:
         _all = _pool.get_all_including_evicted()
     except Exception as e:
-        silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m102_sidecar_node_ids L2985")
+        silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m102_sidecar_node_ids L2985", level="debug")
         return None
     try:
         for _n in (_all or []):
@@ -3588,7 +3588,7 @@ def _m102_sidecar_node_ids(self) -> set:
             if _id:
                 _ids.add(str(_id))
     except Exception as e:
-        silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m102_sidecar_node_ids L2992")
+        silent_exc(e, where="nucleus.mnemosyne.PulseSnapshot::_m102_sidecar_node_ids L2992", level="debug")
         return None
     _ids |= _m102_cold_index_ids(getattr(self, "_m102_cold_cache", {})
                                  if isinstance(getattr(self, "_m102_cold_cache", None), dict)

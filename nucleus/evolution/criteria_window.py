@@ -125,7 +125,7 @@ def write_ledger_conclusions(path: str | None = None,
                     if isinstance(_o, dict) and _o.get("key"):
                         _seen.add(str(_o["key"]))
     except Exception as _e:
-        silent_exc(_e, where="criteria_window::write_ledger_conclusions read")
+        silent_exc(_e, where="criteria_window::write_ledger_conclusions read", level="debug")
     _added = []
     _dir = os.path.dirname(_p)
     try:
@@ -656,7 +656,7 @@ def judge_round(seg2_intake, converge_voided, executed,
         except (TypeError, ValueError) as _e:
             # 读数非数值 ⇒ 判**不可判**（None），不是判 False。
             # ★不许当成"不合格"：口径错配与真实缺口是两件事（铁律166）。
-            silent_exc(_e, where="criteria_window::judge_round _tri")
+            silent_exc(_e, where="criteria_window::judge_round _tri", level="debug")
             return None
         return _n > 0 if not _zero_ok else _n == 0
 
@@ -761,7 +761,7 @@ def judge_rounds(rows, criteria_version: str = "343.j3",
                 ",".join(str(x.get("item")) for x in _alarm["items"])[:200])
         except Exception as _le:
             # 打告警失败不影响返回：alarm 字段已随返回值带出，调用方仍可判定。
-            silent_exc(_le, where="criteria_window::judge_rounds logger.error")
+            silent_exc(_le, where="criteria_window::judge_rounds logger.error", level="debug")
     return {"rounds": _rounds, "n_qualified": _nq,
             "n_unqualified": _nu, "n_unjudged": _nun,
             "alarm": _alarm,
