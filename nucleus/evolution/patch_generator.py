@@ -80,6 +80,10 @@ STATE_TARGET_DRIFTED = "target_drifted"
 #   manual_required 是“**不应该让模型生成**，必须人写”——重试、换模型、加强 prompt
 #   都是错的方向。把两者混一谈，这批条目会永远在重试队列里转。
 STATE_MANUAL_REQUIRED = "manual_required"
+#: ★427刀3：该 (file, method) 正在冷却期，**本次不为它生成**（不是失败，是主动跳过）。
+#: 新增态而非复用 `generation_failed`：后者会进失败统计、触发重试，
+#: 而冷却的本意正是「别再试了」—— 混在一起会让「冷却生效」看起来像「模型坏了」。
+STATE_METHOD_COOLDOWN = "method_cooldown"
 
 STATES = (STATE_DRAFT_READY, STATE_GATE_REJECTED, STATE_GENERATION_FAILED,
           STATE_TARGET_DRIFTED, STATE_MANUAL_REQUIRED)
@@ -2087,6 +2091,24 @@ def _m366_entry_evidence(entry: dict) -> dict:
                              "risk_source": _rbasis, "trust_source": _tbasis}
     return _res
 
+def _m427_method_cooldown(entry: dict, now: float | None = None) -> dict | None:
+    """★427刀3：查该 entry 所属 (file, method) 是否在冷却中。
+
+    在冷却中 ⇒ 返回冷却状态（含 `remain_sec` / `consec_fail` / `cooldown_until`）；
+    否则返回 None。**绝不抛**：查不到账本/导入失败一律当"没冷却"，不阻断生成
+    （保守方向选"照常生成"，因为生成有后续三道闸兜底，而误拦会静默停产）。
+    """
+    if not isinstance(entry, dict):
+        return None
+    try:
+        from nucleus.evolution.patch_execution_dispatch import _m422_method_state
+        _st = _m422_method_state(entry, now=now)
+        return _st if isinstance(_st, dict) and _st.get("cooling") else None
+    except Exception as e:
+        silent_exc(e, where="patch_generator::_m427_method_cooldown")
+        return None
+
+
 def generate_patch_draft(entry: dict,
                          project_root: str | None = None,
                          *,
@@ -2160,6 +2182,23 @@ def generate_patch_draft(entry: dict,
     # ★355刀2①：先把方法名归一为真实名（`m323_truth.method_before`），
     #   再走预检与生成 —— 否则 prompt 里带着猜的名，生成的 def 名也是猜的。
     entry = _m355_normalize_method(entry)
+    # ★427刀3：方法级冷却准入 —— 冷却期内**不再为同一 (file, method) 生成**。
+    #   为什么必须在**生成入口**：坏片段在 2a（入队之前）就被拒，根本走不到
+    #   422 的派单拦截；只在拒收侧记账而不在这里拦，账本会越记越厚、生成照旧白跑
+    #   （实测 `PulseLiver._compress_group` 四天白跑 64 次）。
+    #   位置放在 `_m355_normalize_method` **之后**：记账用的是拒收时补丁里的
+    #   method，必须与这里归一后的名字同口径，否则永远命不中。
+    _cool427 = _m427_method_cooldown(entry, now=_now)
+    if _cool427:
+        _out["state"] = STATE_METHOD_COOLDOWN
+        _out["error"] = f"method_cooldown:{_cool427.get('key')}"
+        _out["cooldown"] = _cool427
+        _out["elapsed_sec"] = round(time.perf_counter() - _t0, 3)
+        _module_logger.info(
+            "[427刀3][方法冷却] 生成入口跳过: key=%s remain_h=%.1f consec=%s total=%s",
+            _cool427.get("key"), float(_cool427.get("remain_sec") or 0.0) / 3600.0,
+            _cool427.get("consec_fail"), _cool427.get("total_fail"))
+        return _out
     # ★352刀1①：生成前目标存在性预检。
     #   为何放在取源码**之前**：目标已不存在时读文件本就是白费，
     #   而且旧路径会把它记成 generation_failed（词不达意）。

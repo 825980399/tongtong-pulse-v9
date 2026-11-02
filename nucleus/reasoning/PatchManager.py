@@ -372,6 +372,44 @@ def _m421_strip_md_fence(text: str) -> str:
     return "\n".join(_lines).strip()
 
 
+def _m427_strip_fence_lines(text: str) -> str:
+    """★427刀1：只删**首尾围栏行**，其余行与缩进**一字不动**。
+
+    为什么不能直接复用 `_m421_strip_md_fence`：后者先 `.strip()` 再删行，
+    它是按「放在 dedent **之后**」设计的 —— 那个位置 strip 无害。可一旦挪到
+    dedent **之前**，`.strip()` 会削掉**首行缩进**，dedent 的公共前缀随即
+    恒为空，整段的统一缩进直接失效（这正是 421 版真实发生的失效机制）。
+
+    本函数只删围栏那两行：
+      · 首个**非空**行 lstrip 后以 ``` 开头 ⇒ 删掉该行；
+      · 最后一个**非空**行 lstrip 后以 ``` 开头 ⇒ 删掉该行；
+      · 其余内容（含缩进、空行、正文中间的三反引号）原样返回。
+
+    ★对**无围栏**输入是**恒等变换**（连 strip 都不做）⇒ 既有全部历史补丁的
+      `_orig_norm` / `_mod_norm` 逐字节不变，本刀零裁决回归。
+    """
+    _t = text or ""
+    if _M421_FENCE_PREFIX not in _t:
+        return _t
+    _lines = _t.split("\n")
+    # 首个非空行
+    for _i, _ln in enumerate(_lines):
+        if not _ln.strip():
+            continue
+        if _ln.lstrip().startswith(_M421_FENCE_PREFIX):
+            del _lines[_i]
+        break
+    # 最后一个非空行（重新扫描：上面的 del 改了长度）
+    for _j in range(len(_lines) - 1, -1, -1):
+        if not _lines[_j].strip():
+            continue
+        if _lines[_j].lstrip().startswith(_M421_FENCE_PREFIX):
+            del _lines[_j]
+        break
+    return "\n".join(_lines)
+
+
+
 def _m376_try_balance(code: str) -> dict:
     """语句级统计 `try` / `except` / `finally`（纯函数，不读写任何全局状态）。
 
@@ -466,6 +504,160 @@ def _m376_try_balance_reason(tb: dict) -> str:
     return f"try 块平衡检查未给出拒收结论（state={tb.get('state')}，不拦）"
 
 
+def _m427_parse_precheck_on() -> bool:
+    """★427刀2：片段可解析预检开关（默认开）。
+
+    关掉 ⇒ 回到 376 行为（2a 先跑、语法错留到关2 才报），用于灰度回退。
+    """
+    try:
+        import config as _c
+        return bool(getattr(_c, "ENABLE_M427_PARSE_PRECHECK", True))
+    except Exception as e:
+        silent_exc(e, where="nucleus.reasoning.PatchManager::_m427_parse_precheck_on")
+        return True
+
+
+def _m427_parse_fragment(norm: str) -> dict:
+    """★427刀2：判断「片段本身能否被 Python 解析」（纯函数，唯一实现）。
+
+    包装方式与关2 **逐字一致**：dedent 后的方法体片段可能带 `return`，顶层
+    非法 ⇒ 必须包进虚拟函数；完整方法（`def` 开头）包进去是嵌套 def，亦合法。
+
+    ★单一真源：关2 与本预检都调这里，不许各写一份 —— 否则会出现
+      「预检说能解析、关2 说不能」的判据分叉，而两者对同一输入必然同结论。
+
+    返回 `{"ok": bool, "detail": str}`；`detail` 沿用关2 原格式
+      `语法错误(<异常类名>): <message>`，既有断言与 grep 可直接沿用。
+    """
+    import ast as _ast427
+    import textwrap as _tw427
+    try:
+        _ast427.parse("def _wrap():\n" + _tw427.indent(norm or "", "    "),
+                      filename="<llm-patch>")
+        return {"ok": True, "detail": ""}
+    except SyntaxError as _e427:
+        # 语法错是**预期路径**（真截断），但门禁口径是「每个 except 都要留痕」，
+        # 照办：留痕只写 debug，不影响返回值，也不改变「不完整」这一结论。
+        silent_exc(_e427, where="nucleus.reasoning.PatchManager::_m427_parse_fragment:syntax")
+        return {"ok": False,
+                "detail": f"语法错误({type(_e427).__name__}): {_e427}"}
+    except Exception as _x427:
+        # 非 SyntaxError（MemoryError 等极小概率）：不猜，按不可解析拒收并留痕
+        silent_exc(_x427, where="nucleus.reasoning.PatchManager::_m427_parse_fragment")
+        return {"ok": False,
+                "detail": f"解析异常({type(_x427).__name__}): {_x427}"}
+
+
+def _m427_cooldown_wire_on() -> bool:
+    """★427刀3：生成侧失败接入方法冷却的开关（默认开；关掉逐字回到 426 行为）。"""
+    try:
+        import config as _c
+        return bool(getattr(_c, "ENABLE_M427_METHOD_COOLDOWN_WIRE", True))
+    except Exception as e:
+        silent_exc(e, where="nucleus.reasoning.PatchManager::_m427_cooldown_wire_on")
+        return True
+
+
+def _m427_note_method_fail(patch: Any, reason: str) -> None:
+    """★427刀3：把生成侧（语法预检 / 2a）拒收计入 422 的方法级冷却账。
+
+    ★为什么不新建 `data/audit/patch_fail_counts.json`（任务书原方案）：
+      422 批刀2 已建 `data/patches/method_cooldown.json` 做同一件事 ——
+      键 = (归一化 file, method)、阈值「连续 3 次」、冷却「24h」，接口
+      `_m422_note_method_fail` / `_m422_cooldown_reason` 齐备，且已接在
+      派单/执行两条路径上。再造一份 = **双真源**，两处计数各说各话。
+      故本刀只**接线**，不复制机制。
+
+    ★为什么在调用方（`_verify_in_copy`）而不是判据内部：
+      `_check_llm_patch_completeness` 是纯判据，有 5 个测试文件直接调它；
+      在判据里写盘会让「跑一次判据」变成有副作用的操作（且 65 条标本重放
+      会写 65 次盘）。留在判据外，职责分界不动。
+
+    ★真实缺口（本刀要补的那一个）：422 的计数只在 `_write_back` 失败与
+      dispatch blocked 两处置账，而坏片段在 **2a 就被拒**、根本走不到派单 ⇒
+      `PulseLiver._compress_group` 四天被生成 64 次、次次 2a 拒收，
+      `method_cooldown.json` 里却**一条记录都没有**（本批 T0 实测）。
+    """
+    if not isinstance(patch, dict):
+        return
+    try:
+        from nucleus.evolution.patch_execution_dispatch import _m422_note_method_fail
+        _rs = str(reason or "")
+        _cat = ("fragment_incomplete" if _rs.startswith("生成片段不完整")
+                else ("try_unbalanced" if _rs.startswith("try 块不平衡")
+                      else "completeness_failed"))
+        _r = _m422_note_method_fail(patch, reason=_rs[:200], category=_cat)
+        if isinstance(_r, dict) and _r.get("entered_cooldown"):
+            _module_logger.info(
+                "[427刀3][方法冷却] 生成侧失败累计触发冷却: file=%s method=%s "
+                "consec=%s total=%s category=%s",
+                patch.get("file"), patch.get("method"),
+                _r.get("consec_fail"), _r.get("total_fail"), _cat)
+    except Exception as e:
+        silent_exc(e, where="nucleus.reasoning.PatchManager::_m427_note_method_fail")
+
+
+def _m427_status_guard_on() -> bool:
+    """★427刀5：状态-真值一致性守卫开关（默认开；关掉逐字回到 426 行为）。"""
+    try:
+        import config as _c
+        return bool(getattr(_c, "ENABLE_M427_STATUS_VERIFY_GUARD", True))
+    except Exception as e:
+        silent_exc(e, where="nucleus.reasoning.PatchManager::_m427_status_guard_on")
+        return True
+
+
+def _m427_converge_status(data: list) -> list:
+    """★427刀5：落盘前收敛「status 说验证通过、嵌套真值说验证失败」的矛盾。
+
+    只治一种形态：`status == "runtime_verified"` 且
+    `runtime_verify_result.verified is False` —— 同一份记录自相矛盾，
+    下游（派单/审批/风险闸）据此做的任何判断都不可信。
+
+    ★为什么**不**按任务书原方案补写顶层 `runtime_verified=True`：
+      105 批 T-105a 与 280 批刀4 已把顶层 `runtime_verified` 定为**污染字段**
+      并有意删除（它曾被 `verify_submitted_patches` 对**所有处理过的补丁**无条件
+      置 True，含失败补丁），审批关卡早已改为只读嵌套
+      `runtime_verify_result.verified`。补写顶层 = 复活一个已知会说谎、且审批
+      根本不看的字段 —— 表面"对齐"了，实际只是把矛盾从一处搬到另一处。
+
+    ★为什么只认 `is False` 不认 `None`：`None` 表示"没跑过验证"，是**合法**的
+      中间态（423 归档恢复出来的条目就落在这一档）；把 None 当矛盾会误伤。
+    ★为什么返回新列表而不是原地改：`_save_patch_list` 会就地改写元素的 `file`
+      （既有行为），调用方（如 `_m94_apply_pending_aging`）依赖原列表的绝对路径；
+      本函数只换 status，故对矛盾项做**浅拷贝**，不把改动泄漏回调用方的内存对象。
+    """
+    if not isinstance(data, list):
+        return data
+    _n_fix = 0
+    _out = []
+    for _it in data:
+        if not isinstance(_it, dict):
+            _out.append(_it)
+            continue
+        _rvr = _it.get("runtime_verify_result")
+        if (str(_it.get("status") or "") == "runtime_verified"
+                and isinstance(_rvr, dict) and _rvr.get("verified") is False):
+            _n = dict(_it)
+            _n["status"] = "needs_reverify"
+            _n["m427_status_fix"] = {
+                "from": "runtime_verified",
+                "to": "needs_reverify",
+                "why": "status 说已验证，但 runtime_verify_result.verified is False",
+                "at": time.time(),
+                "batch": "427",
+            }
+            _out.append(_n)
+            _n_fix += 1
+        else:
+            _out.append(_it)
+    if _n_fix:
+        _module_logger.warning(
+            "[427刀5][状态一致性] 本次落盘收敛 %d 条矛盾记录："
+            "status=runtime_verified 但嵌套 verified=False ⇒ needs_reverify", _n_fix)
+    return _out
+
+
 # ========================================== 377刀3：失败补丁正文独立审计件
 #  _m377_dump_failed_patch
 #  【为什么】376刀4 把关2a 的拒收理由换成了可执行的定位文案（缺几处、缺在第几行），
@@ -515,7 +707,11 @@ def _m377_dump_failed_patch(patch: Any, reason: str, *,
         if _have >= _M377_FAILED_PATCH_MAX:
             return {"written": False, "why": "dir_full", "count": _have}
 
-        _pid = str(patch.get("id") or patch.get("patch_id") or "unknown")
+        # ★427顺带：`issue_id` 兜底 —— 377 刀3 自己落档时写的键就是 `issue_id`，
+        #   但本函数只认 id/patch_id ⇒ 回放这类标本时全落成 `unknown_<ts>_2a.json`，
+        #   同一秒内多条会**互相覆盖**（实测 65 条只剩 2 件）。生产补丁有 id 故未暴露。
+        _pid = str(patch.get("id") or patch.get("patch_id")
+                   or patch.get("issue_id") or "unknown")
         _safe = "".join(_c if (_c.isalnum() or _c in "-_") else "_"
                         for _c in _pid)[:48]
         _ts = time.time()
@@ -3535,6 +3731,10 @@ class PatchManager:
         # 避免「语法恰好合法但内容严重残缺」的补丁通过后续语法/导入关混入队列。
         _completeness = self._check_llm_patch_completeness(patch)
         if not _completeness["complete"]:
+            # ★427刀3：生成侧拒收也要计入 (file, method) 冷却（详见
+            #   `_m427_note_method_fail` docstring 的「真实缺口」段）。
+            if _m427_cooldown_wire_on():
+                _m427_note_method_fail(patch, _completeness["reason"])
             result["errors"].append(f"补丁完整性检查失败: {_completeness['reason']}")
             result["stage"] = "completeness_check_failed"
             result["failed_check"] = "completeness"
@@ -3976,10 +4176,14 @@ class PatchManager:
         #   真实补丁，导致自主修复验证链在完整性第一关被卡死。
         #   修复: 语法解析与相似度对比前统一 textwrap.dedent（缩进仅结构上下文，不影响判定）。
         import textwrap as _tw
-        # ★421刀4：dedent 之后**先剥 markdown 围栏**，再进三道闸
-        #   （理由与实测见 `_m421_strip_md_fence` 上方注释）。
-        _orig_norm = _m421_strip_md_fence(_tw.dedent(_original or ""))
-        _mod_norm = _m421_strip_md_fence(_tw.dedent(_modified or ""))
+        # ★427刀1：顺序改为「先剥围栏行 → 再 dedent → 最后 strip」。
+        #   421 版是「先 dedent → 再剥围栏」，实测失效机制：围栏行通常顶格，
+        #   `textwrap.dedent` 的公共缩进前缀被它拉成空串 ⇒ 整段代码保持原缩进、
+        #   dedent 等于没做（65 条 2a 标本里 52 条正文带 ``` 围栏）。
+        #   ★零回归：`_m427_strip_fence_lines` 对无围栏输入是恒等变换，
+        #     故无围栏时新旧两式都等价于 `dedent(text).strip()`，逐字节相同。
+        _orig_norm = _tw.dedent(_m427_strip_fence_lines(_original or "")).strip()
+        _mod_norm = _tw.dedent(_m427_strip_fence_lines(_modified or "")).strip()
 
         # 关0：字段契约（★第90批 T-90a 新增）
         #   把「字段缺失」与「内容残缺」分开报因 —— 文案把「字段没传」伪装成
@@ -4008,6 +4212,39 @@ class PatchManager:
         #   只拒「try 多于 handler」与「有 handler 无 try」两种**必然语法非法**形态，
         #   故对既有全部通过的补丁零影响（裁决等价性见 tests/test_m376_d4_try_balance.py）。
         _tb376 = _m376_try_balance(_mod_norm)
+        # ★427刀2：先判「片段本身能不能解析」，再谈 try 平不平衡。
+        #   为什么必须前移：`data/audit/failed_patches/` 65 条 2a 标本里 49 条的
+        #   根因是 `SyntaxError: expected 'except' or 'finally' block`
+        #   （生成器把片段截断在 try 中间），可日志只写「try 块不平衡」——
+        #   读起来像"补丁逻辑写错了"，实际要查的是上下文窗口/输出上限。
+        #   两者处置完全不同，故把真因写在 reason **最前面**。
+        #   措辞策略：try 统计降级成括号里的补充诊断（原文案保留 ⇒ 既有断言
+        #   不破、信息不丢），只在**确实也不平衡**时才附上。
+        if _m427_parse_precheck_on():
+            _parse427 = _m427_parse_fragment(_mod_norm)
+            if not _parse427["ok"]:
+                _why427 = f"生成片段不完整（围栏/截断）：{_parse427['detail']}"
+                if _tb376["state"] in ("unbalanced", "orphan"):
+                    # ★427刀2 修（回归 m376 暴露）：这里必须接 376 的**整段**富文案，
+                    #   不能只抄两个计数 —— 那样拒收理由有了"真因"却丢了"定位"
+                    #   （第几行、缺几处收尾、拦截口径全没了），等于从一个误导
+                    #   换到另一个误导。信息只增不减：先真因，后定位。
+                    _why427 += f"（另：{_m376_try_balance_reason(_tb376)}）"
+                _dump427 = _m377_dump_failed_patch(
+                    patch, _why427, stage="2a",
+                    root=getattr(self, "_project_root", None), tb=_tb376)
+                if _dump427.get("written"):
+                    _module_logger.info(
+                        "[427刀2] 片段不完整已留档（不再由 try 平衡闸背锅）: "
+                        "patch=%s file=%s method=%s detail=%s",
+                        str(patch.get("id") or "")[:24], patch.get("file"),
+                        patch.get("method"), _parse427["detail"][:90])
+                else:
+                    _module_logger.warning(
+                        "[427刀2] 片段不完整留档未成功（拒收结论不受影响）: "
+                        "patch=%s why=%s", str(patch.get("id") or "")[:24],
+                        _dump427.get("why"))
+                return {"complete": False, "reason": _why427}
         if _tb376["state"] in ("unbalanced", "orphan"):
             _why376 = _m376_try_balance_reason(_tb376)
             # ★377刀3：正文落独立审计件（只加写盘，**不改裁决**）——
@@ -4034,18 +4271,13 @@ class PatchManager:
         # 关2：语法可解析（dedent + 虚拟函数包装，兼容带缩进/含 return 的方法体片段）
         #   ★PULSE-DEFECT-20260902-01: 方法体片段含 return，dedent 后顶层 return 非法，
         #   需包装进虚拟函数才能正确解析；完整方法（def 开头）包装后为嵌套 def 亦合法。
-        try:
-            import ast as _ast
-            _ast.parse("def _wrap():\n" + _tw.indent(_mod_norm, "    "),
-                      filename="<llm-patch>")
-        except SyntaxError as _e:
-            # ★第92批 T-92a：补上异常类名（`TabError` / `IndentationError` / ...）。
-            #   改前只写 message ⇒ 日志里 `TabError` 与 `IndentationError` 都长成
-            #   「语法错误: inconsistent use of ... / unindent does not match ...」，
-            #   无法一眼区分异常种类，排查要靠人肉读 message。
-            #   改后 `语法错误(TabError): ...`，异常种类可直接 grep。
-            return {"complete": False,
-                    "reason": f"语法错误({type(_e).__name__}): {_e}"}
+        # ★427刀2：判据改由 `_m427_parse_fragment` 统一实现（与上面预检同一份）。
+        #   预检开着时本关必然通过（同输入同结论），属**幂等防御**；
+        #   预检关掉（灰度回退）时本关就是唯一入口，文案格式与 421 版逐字一致
+        #   （★第92批 T-92a 的 `语法错误(<类名>): <msg>` 未变）。
+        _parse427b = _m427_parse_fragment(_mod_norm)
+        if not _parse427b["ok"]:
+            return {"complete": False, "reason": _parse427b["detail"]}
 
         # 关3：相似度阈值（拦截严重残缺/截断；dedent 后对比保证可比）
         #   ★PULSE-DEFECT-20260902-01: 用整字符串对比（不用 splitlines——单行方法体
@@ -5873,6 +6105,13 @@ class PatchManager:
                         _it["file"] = self._normalize_patch_file(_it["file"])
         except Exception:
             _module_logger.debug("补丁路径归一化失败（不影响保存）")
+        # ★427刀5：落盘前收敛「状态说已验证、真值说失败」的矛盾（只治 is False）。
+        try:
+            if isinstance(data, list) and _m427_status_guard_on():
+                data = _m427_converge_status(data)
+        except Exception as _g427:
+            silent_exc(_g427, where="PatchManager._save_patch_list 427状态守卫",
+                       level="warning")
         # ★第280批刀4：pending 队列落盘前做状态机收敛（applied即出队 + 删顶层runtime_verified）。
         if path == self._pending_file:
             data = self._m280_converge_pending(data)

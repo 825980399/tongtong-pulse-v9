@@ -148,6 +148,11 @@ class RuntimeMetrics:
         # ★B156-5 票④：队列深度告警去重状态（上次告警值/时刻）
         self._queue_alert_last_depth = None
         self._queue_alert_last_at = 0.0
+        # ★427刀4：ramp 期与稳态的分界。进程启动后前 10 分钟在加载组件/建索引，
+        #   RSS 是**台阶式上涨**，与泄漏无关；把这段算进"泄漏率"就是 1815MB/min
+        #   那个假读数的来源。`_created_at` 只在本对象创建时取一次。
+        self._created_at = time.time()
+        self._m427_rss_at_10min: float | None = None
 
     def start(self):
         """启动聚合线程。"""
@@ -576,23 +581,118 @@ class RuntimeMetrics:
             % (_pct, float(threshold_percent)))
         return _hit
 
+    def get_memory_growth_report(self, window_samples: int | None = None,
+                                 window_sec: float | None = None) -> dict[str, Any]:
+        """★427刀4：内存增长率**结构化**报告（带窗口、相位、启动基线）。
+
+        为什么必须换口径（任务书 P0-04）：原 `get_memory_growth_rate` 是短窗
+        瞬时斜率（60 样本 × 5s ≈ 5 分钟窗），同一天里给出过 1815MB/min 与
+        -0.119MB/min 两个**相反**读数 —— 同一个指标无法用来判断有没有泄漏。
+        根因不是采样错了，是把两种物理过程塞进同一个数字：
+
+          · **ramp 期**：加载组件/建索引 ⇒ RSS 台阶式上涨，与泄漏无关；
+          · **稳态**：组件齐了以后还在涨，才是真的泄漏。
+
+        故本口径把它们拆开：
+
+          `phase`                      `ramp`（uptime < 10min）/ `steady` / `cold`
+          `growth_mb_per_min`          窗口内斜率（窗口多长由 `window_sec` 如实给出）
+          `window_sec` / `window_samples`
+                                       窗口的真实时长与样本数（**必带**，否则读数不可比）
+          `is_leak_signal`             仅 `steady` 且斜率 ≥ 阈值才 True；ramp 期恒 False
+          `rss_at_10min`               启动后 10 分钟那一刻的 RSS（稳态基线）
+          `steady_growth_mb_per_min`   相对 `rss_at_10min` 的斜率 —— **排除启动阶跃后
+                                       的真实泄漏率**（任务书点名的那条）
+
+        Args:
+            window_samples: 条数窗（旧口径，与 `get_memory_growth_rate` 兼容）。
+            window_sec: 时间窗（秒）；与 `window_samples` 同给时**时间窗优先**。
+
+        ★只加不改：`get_memory_growth_rate()` 的签名与标量返回逐字保留，
+          内部改调本函数取值 —— 既有调用方零感知，且斜率只有一个算法真源。
+        """
+        _out: dict[str, Any] = {
+            "growth_mb_per_min": 0.0, "window_sec": 0.0, "window_samples": 0,
+            "phase": "cold", "is_leak_signal": False, "rss_now": 0.0,
+            "rss_at_10min": None, "steady_growth_mb_per_min": None,
+            "uptime_sec": 0.0, "ramp_sec": 0.0, "sample_interval_sec": 0.0,
+        }
+        try:
+            import config as _c427
+            _ramp = float(getattr(_c427, "MEMORY_RAMP_SEC", 600.0) or 600.0)
+            _thr = float(getattr(_c427, "MEMORY_GROWTH_ALARM_MB_PER_MIN", 10.0) or 10.0)
+        except Exception as _ce427:
+            silent_exc(_ce427, where="runtime_metrics::get_memory_growth_report config")
+            _ramp, _thr = 600.0, 10.0
+        _out["ramp_sec"] = _ramp
+        _out["sample_interval_sec"] = float(getattr(self, "_sample_interval", 5.0) or 5.0)
+        try:
+            _now = time.time()
+            _created = float(getattr(self, "_created_at", _now) or _now)
+            _uptime = max(0.0, _now - _created)
+            _out["uptime_sec"] = round(_uptime, 1)
+            _pts = [p for p in list(self._history) if p.get("mem_rss_mb")]
+            if len(_pts) < 2:
+                return _out
+            # 窗口选择：时间窗优先；只给条数时按样本数（与旧口径逐字一致）
+            if window_sec is not None and float(window_sec) > 0:
+                _cut = _now - float(window_sec)
+                _win = [p for p in _pts if float(p.get("ts") or 0.0) >= _cut]
+                if len(_win) < 2:
+                    _win = _pts[-2:]          # 样本不足 ⇒ 退到最近两点，window_sec 如实报
+            else:
+                _n = int(window_samples) if window_samples else 60
+                _win = _pts[-max(2, _n):]
+            _span = float(_win[-1]["ts"]) - float(_win[0]["ts"])
+            _out["window_samples"] = len(_win)
+            _out["window_sec"] = round(_span, 3)
+            _out["rss_now"] = round(float(_win[-1]["mem_rss_mb"] or 0.0), 3)
+            if _span > 0:
+                # ★不做 round：`get_memory_growth_rate()` 的返回值必须与 421 原实现
+                #   **逐位一致**（它是既有调用方的契约）。观测面要 3 位小数的地方
+                #   （`check_memory_alarm_detailed`）本来就自己 round。
+                _out["growth_mb_per_min"] = (
+                    float(_win[-1]["mem_rss_mb"] or 0.0)
+                    - float(_win[0]["mem_rss_mb"] or 0.0)) / (_span / 60.0)
+            # 启动基线：第一个「距启动 ≥ ramp」的采样点
+            _base, _base_ts = None, None
+            for _p in _pts:
+                if (float(_p.get("ts") or 0.0) - _created) >= _ramp:
+                    _base = float(_p.get("mem_rss_mb") or 0.0)
+                    _base_ts = float(_p.get("ts") or 0.0)
+                    break
+            if _base is not None:
+                self._m427_rss_at_10min = _base
+                _out["rss_at_10min"] = round(_base, 3)
+                _dt = (float(_win[-1]["ts"]) - float(_base_ts)) / 60.0
+                if _dt > 0:
+                    _out["steady_growth_mb_per_min"] = (
+                        _out["rss_now"] - _base) / _dt
+            elif self._m427_rss_at_10min is not None:
+                _out["rss_at_10min"] = round(float(self._m427_rss_at_10min), 3)
+            # 相位：ramp 期的高斜率**不是泄漏**，必须标出来
+            _out["phase"] = "ramp" if _uptime < _ramp else "steady"
+            _out["is_leak_signal"] = bool(
+                _out["phase"] == "steady" and _out["growth_mb_per_min"] >= _thr)
+            return _out
+        except Exception as e:
+            silent_exc(e, where="nucleus.runtime_metrics::get_memory_growth_report")
+            return _out
+
     def get_memory_growth_rate(self, window_samples: int = 60) -> float:
         """★主线第66批 T1.4：估算内存增长率（MB/分钟）。
 
         取最近 window_samples 个含内存快照的历史点，用 (末RSS-首RSS)/跨度分钟。
         无足够样本或 psutil 不可用时安全返回 0.0（绝不抛异常）。
+
+        ★427刀4：算法收敛到 `get_memory_growth_report`（单一真源）。
+          **签名与返回类型逐字不变**，条数窗口口径也与原实现一致（同样取
+          `_mem_pts[-window_samples:]` 的首末两点算跨度），故既有调用方零感知。
+          要看窗口多长、是不是 ramp 期，请用 `get_memory_growth_report()`。
         """
         try:
-            _hist = list(self._history)
-            _mem_pts = [p for p in _hist if p.get("mem_rss_mb")]
-            if len(_mem_pts) < 2:
-                return 0.0
-            _win = _mem_pts[-window_samples:]
-            _span_s = _win[-1]["ts"] - _win[0]["ts"]
-            if _span_s <= 0:
-                return 0.0
-            _delta_mb = _win[-1]["mem_rss_mb"] - _win[0]["mem_rss_mb"]
-            return _delta_mb / (_span_s / 60.0)
+            return float(self.get_memory_growth_report(
+                window_samples=window_samples).get("growth_mb_per_min") or 0.0)
         except Exception as e:
             silent_exc(e, where="nucleus.runtime_metrics::get_memory_growth_rate L440")
             return 0.0
@@ -625,7 +725,10 @@ class RuntimeMetrics:
         _u = self.get_memory_usage()
         _pct = _u.get("percent", 0.0)
         _rss = _u.get("rss_mb", 0.0)
-        _growth = self.get_memory_growth_rate()
+        # ★427刀4：同时取结构化报告（窗口/相位/基线），标量口径不变
+        _grep427 = self.get_memory_growth_report(window_sec=float(
+            getattr(self, "_sample_interval", 5.0) or 5.0) * 60.0)
+        _growth = float(_grep427.get("growth_mb_per_min") or 0.0)
         # ★364刀B1②：三闸并列 —— 使用率≥阈值 或 RSS≥8GB 或 增长率≥阈值。
         #   原判据缺 RSS 阈值 ⇒ `MEMORY_AUTO_GC_RSS_MB=8192.0` 是个**读了没人用**的配置
         #   （366 星轨现场复核：8192 阈值未接入判据）。
@@ -689,7 +792,16 @@ class RuntimeMetrics:
                 "growth_mb_per_min": round(_growth, 3), "gc_triggered": _gc_done,
                 # ★364刀B1②③：闸因与回收读数一起返回（观测面可直接读）
                 "triggers": list(_triggers), "rss_threshold_mb": _rss_thr,
-                "auto_gc_last": (dict(_last_auto_gc[-1]) if _last_auto_gc else None)}
+                "auto_gc_last": (dict(_last_auto_gc[-1]) if _last_auto_gc else None),
+                # ★427刀4：让读数**自带可比性** —— 不带窗口的 MB/min 无法判断
+                #   是 5 分钟抖了一下还是真泄漏；不带相位会把启动阶跃当泄漏。
+                "growth_window_sec": _grep427.get("window_sec"),
+                "growth_window_samples": _grep427.get("window_samples"),
+                "growth_phase": _grep427.get("phase"),
+                "is_leak_signal": _grep427.get("is_leak_signal"),
+                "rss_at_10min": _grep427.get("rss_at_10min"),
+                "steady_growth_mb_per_min": _grep427.get("steady_growth_mb_per_min"),
+                "uptime_sec": _grep427.get("uptime_sec")}
 
     # _m65_t2_get_system_load_done
 

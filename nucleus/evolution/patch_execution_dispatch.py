@@ -843,8 +843,26 @@ def _m422_cooldown_path(path: str | None = None) -> str:
 
 
 def _m422_norm_file(file_norm) -> str:
-    """文件归一：`\\`→`/`、去前导 `./` —— 与 `_m343_o3_stable_id` 同一口径。"""
-    return str(file_norm or "").replace("\\", "/").lstrip("./")
+    r"""文件归一：`\`→`/`、去前导 `./`、**剥项目根前缀**。
+
+    ★427刀3 补一条：绝对路径 → 相对项目根。
+      原实现只统一分隔符，绝对路径与相对路径会算成两个方法键；而生产两侧
+      写法恰好不同 —— 2a 拒收时 `patch["file"]` 是绝对路径（标本实测
+      `D:\...\organs\body\PulseLiver.py`），生成入口 `entry["file"]` 多为
+      相对路径（账本现存键 `organs/motor/PulseController.py::refresh_runtime_params`）
+      ⇒ 冷却永远命不中，接进去等于没接。
+    ★相对路径输入走原分支，一字不变（既有账本键不迁移）。
+    """
+    _s = str(file_norm or "").replace("\\", "/").lstrip("./")
+    _abs_like = _s.startswith("/") or (len(_s) > 1 and _s[1] == ":")
+    if _abs_like:
+        try:
+            _root = _m326_repo_root().replace("\\", "/").rstrip("/") + "/"
+            if _s.lower().startswith(_root.lower()):
+                _s = _s[len(_root):]
+        except Exception as e:
+            silent_exc(e, where="patch_execution_dispatch::_m422_norm_file root")
+    return _s
 
 
 def _m422_pair_of(patch) -> tuple:

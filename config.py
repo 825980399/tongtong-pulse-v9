@@ -5736,6 +5736,17 @@ ENABLE_EXPERIENCE_QUARANTINE_RESTORE = True
 #   重启生效；阈值下调须等 A1 归属结论＋一周实测回落幅度另议。
 ENABLE_MEMORY_AUTO_GC = True
 MEMORY_GROWTH_ALARM_MB_PER_MIN = 10.0
+#: ★427刀4：启动后的「加载期」（秒）。这段时间在装配组件/建索引，RSS 是
+#: 台阶式上涨 —— 与泄漏无关。期内 `growth_mb_per_min` 照常给出（观测面要看），
+#: 但 `phase="ramp"`、`is_leak_signal=False`，不再把启动阶跃当泄漏报。
+#: 600s 的来历：生产实测两次加载阶跃都在启动后 0~8 分钟内完成，10 分钟留 2 分钟余量。
+MEMORY_RAMP_SEC = float(RUNTIME_PARAMS.get("memory_ramp_sec", 600.0))
+
+#: ★427刀5：补丁「状态-真值」一致性守卫（落盘前收敛明确矛盾）。
+#: 关闭 ⇒ 逐字回到 426 行为（矛盾记录照原样落盘）。
+#: ★注意：本开关**不**恢复顶层 `runtime_verified` 字段 —— 那是 105/280 批
+#: 明令弃用的污染字段，审批链路早改为只读 `runtime_verify_result.verified`。
+ENABLE_M427_STATUS_VERIFY_GUARD = True
 MEMORY_AUTO_GC_RSS_MB = float(RUNTIME_PARAMS.get("memory_auto_gc_rss_mb", 8192.0))   # ★401刀1：单一定义源＝RUNTIME_PARAMS["memory_auto_gc_rss_mb"]
 
 # ★主线第176批 段2（2026-10-09）：内存超限自动重启开关（默认全关，零回归）

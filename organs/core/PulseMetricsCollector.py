@@ -2068,6 +2068,15 @@ class PulseMetricsCollector(BasePulseOrgan):
                         "triggers": _al.get("triggers"),
                         "gc_triggered": _al.get("gc_triggered"),
                         "auto_gc_last": _al.get("auto_gc_last"),
+                        # ★427刀4：读数必须自带「窗口多长 / 哪一相位 / 基线多少」，
+                        #   否则同一个 MB/min 既可能是 5 分钟抖动也可能是真泄漏。
+                        "window_sec": _al.get("growth_window_sec"),
+                        "window_samples": _al.get("growth_window_samples"),
+                        "phase": _al.get("growth_phase"),
+                        "is_leak_signal": _al.get("is_leak_signal"),
+                        "rss_at_10min": _al.get("rss_at_10min"),
+                        "steady_growth_mb_per_min": _al.get("steady_growth_mb_per_min"),
+                        "uptime_sec": _al.get("uptime_sec"),
                     }
                     # ★365刀B1：单轨出口 —— 判据只取告警链返回值，不再有第二套计数
                     _out["gc_triggered"] = bool(_al.get("gc_triggered"))
@@ -3007,10 +3016,14 @@ class PulseMetricsCollector(BasePulseOrgan):
             return True
 
     def _m401_memory_block(self, mp: dict[str, Any] | None) -> dict[str, Any]:
-        """memory{process_rss_mb, system_percent, growth_mb_per_min}。
+        r"""memory{process_rss_mb, system_percent, growth_mb_per_min, ...}。
 
         `source` 标明口径：三值都出自**同一次** `memory_pressure` 采样（不另采）。
         增长速率来自告警链读数；链不可用 ⇒ None。
+
+        ★427刀4：追加 `growth_window_sec` / `growth_phase` / `is_leak_signal` /
+          `rss_at_10min` / `steady_growth_mb_per_min` —— 只加不改，原三个键的
+          取值路径一字不动（既有断言 `>= {...}` 仍成立）。
         """
         _mp = mp if isinstance(mp, dict) else {}
         _al = _mp.get("growth_alarm")
@@ -3020,6 +3033,13 @@ class PulseMetricsCollector(BasePulseOrgan):
             "system_percent": _mp.get("system_percent"),
             "growth_mb_per_min": _al.get("growth_mb_per_min"),
             "source": "memory_pressure",
+            # ★427刀4：窗口与相位（ramp 期的高斜率不是泄漏）
+            "growth_window_sec": _al.get("window_sec"),
+            "growth_phase": _al.get("phase"),
+            "is_leak_signal": _al.get("is_leak_signal"),
+            "rss_at_10min": _al.get("rss_at_10min"),
+            "steady_growth_mb_per_min": _al.get("steady_growth_mb_per_min"),
+            "uptime_sec": _al.get("uptime_sec"),
         }
 
     def _m401_gc_block(self, mp: dict[str, Any] | None) -> dict[str, Any]:

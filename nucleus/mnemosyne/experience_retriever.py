@@ -193,7 +193,10 @@ class ExperienceRetriever:
         「检索一直空」与「池/编码器故障」—— 两者处置完全不同：前者可以不召回，
         后者必须报障。
         """
-        _d = self._m421_degrade or {}
+        # ★427刀7：用 getattr 兜底 —— 本方法可能被 `__new__` 构造的裸实例调用
+        #   （test_m366_b4 的接线用例就是如此），私有属性缺席不该让**观测口崩掉**。
+        #   观测口抛异常等于把「查不到状态」变成「框架坏了」，方向正好反了。
+        _d = getattr(self, "_m421_degrade", None) or {}
         return {"degraded": bool(_d.get("degraded")),
                 "reason": str(_d.get("reason") or "")}
 
@@ -282,10 +285,19 @@ class ExperienceRetriever:
         ★282批刀2：expand_adjacent=True 且 ENABLE_GRAPH_ADJACENCY 开启时，
         返回 {"direct": [...], "adjacent": [...], "adjacent_meta": {...}} 两列；
         否则返回原 list（向后兼容，零行为变更）。"""
+        # ★427刀7（P0-09 收尾）：5 处前置早退全部带原因。
+        #   改前它们都是**裸 `return []`**，调用方分不清「真的没命中」与「检索
+        #   链路坏了」—— 前者可以不召回，后者必须报障，处置完全相反。
+        #   ★为什么不改 `retrieve()` 的返回类型：它返回 list，6 条既有单测断言
+        #     `== []`，`retrieve_with_adjacency` / `compare` 也按 list 消费；
+        #     改形态会当场炸（421 刀3 已踩过这面墙，故当时先加 `last_degrade()`）。
+        #     结构化结果由本文件末尾新增的 `retrieve_with_status()` 提供。
         if not query or not isinstance(query, str):
+            self._m421_mark_degrade("query_empty: 查询为空或不是字符串")
             return []
         try:
             if not self.available():
+                self._m421_mark_degrade("encoder_unavailable: 编码器未就绪（向量后端不可用）")
                 return []
             from nucleus.semantic.VectorEncoder import VectorEncoder as _VE
             _inc = None
@@ -293,12 +305,22 @@ class ExperienceRetriever:
                 _inc = not bool(filter_polluted)
             _cand = self.candidates(include_polluted=_inc, limit=limit)
             if not _cand:
+                # ★候选集为空有两种成因：池故障（`_all_experiences` 已记过降级）
+                #   与池里真的没有可用经验。**不许覆盖已有原因** —— 那会把
+                #   「池读不出来」粉饰成「池里没有」，正是 P0-09 要治的病。
+                if not (self._m421_degrade or {}).get("degraded"):
+                    self._m421_mark_degrade(
+                        "no_candidates: 候选集为空（池可读，但没有可用经验）")
                 return []
             _mat = self._ensure_vectors(_cand)
             if _mat is None or len(_mat) == 0:
+                self._m421_mark_degrade(
+                    "vectorize_failed: 候选向量化失败（矩阵为空，编码后端可能异常）")
                 return []
             _qv = self.encoder().encode_one(query)
             if _qv is None:
+                self._m421_mark_degrade(
+                    "query_encode_failed: 查询编码返回 None（编码后端半可用）")
                 return []
             _sims = _VE.cosine_matrix(_qv, _mat)
             _rows = self._score(_sims, _cand)
@@ -317,6 +339,37 @@ class ExperienceRetriever:
             silent_exc(_e, where="nucleus.mnemosyne.experience_retriever::retrieve L279")
             self._m421_mark_degrade(f"retrieve: {type(_e).__name__}: {_e}")
             return []
+
+    def retrieve_with_status(self, query: str, top_k: int | None = None,
+                             filter_polluted: bool | None = None,
+                             limit: int | None = None,
+                             expand_adjacent: bool = False,
+                             adjacency_limit: int | None = None) -> dict:
+        """★427刀7：带降级状态的检索结果（**只加不改**，`retrieve()` 仍返回 list）。
+
+        与 `last_degrade()` 的区别：那个是**状态口**，多次/并发调用后读到的未必
+        是"这一次"的；本方法把「这次的空结果」与「为什么空」绑一起返回，调用方
+        不需要额外同步，也不会被下一次调用冲掉。
+
+        返回::
+
+            {"hits": [...],                    # 与 retrieve() 完全相同的列表
+             "degraded": bool,                 # 这次是否因为前置条件不满足而返回空
+             "reason": str,                    # 具体原因码 + 说明（degraded 时非空）
+             "empty": bool}                    # hits 是否为空（真没命中也会 True）
+
+        ★三个字段合起来才够判：`empty=True & degraded=False` ⇒ **真的没命中**；
+          `empty=True & degraded=True` ⇒ **链路坏了**，该报障而不是等下次。
+        """
+        _hits = self.retrieve(query, top_k=top_k, filter_polluted=filter_polluted,
+                              limit=limit, expand_adjacent=expand_adjacent,
+                              adjacency_limit=adjacency_limit)
+        _d = self.last_degrade()
+        _list = _hits.get("direct") if isinstance(_hits, dict) else _hits
+        return {"hits": _hits,
+                "degraded": bool(_d.get("degraded")),
+                "reason": str(_d.get("reason") or ""),
+                "empty": not bool(_list)}
 
     # -------------------------------------------------- 邻接扩展（282批刀2）
     def _with_adjacent(self, direct: list, adjacency_limit: int | None = None) -> dict:
