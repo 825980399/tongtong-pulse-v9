@@ -61,7 +61,11 @@ _M415_EXP_TOTAL_CHARS = 500
 
 
 def _m415_experience_in_prompt_on() -> bool:
-    """开关：默认 **False**（影子）。读 config 属性，取不到按 False。"""
+    """开关：读 config 属性，取不到按 False。
+
+    ★423 刀2 起 `config.ENABLE_M415_EXPERIENCE_IN_PROMPT` 默认 **True**（实弹）；
+      本函数语义不变 —— 只管"开关此刻开没开"，不预设默认值。
+    """
     try:
         import config as _c
         return bool(getattr(_c, _M415_EXP_SWITCH, False))

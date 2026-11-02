@@ -7104,23 +7104,58 @@ ENABLE_M422_NARRATIVE_CATCHUP = True
 ENABLE_M422_NARRATIVE_FLUSH = True
 
 # ======================================================================
+# [M423-CFG] 第423批 · 归档回收（archive 只写不读的黑洞）
+# ======================================================================
+#
+# ENABLE_M423_ARCHIVE_RECOVERY
+#   默认值：True
+#   语义：启动时扫一遍 `data/patches/pending_patches_archive.json`，
+#        把「运行时验过、但从来没被应用」的补丁重新放回 `pending_patches.json`，
+#        并给每条打 `recovered_from_archive=True` + `recovered_at` + `recovered_by`
+#        标记（原 `archive_reason` 另存 `archive_reason_before_recover`，便于追溯）。
+#   判据（全过才回收，任一不过都单独计数）：
+#        ① 运行时验过 —— `status == "runtime_verified"` 或 `runtime_verified is True`
+#           （★两种口径都认：生产那 8 条只有 status，字段是 None，423 T0 实测）
+#        ② `applied` 非真
+#        ③ 年龄 ≤ `MAX_AGE_DAYS`（30 天，时间取不到的不回收，不猜）
+#        ④ `o3_dead_code` 非真（O3 判死的不要捞回来）
+#        ⑤ id 不在当前 pending / 不在周期 apply 的 dead 账里
+#   回收后**不会立刻被 apply**：`status` 恢复成归档前状态（`status_before_archive`，
+#        缺失时退化为 `runtime_verified`），而周期 apply 只统计 `status=="approved"`。
+#   审计：每轮落 `data/patches/archive_recovery_log.jsonl`（append-only，含逐条排除计数）。
+#   关闭时零行为变化（入口直接返回 status=disabled，不读不写任何文件）。
+#   读取点：nucleus/evolution/archive_recovery.py::recover
+ENABLE_M423_ARCHIVE_RECOVERY = True
+
+# ======================================================================
 # [M415-CFG] 第415批 · 经验池命中拼进对话 prompt
 # ======================================================================
 #
 # ENABLE_M415_EXPERIENCE_IN_PROMPT
-#   默认值：False（**影子 / dry-run**）
+#   默认值：True（★423 刀2 由 False 开启 —— 影子 → 实弹）
 #   语义：True 时 `PulseLung._build_chat_prompt` 在记忆段之后拼一段
 #        【相关经验参考】——取经验池 top3、每条 ≤100 字、合计 ≤500 字，
 #        query 用**用户问题原文**，检索走 411 刀4 的 `experience_hits.top_hits`
-#        （含 412 模板降权、414 权重平方修复）。
+#        （含 412 模板降权、414 权重平方修复、423 刀1 分层候选窗口）。
 #        False 时**照算命中、照记一行日志，但 prompt 逐字不变** ——
 #        日志形如 `[415刀4] 经验命中(影子) 命中=3 拼入=0条/0字 ...`，
 #        其中 `拼入` 是"如果开拼会占多少字"，不是实际拼入量。
-#   为什么默认 False：经验池 400 条里 68.75% 是模板复制品（414 实测），
-#        直接开拼有把对话带成复读机的风险 ⇒ 先跑一周影子看命中分布再开。
+#   ★为什么现在敢开（423 刀2 T0 实测，两条都必须先看）：
+#     ① 检索端已修好：423 刀1 把候选窗口从 200 放到分层全量，
+#        实测 recall@2 20.0% → 66.7%（15 个真实用户问题 / 池 418 条）。
+#        窗口不放开就开闸，会命中不了几条而被误判成"经验没用"（任务书原话）。
+#     ② **影子期的真实情况要说清**：415 批上线至今，生产 `logs/pulse.log` 里
+#        `[415刀4] 经验命中(影子)` 的记录数是 **0 条** —— 不是"影子跑得很好所以可以开"，
+#        而是活的对话都走了 `background_learning` 通道，压根没进 `_build_chat_prompt`。
+#        ⇒ 任务书里"先影子模式跑一天再决定"这个前置，在生产上**从未真正发生过**。
+#        本批按任务书主指令开闸，并把这条事实写在这里，避免后人误以为影子已验过。
+#     ③ 风险仍在：池里 68.7% 是模板复制品（418 条只有 133 种文本），
+#        开拼后若发现复读/拼接痕迹，**改回 False 即回到影子**（一行回滚，无迁移）。
+#   观察点：`logs/pulse.log` 里 `[415刀4] 经验命中(实弹) 命中=N 拼入=N条/N字`
+#        以及回复里是否出现重复段。`拼入=0条` 而 `命中>0` 说明预算/截断把它吃完了。
 #   关闭时零行为变化（唯一副作用是每次对话多一条 INFO 日志）。
 #   读取点：organs/body/PulseLung.py::_m415_experience_in_prompt_on()
-ENABLE_M415_EXPERIENCE_IN_PROMPT = False
+ENABLE_M415_EXPERIENCE_IN_PROMPT = True
 
 # ======================================================================
 # [M416-CFG] 第416批 · self_inspector 启动扫描线程化 + 内存探针护栏

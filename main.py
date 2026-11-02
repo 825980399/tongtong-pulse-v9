@@ -4949,6 +4949,24 @@ def main():
                 _m422_cu.get("landed"), _m422_cu.get("reason") or "ok")
         except Exception as _m422_cu_e:
             silent_exc(_m422_cu_e, "main.py[422刀4-叙事启动补跑]")
+        # ★423刀3：归档回收 —— 把 archive 里「运行时验过但没应用」的件重新入池。
+        #   为什么放启动时一次性做：归档目前是"只写不读"的黑洞，
+        #   回收只在对列被重建时才有意义；放循环内要靠标记位防重，多一个会错的状态。
+        #   ★判据两种口径都认（status=="runtime_verified" 或 runtime_verified is True）：
+        #     生产 archive 里那 8 条裸 patch 只有 status，字段是 None（423 T0 实测）。
+        #   ★回收后不会立刻 apply：status 恢复成归档前状态，而周期 apply 只认 approved
+        #     （`_m422_count_approved_pending`）⇒ 回收件最多重新排队等审批。
+        try:
+            from nucleus.evolution import archive_recovery as _m423_ar
+            _m423_rec = _m423_ar.recover(os.path.dirname(os.path.abspath(__file__)))
+            logging.getLogger("pulse").info(
+                "[423刀3] 归档回收 status=%s shape=%s archive=%s 回收=%s pending=%s->%s ids=%s",
+                _m423_rec.get("status"), _m423_rec.get("shape"),
+                _m423_rec.get("archive_rows"), _m423_rec.get("recovered"),
+                _m423_rec.get("pending_before"), _m423_rec.get("pending_after"),
+                ",".join(_m423_rec.get("recovered_ids") or [])[:200])
+        except Exception as _m423_ar_e:
+            silent_exc(_m423_ar_e, "main.py[423刀3-归档回收]")
         # ★422刀4：周期 flush 的墙钟节流（与夜间编排同款 60s，避免每拍 stat 状态文件）
         _m422_fl_last_ts = 0.0
         while not exit_requested:
