@@ -23,6 +23,8 @@ import numpy as np
 
 from nucleus._silent_except import silent_exc
 from nucleus.logger import get_module_logger
+from utils.native_thread_caps import apply_native_caps as _m437_apply_native_caps
+from utils.native_thread_caps import ort_threads as _m437_ort_threads
 
 _module_logger = get_module_logger("VectorEncoder")
 
@@ -186,6 +188,11 @@ class VectorEncoder:
         model_name = self._cfg.get("model_name", "BAAI/bge-small-zh-v1.5")
         cache_dir = os.path.join(_PROJECT_ROOT,
                                  self._cfg.get("cache_dir", "data/models"))
+        # ★437刀1：权威的早置点在 main.py 第 4 行（必须早于 numpy 导入，否则
+        #   OpenBLAS 池已按核数建好）。这里是**兜底**：工具/测试直接 import 本模块、
+        #   或热重载场景，至少保证 tokenizers 的 rayon 池（首次 encode 才建）
+        #   与下面的 fastembed/ORT session 能吃到上限。
+        _m437_apply_native_caps()
         try:
             os.makedirs(cache_dir, exist_ok=True)
         except Exception as e:
@@ -207,7 +214,10 @@ class VectorEncoder:
                 self._model = TextEmbedding(
                     model_name=model_name,
                     cache_dir=cache_dir,
-                    threads=2 if self._cfg.get("cpu_only", True) else None,
+                    # ★437刀1：360 批写死的 2 → 走 config 的 M437_ORT_INTRA_THREADS
+                    #   （缺省 4，实测 16 核机器上 4 比 2 编码快 15%：0.826s vs 1.148s
+                    #   / 256 条）。无论 cpu_only 与否都给确定值，不再交给 ORT 按核数自选。
+                    threads=_m437_ort_threads(),
                 )
                 _cost = time.time() - _t0
                 with self._lock_self:

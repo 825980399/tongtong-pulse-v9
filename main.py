@@ -2,6 +2,14 @@ from config import EXTERNAL_CALL_TIMEOUTS  # noqa: F401
 from nucleus._silent_except import silent_exc  # 主线第78批 T2：静默异常可见化
 from nucleus._warn_throttle import should_warn
 
+# ★437刀1：原生线程池上限必须在**任何 numpy 系库被 import 之前**写进环境变量。
+#   OpenBLAS 在 `import numpy` 那一刻就按核数建池（16 核 = 15~16 条），
+#   晚了这一步就只是改了变量、池早已建好。生产实测 95 条原生线程里
+#   ORT 只占 ~2 条，大头是 OpenBLAS(16) + faiss(15) + sklearn(15) + rayon(16)。
+from utils.native_thread_caps import apply_native_caps as _apply_native_caps
+
+_NATIVE_CAP_RESULT = _apply_native_caps()
+
 """main —— v9.5 PulseNet 脉冲框架总入口（自进化基座版）
 
 版本: v10 PulseNet
@@ -4591,6 +4599,17 @@ def main():
 
     # 启动框架
     framework.start()
+
+    # ★437刀2：历史备份清理（.bak / .bak.N / .trim.bak）—— 延迟 20s 的低优先级守护线程。
+    #   为什么延迟：启动窗口内 L0/L1 池在建、语义模型在加载，不要这时候抢 IO。
+    #   保护名单在 utils/backup_retention.py：evidence_chain_freeze* / _archive 整棵跳过。
+    #   节流：默认 24h 一次（data/monitor/backup_sweep_stamp.json），
+    #   清单：data/monitor/backup_sweep_last.json。关闸：ENABLE_M437_BACKUP_RETENTION=False。
+    try:
+        from utils.backup_retention import start_sweeper_thread as _m437_start_sweeper
+        framework._m437_sweep_thread = _m437_start_sweeper("data", delay_sec=20.0)
+    except Exception as _se:
+        silent_exc(_se, "main.py:437刀2 备份清理线程", level="warning")
 
     # ★v23.0新增：为内在世界设置框架引用，供自动升级窗口检查使用
     try:

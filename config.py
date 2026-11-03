@@ -5958,6 +5958,29 @@ M436_TREE_CACHE_MAX = 0
 ENABLE_M436_ORGAN_SERIAL = True
 # 刀3（日志前缀中文化）：英文前缀 → 中文器官名；False ⇒ 回到英文原名。
 ENABLE_M436_LOG_TAG_ZH = True
+
+# ===== ★437批：并行化第三阶段（原生线程池限流 + 备份保留）=====
+# 刀1（原生线程池）：总闸 False ⇒ 一个环境变量都不写（逐字回退改前行为）。
+#   实测 16 核机器 95 条原生线程的来源：OpenBLAS(numpy) 16 / faiss 15 /
+#   sklearn 15 / tokenizers(rayon) 16 / torch 7~8 / **ORT 仅 ~2**（360 批已限 2）。
+#   M437_NATIVE_OMP_THREADS：faiss/sklearn/torch 的 OpenMP + numpy 的 OpenBLAS 上限。
+#   M437_NATIVE_RAYON_THREADS：tokenizers(rust rayon) 上限。
+#   M437_ORT_INTRA_THREADS：ONNX Runtime intra/inter-op（360 批写死 2，这里配置化）。
+#   ★必须在 import numpy 之前生效 —— 见 main.py 第 4 行与 utils/native_thread_caps.py。
+ENABLE_M437_NATIVE_THREAD_CAP = True
+M437_NATIVE_OMP_THREADS = 4
+M437_NATIVE_RAYON_THREADS = 2
+M437_ORT_INTRA_THREADS = 4
+
+# 刀2（备份保留）：总闸 False ⇒ 扫描/清理都不跑（只读 CLI 仍可用）。
+#   M437_BACKUP_MAX_AGE_DAYS：超过这个天数的 .bak 系列文件可被清理。
+#   M437_BACKUP_KEEP_GENERATIONS：同源文件保留几代（1 = 只留 .bak，清掉 .bak.1/.bak.2）。
+#   M437_BACKUP_SWEEP_ENABLED：是否在框架启动时自动扫一遍并清理（默认只清「安全可删」）。
+ENABLE_M437_BACKUP_RETENTION = True
+M437_BACKUP_MAX_AGE_DAYS = 7
+M437_BACKUP_KEEP_GENERATIONS = 1
+M437_BACKUP_SWEEP_ENABLED = True
+M437_BACKUP_SWEEP_MIN_INTERVAL_HOURS = 24
 PARQUET_COMPRESSION = "snappy"
 PARQUET_SHARD_BY_EVOL_LEVEL = True
 PARQUET_BATCH_SIZE = 5000
