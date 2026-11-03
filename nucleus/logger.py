@@ -15,6 +15,7 @@ import json
 import logging
 import logging.handlers
 import os
+import queue
 import re
 import sys
 import threading
@@ -54,6 +55,13 @@ _LEVEL_MAP = {
 # 确保日志目录存在
 _log_dir = getattr(config, "LOG_DIR", "logs")
 os.makedirs(_log_dir, exist_ok=True)
+
+# ★434刀2：日志队列化 —— 文件写盘从「各线程抢 SafeRotatingFileHandler 锁」降为
+#   「业务线程入队 + QueueListener 单线程落盘」。这些模块级引用供停机 flush 与
+#   树外 logger 桥复用（root.handlers 里挂的是 QueueHandler，不是文件 handler）。
+_FILE_HANDLER = None       # SafeRotatingFileHandler（唯一落盘者）
+_QUEUE_LISTENER = None     # QueueListener（后台落盘线程）
+_QUEUE_HANDLER = None      # QueueHandler（挂在 root / 树外 logger 的入队口）
 
 
 # ========== ★F3 重复日志聚合降噪 ==========
@@ -903,14 +911,13 @@ def install_tree_outside_logger_bridges() -> None:
         #   原先这里 new 一个**普通 FileHandler** 直写同一个 pulse.log，与 SafeRotating
         #   各持一个文件偏移：SafeRotating 截断后另一方的偏移还在旧位置，下一次 flush
         #   会在旧偏移处写出一大段 NUL 空洞、把文件重新撑大 ⇒ 主文件永远轮不干净。
+        # ★434刀2：主 handler 已换成 QueueHandler（挂 root），真正的文件 handler 由
+        #   QueueListener 持有、存模块级 _FILE_HANDLER。优先复用它（否则这里会因
+        #   root.handlers 里找不到 SafeRotatingFileHandler 而自建直写 handler，复现 NUL 空洞）。
         _fh = None
         try:
-            _m356_abs = os.path.abspath(_log_file)
-            for _h in logging.getLogger("pulse").handlers:
-                if (isinstance(_h, SafeRotatingFileHandler)
-                        and os.path.abspath(getattr(_h, "baseFilename", "")) == _m356_abs):
-                    _fh = _h
-                    break
+            if isinstance(_FILE_HANDLER, SafeRotatingFileHandler):
+                _fh = _FILE_HANDLER
         except Exception as _he356:
             silent_exc(_he356, "logger.install_tree_outside_logger_bridges 复用主handler", level="debug")
         _m356_created = False
@@ -929,13 +936,17 @@ def install_tree_outside_logger_bridges() -> None:
                 datefmt="%Y-%m-%d %H:%M:%S"))
             _fh.addFilter(SanitizingFilter(enabled=_m153_sanitizer_enabled()))
         _attached = 0
+        # ★434刀2：树外 logger 也挂 QueueHandler（入队），与主链同队列、由
+        #   QueueListener 单线程落盘，避免它们仍直挂 SafeRotatingFileHandler 同步写盘
+        #   （那会让"全进程不抢文件锁"落空一半）。QueueHandler 不存在时回退挂文件 handler。
+        _attach_handler = _QUEUE_HANDLER if _QUEUE_HANDLER is not None else _fh
         for _name in _TREE_OUTSIDE_LOGGER_NAMES:
             _lg = logging.getLogger(_name)
             if _lg.handlers:
                 continue  # 尊重模块自配
             _lg.setLevel(logging.DEBUG)
             _lg.propagate = False
-            _lg.addHandler(_fh)  # 共享同一 FileHandler 实例
+            _lg.addHandler(_attach_handler)  # 共享同一 handler 实例
             _attached += 1
         if _attached > 0:
             logging.getLogger("pulse.framework").info(
@@ -1000,7 +1011,20 @@ def _init_root_logger():
     )
     file_handler.setFormatter(file_format)
     file_handler.addFilter(SanitizingFilter(enabled=_m153_sanitizer_enabled()))
-    root.addHandler(file_handler)
+
+    # ★434刀2：文件写盘从「抢锁+落盘」降为「入队 + 后台单线程落盘」。
+    #   SafeRotatingFileHandler 只由 QueueListener 单线程持有，业务线程只往
+    #   queue.Queue 入队（无锁竞争），消除全进程最大串行点（历史上 L0 看门狗
+    #   卡死就是等日志写盘）。console 仍直挂 root（写 stdout 非写盘，不动）。
+    _log_queue = queue.Queue(-1)
+    _queue_handler = logging.handlers.QueueHandler(_log_queue)
+    root.addHandler(_queue_handler)
+    _queue_listener = logging.handlers.QueueListener(_log_queue, file_handler)
+    _queue_listener.start()
+    global _FILE_HANDLER, _QUEUE_LISTENER, _QUEUE_HANDLER
+    _FILE_HANDLER = file_handler
+    _QUEUE_LISTENER = _queue_listener
+    _QUEUE_HANDLER = _queue_handler
     # ★第164批 刀A5（P1）：日志→告警落盘桥（ERROR/WARNING 入档）
     #   根因：既有告警链路仅信封/P0 异常驱动，ERROR/WARNING 日志流从未入档。
     #   挂一个去重+限流的 Handler 到根日志器，受 write_guard 约束（测试环境不挂载）。
@@ -1044,6 +1068,26 @@ def _init_root_logger():
 
     # ★206批 刀1：树外 logger 根治（案C 显式名单注册）—— 一次性点亮 16 生产模块文件通道
     install_tree_outside_logger_bridges()
+
+
+def flush_queue_logs() -> bool:
+    """★434刀2：停机前 flush 日志队列，不丢日志。
+
+    框架退出走 `os._exit`（跳过 atexit），QueueListener 线程不会因进程退出而自然
+    flush —— 必须在退出路径显式调用本函数。`QueueListener.stop()` 会 put sentinel
+    并 join（同步等队列里的记录全部落盘）。
+    """
+    global _QUEUE_LISTENER
+    _ql = _QUEUE_LISTENER
+    if _ql is None:
+        return True
+    try:
+        _ql.stop()
+    except Exception as _e:
+        silent_exc(_e, where="nucleus.logger::flush_queue_logs", level="warning")
+        return False
+    _QUEUE_LISTENER = None
+    return True
 
 
 def get_organ_logger(organ_name: str) -> logging.Logger:

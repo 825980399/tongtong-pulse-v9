@@ -474,14 +474,18 @@ class InfoField(SilentLogMixin):
         # 根据 CPU 核心数动态分配线程池
         # L0 必须保持单线程
         _l0_workers = 1
-        # L1/L2 各分配 CPU 核心数的 50%
-        _l1_workers = max(4, _cpu_count // 2)
+        # ★434刀3：L1 worker 数改由 config.PULSE_LAYER.l1_threads 驱动（对齐 l2）。
+        #   此前 l1_threads 配置项从未被读取，长期被 cpu 公式覆盖。l1_threads<=0 回退 cpu 公式。
+        _l1_cfg_threads = int(PULSE_LAYER.get("l1_threads", 0) or 0)
+        _l1_workers = _l1_cfg_threads if _l1_cfg_threads > 0 else max(4, _cpu_count // 2)
         # ★主线第57批 T4（P2-394）：L2 worker 数改由 config.PULSE_LAYER.l2_threads 驱动
         # （此前 l2_threads 配置项从未被读取，长期被 cpu 公式覆盖）。l2_threads<=0 回退 cpu 公式。
         _l2_cfg_threads = int(PULSE_LAYER.get("l2_threads", 0) or 0)
         _l2_workers = _l2_cfg_threads if _l2_cfg_threads > 0 else max(4, _cpu_count // 2)
-        # L3 分配 CPU 核心数的 25%
-        _l3_workers = max(2, _cpu_count // 4)
+        # ★434刀3：L3 worker 数改由 config.PULSE_LAYER.l3_threads 驱动（对齐 l2）。
+        #   此前 l3_threads 配置项从未被读取，长期被 cpu 公式覆盖。l3_threads<=0 回退 cpu 公式。
+        _l3_cfg_threads = int(PULSE_LAYER.get("l3_threads", 0) or 0)
+        _l3_workers = _l3_cfg_threads if _l3_cfg_threads > 0 else max(2, _cpu_count // 4)
         # 自适应任务池分配 CPU 核心数的 50%
         _adaptive_workers = max(4, _cpu_count // 2)
 
@@ -510,6 +514,29 @@ class InfoField(SilentLogMixin):
             f"L2={self._layer_queue_limits[_PULSE_LAYER_L2]}, "
             f"L3={self._layer_queue_limits[_PULSE_LAYER_L3]}")
 
+        # ★434刀3：五条分层池预算收敛**前置到建池之前**。
+        #   改前（418刀3②）这段 cap 在建完 L0-L3 池之后才执行——此时
+        #   `_l1_workers` 等局部变量已写死进 ThreadPoolExecutor，cap 只改了
+        #   局部变量、池的 max_workers 纹丝不动 ⇒ 配置说 L1=4 实际跑 8。
+        #   收敛前置后，建池拿到的就是 cap 之后的预算。
+        _m418_raw = {"l0": _l0_workers, "l1": _l1_workers, "l2": _l2_workers,
+                     "l3": _l3_workers, "adaptive": _adaptive_workers}
+        try:
+            from utils.thread_budget import cap as _m418_cap
+            _l0_workers = int(_m418_cap("l0", _l0_workers))
+            _l1_workers = int(_m418_cap("l1", _l1_workers))
+            _l2_workers = int(_m418_cap("l2", _l2_workers))
+            _l3_workers = int(_m418_cap("l3", _l3_workers))
+            _adaptive_workers = int(_m418_cap("adaptive", _adaptive_workers))
+        except Exception as _m418_e:
+            silent_exc(_m418_e, where="InfoField::_init_layer_pools 434刀3", level="debug")
+        if _m418_raw != {"l0": _l0_workers, "l1": _l1_workers, "l2": _l2_workers,
+                         "l3": _l3_workers, "adaptive": _adaptive_workers}:
+            _module_logger.info(
+                "[418刀3②] 分层池上限收敛: %s → L0=%d L1=%d L2=%d L3=%d Adaptive=%d",
+                _m418_raw, _l0_workers, _l1_workers, _l2_workers, _l3_workers,
+                _adaptive_workers)
+
         if layer_config.get("l0_enabled", True):
             self._layer_pools[_PULSE_LAYER_L0] = ThreadPoolExecutor(
                 max_workers=_l0_workers,
@@ -534,24 +561,7 @@ class InfoField(SilentLogMixin):
                 thread_name_prefix="L3-Autonomous"
             )
 
-        # ★418刀3②：五条分层池上限统一过预算（改前 L0=1 L1=8 L2=8 L3=4 Adaptive=8）。
-        _m418_raw = {"l0": _l0_workers, "l1": _l1_workers, "l2": _l2_workers,
-                     "l3": _l3_workers, "adaptive": _adaptive_workers}
-        try:
-            from utils.thread_budget import cap as _m418_cap
-            _l0_workers = int(_m418_cap("l0", _l0_workers))
-            _l1_workers = int(_m418_cap("l1", _l1_workers))
-            _l2_workers = int(_m418_cap("l2", _l2_workers))
-            _l3_workers = int(_m418_cap("l3", _l3_workers))
-            _adaptive_workers = int(_m418_cap("adaptive", _adaptive_workers))
-        except Exception as _m418_e:
-            silent_exc(_m418_e, where="InfoField::_init_task_pool 418刀3②", level="debug")
-        if _m418_raw != {"l0": _l0_workers, "l1": _l1_workers, "l2": _l2_workers,
-                         "l3": _l3_workers, "adaptive": _adaptive_workers}:
-            _module_logger.info(
-                "[418刀3②] 分层池上限收敛: %s → L0=%d L1=%d L2=%d L3=%d Adaptive=%d",
-                _m418_raw, _l0_workers, _l1_workers, _l2_workers, _l3_workers,
-                _adaptive_workers)
+        # ★434刀3：cap 收敛已前置到建池之前（见上方），此处直接建 adaptive 池。
         self._adaptive_pool_size = _adaptive_workers
         self._adaptive_task_pool = ThreadPoolExecutor(
             max_workers=self._adaptive_pool_size,

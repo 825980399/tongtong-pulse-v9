@@ -388,9 +388,15 @@ def test_356_d12_storm_budget():
 
 
 def test_356_d12_bridge_reuses_main_handler():
-    """树外 bridge 不得再 new 普通 FileHandler 直写同一文件。"""
+    """树外 bridge 不得再 new 普通 FileHandler 直写同一文件。
+
+    ★434刀2：主 handler 已换成 QueueHandler，真正的文件 handler 由 QueueListener
+    持有、存模块级 _FILE_HANDLER，bridge 改为复用它（isinstance(_FILE_HANDLER, ...)），
+    判据从「遍历 root.handlers 找 _h」改为「复用 _FILE_HANDLER」。行为本质不变：
+    仍复用主 SafeRotatingFileHandler、仍不 new 普通 FileHandler。
+    """
     _t = _src("nucleus/logger.py")
-    assert "isinstance(_h, SafeRotatingFileHandler)" in _t
+    assert "isinstance(_FILE_HANDLER, SafeRotatingFileHandler)" in _t
     assert "logging.FileHandler(_log_file" not in _t
 
 

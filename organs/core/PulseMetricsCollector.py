@@ -2449,6 +2449,20 @@ class PulseMetricsCollector(BasePulseOrgan):
                 "active_conditions": field_stats.get("active_conditions", 0),
             }
 
+        # ★434刀4：把分层队列背压（L0/L1/L2/L3 四层队列深度 + 上限 + 拒收数）接进快照，
+        #   让生产可观测面第一次能看到四层队列水位（此前 get_backpressure_stats 零调用）。
+        #   取不到 info_field / 方法时一律 None（不填假 0：没测到 ≠ 真 0）。
+        try:
+            if self.info_field and hasattr(self.info_field, "get_backpressure_stats"):
+                snapshot["backpressure"] = self.info_field.get_backpressure_stats()
+            else:
+                snapshot["backpressure"] = None
+        except Exception as _bp_e:
+            silent_exc(_bp_e,
+                       where="PulseMetricsCollector::_build_observability_snapshot backpressure",
+                       level="debug")
+            snapshot["backpressure"] = None
+
         # 172刀3：内存压力双口径读数（进程 RSS MB + 系统内存占比）
         # ★401刀1：**一次采集、多块复用** —— `_collect_memory_pressure` 有副作用
         #   （记峰值 / 跑增长告警三闸 / 可能真触发 GC），绝不能为补字段调第二次。

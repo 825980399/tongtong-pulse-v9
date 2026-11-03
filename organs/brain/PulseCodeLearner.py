@@ -15,6 +15,7 @@ import os
 import random
 import re
 import sys
+import threading
 import time
 from typing import Any
 
@@ -3176,6 +3177,42 @@ class PulseCodeLearner(BasePulseOrgan):
             return
         self._last_code_review_at = _now
 
+        # ★434刀1：把「全库扫描 + 补丁生成」整段下沉到专用低优先级后台线程（单飞），
+        #   消阻塞（不再占用 adaptive 前台线程跑 10.6s 的 detect_code_issues）。
+        #   区别于 416 刀：416 只把启动窗口内的 detect_code_issues 交给
+        #   self_inspector._m416_scan_body 扫描留痕（**不生成补丁**），此处是
+        #   整段审视下沉——扫描、日志归因、参数审计、工具检查、运行时审查、
+        #   补丁生成**全部保留**，闭环不丢。
+        _worker = getattr(self, "_code_review_worker_thread", None)
+        if _worker is not None and _worker.is_alive():
+            self._log(LogLevel.DEBUG, "代码审视后台线程仍在跑，本轮跳过（单飞）")
+            return
+        _worker = threading.Thread(target=self._code_review_worker,
+                                   name="pcl-code-review-worker", daemon=True)
+        self._code_review_worker_thread = _worker
+        try:
+            _worker.start()
+        except Exception as _e:
+            silent_exc(_e, where="organs.brain.PulseCodeLearner::_review_own_code_issues spawn",
+                       level="warning")
+            self._code_review_worker_thread = None
+            # 线程起不来时回退同步执行，绝不丢闭环
+            self._code_review_worker()
+        return
+
+    def _code_review_worker(self):
+        """★434刀1：代码自我审视的完整执行体（在专用低优先级后台线程运行）。
+
+        内容即原 `_review_own_code_issues` 的「扫描 + 补丁生成」主体；本线程体
+        先降当前线程优先级（不抢关键线程 CPU），其余逐字不变。
+        """
+        # ★434刀1：降当前线程优先级（Windows THREAD_PRIORITY_LOWEST / posix nice 19）
+        try:
+            from nucleus.self_inspector import _m416_set_thread_lowest
+            self._code_review_prio_backend = _m416_set_thread_lowest()
+        except Exception as _e:
+            silent_exc(_e, where="organs.brain.PulseCodeLearner::_code_review_worker prio",
+                       level="debug")
         try:
             self._log(LogLevel.INFO, "代码自我审视触发...")
             inspector = self._get_inspector()
@@ -3192,14 +3229,12 @@ class PulseCodeLearner(BasePulseOrgan):
                 if isinstance(_defer, dict) and _defer.get("started"):
                     self._log(LogLevel.INFO,
                               "[416刀1] 代码自我审视已交给低优先级延迟线程"
-                              "（延迟%.0fs，不抢 L0；why=%s）"
-                              % (float(_defer.get("delay_sec") or 0.0),
-                                 _defer.get("why")))
+                              f"（延迟{float(_defer.get('delay_sec') or 0.0):.0f}s，不抢 L0；"
+                              f"why={_defer.get('why')}）")
                     return
                 if isinstance(_defer, dict):
                     self._log(LogLevel.DEBUG,
-                              "[416刀1] 延迟线程未启动（%s）⇒ 走原同步扫描"
-                              % _defer.get("why"))
+                              f"[416刀1] 延迟线程未启动（{_defer.get('why')}）⇒ 走原同步扫描")
             issues = inspector.detect_code_issues()
 
             # ★进化闭环升级(完美级): 接入日志动态归因（阶段1：如何发现问题）
@@ -3392,7 +3427,9 @@ class PulseCodeLearner(BasePulseOrgan):
             try:
                 import config as _cfg_m22
                 _m22_nr = bool(getattr(_cfg_m22, "ENABLE_LOG_NOISE_REDUCTION", True))
-            except Exception:
+            except Exception as _m22_e:
+                silent_exc(_m22_e, where="organs.brain.PulseCodeLearner::_code_review_worker m22降噪开关",
+                           level="debug")
                 _m22_nr = True
             _m22_issue_level = LogLevel.DEBUG if _m22_nr else LogLevel.WARNING
             for issue in issues[:5]:
@@ -3470,7 +3507,9 @@ class PulseCodeLearner(BasePulseOrgan):
                         from nucleus.LLMDependencyMetrics import (
                             SCENE_CODE_LEARN as _m95_code_learn,
                         )
-                    except Exception:
+                    except Exception as _m95_e:
+                        silent_exc(_m95_e, where="organs.brain.PulseCodeLearner::_code_review_worker m95场景导入",
+                                   level="debug")
                         _m95_code_learn = None
                     _distill_report = _repair_executor.repair_with_distillation(
                         issues, inspector, scene=_m95_code_learn)

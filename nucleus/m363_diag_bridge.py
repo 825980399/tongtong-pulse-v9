@@ -139,7 +139,19 @@ def collect() -> dict[str, Any]:
             out["queue_alarm"] = {"state": "no_instance"}
         else:
             out["event_metrics"] = _bus.m360_event_metrics()
-            out["queue_alarm"] = {"alarm": bool(_bus.m360_check_queue_alarm())}
+            # ★434刀4：`m360_check_queue_alarm()` 返回 dict，`bool(dict)` 对任何
+            #   非空 dict 都为 True ⇒ 队列告警永远为 True（假告警淹没真告警）。
+            #   改为解引用 dict 的 `alarm` 字段，并保留 depth/threshold/suppressed
+            #   供可观测面使用。
+            _qa = _bus.m360_check_queue_alarm()
+            if not isinstance(_qa, dict):
+                _qa = {}
+            out["queue_alarm"] = {
+                "alarm": bool(_qa.get("alarm")),
+                "depth": _qa.get("depth"),
+                "threshold": _qa.get("threshold"),
+                "suppressed": bool(_qa.get("suppressed")),
+            }
     except Exception as e:
         silent_exc(e, where="m363_diag_bridge::collect.event_bus", level="warning")
         if _LOG is not None:

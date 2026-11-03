@@ -5318,6 +5318,13 @@ def main():
             sys.stderr.flush()
         except Exception as _se:
             silent_exc(_se, "main.py:3793", level="debug")
+        # ★434刀2：日志已队列化（QueueListener），os._exit 跳过 atexit ⇒ 必须在此
+        #   显式 flush 队列，否则停机前最后一批日志会丢在 queue 里。
+        try:
+            from nucleus.logger import flush_queue_logs
+            flush_queue_logs()
+        except Exception as _se:
+            silent_exc(_se, "main.py:3795 flush_queue_logs", level="debug")
         print("[框架] [INFO] 进程退出")
         os._exit(0)
         sys.exit(0)
