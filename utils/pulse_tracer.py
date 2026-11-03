@@ -282,13 +282,30 @@ def _pair_trim_low_water() -> int:
 def _backup_pair_file(path: str) -> str:
     """★401刀2：trim 前先备份（同目录 <name>.trim.bak，只保最新一份）。
 
+    ★435刀2：改用**硬链接**（`os.link`）代替 copy2 —— 零拷贝、零写盘 IO。
+      硬链接与主文件共享同一 inode；`os.replace(tmp, path)` 后主文件指向新
+      inode，备份仍指向旧 inode，内容等于裁前全量（语义不变，431 刀4 测试仍成立）。
+      硬链接不可用（跨卷/文件系统不支持/权限）时回退 copy2，行为与改前一致。
+
     返回备份路径；失败返回空串（不阻断 trim —— 但要留 WARNING，
     因为"删当天更早的数据"这件事一旦无备份不可逆）。
     """
     _bp = path + ".trim.bak"
     try:
-        shutil.copy2(path, _bp)
-        return _bp
+        # 只保最新一份：先删旧备份（否则 os.link 会 FileExistsError）
+        if os.path.exists(_bp):
+            try:
+                os.remove(_bp)
+            except OSError as _rm_e:
+                silent_exc(_rm_e, where="utils/pulse_tracer.py:_backup_pair_file 删旧备份", level="debug")
+        try:
+            os.link(path, _bp)
+            return _bp
+        except OSError as _link_e:
+            # 硬链接失败 ⇒ 回退 copy2（与改前一致，保证备份一定在）
+            silent_exc(_link_e, where="utils/pulse_tracer.py:_backup_pair_file 硬链接回退 copy2", level="debug")
+            shutil.copy2(path, _bp)
+            return _bp
     except OSError as _e:
         logger.warning("pulse_tracer: [401刀2] trim 前备份失败（继续 trim，数据不可回溯）: %s: %s",
                        type(_e).__name__, _e)
@@ -344,35 +361,97 @@ def _dump_pairs():
         print(f"[WARNING] pulse_tracer._dump_pairs: {type(e).__name__}: {e}")
 
 
+def _m435_tail_scan(f, keep_lines: int) -> tuple:
+    """★435刀2：一次反向 block 读 → (总行数, 保留最后 keep_lines 行的起始字节偏移)。
+
+    为什么反向读：要从文件尾定位「保留后 N 行」的起点，正向读必须把前
+    `total - N` 行也过一遍；反向读到第 N 个换行符即可确定 `_start`（一旦确定
+    就不再更新），但仍需继续数到文件头拿**总行数**用于「是否超 cap」判据。
+
+    内存：只持有一个 block（默认 1 MiB）——**不再是 readlines 的 O(文件)**。
+    末尾无换行时 `keep_lines` 无需 +1（最后一行本身就是完整的第 N 行）。
+    空文件 / 总行数 <= keep_lines 时返回 `_start = 0`。
+    """
+    f.seek(0, os.SEEK_END)
+    _size = f.tell()
+    if _size <= 0:
+        return 0, 0
+    f.seek(_size - 1)
+    _last = f.read(1)
+    _last_has_nl = (_last == b"\n")
+    _need = keep_lines if not _last_has_nl else keep_lines + 1
+    _pos = _size
+    _n = 0
+    _start = 0
+    _block = 1024 * 1024
+    while _pos > 0:
+        _read = min(_block, _pos)
+        _pos -= _read
+        f.seek(_pos)
+        _buf = f.read(_read)
+        # ★必须走 C 实现：逐字节 Python 循环数 15MB 换行符实测慢 4 倍
+        #   （0.899s vs 0.215s，A/B 同文件同口径）——省内存不能拿 CPU 换。
+        _cnt = _buf.count(b"\n")
+        if not _start and _n + _cnt >= _need:
+            # 目标第 _need 个 \n 落在这个 block：split 一次分割后累加求偏移
+            #（不用「重复 rfind」——_want 可达 3 万，每次重扫 1MB 会退化成 30GB 扫描）
+            _want = _need - _n
+            _parts = _buf.split(b"\n")
+            _k = len(_parts) - _want
+            if _k >= 1:
+                # _off = 前 _k 段内容长度 + _k 个分隔符（\n 本身也要越过）
+                _off = sum(len(p) for p in _parts[:_k]) + _k
+                _start = _pos + _off
+        _n += _cnt
+    # 行数口径：末尾有换行 ⇒ 换行符数即行数；末尾无换行 ⇒ 最后一行没被 \n 收尾，补 1
+    return (_n if _last_has_nl else _n + 1), _start
+
+
 def _trim_pair_file(path):
-    """当日 pulse_pairs_YYYYMMDD.jsonl 超容时回写为最近 N 行（观测采样）。
+    """当日 pulse_pairs_YYYYMMDD.jsonl 超容时保留最近 N 行（观测采样）。
 
     ★401刀2：①上限取 `_pair_file_cap()`（RUNTIME_PARAMS 单一源）；
              ②回写**前先备份**（等于删掉当天更早的数据，必须可回溯）。
     ★431刀2：③裁到**低水位**（cap×ratio，默认 45 万）而不是裁回 cap。
              旧判据下每次只追加几十行就又超限 ⇒ 每分钟重写 7 次 148MB
              （生产日志实测 1349 次/天）。留 10% 余量后重写间隔变成 5 万行。
+    ★435刀2：④**不再 readlines() 全文** —— 反向 block 读一次拿到「总行数 +
+               保留起点」，再从起点**分块复制**（4 MiB/块）到 tmp。峰值内存
+               从 O(文件) 降到 O(block)；备份改硬链接后，IO 从
+               「读全文 + copy2 全文 + 写全文」降到「读全文(仅计数) + 读尾部 + 写尾部」。
     """
     _cap = _pair_file_cap()
     _low = _pair_trim_low_water()
     try:
-        with open(path, "r", encoding="utf-8") as _f:
-            _lines = _f.readlines()
-        if len(_lines) <= _cap:
+        with open(path, "rb") as _f:
+            _total, _start = _m435_tail_scan(_f, _low)
+        if _total <= _cap:
+            return
+        if _start <= 0:
+            # 定位失败（理论不该发生）⇒ 跳过本轮，绝不退化成全量复制
+            logger.warning("pulse_tracer: [435刀2] 尾部定位失败（total=%d low=%d），本轮跳过 trim",
+                           _total, _low)
             return
         _bp = _backup_pair_file(path)
-        _keep = _lines[-_low:]
         _tmp = path + ".tmp"
-        with open(_tmp, "w", encoding="utf-8") as _f:
-            _f.writelines(_keep)
+        _copied = 0
+        _chunk_size = 4 * 1024 * 1024
+        with open(path, "rb") as _src, open(_tmp, "wb") as _dst:
+            _src.seek(_start)
+            while True:
+                _chunk = _src.read(_chunk_size)
+                if not _chunk:
+                    break
+                _dst.write(_chunk)
+                _copied += len(_chunk)
         os.replace(_tmp, path)
-        logger.info("pulse_tracer: [401刀2] pairs 已 trim %d → %d 行（备份=%s）",
-                    len(_lines), len(_keep), _bp or "无")
+        logger.info("pulse_tracer: [435刀2] pairs 已 trim %d → %d 行（备份=%s，尾部复制 %.1fMB）",
+                    _total, _low, _bp or "无", _copied / 1048576.0)
         logger.info("pulse_tracer: [431刀2] 裁到低水位 %d（cap=%d，下次要再长 %d 行才重写）",
-                    len(_keep), _cap, _cap - len(_keep))
+                    _low, _cap, _cap - _low)
         with _pair_state_lock:
             if _PAIR_LINE_STATE.get("path") == path:
-                _PAIR_LINE_STATE["lines"] = len(_keep)
+                _PAIR_LINE_STATE["lines"] = _low
     except Exception as e:
         print(f"[WARNING] pulse_tracer._trim_pair_file: {type(e).__name__}: {e}")
 

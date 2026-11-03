@@ -33,6 +33,33 @@ except Exception:  # pragma: no cover
 _WRITE_LOCK = threading.Lock()  # 兼容保留（已不再作为全局唯一写锁，见 D186-A 按路径分锁）
 _MAX_BACKUPS = 3
 
+#: ★435刀1：备份分级阈值（字节）。<= 该值 = 关键小文件（保留 1 代）；> 该值 = 大文件（不备份）。
+#:   任务书口径：关键小文件（配置/台账）保留 1 代、大文件（快照/日志）不备份。
+#:   实测背景：原实现每次写前都 copy2 三代（.bak→.bak.1→.bak.2 逐级滚动），
+#:   单次写产生 3 次整文件复制（写放大 4×）；盘上 34 个 .bak 文件、copy2 占 6.4% CPU。
+_M435_BACKUP_SMALL_MAX_BYTES = 1024 * 1024  # 1 MiB
+
+
+def _m435_backup_tier_on() -> bool:
+    """★435刀1：备份分级开关（缺省 True）。关闭 ⇒ 逐字回到原 3 代滚动语义。"""
+    try:
+        import config as _cfg435
+        return bool(getattr(_cfg435, "ENABLE_M435_BACKUP_TIER", True))
+    except Exception as _e:
+        silent_exc(_e, where="nucleus/data/DataAccessLayer.py:_m435_backup_tier_on", level="debug")
+        return True
+
+
+def _m435_backup_small_max_bytes() -> int:
+    """★435刀1：小文件阈值（字节）← config.M435_BACKUP_SMALL_MAX_BYTES，回退 1 MiB。"""
+    try:
+        import config as _cfg435
+        _v = int(getattr(_cfg435, "M435_BACKUP_SMALL_MAX_BYTES", _M435_BACKUP_SMALL_MAX_BYTES))
+        return _v if _v > 0 else _M435_BACKUP_SMALL_MAX_BYTES
+    except Exception as _e:
+        silent_exc(_e, where="nucleus/data/DataAccessLayer.py:_m435_backup_small_max_bytes", level="debug")
+        return _M435_BACKUP_SMALL_MAX_BYTES
+
 # ── D186-A：按规范化路径分锁，消除「写A阻塞写B」的全局互斥 convoy ──
 _LOCKS_GUARD = threading.Lock()
 _PATH_LOCKS = {}  # normcase(abspath) -> threading.Lock
@@ -75,18 +102,44 @@ _last_backup_time = {}   # path -> timestamp
 
 
 def _keep_backup(path: str) -> None:
-    """保留最多 ``_MAX_BACKUPS`` 个历史备份（.bak 最新，.bak.1/.bak.2 旧）。"""
+    """保留历史备份：小文件 1 代、大文件 0 代（关灰度 ⇒ 原 3 代滚动）。
+
+    ★435刀1：原实现每次写前都 copy2 三代（.bak→.bak.1→.bak.2 逐级滚动），
+      单次写产生 **3 次整文件复制**（写放大 4×）。改为按文件大小分级：
+        · size <= 阈值（默认 1 MiB，配置/台账类关键小文件）→ 只保留 1 代 `.bak`；
+        · size >  阈值（快照/日志类大文件）→ **不备份**（0 代，写放大 1×）。
+      `ENABLE_M435_BACKUP_TIER=False` 时逐字回到原 3 代滚动（零行为变化）。
+    """
     if not os.path.exists(path):
         return
     try:
-        slots = [f"{path}.bak", f"{path}.bak.1", f"{path}.bak.2"]
-        if os.path.exists(slots[2]):
-            os.remove(slots[2])
-        if os.path.exists(slots[1]):
-            shutil.copy2(slots[1], slots[2])
-        if os.path.exists(slots[0]):
-            shutil.copy2(slots[0], slots[1])
-        shutil.copy2(path, slots[0])
+        if not _m435_backup_tier_on():
+            # —— 回退路径：原 3 代滚动（与改前逐字一致）——
+            slots = [f"{path}.bak", f"{path}.bak.1", f"{path}.bak.2"]
+            if os.path.exists(slots[2]):
+                os.remove(slots[2])
+            if os.path.exists(slots[1]):
+                shutil.copy2(slots[1], slots[2])
+            if os.path.exists(slots[0]):
+                shutil.copy2(slots[0], slots[1])
+            shutil.copy2(path, slots[0])
+            return
+        try:
+            _size = os.path.getsize(path)
+        except OSError as _sz_e:
+            silent_exc(_sz_e, where="nucleus/data/DataAccessLayer.py:_keep_backup 取大小", level="debug")
+            _size = 0
+        if _size > _m435_backup_small_max_bytes():
+            # 大文件不备份（0 代）——快照/日志类，重写代价远大于可回溯收益
+            return
+        # 小文件只保留 1 代：清掉更早的 .bak.1/.bak.2，只维护最新一份 .bak
+        for _stale in (f"{path}.bak.1", f"{path}.bak.2"):
+            if os.path.exists(_stale):
+                try:
+                    os.remove(_stale)
+                except OSError as _rm_e:
+                    silent_exc(_rm_e, where="nucleus/data/DataAccessLayer.py:_keep_backup 清理旧代", level="debug")
+        shutil.copy2(path, f"{path}.bak")
     except Exception as _exc:
         _module_logger.debug(f"[异常已忽略] backup type={type(_exc).__name__} {_exc}")
 
