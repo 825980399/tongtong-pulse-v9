@@ -3624,6 +3624,55 @@ class PatchManager:
                 return (_now - _t) / 86400.0 > _m54_stale_days()
         return False
 
+    def approve_patch_by_id(self, patch_id: str, by: str = "human:unknown",
+                            reason: str = "",
+                            basis: dict | None = None,
+                            judged_by: str | None = None) -> dict[str, Any]:
+        """★439刀1：**按 id** 审批 —— pending 状态变更的**唯一写口**。
+
+        为什么加这个而不是改造 `approve_patch`：既有 `approve_patch(index, signer, ...)`
+        被 CLI / 测试多处按**下标**调用，改签名等于改契约（铁律 117）。这里只做
+        「id → 下标」的定位，然后**逐字委托**给既有实现 —— 治理门禁
+        （`_approve_via` 的 human 签名 + 字段契约）、O3 四审、审美打分、stale 标记、
+        `auto_apply_requested` 全部继承，本方法不新增任何放行路径。
+
+        调用方（`nucleus/evolution/approval_bridge.maybe_approve`）只负责判条件，
+        **状态只由这里改** —— 这样「桥」改不了状态，「闸」也写不了盘。
+
+        Args:
+            patch_id: pending 条目的 `id`。
+            by: 签名者，形如 ``human:name`` / ``auto:bridge``（治理门禁会校验前缀）。
+            reason: 审批理由（落进返回值，便于事后追溯）。
+            basis: O3 四项审核依据（O3 条目必传）。
+            judged_by: 判定来源标记。
+
+        Returns:
+            ``{"ok": bool, "reason": str, "patch_id": str, ...}``
+        """
+        _pid = str(patch_id or "").strip()
+        if not _pid:
+            return {"ok": False, "reason": "patch_id 为空", "patch_id": _pid}
+        try:
+            _pending = self._load_patch_list(self._pending_file)
+        except Exception as _e:
+            silent_exc(_e, where="PatchManager.approve_patch_by_id 读 pending", level="warning")
+            return {"ok": False, "reason": f"读 pending 失败: {_e}", "patch_id": _pid}
+        if not isinstance(_pending, list):
+            return {"ok": False, "reason": "pending 不是列表", "patch_id": _pid}
+        for _i, _p in enumerate(_pending):
+            if not isinstance(_p, dict):
+                continue
+            if str(_p.get("id") or "") != _pid:
+                continue
+            _r = self.approve_patch(_i, signer=by, basis=basis,
+                                    judged_by=judged_by or "approve_patch_by_id")
+            if isinstance(_r, dict):
+                _r["patch_id"] = _pid
+                if reason:
+                    _r["reason_detail"] = reason
+            return _r
+        return {"ok": False, "reason": f"pending 中找不到 id={_pid}", "patch_id": _pid}
+
     def approve_patch(self, index: int, signer: str = "human:unknown",
                       basis: dict | None = None,
                       judged_by: str | None = None) -> dict[str, Any]:

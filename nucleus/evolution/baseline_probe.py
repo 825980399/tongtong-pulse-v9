@@ -37,6 +37,8 @@ from typing import Any
 _TS_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})")
 
 SOURCE_LOG_WINDOW = "log_window"
+#: ★439刀2：主源 —— 用补丁自己的 `original_code` 静态复现问题（不依赖日志）
+SOURCE_CODE_REPRO = "code_repro"
 SOURCE_UNAVAILABLE = "unavailable"
 
 _PROJECT_ROOT = os.path.dirname(
@@ -151,6 +153,52 @@ def log_span(path: str | None = None) -> dict:
     except OSError as _e:
         _log_debug("log_span 失败: %s: %s", type(_e).__name__, _e)
     return _out
+
+
+def baseline_source_pref() -> str:
+    """基线取源：`code_repro`（默认，439刀2）| `log`（438 的日志口径）。"""
+    _v = str(_cfg("M438_BASELINE_SOURCE", SOURCE_CODE_REPRO) or "").strip()
+    return _v if _v in (SOURCE_CODE_REPRO, "log") else SOURCE_CODE_REPRO
+
+
+def probe_code_repro(patch: dict) -> dict:
+    """用 `patch_active_reprobe` 的静态检测器复现「修复前」问题数。
+
+    Returns:
+        ``{"baseline_errors": int|None, "baseline_source": str, "detail": str,
+           "baseline_verdict": str}``
+
+        · 检测器命中 ≥1 ⇒ 复现成功，基线 = 命中数（**这才是可用的基线**）；
+        · 命中 ==0      ⇒ 复现不出问题 ⇒ 基线 = 0（如实的 0，不是"取不到"）；
+        · 无检测器/无法解析 ⇒ ``None`` + ``unavailable``（不猜）。
+    """
+    try:
+        from nucleus.evolution.patch_active_reprobe import active_reprobe
+    except Exception as _e:
+        _log_debug("active_reprobe 不可用: %s", _e)
+        return {"baseline_errors": None, "baseline_source": SOURCE_UNAVAILABLE,
+                "detail": f"active_reprobe 不可用: {_e}", "baseline_verdict": "unavailable"}
+    try:
+        _r = active_reprobe(patch or {})
+    except Exception as _e:
+        _log_debug("active_reprobe 异常: %s", _e)
+        return {"baseline_errors": None, "baseline_source": SOURCE_UNAVAILABLE,
+                "detail": f"active_reprobe 异常: {type(_e).__name__}: {_e}",
+                "baseline_verdict": "error"}
+
+    _hits = _r.get("reprobe_baseline_hits")
+    _verdict = str(_r.get("reprobe_verdict") or "")
+    _detail = str(_r.get("reprobe_detail") or "")
+    if not isinstance(_hits, int) or _hits < 0:
+        return {"baseline_errors": None, "baseline_source": SOURCE_UNAVAILABLE,
+                "detail": f"无检测器/无法解析，不可判定（verdict={_verdict}）{_detail}"[:200],
+                "baseline_verdict": _verdict or "not_applicable"}
+    return {
+        "baseline_errors": int(_hits),
+        "baseline_source": SOURCE_CODE_REPRO,
+        "detail": f"静态复现 {_hits} 处（verdict={_verdict}）{_detail}"[:200],
+        "baseline_verdict": _verdict or ("true_pass" if _hits > 0 else "false_pass"),
+    }
 
 
 def min_window_hours() -> float:
@@ -360,12 +408,27 @@ def apply_to_patch(patch: dict[str, Any], *, now: float | None = None,
     if patch.get("baseline_source") and patch.get("baseline_errors") is not None:
         return {"applied": False, "why": "已有基线，跳过"}
 
-    _r = probe_baseline(_file, _method, now=now, path=path)
+    # ★439刀2：主源 = 静态复现（不依赖日志）；日志源降为备份。
+    #   为什么必须换：438 实测 pulse.log 56246 行 / 错误级 196 行 / **含 .py 文件名 0 行**
+    #   ⇒ 按 file 匹配的日志基线对任何文件都恒为 0，等于没有基线。
     _now = float(time.time() if now is None else now)
+    _pref = baseline_source_pref()
+    _r = probe_code_repro(patch) if _pref == SOURCE_CODE_REPRO else None
+    if _r is None or (_r.get("baseline_source") == SOURCE_UNAVAILABLE and _pref == SOURCE_CODE_REPRO):
+        _log_r = probe_baseline(_file, _method, now=now, path=path)
+        if _r is None:
+            _r = _log_r
+        else:
+            # ★主源判不了（无检测器/片段解析失败）⇒ 用日志备份，并把主源结论留在 detail
+            _why_main = _r.get("detail", "")
+            _r = dict(_log_r)
+            _r["detail"] = (f"主源 code_repro 不可判定（{_why_main}）→ 日志备份: "
+                             f"{_log_r.get('detail', '')}")[:240]
     patch["baseline_errors"] = _r["baseline_errors"]
     patch["baseline_source"] = _r["baseline_source"]
     patch["baseline_probed_at"] = _now
     patch["baseline_shadow"] = shadow_mode()
     patch["baseline_detail"] = _r["detail"]
     patch["baseline_window_sec"] = _r.get("baseline_window_sec")
+    patch["baseline_verdict"] = _r.get("baseline_verdict")
     return {"applied": True, "why": "ok", **_r}

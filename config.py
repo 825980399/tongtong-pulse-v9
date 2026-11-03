@@ -6006,6 +6006,19 @@ M438_BASELINE_MIN_WINDOW_HOURS = 0.5
 #   baseline 缺失/为 0 ⇒ runtime_undecidable（与 verify_fix_from_logs 的 T-99d 口径对齐）。
 #   False ⇒ 逐字回到 `verified = (after == 0)` 旧判据。
 ENABLE_M438_DELAYED_VERIFY_STRICT = True
+
+# ===== ★439批：进化闭环第二阶段（通桥 + 首条）=====
+# 刀1（审批桥）：`nucleus/evolution/approval_bridge.py` 只出建议，状态只由
+#   `PatchManager.approve_patch_by_id()` 写。
+#   ENABLE_M439_APPROVAL_BRIDGE=False ⇒ 只记决策、不调用状态写口（逐字回退成"只建议"）。
+#   M439_APPROVE_MIN_TRUST：自动放行的信任分门槛（任务书：>=60）。
+ENABLE_M439_APPROVAL_BRIDGE = True
+M439_APPROVE_MIN_TRUST = 60.0
+
+# 刀2（基线主源）：438 实测日志里 0/196 条错误行带 .py ⇒ 日志基线结构性恒 0。
+#   M438_BASELINE_SOURCE = "code_repro"（默认，静态复现，不依赖日志）
+#                        = "log"        （438 的日志窗口口径，保留可回退）
+M438_BASELINE_SOURCE = "code_repro"
 PARQUET_COMPRESSION = "snappy"
 PARQUET_SHARD_BY_EVOL_LEVEL = True
 PARQUET_BATCH_SIZE = 5000
