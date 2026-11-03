@@ -476,7 +476,7 @@ class ChatService:
             return
         _arg = cmd.split(None, 1)[1].strip().lower() if " " in cmd.strip() else "status"
         try:
-            if _arg.startswith("start") or _arg.startswith("开始"):
+            if _arg.startswith(("start", "开始")):
                 _r = _ma.start()
                 if _r.get("ok"):
                     print(f"\n✅ 同进程内存归属采样已启动 pid={_r.get('pid')}"
@@ -485,7 +485,7 @@ class ChatService:
                 else:
                     print(f"\n⚠️ 未启动：{_r.get('why')}"
                           f"（已有采样在跑，samples={_r.get('samples')}）\n")
-            elif _arg.startswith("stop") or _arg.startswith("停止"):
+            elif _arg.startswith(("stop", "停止")):
                 _r = _ma.stop()
                 print(f"\n{'✅ 已置停止（下一拍退出）' if _r.get('ok') else '⚠️ 当前没有在跑的采样'}"
                       f" samples={_r.get('samples')}\n")
@@ -1137,6 +1137,27 @@ class ChatService:
             silent_exc(_e, where="functions.chat.chat_service._m169_crisis_guard", level="debug")
             return False
 
+    def _new_correlation_id(self) -> str:
+        """★432刀4：为**一轮用户输入**生成 correlation_id（`dlg:<seq>:<ms>`）。
+
+        为什么生成点放在入口而不是皮层：
+          `PulseCortex._on_chat_message` 原本自己造 `ctx:<n>:<ms>`，但入口 payload
+          没带 cid ⇒ 发 QICA 的分类请求靠自造 id、QICA 回传却给空串 ⇒
+          `_pending_messages.pop("")` 恒 None ⇒ `no_pending_match` ⇒
+          `dialogue_process_trace.begin()` 一次都不会被调到。
+          换句话说：cid **有**生成点，但生成在断链的下游，白生成。
+
+        格式与皮层平行（`dlg` / `ctx` 一比就知道是谁造的）；皮层收到非空 cid
+        时直接沿用，不再自造 —— 保证一轮对话全链只有一个 id。
+
+        seq 用 `_thinking_lock` 保护：本方法可能被 Web/企业微信/控制台多路并发调用，
+        计数器读改写不是原子操作。
+        """
+        with self._thinking_lock:
+            self._dlg_seq = int(getattr(self, "_dlg_seq", 0)) + 1
+            _seq = self._dlg_seq
+        return f"dlg:{_seq}:{int(time.time() * 1000)}"
+
     def _send_chat_message(self, text: str, original_input: str, is_complex: bool = False,
                            code_blocks: list | None = None, file_paths: list | None = None):
         """
@@ -1145,6 +1166,11 @@ class ChatService:
         if not self.info_field or not self.pulse_core:
             print("💭 曈曈: 系统正在初始化，请稍候...")
             return
+
+        # ★432刀4：入口生成 correlation_id —— 这是一轮对话的唯一身份证，
+        #   必须在**发出去之前**定下来。此前这里没有 cid，皮层只好在更下游自造，
+        #   而 QICA 回传的是空串 ⇒ `_pending_messages.pop("")` 恒 None ⇒ 落盘永不发生。
+        _cid = self._new_correlation_id()
 
         chat_pulse = self.pulse_core.emit(
             source_organ="对话模块",
@@ -1156,6 +1182,9 @@ class ChatService:
                 "is_complex": is_complex,
                 "code_blocks": code_blocks or [],
                 "file_paths": file_paths or [],
+                # ★432刀4：把 cid 塞进入口 payload —— 下游（QICA 分类 → 皮层 →
+                #   dialogue_process_trace）全靠它串起来，缺这一行整条记录链就是断的。
+                "correlation_id": _cid,
             },
             priority=5,
             layer="L1"

@@ -342,6 +342,20 @@ SILENCE_EXEMPT_ORGANS = {
     #   豁免命中失败 → 误报刷屏（任务书：1292 次/每 40 秒）。
     #   任务书明确要求补「裸名」以对齐实际追踪名；存量死键/带后缀条目保留不动。
     "企业微信", "framework_self_modify_gate", "Web对话", "FunctionLoader",
+    # ★432刀2（2026-11-03）：补丁管理器沉默误报。
+    #   `补丁管理器` 不是器官，是 PatchManager 的 consent 脉冲发射器所用的
+    #   source_organ 标签（见 main.py::_wire_consent_channel，注释已写明"用器官名
+    #   会与 PulseConsent 自己的 organ_name 撞上"）。它只在两个时刻发脉冲：
+    #   补丁入队（consent.propose，PatchManager.py:3350）与人工审批
+    #   （consent.decide，:3577/:3612）—— 天然间隔小时级，而沉默阈值是
+    #   `_silence_threshold(15) × avg_interval(≈13.5s) ≈ 200s`。
+    #   实测（logs/pulse.log）：03:04:01→06:45:46 共 41 次
+    #   `分级自愈：1 个器官需处置: [('补丁管理器', 3)]`，节奏恒为 5.4min
+    #   （= `_escalation_alert_cooldown` 300s + 巡检间隔），与业务量无关；
+    #   同期 `[共同决策] 新提议` 仅 1 次（04:09:38）。
+    #   ⇒ 不是"响应慢"，是"没有节律却按有节律判"。豁免后仍保留
+    #   `_organ_pulse_count` 统计（能看见它发了多少 consent 脉冲），只是不参与沉默判定。
+    "补丁管理器",
 }
 
 

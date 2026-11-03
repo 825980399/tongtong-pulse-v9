@@ -4817,6 +4817,16 @@ def main():
 
     _lv_fw = framework  # 捕获闭包引用
 
+    # ★432刀1：判据分层（原单一 `_stall >= 3` 在低活跃期**必然**误报）。
+    #   现场实测（logs/pulse_crash.log 的 WATCHDOG_DUMP 行）：低活跃期
+    #   `get_total_handled()` 每 60s 才 +1（175788→175789→175790→175791→175792，
+    #   间隔严格 60s），而原阈值只有 3 × 10s = 30s ⇒ 每两个窗口就有一个撞在
+    #   "这 30s 内没涨"上 ⇒ 每分钟刷一条 WARNING + 一次全线程 dump。
+    #   当日分布：06 点 14 次 / 07 点 60 次 / 08 点 35 次，累计 145 次 / 6.1MB。
+    #   分层后：220s 是实测最长空闲(60s)的 3.7 倍；真冻结仍能在 4 分钟内被发现。
+    _STALL_NOTE = 9     # 9 × 10s ≈ 90s：只记账，不告警不 dump
+    _STALL_WARN = 22    # 22 × 10s ≈ 220s：才 WARNING + dump
+
     def _liveness_watchdog():
         nonlocal _crash_fh
         _last = 0
@@ -4842,9 +4852,18 @@ def main():
                 continue
             if _handled == _last:
                 _stall += 1
-                if _stall >= 3:  # 连续约 30s 无任何脉冲被处理
-                    _msg = ("\n[假死探测器] 框架疑似冻结：连续约30秒无任何脉冲被处理。\n"
-                            "[假死探测器] 正在 dump 所有线程堆栈到 logs/pulse_crash.log ...\n")
+                if _stall == _STALL_NOTE:
+                    # ★432刀1：90s 未处理属低活跃期常态（实测空闲 60s 才 +1）。
+                    #   只记 DEBUG 台账，不 WARNING 不 dump —— 这条只可能命中一次。
+                    logging.getLogger("pulse").debug(
+                        "[假死探测器] 已连续约%d秒无脉冲被处理（低活跃期常见，暂不告警）",
+                        _stall * 10)
+                if _stall >= _STALL_WARN:
+                    # ★432刀1：**单行**消息。原实现以换行符开头 ⇒ logging 的首行是空串，
+                    #   后面两行只是续行（不带 "WARNING:" 前缀）⇒ 按 WARNING 检索
+                    #   只看到空内容，才被误当成「消息为空」。内容一直都在。
+                    _msg = (f"[假死探测器] 框架疑似冻结：连续约{_stall * 10}秒无任何脉冲被处理。"
+                            "[假死探测器] 正在 dump 所有线程堆栈到 logs/pulse_crash.log ...")
                     # E 可观测化：触发进日志文件（原 print 不落盘，无法自证）
                     logging.getLogger("pulse").warning(_msg)
                     if _fh is not None:
@@ -4874,13 +4893,13 @@ def main():
                             if _crash_fh is not None:
                                 _crash_fh.write(
                                     f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] WATCHDOG_DUMP "
-                                    f"stall={_stall} handled={_handled}\n"
+                                    f"stall={_stall}(~{_stall * 10}s) handled={_handled}\n"
                                 )
                                 _crash_fh.flush()
                             _fh.dump_traceback(_crash_fh or sys.stderr)
                         except Exception as _se:
                             logging.getLogger("pulse").warning(f"[假死探测器] dump_traceback 失败: {type(_se).__name__}: {_se}")
-                    _stall = 0  # 避免刷屏，下次再报需再静默约30秒
+                    _stall = 0  # 避免刷屏，下次再报需再静默约220秒
             else:
                 _last = _handled
                 _stall = 0

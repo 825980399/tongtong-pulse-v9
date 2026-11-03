@@ -110,19 +110,32 @@ def test_m384_d1_raises_when_no_nodes_field(tmp_path):
 
 # --------------------------------------------- ③ 真实快照：偏移与首节点可解析
 def test_m384_d1_real_snapshot_offset_past_callgraph():
-    """真快照上：定位偏移必须 > 1.2MB（真字段在 freq_index 之后）。
+    """真快照上：定位处**前 9 字节必须正好是 `"nodes":[`**。
 
-    这条同时钉住「窗口必须够大」—— 改回 1MB 窗口会在这里当场红。
+    这条钉住「不许命中调用图里的字符串值 `"args": "nodes"`」。
+
+    ★432 批附注（回滚点，2026-11-03）：原判据是 `pos > 1_200_000`（硬编码偏移门槛，
+    代理「真字段在 freq_index 之后」）。今日真快照内部重排，`"nodes":` 落到
+    1,135,426 ⇒ 门槛不成立，但**定位本身仍然正确**（前 9 字节实测 `b'"nodes":['`）。
+    数据一变就红 = 假红，故把代理判据换成直判结构。判别力反而更强：
+    旧实现（不带冒号 + 1MB 缓冲）在本日快照上会落到 852,033，
+    前 12 字节为 `b'hods": ["_lo'`（命中 `called_methods` 数组），当场红。
+    回滚：把本函数体换回 `assert pos > 1_200_000, ...` 一行即可（不建议，数据一变又假红）。
     """
     if not os.path.isfile(REAL_SNAPSHOT):
         return          # 无快照的机器上跳过（不制造假绿：本用例本就不适用）
     with io.open(REAL_SNAPSHOT, "rb") as f:
         pos = m._locate_nodes_array(f)
-    assert pos > 1_200_000, "定位偏移 %d 太小 ⇒ 大概率又命中了字符串值" % pos
     with io.open(REAL_SNAPSHOT, "rb") as f:
+        f.seek(pos - 9)
+        _lead = f.read(9)
         f.seek(pos - 1)
-        assert f.read(1) == b"[", "偏移前一个字节应是数组起始的 ["
+        _brace = f.read(1)
         _raw = f.read(4096)
+    assert _brace == b"[", "偏移前一个字节应是数组起始的 ["
+    assert _lead == b'"nodes":[', (
+        "定位偏移 %d 的前 9 字节是 %r，不是 b'\"nodes\":['  ⇒ 大概率又命中了字符串值"
+        % (pos, _lead))
     assert b'"node_id"' in _raw, "定位后 4KB 内应出现 node_id"
 
 

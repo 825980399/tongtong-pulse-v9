@@ -18,7 +18,7 @@ import sys
 import threading
 import time
 from collections import deque
-from typing import Any
+from typing import Any, ClassVar
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -381,7 +381,7 @@ class PulseCortex(BasePulseOrgan):
                 return
             from nucleus.chronos.time_context import context_time as _m345_ct
             _t = _m345_ct()
-            _value = "%s（%s）" % (_t["text"], _t["wall_clock"])
+            _value = f"{_t['text']}（{_t['wall_clock']}）"
             _hit = None
             try:
                 for _n in _pool.query(space_path_prefix=self.M345_TIME_SPACE_PATH, limit=8) or []:
@@ -448,8 +448,8 @@ class PulseCortex(BasePulseOrgan):
             _frames = _tb.extract_tb(e.__traceback__)
             if _frames:
                 _f = _frames[-1]
-                _loc = "%s:%d in %s()" % (
-                    os.path.basename(_f.filename), _f.lineno, _f.name)
+                _loc = (f"{os.path.basename(_f.filename)}:{_f.lineno} "
+                    f"in {_f.name}()")
             else:
                 _loc = "无traceback"
         except Exception as _m428_e:
@@ -878,9 +878,19 @@ class PulseCortex(BasePulseOrgan):
             return {"status": "skipped", "reason": "空消息"}
 
         # 生成关联ID
-        # GIL-dependent atomic increment (safe on CPython 3.11/3.12, review before free-threaded migration)
-        self._correlation_counter += 1
-        correlation_id = f"ctx:{self._correlation_counter}:{int(time.time() * 1000)}"
+        # ★432刀4：**优先沿用入口（chat_service）给的 correlation_id**。
+        #   432 之前的实情：入口 payload 没有 cid ⇒ 这里自造 `ctx:<n>:<ms>` 存进
+        #   `_pending_messages`，但 QICA 回传的是空串 ⇒ `_on_classify_result` 里
+        #   `_pending_messages.pop("")` 恒 None ⇒ `no_pending_match` ⇒
+        #   `dialogue_process_trace.begin()` 一次都没被调到（落盘从未发生）。
+        #   入口先定 id、这里只兜底，才能保证一轮对话全链只有一个 id。
+        _in_cid = str(payload.get("correlation_id") or "").strip()
+        if _in_cid:
+            correlation_id = _in_cid
+        else:
+            # GIL-dependent atomic increment (safe on CPython 3.11/3.12, review before free-threaded migration)
+            self._correlation_counter += 1
+            correlation_id = f"ctx:{self._correlation_counter}:{int(time.time() * 1000)}"
 
         # 暂存消息上下文（含文件和代码信息）
         self._pending_messages[correlation_id] = {
@@ -2732,7 +2742,7 @@ class PulseCortex(BasePulseOrgan):
         return {"category": _cat, "name": _names.get(_cat, _cat)}
 
     # 默认意图->策略类别映射（可被 config.CORTEX_INTENT_STRATEGY_MAP 覆盖）
-    _CORTEX_INTENT_STRATEGY_DEFAULT = {
+    _CORTEX_INTENT_STRATEGY_DEFAULT: ClassVar[dict] = {
         # 身份/关系 → 知识检索
         "身份确认": "knowledge_retrieve",
         "关系查询": "knowledge_retrieve",

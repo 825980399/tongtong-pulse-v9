@@ -577,11 +577,18 @@ class PulseLiver(BasePulseOrgan):
         if _warned:
             self._res_warn_count += 1
         if self._thread_gap_state.get("warn"):
+            # ★432刀3：措辞纠偏。原句「疑似有线程卡在引导期」是**错判** ——
+            #   376刀3 三份落差快照已证：`未登记 == gap`、`ident域=一致`、
+            #   每拍新增 2–3 个 tid 但总量只 +1/小时 ⇒ 原生线程池轮换，不是卡引导期。
+            #   「卡在引导期」有它自己的判据（`thread_guard.stuck_snapshot()`，即
+            #   `safe_start` 的 SAFE_START_TIMEOUT_SEC 超时未 guide），落差数不该冒充它。
             self._log(LogLevel.WARNING,
-                      f"[374刀9] 线程落差持续增大: OS线程−Python活跃={_gap} "
-                      f"(基线 {self._thread_gap_state.get('base')} · 连续 "
+                      f"[374刀9] 线程落差仍在增大: OS线程−Python活跃={_gap} "
+                      f"(基线 {self._thread_gap_state.get('base')} · 比基线 "
+                      f"+{self._thread_gap_state.get('delta')} · 连续 "
                       f"{self._thread_gap_state.get('persist')} 个采样点) "
-                      f"⇒ 疑似有线程卡在引导期（滞留快照 "
+                      f"⇒ 疑似原生线程池扩张或线程未登记；查「卡在引导期」请用 "
+                      f"thread_guard.stuck_snapshot（当前 "
                       f"{len(thread_guard.stuck_snapshot())} 条）")
             self._res_warn_count += 1
             # ★376刀3（观察票）：只在**已判 warn** 的分支里补一份落差快照
@@ -623,6 +630,9 @@ class PulseLiver(BasePulseOrgan):
             "threads": self._res_threads,
             # ★374刀9：线程落差与持续计数（None 表示本次拿不到 OS 线程数，不是 0）
             "thread_gap": self._thread_gap_state.get("delta"),
+            # ★432刀3：上面 `thread_gap` 是**相对基线**的增长量(delta)。基线复跟后
+            #   delta 会归 0，绝对落差就没人看得见了 ⇒ 补绝对值字段（只加不改）。
+            "thread_gap_abs": self._thread_gap_state.get("gap"),
             "thread_gap_base": self._thread_gap_state.get("base"),
             "thread_gap_persist": self._thread_gap_state.get("persist"),
             # ★376刀3：最近一份落差快照摘要（从没抓过 ⇒ None，不是 0）
@@ -1378,7 +1388,7 @@ class PulseLiver(BasePulseOrgan):
         对组内 L1 取值做 2~4 字中文 n-gram 词频统计，并合并组已有 top 关键词（加权），
         返回前 top_n 个关键词，供句子重要性评分使用。
         """
-        _stop = set(["的了在是和与及或我对你他她它这那有个也都很再上中下内外前后续把被这些那些"])
+        _stop = {"的了在是和与及或我对你他她它这那有个也都很再上中下内外前后续把被这些那些"}
         _counter = {}
         for v in all_values[:15]:
             if not v:
@@ -3008,14 +3018,12 @@ class PulseLiver(BasePulseOrgan):
             if _dropped:
                 self._m418_try_log(
                     LogLevel.DEBUG,
-                    "[418刀3④] 路径段含占位符，已剥除 %s ⇒ 用 %s"
-                    % ("/".join(reversed(_dropped)), _s))
+                    f"[418刀3④] 路径段含占位符，已剥除 {'/'.join(reversed(_dropped))} ⇒ 用 {_s}")
             return _s
         if _segs:
             self._m418_try_log(
                 LogLevel.WARNING,
-                "[418刀3④] 空间路径全部是占位符段 %s ⇒ 展示名退化为「核心智慧」"
-                % ("/".join(_segs),))
+                f"[418刀3④] 空间路径全部是占位符段 {'/'.join(_segs)} ⇒ 展示名退化为「核心智慧」")
         return "核心智慧"
 
     def _m418_try_log(self, level, message) -> None:
@@ -3039,7 +3047,7 @@ class PulseLiver(BasePulseOrgan):
         try:
             if self._m377_is_placeholder(_s):
                 return True
-            return bool(self._m377_is_placeholder("[%s]" % _s))
+            return bool(self._m377_is_placeholder(f"[{_s}]"))
         except Exception as e:
             silent_exc(e, where="organs.body.PulseLiver::_m418_seg_is_placeholder", level="debug")
             return False
@@ -3087,8 +3095,7 @@ class PulseLiver(BasePulseOrgan):
             _kept.append(_n)
         if _drop:
             self._log(LogLevel.DEBUG,
-                      "[377刀5] 融合素材剔除占位符节点 %d 条（路径=%s，剩 %d 条）"
-                      % (_drop, prefix, len(_kept)))
+                      f"[377刀5] 融合素材剔除占位符节点 {_drop} 条（路径={prefix}，剩 {len(_kept)} 条）")
         return _drop, _kept
 
     def _m377_fuse_fingerprint(self, nodes: list) -> tuple:

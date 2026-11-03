@@ -46,6 +46,12 @@ MAX_BOOT_SAMPLES = 32
 THREAD_GAP_BUMP = 1
 #: 突增要**连续几个采样点**才算"持续"（避免单点抖动误报）。
 THREAD_GAP_PERSIST_SAMPLES = 2
+#: 连续几个采样点落差都**没再涨**（delta < BUMP）就认为「稳定在新水平」，
+#: 把当前 gap 扶正为新基线。★432刀3：没有这一条，base 建完永不更新 ⇒
+#: 落差只要涨过一次就永久告警（实测「连续 62 个采样点」）。
+THREAD_GAP_REBASE_IDLE = 6
+#: `persist` 封顶（原实现无上限，数值失去意义）。
+THREAD_GAP_PERSIST_MAX = 60
 #: 看门狗线程名（面板/日志按名字找得到）。
 WATCHDOG_NAME = "ThreadGuardWatchdog"
 
@@ -232,25 +238,62 @@ def gap_delta(os_threads, py_threads=None) -> int | None:
 
 
 def next_gap_state(prev: dict | None, gap: int | None) -> dict:
-    """推进「突增 ≥1 且持续」状态机（纯函数，便于单测）。
+    """推进「突增且持续」状态机（纯函数，便于单测）。
 
-    返回 `{base, persist, delta, warn}`：
-      · 首次拿到 gap ⇒ 建基线，不告警（没有"参照"就谈不上突增）；
-      · `gap - base >= THREAD_GAP_BUMP` ⇒ persist+1，连续达到
-        `THREAD_GAP_PERSIST_SAMPLES` 才 `warn=True`（单点抖动不算）；
-      · 回落（delta < BUMP）⇒ persist 归 0，基线保留（不追着下跌改参照）；
+    返回 `{base, persist, delta, warn, calm, gap}`：
+      · 首次拿到 gap ⇒ 建基线，不告警（没有「参照」就谈不上突增）；
+      · 判「还在涨」看的是 `gap` 与**前一拍**的差（`prev["gap"]`），**不是与基线的差**；
+      · 连续 `THREAD_GAP_PERSIST_SAMPLES` 拍都在涨才 `warn=True`（单次阶跃不算）；
+      · 持平或回落 ⇒ persist 归 0、calm+1；
+      · **连续 `THREAD_GAP_REBASE_IDLE` 拍没再涨 ⇒ 基线复跟到当前 gap**；
       · `gap is None` ⇒ delta=None、persist 原样带回、不告警（拿不到 ≠ 正常）。
+
+    【★432刀3 为什么把判据从「与基线比」改成「与前拍比」】
+      原实现 `delta = gap - base`，而 base 建完永不更新 —— 现场 base=78、gap 稳定在
+      95-96，delta 恒 = 17 ≥ BUMP ⇒ 每拍 persist+1 ⇒ 永久 warn（PulseLiver 日志里
+      「连续 62 个采样点」就是这么来的）。这是**把「绝对值高」当成了「正在变大」**。
+      改看前拍差之后，判据回到原设计本意：只报「正在变大」，绝对值高由面板表达。
+
+    【calm / gap 两个键为什么必须加】
+      · `calm` 是基线复跟的计数器 —— 纯函数没它记不住「稳了几拍」；
+      · `gap` 既是本拍绝对落差（面板要看），也是下一拍判「还在涨」的参照。
     """
     _p = dict(prev or {})
     if gap is None:
         return {"base": _p.get("base"), "persist": int(_p.get("persist") or 0),
-                "delta": None, "warn": False}
+                "delta": None, "warn": False, "calm": int(_p.get("calm") or 0),
+                "gap": _p.get("gap")}
+    _g = int(gap)
     if _p.get("base") is None:
-        return {"base": int(gap), "persist": 0, "delta": 0, "warn": False}
-    _delta = int(gap) - int(_p["base"])
-    _persist = int(_p.get("persist") or 0) + 1 if _delta >= THREAD_GAP_BUMP else 0
-    return {"base": int(_p["base"]), "persist": _persist, "delta": _delta,
-            "warn": _persist >= THREAD_GAP_PERSIST_SAMPLES}
+        return {"base": _g, "persist": 0, "delta": 0, "warn": False,
+                "calm": 0, "gap": _g}
+
+    _base = int(_p["base"])
+    _prev_gap = _p.get("gap")
+    # 手工构造 prev（只给 base/persist）时把 base 当上一拍值 —— 与 374 刀9 原语义一致
+    _prev_gap = int(_prev_gap) if _prev_gap is not None else _base
+    _delta = _g - _base
+
+    if _g > _prev_gap:
+        # 又在涨 ⇒ 记一笔，并把「稳定了几拍」清零（上涨打断了稳定）
+        _persist = min(int(_p.get("persist") or 0) + 1, THREAD_GAP_PERSIST_MAX)
+        _calm = 0
+    else:
+        # 持平或回落 ⇒ 连续增大中断
+        _persist = 0
+        _calm = int(_p.get("calm") or 0) + 1
+
+    _base_out = _base
+    _delta_out = _delta
+    if _calm >= THREAD_GAP_REBASE_IDLE:
+        # 稳住够久 ⇒ 扶正为新基线（此后 delta 相对新基线算，不再背着历史包袱）
+        _base_out = _g
+        _delta_out = 0
+        _calm = 0
+
+    return {"base": _base_out, "persist": _persist, "delta": _delta_out,
+            "warn": _persist >= THREAD_GAP_PERSIST_SAMPLES, "calm": _calm,
+            "gap": _g}
 
 
 # =========================================== 376刀3：线程落差快照（观察票）

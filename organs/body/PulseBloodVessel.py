@@ -241,7 +241,15 @@ class PulseBloodVessel(BasePulseOrgan):
                 if _now_alert - _state["last_alert"] < self._escalation_alert_cooldown:
                     continue
                 # 连续沉默计数 +1
-                _state["alert_count"] += 1
+                # ★432刀2：封顶。原实现无上限，而下方"3 倍冷却未再告警才复位"
+                #   （PulseBloodVessel.py:313）的复位条件**永不成立**——`last_alert`
+                #   每轮告警都刷新，告警冷却 300s 恒小于 900s ⇒ alert_count 单调递增
+                #   ⇒ 第 4 次起永久 level=3，此后每次告警直接走"降级处置"。
+                #   实测 logs/pulse.log 41 次告警**全部** level=3。
+                #   封顶不改分级语义（restart=2 / degrade=4 原样），只防状态无界累积。
+                _state["alert_count"] = min(
+                    _state["alert_count"] + 1,
+                    self._escalation_degrade_threshold * 2)
                 _state["last_alert"] = _now_alert
                 # 分级升级
                 if _state["alert_count"] >= self._escalation_degrade_threshold:

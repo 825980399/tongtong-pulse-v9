@@ -280,9 +280,16 @@ def test_21_stats_exposes_snapshot_summary():
 
 
 def test_22_next_gap_state_semantics_unchanged():
-    """374 刀9 的落差状态机语义（行为级回归，不钉字面快照）。"""
-    assert tg.next_gap_state({}, 79) == {"base": 79, "persist": 0,
-                                         "delta": 0, "warn": False}
+    """374 刀9 的落差状态机语义（行为级回归，不钉字面快照）。
+
+    ★432刀3 规格更新（**只动全等断言的键集，下面每条行为断言一字未动**）：
+      返回结构新增 `calm`（连续「没再涨」拍数，基线复跟计数器）与 `gap`（本拍绝对落差）。
+      原四键 `base / persist / delta / warn` 的值全部保持不变。
+      回滚点：删掉 `calm`+`gap` 两个键 + 把本条断言恢复成四键全等。
+    """
+    assert tg.next_gap_state({}, 79) == {"base": 79, "persist": 0, "delta": 0,
+                                        "warn": False, "calm": 0, "gap": 79}
+
     _s1 = tg.next_gap_state({"base": 79, "persist": 0}, 80)
     assert _s1["warn"] is False, "单点突增不告警"
     _s2 = tg.next_gap_state(_s1, 81)
@@ -292,3 +299,36 @@ def test_22_next_gap_state_semantics_unchanged():
     assert _drop["base"] == 79, "回落不改参照基线"
     _none = tg.next_gap_state(_s2, None)
     assert _none["delta"] is None and _none["warn"] is False
+
+
+def test_22b_sustained_growth_still_warns():
+    """★432刀3 反证：判据换成「与前拍比」之后，真·持续扩张**仍必须**告警。
+
+    没有这一条，我就可以把阈值调到天上去、让所有断言变绿 —— 那是把判据改松，
+    不是修好。线程爆炸（每拍 +3）是这条探测器存在的唯一理由。
+    """
+    _st = tg.next_gap_state(None, 80)
+    _st = tg.next_gap_state(_st, 83)
+    assert _st["warn"] is False, "单拍上涨不该告警（与 374 刀9 原语义一致）"
+    _st = tg.next_gap_state(_st, 86)
+    assert _st["warn"] is True, "连续两拍上涨必须告警 —— 这是探测器存在的理由"
+
+
+def test_22c_one_shot_step_is_not_persistent_growth():
+    """★432刀3 现场复现：一次性阶跃（78→95 然后稳住）不再永久告警。
+
+    真实数据（logs/pulse.log 三份 `[376刀3] 线程落差快照`）：
+      gap 从 78 阶跃到 95，随后 04:35→05:43 一直停在 96（每拍新增 2-3 个 tid
+      但总量只 +1/小时 ⇒ 原生线程池轮换，不是卡引导期）。
+    修复前：base 永远停在 78、delta 恒 17 ⇒ 每拍 warn（实测「连续 62 个采样点」）。
+    """
+    _st = tg.next_gap_state(None, 78)
+    _st = tg.next_gap_state(_st, 95)          # 阶跃那一拍
+    assert _st["warn"] is False, "单次阶跃不是「持续增大」，不该告警"
+    _st = tg.next_gap_state(_st, 96)          # 再涨一格（现场 95→96），calm 仍为 0
+    for _ in range(tg.THREAD_GAP_REBASE_IDLE):
+        _st = tg.next_gap_state(_st, 96)      # 之后稳稳停住，calm 才连得上
+    assert _st["warn"] is False, "稳住之后仍在告警 ⇒ 基线没复跟，62 拍刷屏会重演"
+    assert _st["base"] == 96, f"基线未复跟到 96，实际 {_st['base']}"
+    assert _st["delta"] == 0, "复跟后 delta 应归 0"
+    assert _st["gap"] == 96, "绝对落差必须保留 96（面板要看，不能因为复跟就变 0）"
