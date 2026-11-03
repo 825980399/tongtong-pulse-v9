@@ -1809,7 +1809,8 @@ class PulseController(BasePulseOrgan):
                     if len(_found) >= limit:
                         break
             return _found
-        except Exception:
+        except Exception as e:
+            self._log(LogLevel.DEBUG, f'关键词提取失败（已留痕）: {e}')
             return []
 
     @staticmethod

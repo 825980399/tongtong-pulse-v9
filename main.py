@@ -4183,6 +4183,21 @@ def _m422_periodic_apply_tick(framework, now: float | None = None) -> dict:
     _st["last_count"] = _cnt
     if int(_cnt.get("approved", 0)) <= 0:
         _st["last_reason"] = "no_approved"
+        # ★440刀3：apply=0 不再"静默不说话"。此前这里直接 return，一行日志都没有，
+        #   于是"链路断了"与"本来就没事可做"在日志里长得一模一样。
+        #   现在把「pending 有多少、approved 有多少、最近一条 approved 是什么时候」一次说清，
+        #   并给出**下一步动作**——没有这条，排障只能靠翻文件。
+        _pend_n = int(_cnt.get("pending", 0) or 0)
+        _appr_n = int(_cnt.get("approved", 0) or 0)
+        _last_appr = _cnt.get("last_approved_at") or 0
+        _age_h = ((time.time() - float(_last_appr)) / 3600.0) if _last_appr else -1.0
+        _logger.warning(
+            "[422刀3][周期apply] approved=0 ⇒ 本轮不应用：pending=%d approved=%d "
+            "最近一条 approved=%s（%.1f 小时前）｜建议：检查审批桥是否放行、"
+            "pending 是否全被判 stale、或基线闸门 baseline_positive 是否拦住了",
+            _pend_n, _appr_n,
+            (time.strftime("%m-%d %H:%M", time.localtime(_last_appr)) if _last_appr else "从未"),
+            _age_h)
         return {"status": "idle", "count": _cnt}
     if int(_cnt.get("live", 0)) <= 0:
         # 有 approved 件但**全部**已 dead ⇒ 重启只会空转，明确拒绝（防无限重启末闸）

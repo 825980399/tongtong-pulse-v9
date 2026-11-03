@@ -3664,8 +3664,12 @@ class PatchManager:
                 continue
             if str(_p.get("id") or "") != _pid:
                 continue
+            # ★440刀2：`human:*` → human 口；其余（auto:bridge / machine:*）→ auto 口。
+            #   不猜、不冒充：人工签名只能由 human 前缀走 human 口。
+            _src = "human" if str(by).startswith("human:") else "auto"
             _r = self.approve_patch(_i, signer=by, basis=basis,
-                                    judged_by=judged_by or "approve_patch_by_id")
+                                    judged_by=judged_by or "approve_patch_by_id",
+                                    source=_src)
             if isinstance(_r, dict):
                 _r["patch_id"] = _pid
                 if reason:
@@ -3675,7 +3679,8 @@ class PatchManager:
 
     def approve_patch(self, index: int, signer: str = "human:unknown",
                       basis: dict | None = None,
-                      judged_by: str | None = None) -> dict[str, Any]:
+                      judged_by: str | None = None,
+                      source: str = "human") -> dict[str, Any]:
         """将指定待审批补丁的 status 从 verified/pending 提升为 approved（★FIX: 人工审批闭环）
 
         ★339刀1（E裁决）：O3 条目必须带**四项审核 basis**（缺 ⇒ fail-closed
@@ -3696,7 +3701,11 @@ class PatchManager:
                         "hint": "O3 条目请用 approve_o3_patch(basis={...}) 四审核项"}
             _patch["o3_auto_dispatch_ready"] = True
             _patch["requires_confirmation"] = False
-        if not PatchManager._approve_via(_patch, "human", signer,
+        # ★440刀2：source 由调用方给（缺省 human，逐字保持旧行为）。
+        #   为什么必须参数化：`_boundary_check` 规定 **human 口 signer 必须以 "human:" 开头**，
+        #   且**非 human 口 signer 不得冒充人工** ⇒ `auto:bridge` 走 human 口必被拒。
+        #   机器审批只有走 `auto` 口才合法（source ∈ {auto, aging, save, human}）。
+        if not PatchManager._approve_via(_patch, source, signer,
                                          judged_by=judged_by, basis=basis):
             return {"ok": False, "reason": "审批被治理门禁拦截（需 human:<名> 签名且字段契约完整）"}
         # ★第54批 T3.2（P1）：过期检测 —— 超过阈值天数的补丁打 stale 标记。

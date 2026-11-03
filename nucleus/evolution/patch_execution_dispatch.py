@@ -1410,6 +1410,11 @@ _LIFECYCLE_NAMES = frozenset((
 PILOT_FIRST_BATCH = frozenset({
     ("organs/motor/PulseController.py", "refresh_runtime_params"),
     ("organs/motor/PulseCodeSandbox.py", "refresh_runtime_params"),
+    # ★440刀2（扩面第 1 步，一次只加 1 条）：
+    #   选它的理由：440 刀1 在这条上做过**真补丁真落地**（`except Exception: return []`
+    #   → 补留痕），已过一遍「基线 >0 → 审批 → apply → 回测」，风险与证据都实测过。
+    #   任何一次派单失败 ⇒ 立即移出本表并记 method_cooldown（见 441 的观察项）。
+    ("organs/motor/PulseController.py", "_semantic_extract_keywords"),
 })
 
 #: ★第307批 刀3：**定位失败原因码** —— 305 刀3 起所有定位失败共用一句日志

@@ -400,6 +400,18 @@ def _m421_patch_chain_read(root: str | None = None) -> dict:
     _out["state"] = ("ok" if _miss == 0
                      else "unavailable" if _miss == len(_M421_PC_FIELDS)
                      else "partial")
+    # ★440刀3：apply=0 但队列里还有件 ⇒ **degraded**，不能报 "ok"。
+    #   旧口径只看"字段读没读到"，于是"一切正常但一条都没应用"被标成 ok，
+    #   等于给断链发绿灯。判据保守：只在两个读数都是**确定值**时才降级。
+    try:
+        _ap = _out.get("apply")
+        _qu = _out.get("queue")
+        if (_out.get("state") == "ok" and isinstance(_ap, int) and isinstance(_qu, int)
+                and _ap == 0 and _qu > 0):
+            _out["state"] = "degraded"
+            _out["state_reason"] = f"apply=0 但 pending={_qu}"
+    except Exception as _e:
+        silent_exc(_e, where="PulseMetricsCollector::_m421_patch_chain_read degraded", level="debug")
     _out["errors"] = _errs
     _out["day"] = time.strftime("%Y-%m-%d", time.localtime(_lo))
     _out["read_at"] = time.time()
