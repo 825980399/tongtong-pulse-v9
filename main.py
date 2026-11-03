@@ -1224,6 +1224,17 @@ class PulseFramework:
             _engine.register_analyzer(
                 "event_tap", lambda _e: _e.integrate_event_tap(),
                 "runtime_events", replace=True)
+            # ★443刀2：PHASE18 第 7/8 维（性能基线 / 数据一致性）。
+            #   设计 12 维、生产此前只注册 10 个分析器，这两维**只有设计没有分析器**
+            #   （端到端恒空）。适配器本体在引擎里（integrate_perf_baseline /
+            #   integrate_data_consistency），这里只做注册 —— 注册零开销，
+            #   执行仍完全由 run_all_analyses / 每日 03:00 调度决定。
+            _engine.register_analyzer(
+                "perf_baseline", lambda _e: _e.integrate_perf_baseline(),
+                "perf_baseline", replace=True)
+            _engine.register_analyzer(
+                "data_consistency", lambda _e: _e.integrate_data_consistency(),
+                "data_consistency", replace=True)
             # ★第308批 刀1：全局认知点亮（307 批刷新器已就绪但**无生产调用方**
             #   ⇒ 生产 get_global_awareness() 恒 not_refreshed）。三步：
             #   ① 注入活体器官表 —— 传 dict **引用**（不是拷贝）：本函数位于

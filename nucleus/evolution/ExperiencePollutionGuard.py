@@ -188,9 +188,19 @@ def scan_library(rel_path: str, mark: bool = True,
     return _res
 
 
-def scan_all(rels: tuple[str, ...] = (
-        "data/context/reasoning_experience.json",
-        "data/experience/experience_pool.json"), mark: bool = True) -> list[dict[str, Any]]:
+#: ★443刀2：经验库默认清单 —— **提成模块常量**，供 DataQualityGuard 复用。
+#:   此前它是写在 `scan_all` 签名里的字面默认值，而
+#:   `DataQualityGuard.scan_experience_files()` 传的是 `rel_paths or ()`
+#:   ⇒ 空元组**覆盖**了默认值 ⇒ 永远扫 0 个文件（静默空转）。
+#:   提成常量后，两处引用同一个真源，不会再各写一份。
+_EXPERIENCE_RELS_DEFAULT: tuple[str, ...] = (
+    "data/context/reasoning_experience.json",
+    "data/experience/experience_pool.json",
+)
+
+
+def scan_all(rels: tuple[str, ...] = _EXPERIENCE_RELS_DEFAULT,
+             mark: bool = True) -> list[dict[str, Any]]:
     """扫描全部经验库，返回各库统计。"""
     return [scan_library(r, mark=mark) for r in rels]
 

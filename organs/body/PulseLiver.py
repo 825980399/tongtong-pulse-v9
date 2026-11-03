@@ -3984,16 +3984,35 @@ class PulseLiver(BasePulseOrgan):
 
 
     def _m70_kal_get_node(self, node_id):
-        """★T4.3 实际调用点：优先 KAL，失败回退 node_pool 直连。"""
+        """★T4.3 实际调用点：优先 KAL，失败回退 node_pool 直连。
+
+        ★443刀3：取法顺序改为与 420/L02 的 `_m420_kal_entry()` 一致 ——
+        **`self._kal`（`set_node_pool()` 构造，pool 一定对）→ `get_kal()` 全局单例 → 直连**。
+
+        为什么要改（T0 实测，不是推断）：全仓**没有任何** `get_kal(node_pool=...)`
+        调用，全局单例的 `_node_pool` 恒为 None ⇒ `get_kal().get_node()` 恒返回 None
+        ⇒ 本方法**永远走直连回退**，"KAL 优先"只是字面存在。
+        而 `self._kal` 是 `set_node_pool()` 里 new 出来的，pool 一定对。
+        """
         if not self._m70_kal_callsites_on():
             return self._m70_direct_get_node(node_id)
+        _entries = []
+        _self_kal = getattr(self, "_kal", None)
+        if _self_kal is not None:
+            _entries.append(_self_kal)
         try:
             from nucleus.knowledge_access_layer import get_kal
-            _r = get_kal().get_node(node_id)
-            if _r is not None:
-                return _r
+            _entries.append(get_kal())
         except Exception as e:
             self._log(LogLevel.WARNING, f"[肝] KAL获取节点异常，回退直连node_pool: {type(e).__name__}: {e}")
+        for _k in _entries:
+            try:
+                _r = _k.get_node(node_id)
+            except Exception as e:
+                silent_exc(e, where="organs.body.PulseLiver::_m70_kal_get_node", level="debug")
+                continue
+            if _r is not None:
+                return _r
         return self._m70_direct_get_node(node_id)
 
     def _m70_kal_node_count(self):

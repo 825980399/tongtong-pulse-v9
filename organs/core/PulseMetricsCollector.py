@@ -249,6 +249,9 @@ _m421_pc_lock = threading.Lock()
 #: ★442刀2：degraded 告警节流用的时间戳（10 分钟一条）
 _M442_DEGRADED_WARN_AT = 0.0
 
+#: ★443刀5：InfluxDB 周期采样节流时间戳（默认 60s 一条）。
+_M443_INFLUX_LAST_TS = 0.0
+
 
 def _m421_today_bounds() -> tuple:
     """本地「今天」的 [起, 止) epoch。
@@ -895,6 +898,29 @@ class PulseMetricsCollector(BasePulseOrgan):
                 self._log(LogLevel.WARNING, "health_snapshot.json 写入失败（需关注）")
         except Exception as e:
             self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
+
+        # ★443刀5：给 InfluxDB 一个**真生产者**。
+        #   442 已把 `ENABLE_INFLUXDB_AUTO_CONNECT` 打开（连接成功），但库里的写方法
+        #   `node_activated/node_accessed/node_modified/query_executed` 全是**事件型**：
+        #   没有节点事件就一条都不写 ⇒ 实测 bucket 近 7 天 0 条（除自检点）。
+        #   这里按 `M443_INFLUX_RSS_INTERVAL_SEC`（默认 60s）节流补一个 `process_rss`
+        #   采样点（字段由 `_flush_locked` 经 `_sample_rss` 自动附）。
+        #   零副作用：只入内存缓冲；开关关闭 / 未连接 ⇒ 直接跳过，不抛。
+        try:
+            import config as _cfg443
+            if bool(getattr(_cfg443, "ENABLE_M443_INFLUX_RSS_SAMPLE", True)):
+                global _M443_INFLUX_LAST_TS
+                _iv443 = float(getattr(_cfg443, "M443_INFLUX_RSS_INTERVAL_SEC", 60.0) or 60.0)
+                if _iv443 > 0 and (time.time() - float(_M443_INFLUX_LAST_TS or 0.0)) >= _iv443:
+                    from nucleus.timeseries_store.influxdb_store import get_influxdb_store
+                    _st443 = get_influxdb_store()
+                    if _st443.is_available():
+                        _M443_INFLUX_LAST_TS = time.time()
+                        _st443.record_process_rss()
+        except Exception as _ifx_e:
+            silent_exc(_ifx_e,
+                       where="PulseMetricsCollector::_m443_influx_rss_sample",
+                       level="debug")
         return {"status": "observed", "beat": self._beat_count}
     def _on_heartbeat_alive(self, payload: dict) -> dict[str, Any]:
         """缓存心脏存活数据。
@@ -2491,6 +2517,20 @@ class PulseMetricsCollector(BasePulseOrgan):
                        where="PulseMetricsCollector::_build_observability_snapshot backpressure",
                        level="debug")
             snapshot["backpressure"] = None
+
+        # ★443刀5：O-A4 双路（单向影子）观测入口。
+        #   383 批就建好了 `shadow_stats()`（规则覆盖率 / 凭证可见率分开算，不给合并结论），
+        #   但全仓**只有测试在读**（生产零消费）⇒ 属于"建而不开"。
+        #   这里只**记录**读数，不碰回答路径：`resolve()` 的调用方一个字节没动，
+        #   影子开关 `ENABLE_M383_OA4_SHADOW` 仍由 383 那套控制。
+        try:
+            from nucleus.field.active_memory_dual import shadow_stats as _m443_shadow
+            snapshot["oa4_shadow"] = _m443_shadow()
+        except Exception as _sh_e:
+            silent_exc(_sh_e,
+                       where="PulseMetricsCollector::_build_observability_snapshot oa4_shadow",
+                       level="debug")
+            snapshot["oa4_shadow"] = None
 
         # 172刀3：内存压力双口径读数（进程 RSS MB + 系统内存占比）
         # ★401刀1：**一次采集、多块复用** —— `_collect_memory_pressure` 有副作用

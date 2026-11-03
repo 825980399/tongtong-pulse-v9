@@ -6866,6 +6866,32 @@ PATCH_DISPATCH_INTERVAL_SEC = 3600
 #   ⇒ [340判死] 日志 0 条 ⇒ streak 推不动（需连续 3 个不同 tick）。
 #   只做只读判定 + 入池，不派单不花钱；下限 60s 由代码兜底。
 PATCH_O3_GATE_INTERVAL_SEC = 300
+
+# ===== ★443刀2：PHASE18 第 7/8 维（性能基线 / 数据一致性） =====
+# 第7维：模块导入耗时的**跨时间自比**（复用 nucleus/evolution/perf_delta_probe）。
+#   基线取历史最小值（best-known），变快才更新 ⇒ 持续变慢不会被自己洗白。
+ENABLE_M443_PERF_BASELINE_DIM = True
+M443_PERF_MODULES = (
+    "config.py",
+    "nucleus/knowledge_access_layer.py",
+    "organs/body/PulseLiver.py",
+)
+M443_PERF_REGRESSION_RATIO = 1.5     # now / baseline > 1.5 ⇒ 记一条退化
+M443_PERF_BASELINE_PATH = "data/monitor/perf_baseline.json"
+# 单次取样噪声大（实测 config.py 24ms vs 37ms = 1.6×）⇒ 取 3 次最小值
+M443_PERF_REPEATS = 3
+M443_PERF_TIMEOUT_SEC = 20.0
+# 第8维：经验库/知识节点一致性（复用 nucleus/knowledge/DataQualityGuard，只读 mark=False）。
+ENABLE_M443_DATA_CONSISTENCY_DIM = True
+M443_DATA_SAMPLE_LIMIT = 200
+
+# ===== ★443刀5：InfluxDB 周期采样（此前"接线了但没有生产者"） =====
+# 实测（443 T0）：bucket 近 7 天除自检点外 **0 条** —— node_*/query_executed 都是
+# "事件型"写方法，没有事件就一条都不写。这里按固定节流补一个 process_rss 采样点。
+ENABLE_M443_INFLUX_RSS_SAMPLE = True
+M443_INFLUX_RSS_INTERVAL_SEC = 60.0
+
+
 # ★351刀5：问题池「消费+回灌」节拍（单位=主循环**拍**，不是秒）。
 #   默认 300 拍 = 现行行为，**本批不改默认**（改默认需裁决）。
 #   为什么是拍不是秒：`consume_heartbeat` 挂在主循环 while 里，

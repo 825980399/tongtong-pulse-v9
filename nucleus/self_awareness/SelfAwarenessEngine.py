@@ -111,6 +111,9 @@ _PROFILE_DICT_FIELDS = (
     "organ_activity",
     # ★主线第21批 T3：跨文件调用图 → 代码结构健康度（P3-3）
     "call_graph_health",
+    # ★443刀2：PHASE18 第 7/8 维（性能基线 / 数据一致性）
+    "perf_baseline",
+    "data_consistency",
     "extra",
 )
 
@@ -270,6 +273,103 @@ def _integration_enabled(attr: str, default: bool = True) -> bool:
         _logger.debug("读取整合开关 %s 失败，按默认值 %s: %s: %s",
                       attr, default, type(e).__name__, e)
         return default
+
+
+# ===== ★443刀2：PHASE18 第 7/8 维的参数读取 =====
+def _m443_cfg(name: str, default):
+    """读 config 的同名配置；缺失/异常 ⇒ default（读配置不得影响分析器）。"""
+    try:
+        import config
+        return getattr(config, name, default)
+    except Exception as e:
+        _logger.debug("读取配置 %s 失败，用默认值 %r: %s: %s", name, default,
+                      type(e).__name__, e)
+        return default
+
+
+def _m443_perf_modules() -> tuple[str, ...]:
+    """参与性能基线测量的模块（相对项目根，'/' 分隔）。"""
+    _v = _m443_cfg("M443_PERF_MODULES", (
+        "config.py",
+        "nucleus/knowledge_access_layer.py",
+        "organs/body/PulseLiver.py",
+    ))
+    if isinstance(_v, str):
+        _v = (_v,)
+    _out = tuple(str(x).replace("\\", "/") for x in (_v or ()) if str(x).strip())
+    return _out
+
+
+def _m443_perf_ratio() -> float:
+    """退化判定倍数（now / baseline > 该值 ⇒ 记一条 regression）。"""
+    try:
+        _v = float(_m443_cfg("M443_PERF_REGRESSION_RATIO", 1.5))
+    except (TypeError, ValueError) as e:
+        _logger.debug("M443_PERF_REGRESSION_RATIO 取值非法，回落 1.5: %s", e)
+        return 1.5
+    return _v if _v > 1.0 else 1.5
+
+
+def _m443_perf_repeats() -> int:
+    try:
+        _v = int(_m443_cfg("M443_PERF_REPEATS", 3))
+    except (TypeError, ValueError) as e:
+        _logger.debug("M443_PERF_REPEATS 取值非法，回落 3: %s", e)
+        return 3
+    return max(_v, 1)
+
+
+def _m443_perf_timeout() -> float:
+    try:
+        _v = float(_m443_cfg("M443_PERF_TIMEOUT_SEC", 20.0))
+    except (TypeError, ValueError) as e:
+        _logger.debug("M443_PERF_TIMEOUT_SEC 取值非法，回落 20.0: %s", e)
+        return 20.0
+    return _v if _v > 0 else 20.0
+
+
+def _m443_baseline_path(override: str | None = None) -> str:
+    """性能基线文件绝对路径（override 供测试注入）。"""
+    _rel = str(_m443_cfg("M443_PERF_BASELINE_PATH",
+                         "data/monitor/perf_baseline.json") or "")
+    _p = override or _rel
+    return _p if os.path.isabs(_p) else os.path.join(_project_root(), _p)
+
+
+def _m443_load_baseline(path: str) -> dict:
+    """读基线；不存在/损坏 ⇒ 空 dict（**不猜**，下次重记）。"""
+    try:
+        from nucleus.data.DataAccessLayer import safe_read_json
+        _d = safe_read_json(path, default={})
+        return dict(_d) if isinstance(_d, dict) else {}
+    except Exception as e:
+        _logger.debug("读性能基线失败（按空基线处理）: %s: %s", type(e).__name__, e)
+        return {}
+
+
+def _m443_save_baseline(path: str, data: dict, allow_write: bool = True) -> bool:
+    """写基线；失败只留痕（基线写不进去不该让整维失败）。"""
+    if not allow_write:
+        return False
+    try:
+        from nucleus.data.DataAccessLayer import safe_write_json
+        _dir = os.path.dirname(path)
+        if _dir:
+            os.makedirs(_dir, exist_ok=True)
+        return bool(safe_write_json(path, data, backup=False))
+    except Exception as e:
+        _logger.warning("写性能基线失败（本次读数仅入报告）: %s: %s",
+                        type(e).__name__, e)
+        return False
+
+
+def _m443_data_sample_limit() -> int:
+    try:
+        _v = int(_m443_cfg("M443_DATA_SAMPLE_LIMIT", 200))
+    except (TypeError, ValueError) as e:
+        _logger.debug("M443_DATA_SAMPLE_LIMIT 取值非法，回落 200: %s", e)
+        return 200
+    return _v if _v > 0 else 200
 
 
 def _structure_rescan_enabled() -> bool:
@@ -465,6 +565,10 @@ class SelfAwarenessProfile:
     organ_activity: dict = field(default_factory=dict)
     #: ★主线第21批 T3：跨文件调用图健康度（孤立/热点/循环/深度/耦合）
     call_graph_health: dict = field(default_factory=dict)
+    #: ★443刀2：第 7 维 —— 模块导入耗时的跨时间自比（退化预警）
+    perf_baseline: dict = field(default_factory=dict)
+    #: ★443刀2：第 8 维 —— 经验库/知识节点的一致性（污染/可疑/重复）
+    data_consistency: dict = field(default_factory=dict)
     summary: str = ""
     #: 未归类分析器结果的落点（扩展位，保证任意分析器都不会丢结果）
     extra: dict = field(default_factory=dict)
@@ -497,6 +601,8 @@ class SelfAwarenessProfile:
             "runtime_events": dict(self.runtime_events or {}),
             "organ_activity": dict(self.organ_activity or {}),
             "call_graph_health": dict(self.call_graph_health or {}),
+            "perf_baseline": dict(self.perf_baseline or {}),
+            "data_consistency": dict(self.data_consistency or {}),
             "summary": self.summary,
             "extra": dict(self.extra or {}),
             # ★主线第38批 T1（P2-213）：非字典型字段（标量 + 列表）
@@ -1671,6 +1777,202 @@ class SelfAwarenessEngine:
             return _result
         except Exception as e:      # 整合失败不影响引擎
             _logger.warning("evolution_health 整合失败（返回空 dict）: %s: %s",
+                            type(e).__name__, e)
+            return {}
+
+    # ------------------------------------------------------------------
+    # ★443刀2：PHASE18 第 7 维 —— 性能基线与退化预警
+    # ------------------------------------------------------------------
+    def integrate_perf_baseline(self, project_root: str | None = None,
+                                baseline_path: str | None = None) -> dict:
+        """接入 `nucleus/evolution/perf_delta_probe.py` → `perf_baseline` 维度。
+
+        为什么复用 `measure_import_ms`：它是 412 批为 effect_verify 第三维写的
+        **沙箱导入计时器**（子进程 importlib + 多次取最小值），已解决"在活体进程里
+        reload 模块"的副作用问题；本维度只要"同一模块跨时间的导入耗时"，复用它
+        既安全又不用另造一套计时。
+
+        判据是**跨时间自比**（不与别的机器/别的模块比）：
+          · 某模块首次观测 ⇒ 只记基线，不给分（``baseline_created``）；
+          · 有基线后 ``ratio = now / baseline``；``ratio > M443_PERF_REGRESSION_RATIO``
+            ⇒ 记一条 regression；
+          · 基线取**历史最小值**（best-known）：变快才更新基线，变慢保持旧基线
+            —— 否则"持续变慢"会被自己的新读数洗白，退化永远报不出来。
+
+        安全：全程只读源码文件；基线写盘失败只留痕，不影响维度产出。
+        **测试模式（PULSE_TEST_MODE=1）且未显式传 baseline_path 时不写盘**，
+        避免单测污染生产基线文件。
+
+        Args:
+            project_root: 项目根（测试注入）；None 时取 `_project_root()`。
+            baseline_path: 基线文件路径（测试注入）。
+
+        Returns:
+            ``{"status", "score", "modules", "regressions", "threshold_ratio", ...}``
+            无可比基线 ⇒ ``score=None``（不参与综合评分，不填 0）。
+        """
+        if not _integration_enabled("ENABLE_M443_PERF_BASELINE_DIM"):
+            _logger.debug("perf_baseline 维度开关关闭，跳过")
+            return {}
+        try:
+            _root = os.path.abspath(project_root or _project_root())
+            _mods = _m443_perf_modules()
+            if not _mods:
+                return {"status": "unavailable", "score": None, "no_data": True,
+                        "reason": "M443_PERF_MODULES 为空"}
+            from nucleus.evolution.perf_delta_probe import measure_import_ms
+
+            _bp = _m443_baseline_path(baseline_path)
+            _base = _m443_load_baseline(_bp)
+            _line = _m443_perf_ratio()
+            _now = time.time()
+            _out: dict[str, Any] = {}
+            _regs: list[dict] = []
+            _measured = 0
+            for _rel in _mods:
+                _abs = os.path.join(_root, _rel.replace("/", os.sep))
+                _m = measure_import_ms(_abs, project_root=_root,
+                                       repeats=_m443_perf_repeats(),
+                                       timeout_sec=_m443_perf_timeout())
+                if not isinstance(_m, dict) or _m.get("state") != "ok":
+                    _out[_rel] = {"ms": None,
+                                  "reason": (_m or {}).get("reason") or "no_sample"}
+                    continue
+                _measured += 1
+                _ms = float(_m["ms"])
+                _rec = _base.get(_rel)
+                _old = _rec.get("ms") if isinstance(_rec, dict) else None
+                _old = (float(_old) if isinstance(_old, (int, float))
+                        and not isinstance(_old, bool) else None)
+                if _old is None or _old <= 0:
+                    _base[_rel] = {"ms": _ms, "at": _now}
+                    _out[_rel] = {"ms": round(_ms, 3), "baseline_ms": None,
+                                  "ratio": None, "state": "baseline_created"}
+                    continue
+                _ratio = _ms / _old
+                _state = "regressed" if _ratio > _line else "ok"
+                _out[_rel] = {"ms": round(_ms, 3), "baseline_ms": round(_old, 3),
+                              "ratio": round(_ratio, 3), "state": _state}
+                if _state == "regressed":
+                    _regs.append({"module": _rel, "ms": round(_ms, 3),
+                                  "baseline_ms": round(_old, 3),
+                                  "ratio": round(_ratio, 3)})
+                elif _ms < _old:
+                    # 只有变快才更新基线：见 docstring 的 best-known 说明
+                    _base[_rel] = {"ms": _ms, "at": _now}
+
+            _allow_write = (baseline_path is not None
+                            or os.environ.get("PULSE_TEST_MODE") != "1")
+            _written = _m443_save_baseline(_bp, _base, allow_write=bool(_measured) and _allow_write)
+
+            _cmp = [k for k, v in _out.items() if v.get("ratio") is not None]
+            if not _cmp:
+                return {"status": "baseline_created", "score": None, "no_data": True,
+                        "modules": _out, "regressions": [],
+                        "measured": _measured, "threshold_ratio": _line,
+                        "baseline_path": _bp, "baseline_written": _written,
+                        "note": "首次观测：已记基线，本次不评分（下次起可比）"}
+            return {"status": "ok", "score": round(max(0.0, 100.0 - 30.0 * len(_regs)), 2),
+                    "modules": _out, "regressions": _regs, "compared": len(_cmp),
+                    "measured": _measured, "threshold_ratio": _line,
+                    "baseline_path": _bp, "baseline_written": _written,
+                    "note": ("无退化" if not _regs
+                             else f"{len(_regs)} 个模块超过基线 {_line:.2f}×")}
+        except Exception as e:      # 整合失败不影响引擎
+            _logger.warning("perf_baseline 维度整合失败（返回空 dict）: %s: %s",
+                            type(e).__name__, e)
+            return {}
+
+    # ------------------------------------------------------------------
+    # ★443刀2：PHASE18 第 8 维 —— 数据一致性校验
+    # ------------------------------------------------------------------
+    def integrate_data_consistency(self, sample_limit: int | None = None) -> dict:
+        """接入 `nucleus/knowledge/DataQualityGuard.py` → `data_consistency` 维度。
+
+        为什么复用 `DataQualityGuard`：它已经有「经验库污染 + 知识节点污染 +
+        重复分组」三套判据（11 批建成），本维度只做**适配器**，不另立判据。
+
+        ★只读红线：全程 ``mark=False``。`scan_all()` / `scan_nodes(mark=True)`
+        会把 `quality_flag` **写回节点/文件** ⇒ 那属于治理动作，不是观测，
+        本维度**绝不**调用（否则一个分析器就能改知识库）。
+
+        判据：``score = 100 × (1 - 坏项 / 总项)``，坏项 = 污染 + 可疑；
+        重复分组额外扣分（每组 2 分，最多扣 20），因为重复不一定是污染但一定
+        是不一致。总量为 0 ⇒ ``status="unavailable"``、``score=None``（不填 0）。
+
+        Args:
+            sample_limit: 知识节点抽样上限（测试注入）；None 取
+                `M443_DATA_SAMPLE_LIMIT`（默认 200）。
+
+        Returns:
+            ``{"status", "score", "experience", "nodes", "duplicates", ...}``
+        """
+        if not _integration_enabled("ENABLE_M443_DATA_CONSISTENCY_DIM"):
+            _logger.debug("data_consistency 维度开关关闭，跳过")
+            return {}
+        try:
+            from nucleus.knowledge.DataQualityGuard import get_data_quality_guard
+            _g = get_data_quality_guard()
+
+            # ① 经验库（只读扫描：mark=False）
+            _rows: list[dict] = []
+            _tot = _pol = _sus = 0
+            for _r in (_g.scan_experience_files(mark=False) or []):
+                if not isinstance(_r, dict) or not _r.get("exists"):
+                    continue
+                _tot += int(_r.get("total") or 0)
+                _pol += int(_r.get("polluted") or 0)
+                _sus += int(_r.get("suspect") or 0)
+                _rows.append({"path": _r.get("path"), "total": _r.get("total"),
+                              "polluted": _r.get("polluted"),
+                              "suspect": _r.get("suspect"),
+                              "pollution_rate": _r.get("pollution_rate")})
+
+            # ② 知识节点抽样（KAL 未注入 node_pool 时返回空 ⇒ 如实报 0，不伪造）
+            _nodes_n = _pol_n = _sus_n = 0
+            _dup_groups = 0
+            _node_err = ""
+            try:
+                from nucleus.knowledge_access_layer import get_kal
+                _lim = int(sample_limit if sample_limit is not None
+                           else _m443_data_sample_limit())
+                _nodes = get_kal().query_nodes(limit=max(1, _lim)) or []
+                if _nodes:
+                    _ns = _g.scan_nodes(_nodes, mark=False)   # ★只读
+                    if isinstance(_ns, dict):
+                        _nodes_n = int(_ns.get("total") or 0)
+                        _pol_n = int(_ns.get("polluted") or 0)
+                        _sus_n = int(_ns.get("suspect") or 0)
+                    _dup_groups = len(_g.find_duplicates(_nodes) or [])
+            except Exception as _e:
+                _node_err = f"{type(_e).__name__}: {_e}"
+                _logger.debug("data_consistency 节点抽样失败（不影响经验库部分）: %s",
+                              _node_err)
+
+            _den = _tot + _nodes_n
+            if _den <= 0:
+                return {"status": "unavailable", "score": None, "no_data": True,
+                        "experience": _rows, "nodes_sampled": 0,
+                        "reason": "经验库与知识节点均无可校验样本",
+                        "node_error": _node_err}
+            _bad = _pol + _sus + _pol_n + _sus_n
+            _base = 100.0 * (1.0 - float(_bad) / float(_den))
+            _score = max(0.0, _base - min(20.0, 2.0 * _dup_groups))
+            return {"status": "ok", "score": round(_score, 2),
+                    "experience": _rows,
+                    "experience_total": _tot,
+                    "experience_polluted": _pol,
+                    "experience_suspect": _sus,
+                    "nodes_sampled": _nodes_n,
+                    "nodes_polluted": _pol_n,
+                    "nodes_suspect": _sus_n,
+                    "duplicate_groups": _dup_groups,
+                    "sampled_total": _den,
+                    "bad_total": _bad,
+                    "node_error": _node_err,
+                    "note": "只读扫描（mark=False），不写任何 quality_flag"}
+        except Exception as e:      # 整合失败不影响引擎
+            _logger.warning("data_consistency 维度整合失败（返回空 dict）: %s: %s",
                             type(e).__name__, e)
             return {}
 

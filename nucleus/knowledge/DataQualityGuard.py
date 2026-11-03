@@ -91,9 +91,20 @@ class DataQualityGuard:
 
     def scan_experience_files(self, rel_paths: tuple[str, ...] | None = None,
                               mark: bool = False) -> list[dict[str, Any]]:
-        """扫描真实经验库文件（写盘需 mark=True，默认只读）。"""
-        from nucleus.evolution.ExperiencePollutionGuard import scan_all
-        return scan_all(rels=rel_paths or (), mark=mark)
+        """扫描真实经验库文件（写盘需 mark=True，默认只读）。
+
+        ★443刀2 修 bug：原实现写 `scan_all(rels=rel_paths or (), ...)`，
+        **空元组会覆盖 `scan_all` 的默认清单** ⇒ 不传参时永远扫 0 个文件、
+        返回 `[]`（调用方拿到空列表还以为"经验库很干净"）。
+        实测：修复前 `scan_experience_files(mark=False)` → `[]`；
+        修复后 → 2 个库 / 共 479 条 / 污染 236 条。
+        现改为回落 `_EXPERIENCE_RELS_DEFAULT`（与上游同一真源）。
+        """
+        from nucleus.evolution.ExperiencePollutionGuard import (
+            _EXPERIENCE_RELS_DEFAULT,
+            scan_all,
+        )
+        return scan_all(rels=rel_paths or _EXPERIENCE_RELS_DEFAULT, mark=mark)
 
     # ---------------- 知识节点污染 ----------------
 

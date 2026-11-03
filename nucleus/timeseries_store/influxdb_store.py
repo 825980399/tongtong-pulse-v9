@@ -150,14 +150,21 @@ class InfluxDBStore:
                 return None
             from nucleus.field.InfoField import get_info_field
             _field = get_info_field()
-            if _field is None:
-                return None
-            _m = _field._m169_memory_pressure()
-            if not _m.get("ok"):
-                return None
+            _m = _field._m169_memory_pressure() if _field is not None else {}
+            if _m.get("ok"):
+                return {
+                    "process_rss_mb": float(_m.get("process_rss_mb") or 0.0),
+                    "system_percent": float(_m.get("system_percent") or 0.0),
+                }
+            # ★443刀5：InfoField 未就绪（启动早期 / 隔离进程）时用 psutil 兜底。
+            #   为什么必须兜底：`record_process_rss()` 传的 fields 是**空的**，
+            #   字段全靠本函数附加；返回 None ⇒ 该点零字段 ⇒ Influx 会**整批拒收**
+            #   （连同批里的 node_* 一起丢）。实测隔离进程里 `_sample_rss()` 恒 None。
+            import psutil
+            _proc = psutil.Process()
             return {
-                "process_rss_mb": float(_m.get("process_rss_mb") or 0.0),
-                "system_percent": float(_m.get("system_percent") or 0.0),
+                "process_rss_mb": round(_proc.memory_info().rss / 1048576.0, 2),
+                "system_percent": round(float(psutil.virtual_memory().percent), 2),
             }
         except Exception as _e:
             silent_exc(_e, where="nucleus.timeseries_store.influxdb_store::_sample_rss", level="debug")
@@ -206,6 +213,12 @@ class InfluxDBStore:
             _pts = []
             _rss = self._sample_rss()
             for _p in self._buffer:
+                # ★443刀5：零字段点会让 Influx **整批拒收**（同一批的其它点一起丢）。
+                #   `record_process_rss()` 的 fields 本来就是空的，全靠 _rss 附加；
+                #   _rss 取不到时必须跳过这一条，而不是把空点混进批次。
+                if not _p.get("fields") and not _rss:
+                    _logger.debug("[T2] 跳过零字段点: %s", _p.get("measurement"))
+                    continue
                 _pt = Point(_p["measurement"])
                 for _k, _v in (_p.get("tags") or {}).items():
                     _pt = _pt.tag(_k, str(_v))
@@ -215,6 +228,12 @@ class InfluxDBStore:
                     for _k, _v in _rss.items():
                         _pt = _pt.field(_k, _v)
                 _pts.append(_pt.time(_p.get("time", int(time.time() * 1e9))))
+            if not _pts:
+                # ★443刀5：整批都是零字段点 ⇒ 空 batch 会直接抛，且没有任何数据可写。
+                #   清缓冲、留痕、返回 False（"没写"不是"写成功"）。
+                self._buffer.clear()
+                _logger.debug("[T2] 本批无可写点（全部零字段）⇒ 跳过冲刷")
+                return False
             self._write_api.write(bucket=self._bucket, org=self._org, record=_pts)
             _n = len(self._buffer)
             self._buffer.clear()
