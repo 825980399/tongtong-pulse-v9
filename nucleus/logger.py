@@ -127,6 +127,96 @@ class LogAggregationFilter(logging.Filter):
 
 # ========== 自定义格式器 ==========
 
+#: ★436刀3：英文日志前缀 → 中文器官/模块名。**统一在 logger 做，不改各模块**。
+#:   收录依据：`logs/pulse.log` 尾部 5 万行实测前缀频次（改造前英文前缀 top40）。
+#:   未收录的一律原样返回（第三方库/一次性脚本不管，不硬凑译名）。
+_M436_TAG_ZH = {
+    # —— 高频（>500 行/5万行）——
+    "verify_feedback": "验证反馈",
+    "self_inspector": "自检视",
+    "audit_problem_pool_consumer": "问题池消费",
+    "SafeEvolutionExecutor": "安全演化执行",
+    "audit_problem_pool": "问题池",
+    "main": "主循环",
+    "PatchExecutionDispatch": "补丁派单",
+    "PulseNodePool": "节点池",
+    "InfoField": "信息场",
+    "verification_learning_hub": "验证学习枢纽",
+    "NightOrchestration": "夜间编排",
+    # —— 中频（50~500）——
+    "CallRecorder": "调用记录",
+    "runtime_metrics": "运行时指标",
+    "PulseSnapshot": "快照",
+    "subagent_runner": "子代理",
+    "pulse.semantic_cache_l2": "语义缓存",
+    "CodeProgressStore": "代码进度",
+    "live_gate": "活体闸门",
+    "release_policy": "发布策略",
+    "ast_release": "语法树发布",
+    "EvolutionBudget": "演化预算",
+    "pulse": "框架",
+    "pulse.llm.balance": "模型余额",
+    "external_dependency": "外部依赖",
+    "shadow_profile": "影子画像",
+    "pulse.resonance": "共振",
+    "pulse.silent_except": "静默异常",
+    "pulse.tracer": "脉冲追踪",
+    "CallGraphAnalyzer": "调用图",
+    "WikiQuerier": "百科查询",
+    "PatchManager": "补丁管理",
+    "request_dedup": "请求去重",
+    "SelfCalibrator": "自校准",
+    # —— 低频（<50）——
+    "K1Offload": "K1卸载",
+    "DataQualityGuard": "数据质量",
+    "CapabilityFramework": "能力框架",
+    "exploration_audit": "探索审计",
+    "LLMDependencyMetrics": "模型依赖度量",
+    "EvolutionLoop": "演化闭环",
+    "PatchAutoApprover": "补丁自动审批",
+    "PulseMetricsCollector": "指标采集器",
+    "PulseLung": "肺",
+    "PulseHeart": "心脏",
+    "PulseStomach": "胃",
+    "PulseLiver": "肝",
+    "PulseBrain": "大脑",
+    "PulseEyes": "眼睛",
+    "PulseEars": "耳朵",
+    "PulseLegs": "双腿",
+    "PulseBloodVessel": "血管",
+    "PulseCodeLearner": "代码学习",
+    "PulseInnerWorld": "内在世界",
+    "PulseVisualCortex": "视觉皮层",
+}
+
+
+def _m436_zh_tag_on() -> bool:
+    """★436刀3：日志前缀中文化开关（缺省 True）。关 ⇒ 逐字回到英文原名。"""
+    try:
+        return bool(getattr(config, "ENABLE_M436_LOG_TAG_ZH", True))
+    except Exception as _e:
+        silent_exc(_e, where="nucleus.logger::_m436_zh_tag_on", level="debug")
+        return True
+
+
+def _m436_zh_tag(tag: str, name: str = "") -> str:
+    """★436刀3：英文前缀 → 中文；未收录原样返回（第三方库不管）。"""
+    if not _m436_zh_tag_on():
+        return tag
+    _z = _M436_TAG_ZH.get(tag)
+    if _z:
+        return _z
+    # `pulse.organ.PulseHeart` 会被 format 截成 `Heart` —— 补查 `Pulse` + tag
+    _z = _M436_TAG_ZH.get("Pulse" + tag)
+    if _z:
+        return _z
+    if name and name != tag:
+        _z = _M436_TAG_ZH.get(name)
+        if _z:
+            return _z
+    return tag
+
+
 class PulseFormatter(logging.Formatter):
     """
     将 logger 名称映射为简洁的中文标签。
@@ -143,14 +233,16 @@ class PulseFormatter(logging.Formatter):
                 short = organ_full[5:]
             else:
                 short = organ_full
-            record.organ_tag = short
+            # ★436刀3：疑似英文前缀 → 查中文映射（未收录原样）
+            record.organ_tag = _m436_zh_tag(short, name)
         elif name == "pulse.framework":
             record.organ_tag = "框架"
         elif name.startswith("pulse.module."):
-            # 非器官模块，保留模块原名作为标签
-            record.organ_tag = name.split(".")[-1]
+            # 非器官模块，保留模块原名作为标签；★436刀3 再查中文映射
+            record.organ_tag = _m436_zh_tag(name.split(".")[-1], name)
         else:
-            record.organ_tag = name
+            # ★436刀3：直接 logger 名（如 verify_feedback / self_inspector / main）
+            record.organ_tag = _m436_zh_tag(name, name)
         # ★348刀1③（A-11 根治）：**每一行末尾**自带 `pid=<n> gen=<pid@创建时刻>`。
         #   为什么放行尾、不放标签后面：`LogAnalyzer._LOG_ORGAN_RE` 的正则是
         #   `\[([^\]]+)\]\s*(?:\[)?(ERROR|CRITICAL|WARNING|Traceback|Exception)`

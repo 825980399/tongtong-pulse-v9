@@ -318,6 +318,13 @@ class InfoField(SilentLogMixin):
         self._organ_concurrent_count: dict[str, int] = {}
         self._organ_concurrent_lock = threading.Lock()
         self._organ_max_concurrent = PULSE_LAYER.get("organ_max_concurrent_pulses", 0)
+        # ★436刀2：器官级执行锁 —— 「同器官串行、跨器官并行」的显式并发模型。
+        #   原模型（max_concurrent=0）对同器官**无任何限制**：同一器官的两个脉冲
+        #   可被不同 worker 并发执行 ⇒ 重入竞态（器官内部状态/队列非线程安全时出问题）。
+        #   现每器官一把 RLock：同器官的脉冲在此排队串行，不同器官各持各锁互不阻塞。
+        #   注意这是**排队**不是**拒收**（`_check_organ_concurrency` 超限是拒收，会丢脉冲）。
+        self._organ_exec_locks: dict = {}
+        self._organ_exec_locks_guard = threading.Lock()
         # ★主线第13批 P2-87：按层·按器官的在途任务计数。
         #   publish 提交任务时 +1，_dispatch_handler 完成/兜底时 -1。
         #   池重建时据此精确算出「被 cancel_futures 取消的数量」，
@@ -1125,6 +1132,31 @@ class InfoField(SilentLogMixin):
             + " ".join(f"{_o}={_s}" for _o, _s in _results)
         )
 
+    def _m436_organ_serial_on(self) -> bool:
+        """★436刀2：同器官串行开关（缺省 True）。关 ⇒ 逐字回到「同器官可并发」。"""
+        try:
+            return bool(getattr(_cfg, "ENABLE_M436_ORGAN_SERIAL", True))
+        except Exception as _e:
+            silent_exc(_e, where="InfoField::_m436_organ_serial_on", level="debug")
+            return True
+
+    def _m436_organ_lock(self, organ_name: str) -> "threading.RLock":
+        """★436刀2：取（或建）该器官的执行锁。同器官互斥、跨器官互不影响。
+
+        用 RLock 而非 Lock：同一**线程**内 handler 若再次触发同器官（同步重入），
+        RLock 可重入不死锁；跨线程重入仍会排队（那正是「同器官串行」要的语义）。
+        """
+        _k = str(organ_name or "<unknown>")
+        _lk = self._organ_exec_locks.get(_k)
+        if _lk is not None:
+            return _lk
+        with self._organ_exec_locks_guard:
+            _lk = self._organ_exec_locks.get(_k)
+            if _lk is None:
+                _lk = threading.RLock()
+                self._organ_exec_locks[_k] = _lk
+            return _lk
+
     def _dispatch_handler(self, pulse: dict[str, Any], handler: Callable,
                           organ_name: str, route_mode: str, layer_tag: str | None = None):
         """
@@ -1145,7 +1177,13 @@ class InfoField(SilentLogMixin):
             self._l0_inflight[_pid] = (time.time(), organ_name, threading.get_ident())
         try:
             # ★P1-2修复：明确标注串行路由为预留功能，当前版本统一使用并行分发
-            self._call_handler_safe(pulse, handler)
+            # ★436刀2：同器官串行（每器官 RLock 排队）、跨器官并行。
+            #   关 ENABLE_M436_ORGAN_SERIAL ⇒ 逐字回到改前（直接调，无锁）。
+            if self._m436_organ_serial_on():
+                with self._m436_organ_lock(organ_name):
+                    self._call_handler_safe(pulse, handler)
+            else:
+                self._call_handler_safe(pulse, handler)
         finally:
             if _is_l0 and _pid is not None:
                 self._l0_inflight.pop(_pid, None)

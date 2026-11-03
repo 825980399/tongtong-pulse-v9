@@ -558,6 +558,47 @@ def m416_startup_window_default() -> float:
         return _M416_STARTUP_WINDOW_SEC
 
 
+def _m436_ast_cache_max() -> int:
+    """★436刀1：SelfInspector AST 缓存容量（缺省 512）。关灰度回退 60（原值）。
+
+    为什么改：全库 nucleus/organs/base/utils/functions/somatics/hardware 共
+    **435 个 .py / 12.4MB**，原容量 60 只能装 13.8%。`detect_code_issues`
+    顺序扫全库时第 61 个文件就淘汰第 1 个 ⇒ 下一轮（mtime 全未变）仍要重解析
+    绝大部分文件（实测第 2 轮 ast.parse 5820 次 / 56.81s）。
+    容量 512 覆盖全库 + 后续新增余量；关 `ENABLE_M436_AST_CACHE_ENLARGE` 回退 60。
+    """
+    try:
+        _c = sys.modules.get("config")
+        if _c is not None and not bool(getattr(_c, "ENABLE_M436_AST_CACHE_ENLARGE", True)):
+            return 60
+        _v = int(getattr(_c, "M436_AST_CACHE_MAX", 512)) if _c is not None else 512
+        return _v if _v > 0 else 60
+    except Exception as _e:
+        silent_exc(_e, where="nucleus.self_inspector._m436_ast_cache_max", level="debug")
+        return 60
+
+
+def _m436_tree_cache_max() -> int:
+    """★436刀1：**AST 对象**共享缓存容量（缺省 **0 = 关闭**）。
+
+    ★为什么默认关：AST 对象太重。实测把容量提到 4096 后（`_si_walk_py` 扫 1418 个
+    .py），tracemalloc 显示常驻 **865MB**、首轮反而从 65s 涨到 **168s**（大对象堆
+    触发 GC 扫描）——**省了 ast.parse 却拿内存/GC 换，净亏**。
+    故本刀改为**缓存「检测结果」而非 AST**：见 `_m436_memo` / `_m436_result_cache`
+    （每文件每检测器只存一个标量/小列表，全库约几 MB）。
+    保留此函数只为灰度对照：置 >0 可复现「AST 共享缓存」路线，仅供 A/B 取证。
+    """
+    try:
+        _c = sys.modules.get("config")
+        if _c is not None and not bool(getattr(_c, "ENABLE_M436_AST_SHARED_CACHE", True)):
+            return 0
+        _v = int(getattr(_c, "M436_TREE_CACHE_MAX", 0)) if _c is not None else 0
+        return max(_v, 0)
+    except Exception as _e:
+        silent_exc(_e, where="nucleus.self_inspector._m436_tree_cache_max", level="debug")
+        return 0
+
+
 
 # ===== ★417刀2：主扫描让出点（协作式，**全局**进度计数）=====
 #  为什么是全局计数而不是 `threading.local()`：`_do_scan_all_organs` 走 `run_group`
@@ -778,7 +819,21 @@ class SelfInspector(SilentLogMixin):
         self._last_issue_ids: set = set()  # 上次扫描的所有问题ID集合
         # ★v23.0新增：AST解析缓存——避免每个方法都重新解析整个文件
         self._ast_cache: dict[str, tuple[float, Any]] = {}
-        self._ast_cache_max = 60  # 最多缓存60个文件的AST
+        # ★436刀1：60 → 512（覆盖全库 435 个 .py / 12.4MB）。关灰度回退 60。
+        self._ast_cache_max = _m436_ast_cache_max()
+        # ★436刀1：**检测结果**级缓存（不是 AST）。key = (检测器名, 文件路径)，
+        #   value = ((mtime, size), 结果)。全库 1418 文件 × 4 检测器只存小对象（约几 MB），
+        #   第二轮 mtime/size 未变 ⇒ 直接复用上次结果，零 ast.parse。
+        self._m436_result_cache: dict = {}
+        self._m436_tree_cache: dict = {}   # 灰度对照用（默认容量 0 = 不写）
+        self._m436_tree_cache_max = _m436_tree_cache_max()
+        #: ★436刀1：结果缓存总闸（False ⇒ `_m436_memo` 直接 compute，逐字回退改前）。
+        try:
+            self._m436_cache_on = bool(
+                getattr(sys.modules.get("config"), "ENABLE_M436_AST_SHARED_CACHE", True))
+        except Exception as _e:
+            silent_exc(_e, where="nucleus.self_inspector.__init__ _m436_cache_on", level="debug")
+            self._m436_cache_on = True
         self._max_issue_states = 2000  # 最多跟踪2000个问题状态
         # ★PHASE14（2026-09-07）：方法节点的行号/名称索引，与 _ast_cache 同生命周期。
         #   背景：_read_method_body 原先每次调用都要 ast.walk 整棵树来找目标方法。
@@ -3866,10 +3921,73 @@ class SelfInspector(SilentLogMixin):
                 silent_exc(_e, "self_inspector.py:_si_collect_metrics", level="debug")
         return _loc, _silent, _per_file
 
-    def _si_count_branches(self, src: str) -> int:
-        """AST 分支节点计数（B3 用）。"""
+    def _m436_memo(self, detector: str, path: str, compute):
+        """★436刀1：按 **(mtime, size)** 缓存单文件检测结果，文件没改就复用上次结果。
+
+        `detector`：检测器名（同一文件在不同检测器的结果不同，必须分开存）。
+        `compute`：`() -> 结果`，只在缓存未命中时调用（内部才是真正的读文件+ast.parse）。
+        失效：stat 变化 / 文件消失 ⇒ 重算；stat 失败 ⇒ **不缓存**，直接算（不猜）。
+        """
+        if not getattr(self, "_m436_cache_on", True):
+            return compute()
         try:
-            _tree = ast.parse(src, filename="<self_inspector>")
+            _st = os.stat(path)
+            _cur = (float(_st.st_mtime), int(_st.st_size))
+        except OSError as _e:
+            silent_exc(_e, where="nucleus.self_inspector._m436_memo stat", level="debug")
+            return compute()
+        _key = (detector, path)
+        _hit = self._m436_result_cache.get(_key)
+        if _hit is not None and _hit[0] == _cur:
+            return _hit[1]
+        _val = compute()
+        self._m436_result_cache[_key] = (_cur, _val)
+        return _val
+
+    def _m436_probe_god_file(self, path: str) -> dict:
+        """★436刀1：单文件 loc + 分支数（god_file 检测的最小结果，供 (mtime,size) 缓存）。"""
+        with open(path, "r", encoding="utf-8", errors="replace") as _f:
+            _src = _f.read()
+        _lines = _src.count("\n") + (1 if _src and not _src.endswith("\n") else 0)
+        return {"loc": _lines, "branches": self._si_count_branches(_src)}
+
+    def _m436_probe_unreachable(self, path: str, rel_key: str, root: str) -> list:
+        """★436刀1：单文件不可达语句列表（供 (mtime,size) 缓存）。"""
+        with open(path, "r", encoding="utf-8", errors="replace") as _f:
+            _src = _f.read()
+        _tree = self._m436_tree(_src, path)
+        _out: list = []
+        self._si_scan_unreachable_block(_tree.body, _out, rel_key, root, rel_key)
+        return _out
+
+    def _m436_probe_cc(self, path: str) -> list:
+        """★436刀1：单文件 radon CC 块（供 (mtime,size) 缓存）。"""
+        with open(path, "r", encoding="utf-8", errors="replace") as _f:
+            _src = _f.read()
+        return self._si_cc_blocks(_src)
+
+    def _m436_tree(self, src: str, filename: str = "<self_inspector>"):
+        """★436刀1：源码 → AST，按内容 hash 缓存（**四个检测器共享同一棵树**）。
+
+        key = `("tree", len(src), hash(src))`；容量 0 /
+        `ENABLE_M436_AST_SHARED_CACHE=False` ⇒ 逐字回退「每次 ast.parse」。
+        满容后不再写入（保留已有命中），绝不清表——清表会让下一轮全部重解析。
+        """
+        if self._m436_tree_cache_max <= 0:
+            return ast.parse(src, filename=filename)
+        _key = ("tree", len(src), hash(src))
+        _hit = self._m436_tree_cache.get(_key)
+        if _hit is not None:
+            return _hit
+        _tree = ast.parse(src, filename=filename)
+        if len(self._m436_tree_cache) < self._m436_tree_cache_max:
+            self._m436_tree_cache[_key] = _tree
+        return _tree
+
+    def _si_count_branches(self, src: str) -> int:
+        """AST 分支节点计数（B3 用）。★436刀1：改走共享缓存。"""
+        try:
+            _tree = self._m436_tree(src)
         except (SyntaxError, ValueError) as _e:
             silent_exc(_e, "self_inspector.py:_si_count_branches", level="debug")
             return 0
@@ -4006,14 +4124,15 @@ class SelfInspector(SilentLogMixin):
             if os.path.basename(_ap) in GOD_FILE_EXEMPT:
                 continue
             try:
-                with open(_ap, "r", encoding="utf-8", errors="replace") as _f:
-                    _src = _f.read()
+                # ★436刀1：按 (mtime,size) 缓存 loc/branches，文件没改就不再解析
+                _probe = self._m436_memo(
+                    "god_file", _ap, lambda _p=_ap: self._m436_probe_god_file(_p))
             except OSError as _m369_e:
                 silent_exc(_m369_e, where="nucleus/self_inspector.py:_detect_god_file", level="debug")
                 continue
-            _lines = _src.count("\n") + (1 if _src and not _src.endswith("\n") else 0)
-            _branches = self._si_count_branches(_src)
-            _cur[_rel] = {"loc": _lines, "branches": _branches}
+            _lines = _probe["loc"]
+            _branches = _probe["branches"]
+            _cur[_rel] = _probe
             if not _baseline:
                 continue
             _b = _baseline.get(_rel)
@@ -4093,7 +4212,7 @@ class SelfInspector(SilentLogMixin):
         _module_level: list[str] = []
         _function_level: list[str] = []
         try:
-            _tree = ast.parse(src, filename="<self_inspector>")
+            _tree = self._m436_tree(src)
         except (SyntaxError, ValueError) as _e:
             silent_exc(_e, "self_inspector.py:_si_resolve_import_mods", level="debug")
             return _module_level, _function_level
@@ -4156,7 +4275,9 @@ class SelfInspector(SilentLogMixin):
             _m = _file_to_mod.get(_ap)
             if not _m:
                 continue
-            _mods, _fn_mods = self._si_resolve_import_mods(_src)
+            # ★436刀1：按 (mtime,size) 缓存 import 抽取结果（文件没改就不再 ast.parse）
+            _mods, _fn_mods = self._m436_memo(
+                "imports", _ap, lambda _s=_src: self._si_resolve_import_mods(_s))
 
             def _resolve(_im: str):
                 _parts = _im.split(".")
@@ -4283,20 +4404,16 @@ class SelfInspector(SilentLogMixin):
         _base_path = os.path.join(_root, SELF_INSPECTOR_D1_BASELINE_REL)
         _issues: list[dict] = []
         for _ap, _rel in self._si_walk_py():
-            try:
-                with open(_ap, "r", encoding="utf-8", errors="replace") as _f:
-                    _src = _f.read()
-            except OSError as _e:
-                silent_exc(_e, "self_inspector.py:_detect_unreachable_code", level="debug")
-                continue
-            try:
-                _tree = ast.parse(_src, filename=_ap)
-            except (SyntaxError, ValueError) as _e:
-                silent_exc(_e, "self_inspector.py:_detect_unreachable_code", level="debug")
-                continue
             # ★第138批 T-138c：基线键用**相对路径 + '/' 分隔**（跨机可移植）
             _rel_key = _rel.replace(os.sep, "/")
-            self._si_scan_unreachable_block(_tree.body, _issues, _rel_key, _root, _rel_key)
+            try:
+                # ★436刀1：按 (mtime,size) 缓存该文件的不可达语句列表，未改不重解析
+                _issues.extend(self._m436_memo(
+                    "unreachable", _ap,
+                    lambda _p=_ap, _rk=_rel_key: self._m436_probe_unreachable(_p, _rk, _root)))
+            except (OSError, SyntaxError, ValueError) as _e:
+                silent_exc(_e, "self_inspector.py:_detect_unreachable_code", level="debug")
+                continue
         _cur: dict[str, str] = {}
         for _i in _issues:
             _cur[f'{_i["file"]}:{_i["line"]}:{_i["description"]}'] = _i["description"]
@@ -4313,7 +4430,18 @@ class SelfInspector(SilentLogMixin):
 
     # ---- ★第138批 T-138a：圈复杂度（CC）检测器 ----
     def _si_cc_blocks(self, src: str) -> list[tuple[str, int, int]]:
-        """radon cc_visit → [(name, complexity, lineno)]（仅 Function/Method，剔除 Class 级块）。"""
+        """radon cc_visit → [(name, complexity, lineno)]（仅 Function/Method，剔除 Class 级块）。
+
+        ★436刀1：`cc_visit` 内部也走 `code2ast`（ast.parse）——按内容 hash 缓存**结果**，
+        与 `_m436_tree` 共用同一个缓存表（key 前缀 "cc" 区分）。
+        """
+        _use_cache = self._m436_tree_cache_max > 0
+        _ck = None
+        if _use_cache:
+            _ck = ("cc", len(src), hash(src))
+            _hit = self._m436_tree_cache.get(_ck)
+            if _hit is not None:
+                return list(_hit)
         try:
             from radon.complexity import cc_visit
         except ImportError as _e:
@@ -4333,6 +4461,8 @@ class SelfInspector(SilentLogMixin):
             if not isinstance(_c, int):
                 continue
             _out.append((getattr(_blk, "name", "?"), _c, int(getattr(_blk, "lineno", 0) or 0)))
+        if _use_cache and _ck is not None and len(self._m436_tree_cache) < self._m436_tree_cache_max:
+            self._m436_tree_cache[_ck] = list(_out)
         return _out
 
     def _detect_cc_growth(self) -> list[dict]:
@@ -4348,12 +4478,12 @@ class SelfInspector(SilentLogMixin):
         _ge50: set[str] = set()
         for _ap, _rel in self._si_walk_py():
             try:
-                with open(_ap, "r", encoding="utf-8", errors="replace") as _f:
-                    _src = _f.read()
+                # ★436刀1：按 (mtime,size) 缓存 radon CC 结果，文件没改就不再 cc_visit
+                _blocks = self._m436_memo(
+                    "cc", _ap, lambda _p=_ap: self._m436_probe_cc(_p))
             except OSError as _e:
                 silent_exc(_e, "self_inspector.py:_detect_cc_growth", level="debug")
                 continue
-            _blocks = self._si_cc_blocks(_src)
             _ge25 = 0
             _ge50c = 0
             _max_cc = 0
@@ -7310,6 +7440,36 @@ _M348_PROTOCOL_MARKERS = ("协议", "接口定义", "桥接", "通信桥", "通�
                           "protocol", "interface definition", "bridge")
 
 
+#: ★436刀1：`_m348_protocol_iface_declared` 的「文件 → (mtime,size,行列表)」缓存。
+#:   原实现对**每个候选**都 `open().read()` + `splitlines()`（实测 952 候选 ×
+#:   每次整文件），是 `_detect_dead_code` 剩余耗时的大头（profile：4.0s/轮）。
+#:   缓存后同一文件在一轮里只读一次；文件改了（mtime/size 变）自动失效。
+_M436_SRC_LINES_CACHE: dict = {}
+_M436_SRC_LINES_MAX = 4096
+
+
+def _m436_src_lines(path: str):
+    """★436刀1：按 (mtime, size) 缓存 `splitlines()` 结果。读失败返回 None（不猜）。"""
+    try:
+        _st = os.stat(path)
+        _cur = (float(_st.st_mtime), int(_st.st_size))
+    except OSError as _e:
+        silent_exc(_e, where="nucleus.self_inspector._m436_src_lines stat", level="debug")
+        return None
+    _hit = _M436_SRC_LINES_CACHE.get(path)
+    if _hit is not None and _hit[0] == _cur:
+        return _hit[1]
+    try:
+        _src = open(path, encoding="utf-8", errors="replace").read()
+    except OSError as _e:
+        silent_exc(_e, where="nucleus.self_inspector._m436_src_lines read", level="debug")
+        return None
+    _lines = _src.splitlines()
+    if len(_M436_SRC_LINES_CACHE) < _M436_SRC_LINES_MAX:
+        _M436_SRC_LINES_CACHE[path] = (_cur, _lines)
+    return _lines
+
+
 def _m348_protocol_iface_declared(item: dict) -> bool:
     """★348刀10：该候选所在方法/文件是否**自我声明**为协议·接口·桥接·通信面。
 
@@ -7329,9 +7489,11 @@ def _m348_protocol_iface_declared(item: dict) -> bool:
         _full = _f if os.path.isabs(_f) else os.path.join(_root, _f)
         if not os.path.isfile(_full):
             return False
-        _src = open(_full, encoding="utf-8", errors="replace").read()
+        # ★436刀1：走文件行缓存（同文件不重复整读+splitlines）
+        _lines = _m436_src_lines(_full)
+        if _lines is None:
+            return False
         # ① 方法体（按 def 名定位到下一个同级 def 之前，最多 200 行）
-        _lines = _src.splitlines()
         _start = None
         for _i, _l in enumerate(_lines):
             if _l.lstrip().startswith("def ") and ("def %s(" % _n) in _l:

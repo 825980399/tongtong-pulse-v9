@@ -5947,6 +5947,17 @@ SNAPSHOT_LOAD_SOURCE = "parquet"
 #   都用 `_CfgSwitch` 显式设定本键 ⇒ **不受默认值改动影响**。
 #   回退：把下面这一行改回 True 即可（代码路径一字未删）。
 SNAPSHOT_SAVE_JSON_BACKUP = False
+
+# ===== ★436批：并行化第二阶段收尾（3刀）灰度开关 =====
+# 刀1（AST 扫描缓存）：总闸 False ⇒ `_m436_memo` 直接 compute（逐字回退改前行为）。
+#   M436_TREE_CACHE_MAX：AST **对象**共享缓存容量，0 = 关闭（默认关 —— 实测
+#   全库 1418 文件缓存 AST 常驻 865MB、首轮反而变慢，故主方案改缓存「检测结果」）。
+ENABLE_M436_AST_SHARED_CACHE = True
+M436_TREE_CACHE_MAX = 0
+# 刀2（器官并发模型）：同器官串行、跨器官并行；False ⇒ 回到「同器官可并发」。
+ENABLE_M436_ORGAN_SERIAL = True
+# 刀3（日志前缀中文化）：英文前缀 → 中文器官名；False ⇒ 回到英文原名。
+ENABLE_M436_LOG_TAG_ZH = True
 PARQUET_COMPRESSION = "snappy"
 PARQUET_SHARD_BY_EVOL_LEVEL = True
 PARQUET_BATCH_SIZE = 5000
