@@ -406,7 +406,7 @@ def _m421_patch_chain_read(root: str | None = None) -> dict:
     try:
         _ap = _out.get("apply")
         _qu = _out.get("queue")
-        if (_out.get("state") == "ok" and isinstance(_ap, int) and isinstance(_qu, int)
+        if (_out.get("state") in ("ok", "partial") and isinstance(_ap, int) and isinstance(_qu, int)
                 and _ap == 0 and _qu > 0):
             _out["state"] = "degraded"
             _out["state_reason"] = f"apply=0 但 pending={_qu}"
