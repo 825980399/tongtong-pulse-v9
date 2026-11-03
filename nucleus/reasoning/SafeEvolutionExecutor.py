@@ -2926,14 +2926,21 @@ class SafeEvolutionExecutor:
         **之后**重算一次拆分字段，闭合"跑了但没写回"的断链。
 
         ★绝不改变验证/回滚流程与任何返回值；异常降级为 DEBUG（不阻断）。
+
+        ★433刀1：**人工 override 锁优先**。``problem_fixed_corrected`` 为真表示人已
+        裁定该补丁的修复语义；本方法会被 6 个写回点 + 每轮静默复算调到，若无锁就会
+        把人工修正覆盖回去。锁判据与 ``PatchManager.apply_all_pending`` 同源
+        （``is_split_override_locked``），命中即跳过复算（返回 False = 未复算）。
         """
         try:
             if not isinstance(patch, dict):
                 return False
-            from nucleus.evolution.patch_verification_split import (
-                apply_split as _apply_split84,
-            )
-            _apply_split84(patch)
+            from nucleus.evolution import patch_verification_split as _pvs84
+            if _pvs84.is_split_override_locked(patch):
+                _module_logger.debug(
+                    f"[语义拆分] 人工 override 已锁定，跳过静默复算: {patch.get('id', '')}")
+                return False
+            _pvs84.apply_split(patch)
             return True
         except Exception as _e84:
             _module_logger.debug(
@@ -2956,6 +2963,10 @@ class SafeEvolutionExecutor:
         try:
             _hist = self._patch_manager.load_json(
                 self._patch_manager.get_history_file(), [])
+            # ★433刀2：读入按 id 合并（否则同一补丁的两个快照把账本分母算两遍）。
+            _dd433 = getattr(self._patch_manager, "dedup_history_rows", None)
+            if callable(_dd433):
+                _hist = _dd433(_hist)
             if not isinstance(_hist, list):
                 return {}
             _applied = sum(1 for _p in _hist
@@ -3261,6 +3272,10 @@ class SafeEvolutionExecutor:
         try:
             _history = self._patch_manager.load_json(
                 self._patch_manager.get_history_file(), [])
+            # ★433刀2：读入按 id 合并（否则同一补丁被验两遍、total 多计 1）。
+            _dd433b = getattr(self._patch_manager, "dedup_history_rows", None)
+            if callable(_dd433b):
+                _history = _dd433b(_history)
             if not _history:
                 return {"total": 0, "verified": 0, "failed": 0,
                         "rolled_back": 0, "avg_effectiveness": 0.0}
@@ -3367,7 +3382,9 @@ class SafeEvolutionExecutor:
                     _effects.append(_effectiveness)
 
             # 保存更新后的 history
-            self._patch_manager._save_json(
+            # ★433刀1：改走 _save_patch_list 单写口（内含 427 状态守卫 + file 路径归一），
+            #   原 _save_json 整份写盘会绕过守卫 ⇒ 「status 说已验证、真值说失败」可被写回盘。
+            self._patch_manager._save_patch_list(
                 self._patch_manager.get_history_file(), _history)
 
             _avg = sum(_effects) / len(_effects) if _effects else 0.0
@@ -5884,7 +5901,7 @@ class SafeEvolutionExecutor:
             "status": "pending",
             "verification": None,
             "applied": False,
-            "applied_at": 0,
+            "applied_at": None,
         }
 
     def _assess_patch_quality(self, original_code: str, modified_code: str,
@@ -6482,7 +6499,7 @@ class SafeEvolutionExecutor:
                 "status": "pending",
                 "verification": None,
                 "applied": False,
-                "applied_at": 0,
+                "applied_at": None,
             }
         except Exception as e:
             silent_exc(e, "nucleus/reasoning/SafeEvolutionExecutor.py:5179:_generate_llm_patch", level="warning")

@@ -224,7 +224,7 @@ class SelfReflectionEngine:
                 "status": "pending",
                 "verification": None,
                 "applied": False,
-                "applied_at": 0,
+                "applied_at": None,
             }
         except Exception as e:
             print(f"[WARNING] SelfReflectionEngine.py:174: {type(e).__name__}: {e}")

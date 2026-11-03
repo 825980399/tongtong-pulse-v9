@@ -23,7 +23,6 @@ from config import TIMEOUT_CONFIG
 from nucleus._silent_except import silent_exc  # 主线第78批 T2：静默异常可见化
 from nucleus.logging.sanitizer import sanitize
 
-
 #: ★418刀3①：锁等待均值的时间窗（秒）。120s ≈ 4 个采样周期，
 #:   短到不会被半小时前的尖峰污染，长到在低流量下仍有样本。
 _M418_LOCK_WAIT_WINDOW_SEC = 120.0
@@ -153,6 +152,10 @@ class RuntimeMetrics:
         #   那个假读数的来源。`_created_at` 只在本对象创建时取一次。
         self._created_at = time.time()
         self._m427_rss_at_10min: float | None = None
+        # ★433刀4：基线的**采样时刻**必须与基线值同源存下 —— 原实现只存值，
+        #   每拍用 deque 里"当前第一个 ≥ ramp 的点"重算，老样本被挤出后该点
+        #   一路后滑 ⇒ 基线越来越高、斜率窗口从 10min 拉到 61.8min。
+        self._m427_rss_at_10min_ts: float | None = None
 
     def start(self):
         """启动聚合线程。"""
@@ -615,6 +618,8 @@ class RuntimeMetrics:
             "growth_mb_per_min": 0.0, "window_sec": 0.0, "window_samples": 0,
             "phase": "cold", "is_leak_signal": False, "rss_now": 0.0,
             "rss_at_10min": None, "steady_growth_mb_per_min": None,
+            # ★433刀4：稳态斜率的真实窗口（秒）。不带窗口的 MB/min 不可比。
+            "steady_window_sec": None,
             "uptime_sec": 0.0, "ramp_sec": 0.0, "sample_interval_sec": 0.0,
         }
         try:
@@ -654,22 +659,40 @@ class RuntimeMetrics:
                 _out["growth_mb_per_min"] = (
                     float(_win[-1]["mem_rss_mb"] or 0.0)
                     - float(_win[0]["mem_rss_mb"] or 0.0)) / (_span / 60.0)
-            # 启动基线：第一个「距启动 ≥ ramp」的采样点
-            _base, _base_ts = None, None
-            for _p in _pts:
-                if (float(_p.get("ts") or 0.0) - _created) >= _ramp:
-                    _base = float(_p.get("mem_rss_mb") or 0.0)
-                    _base_ts = float(_p.get("ts") or 0.0)
-                    break
-            if _base is not None:
-                self._m427_rss_at_10min = _base
-                _out["rss_at_10min"] = round(_base, 3)
-                _dt = (float(_win[-1]["ts"]) - float(_base_ts)) / 60.0
+            # 启动基线：**只在"真的是 ramp 后第一个点"时缓存一次**，之后一律用缓存。
+            #   病因（433 T0 实测）：原实现每拍把 deque 里「第一个 ≥ ramp 的点」
+            #   重新赋给 `_m427_rss_at_10min`。deque maxlen=720、采样 5s ⇒ 只保留
+            #   最近 60 分钟；老样本被挤出后这个"第一个点"一路后滑 ⇒ 基线越滑越高、
+            #   斜率窗口从 10 分钟拉到 61.8 分钟。生产实测 rss_at_10min=5890.2 /
+            #   rss_now=6112.5 / 61.8min ⇒ steady_growth=3.599MB/min（假读数）。
+            #   改为「只缓存一次」后，基线一旦落定就不再漂移。
+            if self._m427_rss_at_10min is None:
+                _iv433 = float(getattr(self, "_sample_interval", 5.0) or 5.0)
+                # 容差：给 10 个采样周期 / 至少 600s 的落地余量。超出余量的点说明
+                # 本进程第一次调本函数时 deque 里已没有 ramp 后首个样本（老进程），
+                # 此时**宁可不缓存**（读数留 None），也不拿一个偏晚的样本冒充基线。
+                _grace433 = max(600.0, 10.0 * _iv433)
+                for _p in _pts:
+                    _ts433 = float(_p.get("ts") or 0.0)
+                    if (_ts433 - _created) < _ramp:
+                        continue
+                    if (_ts433 - _created) <= (_ramp + _grace433):
+                        self._m427_rss_at_10min = float(_p.get("mem_rss_mb") or 0.0)
+                        self._m427_rss_at_10min_ts = _ts433
+                    break      # 只认第一个 ≥ ramp 的点；偏晚的点宁可不要
+            if self._m427_rss_at_10min is not None:
+                _base433 = float(self._m427_rss_at_10min)
+                _out["rss_at_10min"] = round(_base433, 3)
+                _bts433 = self._m427_rss_at_10min_ts
+                if _bts433 is None:
+                    # 旧对象（热更新/反序列化）可能只有值没有时刻 ⇒ 补记当前可用最早点
+                    _bts433 = float(_win[-1]["ts"])
+                _dsec433 = float(_win[-1]["ts"]) - float(_bts433)
+                _out["steady_window_sec"] = round(_dsec433, 1)
+                _dt = _dsec433 / 60.0
                 if _dt > 0:
                     _out["steady_growth_mb_per_min"] = (
-                        _out["rss_now"] - _base) / _dt
-            elif self._m427_rss_at_10min is not None:
-                _out["rss_at_10min"] = round(float(self._m427_rss_at_10min), 3)
+                        _out["rss_now"] - _base433) / _dt
             # 相位：ramp 期的高斜率**不是泄漏**，必须标出来
             _out["phase"] = "ramp" if _uptime < _ramp else "steady"
             _out["is_leak_signal"] = bool(
@@ -801,6 +824,9 @@ class RuntimeMetrics:
                 "is_leak_signal": _grep427.get("is_leak_signal"),
                 "rss_at_10min": _grep427.get("rss_at_10min"),
                 "steady_growth_mb_per_min": _grep427.get("steady_growth_mb_per_min"),
+                # ★433刀4：稳态斜率的真实窗口（秒）—— 与 steady_growth 同源，
+                #   用于一眼看出"这个速率是几分钟算出来的"。
+                "steady_window_sec": _grep427.get("steady_window_sec"),
                 "uptime_sec": _grep427.get("uptime_sec")}
 
     # _m65_t2_get_system_load_done

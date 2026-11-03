@@ -657,6 +657,82 @@ def _m427_converge_status(data: list) -> list:
             "status=runtime_verified 但嵌套 verified=False ⇒ needs_reverify", _n_fix)
     return _out
 
+# ============== ★433刀3：applied_at 哨兵归一 / schema 校验 ==============
+# 病因（433 T0 实测）：`patch_history` 里 6 条**未落地**补丁的 `applied_at` 是
+# `0`（epoch 0），报表按时间戳渲染成 `1970-01-01 08:00` —— 一个看起来"有值"、
+# 实际含义是"从未落地"的假象；4 个补丁构造点把 `"applied_at": 0` 写死是根源。
+# 下游读点已逐个核过 None 安全（`x.get("applied_at") or ...` / `if not _applied_at`
+# / `isinstance(..., (int, float))` 三类），故归一为 None 不会炸任何调用方。
+
+#: `applied_at` 合法下界：2000-01-01T00:00:00Z。低于它的都是坏哨兵，不是真时刻。
+MIN_APPLIED_AT = 946684800
+
+
+def _m433_normalize_applied_at(value):
+    """把 ``applied_at`` 归一为「合法时刻」或 ``None``。返回 ``(新值, 是否改动)``。"""
+    if value is None:
+        return None, False
+    if isinstance(value, bool):
+        return None, True
+    if isinstance(value, (int, float)):
+        return (None, True) if float(value) <= MIN_APPLIED_AT else (value, False)
+    if isinstance(value, str):
+        try:
+            _f = float(value.strip())
+        except (TypeError, ValueError) as _e433v:
+            # 非数字字符串 = 坏哨兵：归一为 None，但要留痕（否则查不出上游写坏了什么）
+            silent_exc(_e433v,
+                       where="PatchManager._m433_normalize_applied_at 非数字字符串",
+                       level="debug")
+            return None, True
+        return (None, True) if _f <= MIN_APPLIED_AT else (_f, False)
+    return None, True
+
+
+def _m433_applied_at_valid(value) -> bool:
+    """schema 判据：``applied_at`` 只能是 ``None`` 或 ``> MIN_APPLIED_AT`` 的数值。"""
+    if value is None:
+        return True
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    return float(value) > MIN_APPLIED_AT
+
+
+def _m433_normalize_applied_at_in(rows) -> int:
+    """对整份补丁列表**就地**归一 ``applied_at``，返回改动条数。"""
+    _n = 0
+    if not isinstance(rows, list):
+        return 0
+    for _r in rows:
+        if not isinstance(_r, dict) or "applied_at" not in _r:
+            continue
+        _new, _chg = _m433_normalize_applied_at(_r.get("applied_at"))
+        if _chg:
+            _r["applied_at"] = _new
+            _n += 1
+    if _n:
+        _module_logger.info("[433刀3] applied_at 哨兵归一为 None：%d 条", _n)
+    return _n
+
+
+# ============== ★433刀2：history 按 id 合并（落盘/读入共用同一实现）==============
+def _m433_upsert_history(rows, where: str = ""):
+    """history 列表按 id 合并（幂等）；任何异常一律原样返回，绝不影响保存/读取。"""
+    try:
+        from nucleus.evolution.patch_dedup import upsert_by_id as _upsert433
+        _out, _st = _upsert433(rows)
+        if _st.get("merged"):
+            _module_logger.warning(
+                "[433刀2] history 按 id 合并 %d 条重复快照（%d 行 -> %d 行）ids=%s where=%s",
+                _st["merged"], _st["before"], _st["after"],
+                _st["merged_ids"][:5], where)
+        return _out
+    except Exception as _e433:
+        silent_exc(_e433, where="PatchManager._m433_upsert_history", level="warning")
+        return rows
+
+
+
 
 # ========================================== 377刀3：失败补丁正文独立审计件
 #  _m377_dump_failed_patch
@@ -6153,7 +6229,20 @@ class PatchManager:
             for _it in _items:
                 if isinstance(_it, dict) and isinstance(_it.get("file"), str):
                     _it["file"] = self._resolve_patch_file(_it["file"])
+            # ★433刀3：读入即归一 applied_at 哨兵（0/"0"/"" ⇒ None）。
+            _m433_normalize_applied_at_in(_items)
+            # ★433刀2：history 读入按 id 合并（同 id 多快照只留一条）。
+            if path == self._history_file:
+                _items = _m433_upsert_history(_items, where="_load_patch_list")
         return _items
+
+    def dedup_history_rows(self, rows):
+        """★433刀2：读入端按 id 合并 history（薄封装，纯函数在 patch_dedup）。
+
+        给不走 `_load_patch_list` 的读点用（它们直接 `load_json(get_history_file())`）；
+        与落盘端同一实现，避免"写进去 1 行、读出来 2 条"。
+        """
+        return _m433_upsert_history(rows, where="dedup_history_rows")
 
     def _save_patch_list(self, path, data):
         """保存补丁列表（pending/history）并把 file 归一化为相对路径落盘。"""
@@ -6164,6 +6253,17 @@ class PatchManager:
                         _it["file"] = self._normalize_patch_file(_it["file"])
         except Exception:
             _module_logger.debug("补丁路径归一化失败（不影响保存）")
+        # ★433刀3：落盘前把 applied_at 哨兵（0/"0"/""）归一为 None。
+        try:
+            _m433_normalize_applied_at_in(data)
+        except Exception as _na433:
+            silent_exc(_na433, where="PatchManager._save_patch_list applied_at归一",
+                       level="debug")
+        # ★433刀2：history 按 id upsert（同一补丁多个生命周期快照只留一行，
+        #   并合并 status_history / wont_fix_* 审计信息）。**只对 history 生效**：
+        #   pending 的唯一写口是 write_pending，不在本刀范围内。
+        if path == self._history_file:
+            data = _m433_upsert_history(data, where="_save_patch_list")
         # ★427刀5：落盘前收敛「状态说已验证、真值说失败」的矛盾（只治 is False）。
         try:
             if isinstance(data, list) and _m427_status_guard_on():

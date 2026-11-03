@@ -27,7 +27,6 @@ from nucleus.llm.call_recorder import trace_evolution_call
 from nucleus.LLMDependencyMetrics import SCENE_EVOLUTION, record_llm_call
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
 
-
 # ===== ★428刀1：生成侧截断治理 =====
 # 【T0 实测，非推测】67 条关2a 拒收标本（data/audit/failed_patches/）用正确管线
 #   （先剥围栏再 dedent）跑 `ast.parse`：**0/67 通过**，其中 66 条报
@@ -502,7 +501,7 @@ class LLMEvolutionEngine(SilentLogMixin):
                     "status": "pending",
                     "verification": None,
                     "applied": False,
-                    "applied_at": 0,
+                    "applied_at": None,
                 }
                 _result.append(_patch)
             return _result

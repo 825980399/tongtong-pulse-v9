@@ -306,6 +306,19 @@ class _FakePM:
     def _save_json(self, path, data) -> None:
         self.saved[path] = data
 
+    def _save_patch_list(self, path, data) -> bool:
+        """★433刀1：生产侧改走单写口后，替身必须同步实现该入口。
+
+        否则 `verify_applied_patches` 末尾会 AttributeError → 被外层 except 吞掉
+        → 返回值退化成 error dict（`_res["verified"]` 变 0），断言假红。
+        """
+        self.saved[path] = data
+        return True
+
+    def dedup_history_rows(self, rows):
+        """★433刀2：读入端按 id 合并的替身（原样返回，保持用例语义）。"""
+        return rows
+
     def rollback_patch(self, pid: str):
         self.rollbacks.append(pid)
         return {"ok": True}

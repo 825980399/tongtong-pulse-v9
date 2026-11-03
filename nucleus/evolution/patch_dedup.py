@@ -25,16 +25,22 @@
 """
 from __future__ import annotations
 
+import time
 from typing import Any
 
 __all__ = [
+    "TERMINAL_STATUSES",
     "TIME_KEYS",
+    "attempt_ts",
     "dedup_history",
     "dedup_stats",
     "fix_detail_consistency",
     "fix_details_in_history",
+    "merge_group",
     "pick_keeper",
     "record_time",
+    "terminal_ts",
+    "upsert_by_id",
 ]
 
 #: 时间字段优先级（取第一个可用者）。
@@ -196,3 +202,216 @@ def fix_details_in_history(hist: Any) -> tuple:
             _fixed += 1
             _ids.append(str(_r.get("id")))
     return _fixed, _ids
+
+
+# ======================================================================
+# ★433刀2：同 id 历史快照合并（upsert by id）
+# ======================================================================
+# 病因（433 T0 实测）：`patch_history` 是 append-only，同一补丁的两个生命周期快照
+# 被追加成两行。盘上实测 1 组：`o3_1792638584_57885429` 在 index 85
+# （status=wont_fix，status_history 长 1）与 index 86（status=approved，长 0），
+# 除 status / status_history / o3_auto_dispatch_ready / 验证结论外其余字段逐字相同。
+# 两行的后果：
+#   · 账本 `history_total` 虚高、`real_fix_rate` 分母多算；
+#   · `verify_applied_patches` 把同一补丁验两遍、`total` 多计；
+#   · `clear_cancelled_pending` 的 `_wont` 映射按 id 建表，后写者覆盖前者 ⇒
+#     撤单信号可能被 approved 快照顶掉。
+# 本组是**纯函数**（不读盘、不写盘），落盘与一次性迁移由调用方负责。
+
+#: 人工终态 —— 出现即代表「人已裁决」。
+TERMINAL_STATUSES = ("wont_fix", "wontfix", "cancelled", "revoked",
+                     "rejected", "rolled_back")
+
+#: 各终态对应的裁决时刻字段（缺字段时回退 status_history / record_time）。
+_TERMINAL_TS_KEYS = {
+    "wont_fix": ("wont_fix_at",),
+    "wontfix": ("wont_fix_at",),
+    "cancelled": ("cancelled_at",),
+    "revoked": ("revoked_at",),
+    "rejected": ("rejected_at",),
+    "rolled_back": ("rolled_back_at",),
+}
+
+#: ★433刀2 合并策略：True ⇒ 组内出现人工终态时以终态为准（默认）。
+#: 置 False 则逐字退回「基底 status 原样保留」，用于 A/B 对照与紧急回滚。
+TERMINAL_STATUS_WINS = True
+
+
+def _is_blank(v: Any) -> bool:
+    """空值判定（``None`` / 空串 / 空容器）。``0`` 与 ``False`` **不算空**。"""
+    return v is None or v == "" or v == [] or v == {}
+
+
+def attempt_ts(rec: dict) -> float:
+    """该记录的 ``runtime_verify_last_attempt_at``（缺失/非法 ⇒ ``0.0``）。"""
+    if not isinstance(rec, dict):
+        return 0.0
+    _v = rec.get("runtime_verify_last_attempt_at")
+    if isinstance(_v, bool) or not isinstance(_v, (int, float)):
+        return 0.0
+    return float(_v) if _v > 0 else 0.0
+
+
+def terminal_ts(rec: dict):
+    """该记录**当前 status** 若为人工终态 → 返回裁决时刻；否则 ``None``。
+
+    时刻优先取状态专属字段（``wont_fix_at`` 等）；缺失时回退
+    ``status_history`` 里最后一条同状态记录的 ``at``；再缺失回退 ``record_time``。
+    """
+    if not isinstance(rec, dict):
+        return None
+    _st = str(rec.get("status") or "").strip().lower()
+    if _st not in TERMINAL_STATUSES:
+        return None
+    _ts = 0.0
+    for _k in _TERMINAL_TS_KEYS.get(_st, ()):
+        _v = rec.get(_k)
+        if isinstance(_v, bool) or not isinstance(_v, (int, float)):
+            continue
+        if _v > 0:
+            _ts = max(_ts, float(_v))
+    if _ts <= 0:
+        for _h in rec.get("status_history") or []:
+            if (isinstance(_h, dict)
+                    and str(_h.get("status") or "").strip().lower() == _st):
+                _v = _h.get("at")
+                if isinstance(_v, (int, float)) and not isinstance(_v, bool):
+                    _ts = max(_ts, float(_v))
+    return _ts if _ts > 0 else record_time(rec)
+
+
+def merge_group(group: list, now: float | None = None) -> dict:
+    """把**同一 id** 的多条生命周期快照合并成一条（纯函数，不写盘）。
+
+    规则（确定性、可解释）：
+      1. **基底**取 ``runtime_verify_last_attempt_at`` 最大的一条 —— 它带着最新的
+         验证结论（失败原因/模式/fail_count），是这条补丁的"数据载体"；
+         并列取后出现者（稳定）。
+      2. 基底为空的字段用其余行的非空值补 —— **不覆盖**基底已有的真值。
+      3. ``status_history`` 取并集（按 ``(status, at)`` 去重、按时间升序）。
+      4. ``wont_fix_*`` 三字段任一行为空即取非空者（撤单理由不得因合并丢失）。
+      5. **状态**：组内存在人工终态时取**裁决时刻最晚**的那个终态（``0/1`` 由
+         :data:`TERMINAL_STATUS_WINS` 控制），并把 ``o3_auto_dispatch_ready``
+         置 False —— 348刀10 + 350刀4 + 385 的判据都要求"撤单后不得再派单"。
+      6. 落 ``m433_merged_from`` 留痕（条数 / 来源 id / 时刻 / 批次）。
+
+    ★为什么终态优先于基底 status：基底只按"验证数据最全"选，与"人最后怎么裁"
+      无关。实测那组里 wont_fix 的 ``wont_fix_at``=1792740262 晚于基底
+      （approved 行）的 ``runtime_verify_last_attempt_at``=1792736813 ——
+      若按基底保留 approved，`clear_cancelled_pending` 的 `_wont` 映射会丢掉
+      这个 id，那条补丁就重新具备被派单的资格。
+    """
+    _recs = [r for r in group if isinstance(r, dict)]
+    if not _recs:
+        return {}
+    if len(_recs) == 1:
+        return dict(_recs[0])
+
+    # ① 基底：验证结论最新最全的一条
+    _base = _recs[0]
+    for _r in _recs[1:]:
+        if attempt_ts(_r) >= attempt_ts(_base):
+            _base = _r
+    _out = dict(_base)
+
+    # ② 其余行的非空字段只补基底的空缺
+    for _r in _recs:
+        if _r is _base:
+            continue
+        for _k, _v in _r.items():
+            if _k in ("status", "status_history"):
+                continue
+            if _is_blank(_out.get(_k)) and not _is_blank(_v):
+                _out[_k] = _v
+
+    # ③ status_history：并集
+    _sh, _seen = [], set()
+    for _r in _recs:
+        for _h in _r.get("status_history") or []:
+            if not isinstance(_h, dict):
+                continue
+            _key = (str(_h.get("status") or ""), repr(_h.get("at")))
+            if _key in _seen:
+                continue
+            _seen.add(_key)
+            _sh.append(dict(_h))
+    if _sh:
+        _sh.sort(key=lambda _x: float(_x.get("at") or 0.0))
+        _out["status_history"] = _sh
+
+    # ④ wont_fix_*：撤单理由不得因合并丢失
+    for _k in ("wont_fix_reason", "wont_fix_at", "wont_fix_by"):
+        if not _is_blank(_out.get(_k)):
+            continue
+        for _r in _recs:
+            if not _is_blank(_r.get(_k)):
+                _out[_k] = _r[_k]
+                break
+
+    # ⑤ 状态：人工终态优先
+    _tstat, _tts = "", None
+    if TERMINAL_STATUS_WINS:
+        for _r in _recs:
+            _ts = terminal_ts(_r)
+            if _ts is None:
+                continue
+            if _tts is None or _ts >= _tts:
+                _tstat, _tts = str(_r.get("status") or "").strip().lower(), _ts
+    if _tstat:
+        _out["status"] = _tstat
+        _out["o3_auto_dispatch_ready"] = False
+
+    # ⑥ 追溯
+    _out["m433_merged_from"] = {
+        "n": len(_recs),
+        "ids": [str(_r.get("id") or "") for _r in _recs],
+        "base_attempt_at": attempt_ts(_base),
+        "at": float(now if now is not None else time.time()),
+        "batch": "433",
+    }
+    return _out
+
+
+def upsert_by_id(hist: Any, now: float | None = None) -> tuple:
+    """按 id upsert：同一 id 的多个快照合并成一条（幂等，保持首次出现位置）。
+
+    ★同一实现同时服务于**落盘端**（`PatchManager._save_patch_list`）与
+      **读入端**（`_load_patch_list` / `verify_applied_patches`）——
+      两端用同一规则才不会出现"写进去 1 行、读出来 2 条"。
+
+    Returns:
+        ``(kept, stats)``。``stats`` = ``{before, after, merged, merged_ids}``。
+        非 list 输入 → ``(原输入, 空统计)``。
+    """
+    if not isinstance(hist, list):
+        return hist, {"before": 0, "after": 0, "merged": 0, "merged_ids": []}
+    _out: list = []
+    _groups: dict = {}
+    _pos: dict = {}
+    for _r in hist:
+        if not isinstance(_r, dict):
+            _out.append(_r)
+            continue
+        _id = str(_r.get("id") or "").strip()
+        if not _id:
+            # 无 id 的记录不是"重复"，只是没有标识（与 dedup_history 同裁决）
+            _out.append(_r)
+            continue
+        if _id not in _groups:
+            _groups[_id] = []
+            _pos[_id] = len(_out)
+            _out.append(None)
+        _groups[_id].append(_r)
+    _merged_ids = []
+    for _id, _g in _groups.items():
+        if len(_g) == 1:
+            _out[_pos[_id]] = _g[0]
+            continue
+        _out[_pos[_id]] = merge_group(_g, now=now)
+        _merged_ids.append(_id)
+    return _out, {
+        "before": len(hist),
+        "after": len(_out),
+        "merged": len(_merged_ids),
+        "merged_ids": _merged_ids,
+    }

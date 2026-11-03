@@ -2113,6 +2113,8 @@ class PulseMetricsCollector(BasePulseOrgan):
                         "is_leak_signal": _al.get("is_leak_signal"),
                         "rss_at_10min": _al.get("rss_at_10min"),
                         "steady_growth_mb_per_min": _al.get("steady_growth_mb_per_min"),
+                        # ★433刀4：稳态斜率的真实窗口（秒），进 health_snapshot。
+                        "steady_window_sec": _al.get("steady_window_sec"),
                         "uptime_sec": _al.get("uptime_sec"),
                     }
                     # ★365刀B1：单轨出口 —— 判据只取告警链返回值，不再有第二套计数
@@ -3076,6 +3078,8 @@ class PulseMetricsCollector(BasePulseOrgan):
             "is_leak_signal": _al.get("is_leak_signal"),
             "rss_at_10min": _al.get("rss_at_10min"),
             "steady_growth_mb_per_min": _al.get("steady_growth_mb_per_min"),
+            # ★433刀4：稳态斜率的真实窗口（秒）
+            "steady_window_sec": _al.get("steady_window_sec"),
             "uptime_sec": _al.get("uptime_sec"),
         }
 
