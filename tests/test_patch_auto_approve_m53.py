@@ -215,7 +215,7 @@ class TestPatchAutoApproverDeprecated(unittest.TestCase):
         return _out
 
     def test_40_no_production_call_sites(self):
-        """★核心依据：classify/scan_pending/prune_pending/get_patch_auto_approver 无生产调用点。
+        """★核心依据：classify/scan_pending/get_patch_auto_approver 无生产调用点。
 
         ★408 刀4 改 AST 口径：原实现是 `if _pat in _t` **子串**匹配，被
           `tools/ci/replay_conditional_writes.py:82` 的**回放数据串**
@@ -223,8 +223,22 @@ class TestPatchAutoApproverDeprecated(unittest.TestCase):
           子串匹配分不清"调用"与"提到名字"。查调用点就该看 `ast.Call`。
         ★同时补两条防腐：① 解析失败的文件不许被悄悄跳过（跳过 = 少扫一个
           还宣布"没有调用点"）；② 扫描面下限，防目录结构一变就空转成假绿。
+
+        ★438 刀1 **规格变更（本条断言的规格被任务书推翻）**：
+          旧规格「prune_pending 无生产调用点」正是病根 —— 11-03 实测 pending 9 条里
+          8 条已被 `classify()` 判 reject_stale，却因为**没有人调 prune_pending**
+          而永远躺在池里。任务书 438 刀1 明确要求「把 8 条移出 pending」，
+          故本断言改为：**只允许** `main.py` 与 `nucleus/reasoning/PatchManager.py`
+          这两处调用 `PatchAutoApprover` / `prune_pending`，其余符号仍无生产调用点。
+          回滚点：撤掉这两处接线后，把 `_ALLOWED` 置空即回到旧规格。
         """
         _self_rel = os.path.join("nucleus", "evolution", "PatchAutoApprover.py")
+        #: ★438 刀1：唯一允许的生产调用点（启动清理 + 入队口节流清理）
+        _ALLOWED = frozenset({
+            "main.py",
+            os.path.join("nucleus", "reasoning", "PatchManager.py"),
+        })
+        _ALLOWED_NAMES = frozenset(("PatchAutoApprover", "prune_pending"))
         _prod = []
         _parse_err = []
         _scanned = 0
@@ -246,7 +260,14 @@ class TestPatchAutoApproverDeprecated(unittest.TestCase):
                          "有文件解析失败 → 扫描不完整：%s" % _parse_err)
         self.assertGreater(_scanned, 200,
                            "扫描面 %d 太小，断言可能是空转" % _scanned)
-        self.assertEqual(_prod, [], "PatchAutoApprover 出现生产调用点 → deprecated 结论失效")
+        _bad = [x for x in _prod
+                if not (x[0] in _ALLOWED and x[2] in _ALLOWED_NAMES)]
+        self.assertEqual(_bad, [],
+                         "PatchAutoApprover 出现**未授权**的生产调用点 → deprecated 结论失效")
+        # ★438 刀1 正向判据：清理接线必须真的在，否则本批的清堵等于没做
+        self.assertTrue(
+            any(x[2] == "prune_pending" and x[0] in _ALLOWED for x in _prod),
+            "438刀1 的队列清理接线消失了（prune_pending 又变回无人调用）")
 
     def test_41_module_docstring_marks_deprecated(self):
         _doc = ast.get_docstring(ast.parse(_read("nucleus/evolution/PatchAutoApprover.py"))) or ""

@@ -5005,6 +5005,23 @@ def main():
                 ",".join(_m423_rec.get("recovered_ids") or [])[:200])
         except Exception as _m423_ar_e:
             silent_exc(_m423_ar_e, "main.py[423刀3-归档回收]", level="debug")
+        # ★438刀1：队列清堵 —— 启动时先把「按龄过期 / 内容 obsolete」的件归档出 pending。
+        #   为什么必须紧跟回收之后：11-03 16:05 回收器用 30 天阈值捞回 8 条（年龄 10.1~10.2 天），
+        #   而 `PatchAutoApprover.classify()` 用 7 天阈值判它们 **reject_stale**。
+        #   判定一直在跑，**执行从来没人调**（`prune_pending()` 全仓无调用方）⇒ 队列只进不出。
+        #   ★归档目标沿用 `prune_pending` 内既有实现（`pending_patches_resolved.json`），
+        #     不另造 `pending_archived.json` —— 两个归档文件会各说各话。
+        try:
+            from nucleus.evolution.PatchAutoApprover import (
+                PatchAutoApprover as _m438_paa,
+            )
+            _m438_pr = _m438_paa().prune_pending()
+            logging.getLogger("pulse").info(
+                "[438刀1] 队列清理 pruned=%s remaining=%s skipped=%s err=%s",
+                _m438_pr.get("pruned"), _m438_pr.get("remaining"),
+                _m438_pr.get("skipped_by_flag"), _m438_pr.get("error") or "-")
+        except Exception as _m438_pr_e:
+            silent_exc(_m438_pr_e, "main.py[438刀1-队列清理]", level="warning")
         # ★422刀4：周期 flush 的墙钟节流（与夜间编排同款 60s，避免每拍 stat 状态文件）
         _m422_fl_last_ts = 0.0
         while not exit_requested:

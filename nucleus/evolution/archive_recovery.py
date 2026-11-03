@@ -49,8 +49,30 @@ _M423_K3_VERSION = "423.1"
 #: 灰度开关（config 登记）。关掉时入口直接返回 status=disabled，零副作用。
 RECOVER_SWITCH = "ENABLE_M423_ARCHIVE_RECOVERY"
 
-#: 太老的不回收（任务书：超过 30 天的不要）
-MAX_AGE_DAYS = 30.0
+#: 太老的不回收。
+#: ★438刀1：30 → **7**，与 `PATCH_AUTO_APPROVE_STALE_DAYS` 同源。
+#:   改前实测（`data/patches/archive_recovery_log.jsonl`）：
+#:     11-03 16:05:32 recovered=**8**，`max_age_days=30.0`，`oldest_age_days=10.22`；
+#:     随后每轮 recovered=0 + `skip_already_pending=8` —— 即这 8 条**在池里**。
+#:   而 `PatchAutoApprover.classify()` 用的是 7 天阈值 ⇒ 这 8 条**全部判 reject_stale**。
+#:   两头阈值不一致 ⇒ 「回收器捞回来、审批器立刻判死」的循环空转，队列永远清不干净。
+#:   现在两者读同一个 config 键，**回收器永远不会捞回审批器认为已过期的件**。
+MAX_AGE_DAYS = 7.0
+
+
+def max_age_days_cfg() -> float:
+    """回收年龄阈值：与 `PATCH_AUTO_APPROVE_STALE_DAYS` **同源**（缺省 7）。
+
+    取不到 config 时回落到模块常量（仍是 7.0），绝不回落到 30 —— 那会把
+    「回收即死」重新引回来。
+    """
+    try:
+        import config as _c
+        _v = float(getattr(_c, "PATCH_AUTO_APPROVE_STALE_DAYS", MAX_AGE_DAYS))
+        return _v if _v > 0 else MAX_AGE_DAYS
+    except Exception as _e:
+        silent_exc(_e, where="evolution.archive_recovery:max_age_days_cfg", level="debug")
+        return MAX_AGE_DAYS
 
 #: 单次回收上限（防一次把 pending 灌爆）
 MAX_RECOVER = 20
@@ -156,7 +178,7 @@ def _m423_k3_age_days(row: dict, now: float) -> float | None:
 def select_recoverable(rows: list[dict[str, Any]], now: float,
                        pending_ids: set[str] | None = None,
                        dead_ids: set[str] | None = None,
-                       max_age_days: float = MAX_AGE_DAYS,
+                       max_age_days: float | None = None,
                        max_recover: int = MAX_RECOVER,
                        ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """逐条判据筛出可回收件；**每个排除理由都单独计数**（便于写报告）。
@@ -172,6 +194,9 @@ def select_recoverable(rows: list[dict[str, Any]], now: float,
     """
     _pend = set(pending_ids or set())
     _dead = set(dead_ids or set())
+    # ★438刀1：None ⇒ 取「与 PATCH_AUTO_APPROVE_STALE_DAYS 同源」的阈值（缺省 7）。
+    if max_age_days is None:
+        max_age_days = max_age_days_cfg()
     _picked: list[dict[str, Any]] = []
     _st: dict[str, Any] = {
         "scanned": 0, "recoverable": 0,
@@ -317,7 +342,7 @@ def recover(root: str, now: float | None = None,
             archive_path: str | None = None, pending_path: str | None = None,
             dead_path: str | None = None, ledger_path: str | None = None,
             dry_run: bool = False,
-            max_age_days: float = MAX_AGE_DAYS,
+            max_age_days: float | None = None,
             max_recover: int = MAX_RECOVER) -> dict[str, Any]:
     """扫一遍 archive，把符合条件的件重新入池（**启动时调一次**）。
 
@@ -337,6 +362,9 @@ def recover(root: str, now: float | None = None,
         ``dry_run`` / ``written`` / ``write_failed`` / ``skipped_bad_pending``
     """
     _now = float(time.time() if now is None else now)
+    # ★438刀1：None ⇒ 同源阈值（7），绝不再回落到 30。
+    if max_age_days is None:
+        max_age_days = max_age_days_cfg()
     _out: dict[str, Any] = {
         "status": "no_archive", "shape": "unknown", "archive_rows": 0,
         "pending_before": 0, "pending_after": 0, "recovered": 0,

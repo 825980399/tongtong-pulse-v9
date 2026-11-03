@@ -5981,6 +5981,31 @@ M437_BACKUP_MAX_AGE_DAYS = 7
 M437_BACKUP_KEEP_GENERATIONS = 1
 M437_BACKUP_SWEEP_ENABLED = True
 M437_BACKUP_SWEEP_MIN_INTERVAL_HOURS = 24
+
+# ===== ★438批：进化闭环第一阶段（清堵 + 补证）=====
+# 刀1（队列治理）：
+#   M438_PRUNE_INTERVAL_SEC —— 入队口清理节流（`PatchAutoApprover.prune_pending()`）。
+#   回收年龄阈值不在这里：`archive_recovery` 直接读 `PATCH_AUTO_APPROVE_STALE_DAYS`
+#   （=7），与审批器**同源**，杜绝「回收器 30 天捞回、审批器 7 天判死」的空转。
+M438_PRUNE_INTERVAL_SEC = 3600.0
+
+# 刀2（基线探针）：入队口记录「修复前日志窗口内的错误数」。
+#   ENABLE_M438_BASELINE_PROBE=False ⇒ 入队口不写任何 baseline_* 字段（逐字回退）。
+#   M438_BASELINE_SHADOW=True       ⇒ 只记录、不回溯改写历史件的判定（默认影子）。
+#   M438_BASELINE_WINDOW_HOURS      ⇒ 基线窗口长度（默认 24h）。
+#   M438_BASELINE_LOG_FRESH_SEC     ⇒ 日志末行比窗口终点早过这么多秒 ⇒ 判「窗口未覆盖」。
+ENABLE_M438_BASELINE_PROBE = True
+M438_BASELINE_SHADOW = True
+M438_BASELINE_WINDOW_HOURS = 24.0
+M438_BASELINE_LOG_FRESH_SEC = 3600.0
+#   实测 pulse.log 首行只到当天 03:00 ⇒ 请求 24h 时只能取「请求 ∩ 实际覆盖」。
+#   低于这个下限的观测窗口不配叫基线（写 None + unavailable）。
+M438_BASELINE_MIN_WINDOW_HOURS = 0.5
+
+# 刀3（延迟复验闸门）：after==0 **且 baseline>0** 才算 verified；
+#   baseline 缺失/为 0 ⇒ runtime_undecidable（与 verify_fix_from_logs 的 T-99d 口径对齐）。
+#   False ⇒ 逐字回到 `verified = (after == 0)` 旧判据。
+ENABLE_M438_DELAYED_VERIFY_STRICT = True
 PARQUET_COMPRESSION = "snappy"
 PARQUET_SHARD_BY_EVOL_LEVEL = True
 PARQUET_BATCH_SIZE = 5000

@@ -39,6 +39,24 @@ from nucleus.reasoning.SelfCalibrator import evidence_confidence as _evidence_co
 
 _module_logger = get_module_logger("SafeEvolutionExecutor")
 
+# ===== ★438批 刀3：延迟复验的「基线不可判定」闸门 =====
+# 背景（T0 实测）：本文件延迟复验段旧判据是 `verified = (after == 0)`，
+#   **baseline=0 也判通过**。而 `verify_fix_from_logs()`（同文件 2850 行起）早在
+#   T-99d 就已把 baseline=0 判为 `undecidable` —— 同一条链上两个口径，互相打架。
+#   实测 pending 9 条里 8 条 baseline_errors=0 却 status=runtime_verified。
+# 口径（与 verify_fix_from_logs 对齐）：
+#   after==0 且 baseline>0  ⇒ verified
+#   baseline 缺失/为 0      ⇒ runtime_undecidable（**不是** runtime_verified，也不是 failed）
+# 回退：ENABLE_M438_DELAYED_VERIFY_STRICT=False ⇒ 逐字回到 `after == 0` 旧判据。
+def _m438_strict_verify_on() -> bool:
+    """`ENABLE_M438_DELAYED_VERIFY_STRICT`（缺省 True）。"""
+    try:
+        import config as _c
+        return bool(getattr(_c, "ENABLE_M438_DELAYED_VERIFY_STRICT", True))
+    except Exception as _e:
+        silent_exc(_e, where="SafeEvolutionExecutor::_m438_strict_verify_on", level="debug")
+        return True
+
 # _m422_k1_statement_block_clip
 # ===== ★422批 刀1：片段按「完整语句块」边界截断 =====
 # 背景（T0 实测，非推测）：`_read_snippet_from_file` 原实现是「从 def 行硬取 40 行」。
@@ -3003,6 +3021,7 @@ class SafeEvolutionExecutor:
             _effects = []
             _reverified = 0
             _reverify_failed = 0
+            _reverify_undecidable = 0   # ★438刀3：基线不可判定单列，不混进 failed
             _needs_reverify = 0
             _reverify_delay = 3600  # 延迟复验窗口（秒）：到点后重采基线
 
@@ -3051,19 +3070,39 @@ class SafeEvolutionExecutor:
                 # —— 以下为 genuine 修复时间戳存在的正常延迟复验 ——
                 _rafter = self._count_errors_for_location(
                     _rfile, _rmethod, since=_rfixed)
-                _rbaseline = _patch.get("baseline_errors") or 0
+                # ★438刀3：baseline 允许 None（438刀2 的探针取不到窗口时写 None，
+                #   老件则可能根本没有这个键）。旧代码 `or 0` 把 None 折成 0，
+                #   与「真的 0 条错」不可区分 —— 而这正是假成功的温床。
+                _rb_raw = _patch.get("baseline_errors", None)
+                _rbaseline = (int(_rb_raw)
+                              if isinstance(_rb_raw, (int, float))
+                              and not isinstance(_rb_raw, bool) else None)
+                _m438_strict = _m438_strict_verify_on()
+                # 基线缺失/为 0 ⇒ 无错可修 ⇒ 修复效果不可判定（strict 时才闸）
+                _rb_undecidable = bool(
+                    _m438_strict and (_rbaseline is None or _rbaseline <= 0))
+                _rpassed = bool((_rafter == 0) and not _rb_undecidable)
+                if _rb_undecidable:
+                    _rdetail = (f"[延迟复验] 基线不可判定：baseline={_rbaseline!r}"
+                                f"（无错误基线可对比），修复后错误={_rafter}；"
+                                f"按 verify_fix_from_logs 同款口径转 runtime_undecidable")
+                else:
+                    _rdetail = (f"[延迟复验] 重采基线: baseline={_rbaseline}, "
+                                f"修复后错误={_rafter}, "
+                                f'{"通过" if _rpassed else "未通过"}')
                 _rverdict = {
-                    "verified": _rafter == 0,
-                    # ★B2：用真实 baseline（不再硬编码 0）；baseline=0 时问题仍不可判定
-                    "baseline": _rbaseline,
+                    "verified": _rpassed,
+                    # ★B2/★438刀3：用真实 baseline（不再硬编码 0）；
+                    #   baseline 缺失时落 0 仅作**展示**用，判定看 undecidable
+                    "baseline": _rbaseline if _rbaseline is not None else 0,
+                    "baseline_known": _rbaseline is not None,
                     "after_fix": _rafter,
                     "post_apply_errors": _rafter,
                     "effectiveness": (round((_rbaseline - _rafter) / float(_rbaseline), 4)
                                       if _rbaseline else None),
                     "new_issues": _rafter,
-                    "detail": (f"[延迟复验] 重采基线: 修复后错误={_rafter}, "
-                               f'{"通过" if _rafter == 0 else "未通过"}'),
-                    "undecidable": False,
+                    "detail": _rdetail,
+                    "undecidable": _rb_undecidable,
                 }
                 _patch["runtime_verify_result"] = _rverdict
                 # ★第116批 T-116b：顶层 runtime_verified 取嵌套真值（原恒 True，
@@ -3073,9 +3112,15 @@ class SafeEvolutionExecutor:
                 _patch["reverify_count"] = int(_patch.get("reverify_count", 0)) + 1
                 self._m84_recompute_split(_patch)
                 self._learn_from_verification(_patch, _rverdict)
-                if _rafter == 0:
+                if _rpassed:
                     _reverified += 1
                     _patch["status"] = "runtime_verified"
+                elif _rb_undecidable:
+                    # ★438刀3：不可判定**既不算通过也不算失败** —— 不置 needs_repair、
+                    #   不触发回滚（回滚一个可能真修好了的补丁，是比假成功更贵的错）。
+                    _reverify_undecidable += 1
+                    _patch["status"] = "runtime_undecidable"
+                    _patch["needs_runtime_verify"] = False
                 else:
                     _reverify_failed += 1
                     _patch["status"] = "runtime_failed"
@@ -3101,7 +3146,7 @@ class SafeEvolutionExecutor:
                                 f"[延迟复验] 失败补丁回滚异常: {_rb_e}")
                 _module_logger.info(
                     f"[延迟复验] 到点重采基线: {os.path.basename(_rfile)}.{_rmethod} "
-                    f'-> {"runtime_verified" if _rafter == 0 else "runtime_failed"}')
+                    f'-> {_patch.get("status")}')
 
             for _patch in _pending:
                 if not _patch.get("needs_runtime_verify"):

@@ -2936,6 +2936,32 @@ class PatchManager:
                     _sw["archived"], ",".join(_sw.get("archived_ids") or [])[:200])
         except Exception as _sw_e:
             silent_exc(_sw_e, where="nucleus.reasoning.PatchManager::save_pending_patch 323滞留清理", level="warning")
+        # ★438刀1：按龄过期 / 内容 obsolete 的件**归档出** pending（清堵）。
+        #   为什么放在入队口：队列被触碰时才需要清理，不新增调度面（与 323刀3 同款思路）。
+        #   为什么必须节流：`classify()` 的 obsolete 判据要读目标文件，每次入队都跑会
+        #   把入队路径变成 IO 密集；1h 一次足够（7 天阈值下不存在秒级过期的件）。
+        #   为什么必须有这一句：`PatchAutoApprover.prune_pending()` 原本**全仓无调用方**
+        #   ⇒ 判定天天在跑、队列从不回收（11-03 实测 9 条 pending 里 8 条已判 reject_stale
+        #   却仍躺在池里，其中 2 条 obsolete）。启动时另有一次（main.py[438刀1]）。
+        try:
+            _m438_now = time.time()
+            import config as _m438_cfg  # 本模块无模块级 config 导入，按 240 行同款就地取
+            _m438_iv = float(getattr(_m438_cfg, "M438_PRUNE_INTERVAL_SEC", 3600.0) or 3600.0)
+            if (_m438_now - float(getattr(PatchManager, "_m438_last_prune_at", 0.0) or 0.0)
+                    >= _m438_iv):
+                PatchManager._m438_last_prune_at = _m438_now
+                from nucleus.evolution.PatchAutoApprover import (
+                    PatchAutoApprover as _m438_paa,
+                )
+                _m438_pr = _m438_paa().prune_pending()
+                if _m438_pr.get("pruned"):
+                    _module_logger.info(
+                        "[438刀1] 入队口清理：归档 %s 条（remaining=%s）",
+                        _m438_pr.get("pruned"), _m438_pr.get("remaining"))
+        except Exception as _m438_pr_e:
+            silent_exc(_m438_pr_e,
+                       where="nucleus.reasoning.PatchManager::save_pending_patch 438队列清理",
+                       level="warning")
         # ★323批刀2（P-03）：入队前先做「真值归一」——AST enclosing def 为唯一真值
         #   回填 method、统一 re-indent。280 的拒收闸门保留兜底（只拦真异常）。
         try:
@@ -3411,6 +3437,23 @@ class PatchManager:
                         f"(原错误: {_hist.get('apply_error', '未知')})")
                     return
 
+        # ★438刀2：入队口写「修复前基线」——没有基线的 verified 是自证。
+        #   为什么在入队口而不是验证时：验证发生在修复**之后**，那时日志里已经
+        #   看不到"修复前那 24 小时"了（只能靠历史日志考古，而日志会轮转）。
+        #   取不到 ⇒ baseline_errors=None + source="unavailable"，**绝不填 0**。
+        try:
+            from nucleus.evolution.baseline_probe import apply_to_patch as _m438_bp
+            _m438_bpr = _m438_bp(patch)
+            if _m438_bpr.get("applied"):
+                _module_logger.info(
+                    "[438刀2] 基线探测 %s:%s → baseline=%s source=%s shadow=%s (%s)",
+                    patch.get("file", ""), patch.get("method", ""),
+                    patch.get("baseline_errors"), patch.get("baseline_source"),
+                    patch.get("baseline_shadow"), patch.get("baseline_detail", ""))
+        except Exception as _m438_bp_e:
+            silent_exc(_m438_bp_e,
+                       where="nucleus.reasoning.PatchManager::save_pending_patch 438基线探测",
+                       level="warning")
         pending.append(patch)
         self._save_patch_list(self._pending_file, pending)
         PatchManager._enqueue_count += 1
