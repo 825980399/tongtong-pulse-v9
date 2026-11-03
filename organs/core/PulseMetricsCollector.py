@@ -246,6 +246,9 @@ _M421_PC_FIELDS = ("gen", "queue", "apply", "ledger")
 _m421_pc_cache: dict = {"at": 0.0, "data": None}
 _m421_pc_lock = threading.Lock()
 
+#: ★442刀2：degraded 告警节流用的时间戳（10 分钟一条）
+_M442_DEGRADED_WARN_AT = 0.0
+
 
 def _m421_today_bounds() -> tuple:
     """本地「今天」的 [起, 止) epoch。
@@ -410,6 +413,20 @@ def _m421_patch_chain_read(root: str | None = None) -> dict:
                 and _ap == 0 and _qu > 0):
             _out["state"] = "degraded"
             _out["state_reason"] = f"apply=0 但 pending={_qu}"
+            # ★442刀2：degraded 要有告警出口 —— 441 实测"降级了没有任何程序据此动作"。
+            #   放在这里（读数点）而不是看板：机器也要能看见。10 分钟一条，防刷屏。
+            try:
+                global _M442_DEGRADED_WARN_AT
+                if time.time() - float(_M442_DEGRADED_WARN_AT or 0) >= 600.0:
+                    _M442_DEGRADED_WARN_AT = time.time()
+                    import logging as _lg442
+                    _lg442.getLogger("pulse.module.PulseMetricsCollector").warning(
+                        "[442刀2][补丁链降级] patch_chain.state=degraded：%s "
+                        "（gen=%s queue=%s apply=%s ledger=%s）｜"
+                        "处置：查审批是否卡住/派单是否选中/基线闸门是否拦截",
+                        _out.get("state_reason"), _out.get("gen"), _qu, _ap, _out.get("ledger"))
+            except Exception as _w_e:
+                silent_exc(_w_e, where="PulseMetricsCollector::_m442_degraded_warn", level="debug")
     except Exception as _e:
         silent_exc(_e, where="PulseMetricsCollector::_m421_patch_chain_read degraded", level="debug")
     _out["errors"] = _errs

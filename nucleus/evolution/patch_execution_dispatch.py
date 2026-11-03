@@ -60,6 +60,29 @@ def _m343_o3_stable_id(file_norm, method: str,
 _DISPATCH_INTERVAL_DEFAULT_SEC = 86400.0
 _last_dispatch_ts: float | None = None
 
+#: ★442刀1：O3 开闸结论的**独立**节拍时间戳。
+#   为什么必须独立：`PATCH_DISPATCH_INTERVAL_SEC=3600` + 框架频繁重启 ⇒
+#   `dispatch_on_tick` 永远停在首次 `armed`，第二拍永不发生
+#   ⇒ `_m335_o3_consume()` 一次都没跑过 ⇒ 5.6 万行日志里 `[340判死]` 0 条
+#   ⇒ streak 永远推不动（它需要**连续 3 个不同 tick** 全绿）。
+_last_o3_gate_ts: float | None = None
+
+
+def _o3_gate_interval_sec() -> float:
+    """O3 开闸结论的评估间隔（缺省 300s，下限 60s）。
+
+    只跑 `o3_open_gate_report()` 的**只读判定** + 入池，不派单、不花钱。
+    """
+    _iv = 300.0
+    try:
+        import config as _cfg
+        _v = getattr(_cfg, "PATCH_O3_GATE_INTERVAL_SEC", 300.0)
+        if _v is not None:
+            _iv = float(_v)
+    except Exception as _e:
+        silent_exc(_e, where="patch_execution_dispatch._o3_gate_interval_sec", level="debug")
+    return max(60.0, _iv)
+
 
 def _dispatch_interval_sec() -> float:
     """读派单最小间隔（秒）；缺失/非法回退日频，下限 60s 防每轮询重入。"""
@@ -446,6 +469,18 @@ def dispatch_on_tick(now: float | None = None) -> dict[str, Any]:
     global _last_dispatch_ts
     _now = float(time.time() if now is None else now)
     _iv = _dispatch_interval_sec()
+    # ★442刀1：先按**独立节拍**评估 O3 开闸结论 —— 这一拍与"要不要派单"无关。
+    #   放这里而不是放在 `_last_dispatch_ts` 之后：后者 1h 才轮一次，重启即归零，
+    #   O3 判定就永远等不到第二拍（441 实测 5.6 万行日志 0 条 `[340判死]`）。
+    try:
+        global _last_o3_gate_ts
+        _g_iv = _o3_gate_interval_sec()
+        if _last_o3_gate_ts is None or (_now - float(_last_o3_gate_ts)) >= _g_iv:
+            _last_o3_gate_ts = _now
+            _m335_o3_consume(now=_now)
+    except Exception as _g_e:
+        silent_exc(_g_e, where="patch_execution_dispatch.dispatch_on_tick 442刀1 O3独立节拍",
+                   level="warning")
     if _last_dispatch_ts is None:
         _last_dispatch_ts = _now
         _module_logger.info(
