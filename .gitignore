@@ -182,3 +182,7 @@ _install_cython.bat
 .arts/
 # ★381刀8（T-381-旧探针出索引）：批量 pytest 会重建的探针件，不入库
 tests/_probe_py_m162.py
+
+# ★443刀4（git 回弹）：仓库根的 micromamba 可执行件 —— 实测 **0 字节**（下载失败残留），
+# 属本机工具而不是项目产物，不该入库，也不该每批都挂在 git status 上。
+/micromamba.exe
