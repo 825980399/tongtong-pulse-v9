@@ -1055,8 +1055,15 @@ class PulseLung(BasePulseOrgan):
         #   未接线（None→记 unavailable），零行为；实弹刀（推 200）注入真实 retriever。
         _v2_frag = ""
         try:
+            # ★452刀1（P0-1a）：把同一次只读检索的命中正文/来源/score 落 dry-run 留痕。
+            #   ★零行为变化：只多一个回调，不重复检索、不落 prompt、不改缓存。
+            def _m452_sink(_q, _hits):
+                from nucleus.evidence_trace import note_hits as _m452_note
+                _m452_note(_q, _hits, top_k=3)
+
             _v2_frag = build_shadow_v2_fragment(
-                getattr(self, "_shadow_v2_retriever", None), prompt, top_k=3)
+                getattr(self, "_shadow_v2_retriever", None), prompt, top_k=3,
+                evidence_sink=_m452_sink)
         except Exception as _e:
             silent_exc(_e, "organs/body/PulseLung.py:_build_channel_messages:shadow_v2",
                        level="debug")

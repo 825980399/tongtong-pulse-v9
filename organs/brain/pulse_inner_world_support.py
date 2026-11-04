@@ -29,6 +29,13 @@ from nucleus.diagnostics import get_diagnostics
 from nucleus.iw_text_guard import _search_prefix_pattern
 from nucleus.knowledge.PlaceholderSanitizer import contains_placeholder_literal
 
+#: ★452刀2：寒暄/身份问候短语（判"不占环形缓冲"用，只做精确短语匹配）。
+#: 这些是 426 trace 实测里反复出现、且不含任何推理内容的问题。
+_M452_CHITCHAT_PHRASES = (
+    "你好", "早安", "晚安", "在吗", "嗨", "hello", "hi", "陪我",
+    "吃了吗", "最近感觉怎么样", "今天过得怎么样",
+)
+
 
 class PulseInnerWorldSupportMixin:
     """PulseInnerWorld 支撑簇 + 尾块（第137批拆分，纯搬运）"""
@@ -1864,6 +1871,17 @@ class PulseInnerWorldSupportMixin:
                         "confidence": _s.confidence,
                     })
 
+        # ★452刀2（P0-2）：寒暄/身份问候不占 50 条环形缓冲（留给真实问题）。
+        #   判据只用显式短语，不做语义猜测；命中则**只记一个计数**，不 append。
+        #   ★"或单独标 is_chitchat=true" 这条在 dialogue_process_trace 侧实现
+        #     （那边是 JSONL 全量留痕，不占环形缓冲，标记即可）。
+        _m452_chitchat = any(_p in str(question) for _p in _M452_CHITCHAT_PHRASES) \
+            and len(str(question)) <= 20
+        if _m452_chitchat:
+            self._m452_chitchat_skipped = int(
+                getattr(self, "_m452_chitchat_skipped", 0) or 0) + 1
+            return
+
         trace_entry = {
             "timestamp": time.time(),
             "question": question[:100],
@@ -1878,6 +1896,16 @@ class PulseInnerWorldSupportMixin:
             "degraded_to_llm": _degraded_to_llm,
             # ★新增：分步推导轨迹（内部符号推理步骤，可回溯复盘）
             "reasoning_steps": _steps_serialized,
+            # ★452刀2：trace schema 扩字段。
+            #   `steps` 先空着（任务书明写"先空着，后面填"）—— 新 schema 为
+            #   [{idx, type, input, output, confidence, source}]，由后续注入刀填。
+            #   `step_count` 用**真实**已序列化的符号推理步数，不填假 0；
+            #   `evidence_count` 此刻恒 0：刀1 的 evidence 是 dry-run，未注入回答，
+            #   写别的数就是自欺（铁律 30）。
+            "steps": [],
+            "step_count": len(_steps_serialized),
+            "evidence_count": 0,
+            "is_chitchat": False,
         }
         self._inference_trace.append(trace_entry)
         if len(self._inference_trace) > self._max_trace:

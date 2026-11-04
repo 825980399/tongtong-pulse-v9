@@ -86,6 +86,33 @@ def _m407_is_clean(exp: Any) -> bool:
     return True
 
 
+def _m452_is_non_question(question: str) -> bool:
+    """★452刀8：判断这条 `example_question` 是不是**用户提问**（纯函数，可单测）。
+
+    判据（宁少不多：漏挡一条只是多一条噪声，误挡一条会丢真经验）：
+      1. 含搜索语法（`site:` / `-拼音` / `-部首` / `概念 原理`）⇒ 搜索主题；
+      2. 内省/自述标记开头（内化 / 本能——反思 / 第零部分 / 长期规划领域）⇒ 系统自述；
+      3. **既不以问号结尾、也不含任何疑问词** ⇒ 陈述句。
+    ★刻意保留「请推导规则1→A→B」这类无问号但有祈使动词的推理题 —— 它们是真样本。
+    """
+    q = str(question or "").strip()
+    if not q:
+        return True
+    for _sig in ("site:", "-拼音", "-部首", "-笔顺", "概念 原理"):
+        if _sig in q:
+            return True
+    for _sig in ("内化", "本能——反思", "第零部分", "长期规划领域", "自主回顾"):
+        if q.startswith(_sig):
+            return True
+    if q.endswith(("？", "?")):
+        return False
+    for _sig in ("请", "怎么", "如何", "为什么", "是什么", "是不是", "是否",
+                 "会不会", "能不能", "多少", "几个", "吗", "哪", "谁"):
+        if _sig in q:
+            return False
+    return True
+
+
 class ReasoningExperience(SilentLogMixin):
     """
     推理经验管理器。
@@ -415,13 +442,24 @@ class ReasoningExperience(SilentLogMixin):
             confidence: 置信度
         """
         # ★407刀1：代码学习 prompt 不入经验库 —— 它占满 89% 的库容却一条可用都没有。
-        #   放在函数**第一行**（算特征之前）：既省一次特征提取，也保证任何写点都被覆盖。
+        #   ★452 注意：本闸门必须是 `record()` 的**第一个 if**
+        #     （`tests/test_m407_k1_prompt_guard.py::test_50_gate_is_first_if_of_record`
+        #      是规格断言，不是行为断言 ⇒ 452 的非提问闸只能排在它后面）。
         if self._m407_prompt_guard_on() and is_code_learning_prompt(question):
             _n = int(getattr(self, "_m407_prompt_guard_hits", 0)) + 1
             self._m407_prompt_guard_hits = _n
             self._log(LogLevel.DEBUG,
                       f"[407刀1] 代码学习 prompt 不入经验库（累计拦下 {_n} 条）: "
                       f"{str(question)[:48]!r}")
+            return
+
+        # ★452刀8：**非用户提问不入经验库**（紧跟 407 闸，仍在算特征之前，
+        #   因此任何写点都被覆盖）。
+        #   451 移交实测：有效池 15 条里 13 条 `unknown`，其中 5 条是
+        #   `site:baike.baidu.com … -拼音 -部首` 的**搜索主题**、2 条是
+        #   「内化"向善"本能——反思温柔」这类**内省语句**、其余是陈述句。
+        #   给它们补 derivation_type 只会让它们更像"可用经验"，所以这里直接挡住。
+        if _m452_is_non_question(question):
             return
 
         features = self.extract_structural_features(question)
@@ -471,23 +509,50 @@ class ReasoningExperience(SilentLogMixin):
         self._save()
 
     def get_stats(self) -> dict[str, Any]:
-        """获取经验库统计"""
+        """★452刀4（P0-3b）：获取经验库统计，**来源标签不进推理类型分布**。
+
+        病因（11-04 盘面实测）：129 条里 114 条 `derivation_type=remote_api_confirmed`
+        （88.4%），13 条 `unknown`，它们都是**来源/缺省标签**而不是推理类型。
+        旧口径把它们和 `inductive` 一起塞进 `type_distribution`，于是自画像会输出
+        「在 remote_api_confirmed 方面比较有把握」这种鬼话。
+
+        ★`REAL_DERIVATION_TYPES` 与 `PulseInnerWorld._KNOWN_DERIVATION_TYPES`
+          同源（7 类真推理算子 + 452 新增的 failure_mode）。改一处要同步另一处，
+          单测 `test_real_types_与路由白名单一致` 会盯着。
+        """
         sources = {}
         for exp in self._experiences:
             src = exp.get("source", "unknown")
             sources[src] = sources.get(src, 0) + 1
 
-        types = {}
+        types: dict = {}
+        _filtered = 0
         for exp in self._experiences:
-            t = exp.get("derivation_type", "unknown")
+            t = str(exp.get("derivation_type", "unknown") or "unknown")
+            if t not in REAL_DERIVATION_TYPES:
+                _filtered += 1
+                continue
             types[t] = types.get(t, 0) + 1
 
         return {
             "total_experiences": len(self._experiences),
             "source_distribution": sources,
             "type_distribution": types,
+            # ★452刀4：被过滤掉多少条（可审计，不是静默丢弃）
+            "filtered_count": _filtered,
+            "real_type_count": sum(types.values()),
             "max_capacity": self._max_experiences,
         }
+
+#: ★452刀4：**真推理类型**白名单（与 `PulseInnerWorld._KNOWN_DERIVATION_TYPES` 同源）。
+#: `get_stats()` 只统计这些；`remote_api_confirmed` / `unknown` / `quality_feedback`
+#: 之类是**来源或缺省标签**，不是推理类型，不能进自画像的"能力分布"。
+#: ★改这张表必须同步改 PulseInnerWorld 的那张（单测 `test_real_types_与路由白名单一致`）。
+REAL_DERIVATION_TYPES = frozenset({
+    "deductive", "inductive", "analogical", "conflict_resolution",
+    "multi_variable", "long_term_evolution", "meta_reflection",
+    "failure_mode",
+})
 
 # 模块级单例
 

@@ -59,12 +59,16 @@ def throttle_key() -> str:
 
 def build_shadow_v2_fragment(retriever: Callable[[str, int], list[Any]] | None,
                              query_hint: str,
-                             top_k: int = 3) -> str:
+                             top_k: int = 3,
+                             evidence_sink: Callable[[str, list[Any]], None] | None = None) -> str:
     """对 retriever 做一次只读查询，返回待并入影子 INFO 的片段字符串。
 
     - ``retriever`` 为 None 或异常 → 返回 unavailable/error 片段（仍并入同一条
       INFO，便于验收与长期可观测），不抛异常。
     - 仅读取，绝不写入/翻开关/改缓存。
+    - ★452刀1：`evidence_sink(query, hits)` 可选回调 —— 把**这一次已经取到**的
+      hits 交给 dry-run 留痕（不重复检索）。回调异常只记 DEBUG，绝不影响本函数返回。
+      不传 ⇒ 逐字回到 199/239 行为。
     """
     _tk = throttle_key()
     if retriever is None:
@@ -72,6 +76,12 @@ def build_shadow_v2_fragment(retriever: Callable[[str, int], list[Any]] | None,
                 "score分布=无 节流键=%s" % _tk)
     try:
         _hits = retriever(query_hint, top_k) or []
+        if evidence_sink is not None:
+            try:
+                evidence_sink(query_hint, _hits)
+            except Exception as _sink_e:
+                silent_exc(_sink_e, "nucleus/shadow_v2_probe.py:evidence_sink",
+                           level="debug")
         _d = _distribution(_hits)
         return ("[v2只读检索] retriever=available 条数=%d "
                 "score分布=min%s/max%s/mean%s 节流键=%s"

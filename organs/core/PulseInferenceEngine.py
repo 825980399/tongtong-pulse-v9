@@ -23,7 +23,19 @@ from base.BasePulseOrgan import BasePulseOrgan
 from nucleus.const import InferenceEngineEvent, SystemEvent
 
 
-class PulseInferenceEngine(BasePulseOrgan):
+class PulseInferenceCache(BasePulseOrgan):
+    """★452刀5（P0-3c）：本模块是 **KV 缓存**，不是推理引擎。
+
+    历史上类名叫 `PulseInferenceEngine`，但它只做「推理结果本地缓存 / 命中复用」，
+    没有任何推理算子；而且它长期在 `nucleus/organ_loader.py:_OFFLINE_ORGANS`
+    下线名单里（实测 452 T0），框架启动时**根本不会实例化**。留在"推理能力统计"
+    口径里会把缓存命中当推理产出。
+
+    ★只改名 + 改说明：不删器官、不删文件、不改任何方法/行为。
+      `PulseInferenceEngine` 保留为**兼容别名**（见文件末尾）—— main.py 的直接
+      import 和 organ_loader 按文件名 `getattr(module, "PulseInferenceEngine")`
+      都依赖这个名字（铁律 117：换写口 = 换契约）。
+    """
     """脉冲驱动推理引擎（v9.5 分层脉冲版）"""
 
     def __init__(self, organ_name: str = "推理引擎"):
@@ -93,11 +105,11 @@ class PulseInferenceEngine(BasePulseOrgan):
 
 
 if __name__ == "__main__":
-    print("=== PulseInferenceEngine v9.5 分层脉冲自测 ===\n")
+    print("=== PulseInferenceCache v9.5 分层脉冲自测（452刀5 改名）===\n")
     class MockInfoField:
         def __init__(self): self.published = []
         def publish(self, p): self.published.append(p)
-    m = MockInfoField(); e = PulseInferenceEngine("推理引擎"); e.set_info_field(m); e.start()
+    m = MockInfoField(); e = PulseInferenceCache("推理缓存"); e.set_info_field(m); e.start()
     r1 = e.on_pulse({"event_type": InferenceEngineEvent.EXECUTE, "payload": {"query": "曈曈是谁"}, "priority": 6})
     print(f"1. 首次推理: {r1['status']}")
     # 验证推理结果脉冲的 layer 标记
@@ -109,3 +121,13 @@ if __name__ == "__main__":
     s = e.on_pulse({"event_type": SystemEvent.STATUS_REQUEST, "payload": {}, "priority": 5})
     print(f"3. 统计: 推理{s['inference_count']}次, 缓存命中{s['cache_hit_count']}次")
     e.stop(); print("\n=== 自测全部通过 ===")
+
+# ==================== ★452刀5：兼容别名（**不可删**）====================
+# `nucleus/organ_loader.py::load_organs_from_dir` 按**文件名**取属性：
+#     organ_class_name = "PulseInferenceEngine"
+#     organ_class = getattr(module, organ_class_name)
+# main.py 也有 `from organs.core.PulseInferenceEngine import PulseInferenceEngine`。
+# 删掉这个别名 ⇒ 直接 import 失败 / 装配报 AttributeError。
+# 类名改了，但契约口必须留着（铁律 117）；"推理能力统计"里用 `PulseInferenceCache`
+# 这个新名去识别它是缓存，不把它算作推理引擎。
+PulseInferenceEngine = PulseInferenceCache

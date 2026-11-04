@@ -7776,3 +7776,30 @@ M451_UNJUDGED_RENOTIFY_SEC = 3600
 #        high/medium 不受此限（全量保留）；`MAX_POOL_ENTRIES=5000` 仍是总闸。
 M451_MAX_LOW_ENTRIES = 2000
 
+# ==================== ★452批：推理能力 P0 第一批（纯安全刀）====================
+
+# ---- 刀1：检索内容 dry-run ----
+# ENABLE_M452_EVIDENCE_TRACE / M452_EVIDENCE_TRACE_PATH
+#   默认值：True / "data/eval/evidence_trace.jsonl"
+#   语义：影子 v2 探针把**同一次**只读检索的命中正文/来源/score 落盘（一行一条）。
+#        **只记录，不注入 prompt、不改回答、不重复检索**。关 ⇒ 逐字回到 199/239。
+ENABLE_M452_EVIDENCE_TRACE = True
+M452_EVIDENCE_TRACE_PATH = "data/eval/evidence_trace.jsonl"
+
+# ---- 刀3：知识边界判据 ----
+# KNOWLEDGE_BOUNDARY_THRESHOLD
+#   默认值：0.6（**越高越不容易判"越界"**）
+#   语义：相关性判据里 `_overlap_ratio < (1 - 阈值)` 才算"检索结果与问题相关性低"。
+#   ★452 修掉的是 `_core_words` 恒空导致 `_overlap` 恒 0 的时序 bug；本阈值是
+#     观察期的可调旋钮（任务书 §风险提示）。
+KNOWLEDGE_BOUNDARY_THRESHOLD = 0.6
+
+# ---- 刀6：补丁失败经验库 ----
+# ENABLE_PATCH_FAILURE_EXPERIENCE / M452_FAILURE_EXPERIENCE_PATH
+#   默认值：True / "data/patches/failure_experience.jsonl"
+#   语义：验证失败时记一条（error_type/error_msg/file_path/patch_snippet），
+#        补丁生成 prompt 末尾追加「最近 10 类最常见错误」提醒段（≤300 字，幂等）。
+#   ★只追加提醒段，不改既有 prompt 一字。
+ENABLE_PATCH_FAILURE_EXPERIENCE = True
+M452_FAILURE_EXPERIENCE_PATH = "data/patches/failure_experience.jsonl"
+

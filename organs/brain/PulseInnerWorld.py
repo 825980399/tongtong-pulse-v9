@@ -4372,6 +4372,10 @@ class PulseInnerWorld(
             _KNOWN_DERIVATION_TYPES = {
                 "deductive", "inductive", "analogical", "conflict_resolution",
                 "multi_variable", "long_term_evolution", "meta_reflection",
+                # ★452刀8：库里真有 1 条 failure_mode，旧清单没有它 ⇒ 命中即判
+                #   「非法/未知类型 ⇒ 跳过」。登记后不再误报。
+                #   它没有对应的 _derive_* 算子 ⇒ 仍走"仅参考、不当答案"分支。
+                "failure_mode",
             }
             # ★407刀2：清单已提到 `search()` 之前定义（见上），此处只做判断。
             _exp_type = _exp_match.get("derivation_type", "")
@@ -14222,6 +14226,14 @@ class PulseInnerWorld(
         """
         _boundary_signals = []
         _core_words = []
+        # ★452刀3（P0-3a）：**先提取核心词，再判相关性**。
+        #   旧代码 `_core_words` 在此处恒为 `[]`，相关性判断读到空集 ⇒ `_overlap` 恒 0
+        #   ⇒ "检索结果与问题相关性低"这个信号**每次都触发** ⇒ 知识边界恒真，
+        #   系统动不动就说"我不知道"。真正的提取循环原本在 `return None` 之后（#L14261），
+        #   连执行机会都没有。现把它提到所有信号判断之前，下面的原循环保留（幂等去重）。
+        for _w in self._m31_extract_key_terms(question, limit=6):
+            if _w not in _core_words:
+                _core_words.append(_w)
         # 信号1：知识检索结果为空或过短
         if not knowledge_result or len(str(knowledge_result)) < 30:
             _boundary_signals.append("知识检索未命中")
@@ -14242,10 +14254,31 @@ class PulseInnerWorld(
         # ★v22.0方向三修复：增加结果相关性信号
         if knowledge_result:
             _core_words_set = set(_core_words[:5]) if _core_words else set()
-            _result_words = set(re.findall(r'[\u4e00-\u9fff]{2,4}', str(knowledge_result)[:200]))
-            _overlap = len(_core_words_set & _result_words)
-            if _overlap < 1:
-                _boundary_signals.append(f"检索结果与问题相关性低(重叠词={_overlap})")
+            _result_text = str(knowledge_result)[:200]
+            # ★452刀3 第二层 bug：旧口径用 `[\u4e00-\u9fff]{2,4}` 把正文切成
+            #   **2~4 字连续块**，而核心词是 2 字词（"运行"/"日志"）——
+            #   正文里"运行日志"会被切成 4 字块 "运行日志"，集合里根本没有
+            #   "运行" 这个元素 ⇒ `_overlap` 仍然恒 0，光调顺序也救不回来。
+            #   改成"核心词是否出现在正文里"的子串判据，语义才是"相关性"。
+            _overlap = sum(1 for _cw in _core_words_set
+                           if str(_cw) and str(_cw) in _result_text)
+            # ★452刀3：`KNOWLEDGE_BOUNDARY_THRESHOLD`（默认 0.6，越高越不容易判"越界"）
+            #   在这里当作**相关性下限**：重叠率 < (1-阈值) 才算"相关性低"。
+            #   阈值 0.6 ⇒ 重叠率 < 0.4 才触发；配合上面真正提取到的核心词，
+            #   正常问答不会再被"空集 ⇒ 恒 0 重叠"误判。
+            try:
+                import config as _c452b
+                _kb_thr = float(getattr(_c452b, "KNOWLEDGE_BOUNDARY_THRESHOLD", 0.6))
+            except Exception as _kb_e:
+                silent_exc(_kb_e, where="PulseInnerWorld::knowledge_boundary cfg",
+                           level="debug")
+                _kb_thr = 0.6
+            _kb_thr = max(0.0, min(1.0, _kb_thr))
+            _overlap_ratio = _overlap / max(1, len(_core_words_set))
+            if _overlap_ratio < (1.0 - _kb_thr):
+                _boundary_signals.append(
+                    f"检索结果与问题相关性低(重叠词={_overlap}/{len(_core_words_set)}"
+                    f" 重叠率={_overlap_ratio:.2f}<{1.0 - _kb_thr:.2f})")
 
         # 触发条件：≥2个信号，或存在相关性低信号时只需1个其他信号，或置信度极低时1个即可
         _has_low_relevance = any("相关性低" in _s for _s in _boundary_signals)

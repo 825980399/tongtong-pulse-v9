@@ -1547,6 +1547,14 @@ class SafeEvolutionExecutor:
         仍在请求旧模型」——这正是免费额度实际用不上的表现之一。
         """
         record_llm_call(scene or SCENE_EVOLUTION)
+        # ★452刀6：把最近最常见的失败类型拼成 ≤300 字提醒段追加到 prompt 末尾。
+        #   ★只追加、不改既有 prompt 一字；幂等（已含提醒头则原样）。
+        try:
+            from nucleus.patch_failure_experience import append_reminder as _m452_remind
+            prompt = _m452_remind(prompt)
+        except Exception as _m452_pe:
+            silent_exc(_m452_pe, where="SafeEvolutionExecutor::452提醒拼接",
+                       level="debug")
         import json
 
         from nucleus.ssrf_guard import safe_http_json
@@ -6300,7 +6308,18 @@ class SafeEvolutionExecutor:
     def _m114a_register_verify_failure(self, fp: str, detail: str = "") -> None:
         """★断2：验证失败的题登记冷却，避免每轮全量重扫重问。
         同因累计满 3 轮升级到 86400s（日级复检）；落盘见 _m114a_save_cooldown。
+
+        ★452刀6（P0-4）：顺手记一条**失败经验**到 failure_experience.jsonl，
+          供下次补丁生成 prompt 拼"最近易犯错误"提醒段。
+          位置在这里的理由：本方法是所有验证失败路径的**唯一收口**
+          （本地规则验证失败 / 补丁生成失败都调它）。
         """
+        try:
+            from nucleus.patch_failure_experience import record_failure as _m452_rec
+            _m452_rec(str(detail or ""), file_path=str(fp or ""))
+        except Exception as _m452_re:
+            silent_exc(_m452_re, where="SafeEvolutionExecutor::452失败经验登记",
+                       level="debug")
         if not isinstance(self, SafeEvolutionExecutor):
             # ★T-115d：占位/Dummy 实例不应承担冷却落盘职责
             return

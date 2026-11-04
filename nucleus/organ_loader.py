@@ -186,7 +186,10 @@ class OrganLoader:
 
         # ★P3-3修复：已下线器官黑名单（功能被 PulseInnerWorld 推理链路替代，_simulate_inference 为假实现），
         # 跳过自动加载以消除「订阅了 inference.execute 却无人发射」的幽灵监听。
-        _OFFLINE_ORGANS = {"PulseInferenceEngine"}
+        # ★452刀5：类名改成 PulseInferenceCache 后，这里仍按**文件名**判（键没变），
+        #   但把新旧两个名字都列上，防止将来有人按类名过滤时把它意外装配起来 ——
+        #   它一旦被装配就会订阅 inference.execute，属于**行为变化**，本批不允许。
+        _OFFLINE_ORGANS = {"PulseInferenceEngine", "PulseInferenceCache"}
         for file_name in sorted(os.listdir(organs_dir)):
             if not file_name.endswith(".py") or file_name.startswith("_"):
                 continue

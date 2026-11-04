@@ -214,6 +214,12 @@ def _sanitize(rec: dict) -> dict:
         "channel_reason": _clip(rec.get("channel_reason"), 120),
         "method": _clip(rec.get("method"), 40),
         "answer_preview": _clip(rec.get("answer_preview"), 120),
+        # ★452刀2：finish() 传进来的步数/证据数/寒暄标记。
+        #   `_sanitize` 是**显式白名单**，不加这三行的话 finish(step_count=…)
+        #   会被静默丢掉 —— 这是本刀最容易漏的地方。
+        "step_count": rec.get("step_count"),
+        "evidence_count": rec.get("evidence_count"),
+        "is_chitchat": bool(rec.get("is_chitchat") or False),
         "latency_ms": rec.get("latency_ms"),
         "error": _clip(rec.get("error"), 120) or None,
     }
@@ -255,7 +261,11 @@ def _finish_one(correlation_id: str, stage: str = "finished", **fields) -> dict 
 
 
 def finish(correlation_id: str, **fields) -> dict | None:
-    """收口并落盘一行。返回落盘的内容（供单测/活体自检），失败返回 None。"""
+    """收口并落盘一行。返回落盘的内容（供单测/活体自检），失败返回 None。
+
+    ★452刀2：支持 `step_count` / `evidence_count` / `is_chitchat` 三个新字段
+      （已在 `_sanitize` 白名单里登记）。不传 ⇒ 落 None / False，**不填假 0**。
+    """
     if not enabled():
         return None
     try:

@@ -213,7 +213,7 @@ from organs.core.PulseHealthMonitor import (
     PulseHealthMonitor,  # 健康监控: 四级异常分级/告警触发  # noqa: F401
 )
 from organs.core.PulseInferenceEngine import (
-    PulseInferenceEngine,  # 推理引擎: 统一推理接口/KV缓存 # noqa: F401
+    PulseInferenceEngine,  # ★452刀5：兼容别名，本体已改名"推理缓存"（KV缓存，非推理引擎） # noqa: F401
 )
 from organs.core.PulseMetricsCollector import (
     PulseMetricsCollector,  # 指标采集器: 分子/细胞/器官三级采集+可观测性 # noqa: F401
@@ -2161,7 +2161,11 @@ class PulseFramework:
         self.metrics_collector = _core_result.get("PulseMetricsCollector")
         if self.metrics_collector:
             self.metrics_collector.set_node_pool(self.node_pool)
-        self.inference_engine = _core_result.get("PulseInferenceEngine")
+        # ★452刀5：装配键仍按**文件名**（PulseInferenceEngine），且该器官在
+        #   organ_loader._OFFLINE_ORGANS 里长期下线 ⇒ 这里恒为 None，与改名前逐字一致。
+        #   保留向后兼容查找，再兼容新名（未来若真启用缓存器官，不必再改这里）。
+        self.inference_engine = (_core_result.get("PulseInferenceEngine")
+                                 or _core_result.get("PulseInferenceCache"))
         self.device_manager = _core_result.get("PulseDeviceManager")
         if self.device_manager:
             self.device_manager.set_sensor(self.sensor)
