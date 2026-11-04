@@ -39,6 +39,25 @@ from nucleus.reasoning.SelfCalibrator import evidence_confidence as _evidence_co
 
 _module_logger = get_module_logger("SafeEvolutionExecutor")
 
+
+#: ★445刀2：连续 no_def 作废后追加到 prompt 末尾的**硬性要求**。
+#:   抽成模块级纯函数：可单测、可 grep、不掺进生成器内部策略字段。
+M445_FULL_DEF_REQUIREMENT = (
+    "【硬性要求 · 445】必须输出**完整方法定义**："
+    "第一行就是 `def <方法名>(self, ...):`"
+    "（含 self、完整参数列表与类型标注），不要只给方法体。"
+    "上一版因缺少 def 签名被判结构缺陷作废。"
+)
+
+
+def _m445_append_full_def_requirement(prompt: str, issue: dict | None) -> str:
+    """若 `issue["m445_require_full_def"]` 为真，把硬性要求追加到 prompt 末尾。"""
+    if not isinstance(issue, dict) or not issue.get("m445_require_full_def"):
+        return prompt
+    if M445_FULL_DEF_REQUIREMENT in str(prompt or ""):
+        return prompt
+    return str(prompt or "") + chr(10) + chr(10) + M445_FULL_DEF_REQUIREMENT
+
 # ===== ★438批 刀3：延迟复验的「基线不可判定」闸门 =====
 # 背景（T0 实测）：本文件延迟复验段旧判据是 `verified = (after == 0)`，
 #   **baseline=0 也判通过**。而 `verify_fix_from_logs()`（同文件 2850 行起）早在
@@ -1783,6 +1802,10 @@ class SafeEvolutionExecutor:
             _prompt = _generator.build_prompt(
                 _strategy, issue, local_analysis=_local_analysis,
                 code_snippet=code_snippet, related_logs=related_logs)
+            # ★445刀2：连续 no_def 作废后，#加一段**硬性要求**（不换 strategy 结构，
+            #   只在末尾追加约束）——换模板可以，但不动生成器内部策略字段，
+            #   避免把 114 批的指纹台账/追问逻辑一起改坏。
+            _prompt = _m445_append_full_def_requirement(_prompt, issue)
 
             # ★第114批 T-114a（断5）：指纹咨询台账硬闸。
             #   同指纹问题若已 ≥3 次咨询且无任何成功记录，跳过本轮 LLM 问询，
@@ -6477,6 +6500,27 @@ class SafeEvolutionExecutor:
                 "history_experience": self._patch_manager._load_history_experience(
                     plan.get("type", "")),
             }
+            # ★445刀2：读生成侧反馈 —— 同一 (file, method) 连续 2 次因缺 def 被作废，
+            #   本轮改用「完整方法」硬要求（见 _call_llm_for_repair 的 tail 追加）。
+            #   7 天窗口（`M445_FEEDBACK_WINDOW_DAYS`），过期不记，避免永久记忆。
+            _m445_strategy = "unchanged"
+            _m445_streak = 0
+            try:
+                from nucleus.evolution import criteria_window as _cw445
+                _m445_st = _cw445.no_def_streak(str(file_path or ""), str(method_name or ""))
+                _m445_streak = int(_m445_st.get("streak") or 0)
+                _m445_need = int(getattr(config, "M445_REQUIRE_FULL_DEF_STREAK", 2))
+                if _m445_streak >= _m445_need:
+                    _issue["m445_require_full_def"] = True
+                    _m445_strategy = "require_full_def"
+                _module_logger.info(
+                    "[445刀2] 生成策略=%s（同 (file,method) 近 %s 天连续 no_def=%d，阈值=%d）"
+                    " file=%s method=%s",
+                    _m445_strategy, _m445_st.get("window_days"), _m445_streak,
+                    _m445_need, file_path, method_name)
+            except Exception as _fb_e:
+                silent_exc(_fb_e, where="SafeEvolutionExecutor::_generate_llm_patch 445反馈",
+                           level="debug")
             # 关联日志（若有）
             _related_logs = self._find_related_logs(file_path, method_name)
             # 调用 LLM 生成修复（单文件）

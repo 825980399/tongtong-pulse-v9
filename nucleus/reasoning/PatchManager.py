@@ -21,6 +21,7 @@ import os
 import shutil
 import subprocess
 import sys
+import textwrap
 import time
 from typing import Any, ClassVar
 
@@ -2569,6 +2570,16 @@ class PatchManager:
             return True
         return str(patch.get("source") or "") in PatchManager._M343_AUTO_FIX_SOURCES
 
+    @staticmethod
+    def _m445_full_def_need() -> int:
+        """连续多少次 no_def 后要求生成器输出**完整方法**（默认 2）。"""
+        try:
+            import config as _c445b
+            return max(1, int(getattr(_c445b, "M445_REQUIRE_FULL_DEF_STREAK", 2)))
+        except Exception as _e:
+            silent_exc(_e, where="PatchManager::_m445_full_def_need", level="debug")
+            return 2
+
     def _m280_converge_pending(self, data):
         # ★280批刀4：pending 队列落盘前状态机收敛。
         #   ① applied=True 即出队（不再留在 pending）；
@@ -2636,6 +2647,27 @@ class PatchManager:
                 except Exception as _cw_e:
                     silent_exc(_cw_e, where="PatchManager::_m280 344作废台账",
                                level="warning")
+                # ★445刀2：把「因缺 def 被作废」反馈给生成侧（回灌）。
+                #   只在 `no_def`（不是 def 名错配）时反馈 —— 错配是生成器写错了名字，
+                #   换模板解决不了。连续次数写进台账，生成侧据此决定是否换模板。
+                if _no_def and not _mismatch:
+                    try:
+                        from nucleus.evolution import criteria_window as _cw2
+                        _st445 = _cw2.no_def_streak(
+                            str(_it.get("file") or ""), _method_name)
+                        _streak445 = int(_st445.get("streak") or 0) + 1
+                        _strat445 = ("require_full_def"
+                                     if _streak445 >= self._m445_full_def_need() else "unchanged")
+                        _cw2.note_generation_feedback(
+                            file=str(_it.get("file") or ""), method=_method_name,
+                            reason="no_def", streak=_streak445, strategy=_strat445,
+                            patch_id=str(_it.get("id") or "")[:64])
+                        _module_logger.info(
+                            "[445刀2] 生成侧反馈: %s::%s 连续no_def=%d 策略=%s",
+                            _it.get("file", ""), _method_name, _streak445, _strat445)
+                    except Exception as _fb_e:
+                        silent_exc(_fb_e, where="PatchManager::_m280 445反馈回灌",
+                                   level="warning")
                 _voided += 1
                 continue
             _it.pop("runtime_verified", None)
@@ -2773,6 +2805,212 @@ class PatchManager:
             _out["error"] = type(_e).__name__
         return _out
 
+    # ===== ★445刀1：片段 → 完整方法 包裹器（影子优先） =====
+    #: 影子统计（读 `get_m445_wrap_metrics()`；进程内累计，重启归零）
+    _m445_wrap_ok = 0
+    _m445_wrap_fail = 0
+    _m445_wrap_skipped = 0
+
+    @staticmethod
+    def _m445_wrap_mode() -> str:
+        """包裹模式：`off` / `shadow`（默认，只留痕不改）/ `apply`（真改）。"""
+        try:
+            import config as _c445
+            _m = str(getattr(_c445, "M445_WRAP_FRAGMENT_MODE", "shadow") or "").strip().lower()
+        except Exception as _e:
+            silent_exc(_e, where="PatchManager::_m445_wrap_mode", level="debug")
+            return "shadow"
+        return _m if _m in ("off", "shadow", "apply") else "shadow"
+
+    @staticmethod
+    def _m445_trace_path() -> str:
+        """留痕落盘路径（测试可注入 `M445_WRAP_TRACE_PATH`）。"""
+        try:
+            import config as _c445
+            _rel = str(getattr(_c445, "M445_WRAP_TRACE_PATH",
+                               "data/patches/wrap_trace.jsonl") or "")
+        except Exception as _e:
+            silent_exc(_e, where="PatchManager::_m445_trace_path", level="debug")
+            _rel = "data/patches/wrap_trace.jsonl"
+        if os.path.isabs(_rel):
+            return _rel
+        _root = os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))))
+        return os.path.join(_root, _rel)
+
+    @staticmethod
+    def _m445_find_signature(file_rel: str, method: str) -> dict:
+        """从目标文件 AST 取 `def <method>(...)` 的真实签名。
+
+        Returns:
+            ``{"ok", "prefix", "args", "indent", "reason"}``
+            · `prefix`：`def` 或 `async def`
+            · `args`  ：`self, x: int = 0, **kw`（`ast.unparse` 出来的原文）
+            · `indent`：该方法在文件里的缩进列（类方法 4，模块级 0）
+        """
+        _out = {"ok": False, "prefix": "def", "args": "", "indent": 4, "reason": ""}
+        if not file_rel or not method:
+            _out["reason"] = "缺 file/method"
+            return _out
+        _root = os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))))
+        _p = file_rel if os.path.isabs(file_rel) else os.path.join(
+            _root, str(file_rel).replace("\\", "/"))
+        if not os.path.isfile(_p):
+            _out["reason"] = f"目标文件不存在: {file_rel}"
+            return _out
+        try:
+            with open(_p, encoding="utf-8", errors="replace") as _f:
+                _src = _f.read()
+            _tree = ast.parse(_src)
+        except (OSError, SyntaxError, ValueError) as _e:
+            silent_exc(_e, where="PatchManager::_m445_find_signature parse", level="debug")
+            _out["reason"] = f"解析失败: {type(_e).__name__}: {_e}"
+            return _out
+        for _node in ast.walk(_tree):
+            if not isinstance(_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if _node.name != method:
+                continue
+            try:
+                _args = ast.unparse(_node.args)
+            except Exception as _e:
+                silent_exc(_e, where="PatchManager::_m445_find_signature unparse",
+                           level="debug")
+                _args = "self"
+            _out.update({
+                "ok": True,
+                "prefix": ("async def" if isinstance(_node, ast.AsyncFunctionDef) else "def"),
+                "args": _args,
+                "indent": int(getattr(_node, "col_offset", 4) or 0),
+                "reason": "",
+            })
+            return _out
+        _out["reason"] = f"目标方法不存在: {method}"
+        return _out
+
+    @staticmethod
+    def _m445_wrap_fragment(patch: dict) -> dict:
+        """把「只有方法体」的 `modified_code` 包成完整方法（★445刀1）。
+
+        ★为什么要做：LLM 常只给方法体（无 `def`），验证侧用"虚拟函数包装"解析说通过，
+        而入队侧（284 刀5）要求能解析出 `def` ⇒ 两条尺子不一致，今天 10 条全被判结构缺陷。
+
+        ★安全边界：
+          · 只在 `modified_code` **确实没有 def** 时动手（已有 def 一律不碰）；
+          · 包完必须 `ast.parse` 通过才可能写回；失败保持原样（仍交 284 判），绝不强行包裹；
+          · 默认 **shadow**：只留痕、不改 `modified_code`（先跑 24h 看成功率）。
+
+        Returns:
+            ``{"status", "parse_ok", "reason", "wrapped", "signature"}``
+        """
+        _t0 = time.perf_counter()
+        _mode = PatchManager._m445_wrap_mode()
+        _out = {"status": "skipped", "parse_ok": None, "reason": "",
+                "wrapped": "", "signature": None, "mode": _mode}
+        if _mode == "off":
+            PatchManager._m445_wrap_skipped += 1
+            _out["reason"] = "模式 off"
+            return _out
+        _code = str(patch.get("modified_code") or "")
+        _file = str(patch.get("file") or "")
+        _method = str(patch.get("method") or "").strip()
+        if not _code.strip() or not _method:
+            PatchManager._m445_wrap_skipped += 1
+            _out["reason"] = "缺 modified_code / method"
+            return _out
+        if PatchManager._m280_extract_def_name(_code):
+            PatchManager._m445_wrap_skipped += 1
+            _out["status"] = "already_full"
+            _out["reason"] = "已有 def 签名，不需要包裹"
+            return _out
+        _sig = PatchManager._m445_find_signature(_file, _method)
+        _out["signature"] = _sig
+        if not _sig.get("ok"):
+            PatchManager._m445_wrap_fail += 1
+            _out["status"] = "no_signature"
+            _out["parse_ok"] = False
+            _out["reason"] = _sig.get("reason") or "取不到签名"
+            _out["elapsed_ms"] = round((time.perf_counter() - _t0) * 1000.0, 3)
+            PatchManager._m445_write_trace(patch, _out, _code, "")
+            return _out
+        # 先统一左移（片段常带原始缩进），再按「方法体缩进 = def 缩进 + 4」包
+        _body, _ = PatchManager._m323_reindent(_code)
+        _indent = " " * int(_sig.get("indent") or 0)
+        _prefix = _sig.get("prefix") or "def"
+        _args = _sig.get("args") or "self"
+        _indented = textwrap.indent(_body.rstrip() + "\n", _indent + "    ")
+        _wrapped = f"{_indent}{_prefix} {_method}({_args}):\n{_indented}"
+        _parse_ok = True
+        # ★445刀1 修正：类方法的 `def` 本身带 4 空格缩进，**单独 parse 必然
+        #   "unexpected indent"**（这不是包裹错，是校验方式错）。缩进 >0 时套一层
+        #   类壳再 parse —— 壳只用于校验，绝不写进补丁。
+        _check = _wrapped
+        if int(_sig.get("indent") or 0) != 0:
+            _check = "class _M445WrapShim:" + chr(10) + _wrapped
+        try:
+            ast.parse(_check)
+        except (SyntaxError, ValueError) as _e:
+            silent_exc(_e, where="PatchManager::_m445_wrap_fragment ast", level="debug")
+            _parse_ok = False
+            _out["reason"] = f"包裹后 AST 校验失败: {type(_e).__name__}: {_e}"
+        _out["parse_ok"] = _parse_ok
+        _out["wrapped"] = _wrapped
+        _out["elapsed_ms"] = round((time.perf_counter() - _t0) * 1000.0, 3)
+        if _parse_ok:
+            PatchManager._m445_wrap_ok += 1
+            _out["status"] = "wrapped"
+            if _mode == "apply":
+                patch["modified_code"] = _wrapped
+                _out["applied"] = True
+            else:
+                _out["applied"] = False
+        else:
+            PatchManager._m445_wrap_fail += 1
+            _out["status"] = "parse_failed"
+        PatchManager._m445_write_trace(patch, _out, _code, _wrapped)
+        return _out
+
+    @staticmethod
+    def _m445_write_trace(patch: dict, out: dict, before: str, after: str) -> None:
+        """把一次包裹尝试写入 `wrap_trace.jsonl`（**修改前/后全文**都在，可追溯）。
+
+        写失败只留 warning，绝不影响入队主流程。
+        """
+        _rec = {
+            "ts": time.time(),
+            "patch_id": str((patch or {}).get("id") or "")[:64],
+            "file": str((patch or {}).get("file") or ""),
+            "method": str((patch or {}).get("method") or ""),
+            "mode": out.get("mode"),
+            "status": out.get("status"),
+            "parse_ok": out.get("parse_ok"),
+            "applied": bool(out.get("applied")),
+            "reason": str(out.get("reason") or "")[:300],
+            "elapsed_ms": out.get("elapsed_ms"),
+            "signature": out.get("signature"),
+            # ★留痕硬要求：修改前 / 修改后都是**全文**，不看长度截断
+            "modified_code_before": before or "",
+            "modified_code_after": after or "",
+        }
+        try:
+            _p = PatchManager._m445_trace_path()
+            _d = os.path.dirname(os.path.abspath(_p))
+            if _d and not os.path.isdir(_d):
+                os.makedirs(_d, exist_ok=True)
+            with open(_p, "a", encoding="utf-8", newline="\n") as _f:
+                _f.write(json.dumps(_rec, ensure_ascii=False) + "\n")
+        except Exception as _e:
+            silent_exc(_e, where="PatchManager::_m445_write_trace", level="warning")
+
+    @staticmethod
+    def get_m445_wrap_metrics() -> dict:
+        """包裹器进程内指标（ok / fail / skipped）。"""
+        return {"wrapped_ok": int(PatchManager._m445_wrap_ok),
+                "wrap_failed": int(PatchManager._m445_wrap_fail),
+                "skipped": int(PatchManager._m445_wrap_skipped),
+                "mode": PatchManager._m445_wrap_mode()}
+
     @staticmethod
     def _m323_normalize_patch(patch: dict) -> dict:
         """以 AST enclosing def 为唯一真值回填 method（★323批刀2）。
@@ -2797,6 +3035,17 @@ class PatchManager:
             silent_exc(_e, where="nucleus.reasoning.PatchManager::_m323_normalize_patch 语法校验",
                        level="warning")
             _info["parse_ok"] = False
+        # ★445刀1：片段 → 完整方法 包裹（影子模式只留痕）。放在取 def **之前**：
+        #   否则 284 刀5 看到的仍是"无 def"，作废判定不变。
+        try:
+            _m445_r = PatchManager._m445_wrap_fragment(patch)
+            _info["m445_wrap"] = {k: _m445_r.get(k) for k in
+                                  ("status", "parse_ok", "reason", "mode", "applied")}
+            if _m445_r.get("status") == "wrapped" and _m445_r.get("applied"):
+                _code = str(patch.get("modified_code") or "")
+        except Exception as _m445_e:
+            silent_exc(_m445_e, where="PatchManager::_m323_normalize_patch 445包裹",
+                       level="warning")
         _def = PatchManager._m323_ast_def_name(_code)
         _info["def_name"] = _def
         if _def:

@@ -190,6 +190,118 @@ def _cw_repo_root() -> str:
     return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
+#: ★445刀2：生成侧反馈台账（append-only JSONL）。
+#:   与 `converge_voided` 分开：那个记"作废发生了什么"，这个记"给生成侧的指令是什么"。
+GENERATION_FEEDBACK_REL = os.path.join("data", "patches", "generation_feedback.jsonl")
+
+
+def generation_feedback_path(path: str | None = None) -> str:
+    """反馈台账路径（`path` 仅供隔离验证注入）。"""
+    if path:
+        return path
+    return os.path.join(_cw_repo_root(), GENERATION_FEEDBACK_REL)
+
+
+def note_generation_feedback(file: str = "", method: str = "", reason: str = "no_def",
+                             streak: int = 0, strategy: str = "",
+                             path: str | None = None, now: float | None = None,
+                             **fields) -> str:
+    """**写**一条生成侧反馈（append-only）。返回路径；失败返回空串。
+
+    ★为什么要有这个文件：284 刀5 作废后只落了"作废台账"，生成侧读不到
+    ⇒ 同一个 (file, method) 会一遍遍生成同样没有 def 的片段。
+
+    Args:
+        streak: 本次是**连续第几次**同因作废（写入时固定下来，事后不用重算）。
+        strategy: 本次/下次采用的生成策略（`require_full_def` / `unchanged`）。
+    """
+    _p = generation_feedback_path(path)
+    _ts = float(now if now is not None else time.time())
+    _rec = {"ts": _ts, "file": str(file or ""), "method": str(method or ""),
+            "reason": str(reason or "")[:60], "streak": int(streak),
+            "strategy": str(strategy or "")[:60]}
+    try:
+        from nucleus.proc_gen import proc_gen_str as _pgs
+        _rec["proc_gen"] = str(_pgs() or "unknown")
+    except Exception as _e:
+        silent_exc(_e, where="criteria_window::note_generation_feedback proc_gen",
+                   level="debug")
+    _rec.update(fields)
+    try:
+        _dir = os.path.dirname(os.path.abspath(_p))
+        if _dir and not os.path.isdir(_dir):
+            os.makedirs(_dir, exist_ok=True)
+        with io.open(_p, "a", encoding="utf-8", newline="\n") as _f:
+            _f.write(_json350.dumps(_rec, ensure_ascii=False) + "\n")
+        return _p
+    except Exception as _e:
+        silent_exc(_e, where="criteria_window::note_generation_feedback write",
+                   level="warning")
+        return ""
+
+
+def no_def_streak(file: str = "", method: str = "", days: float | None = None,
+                  path: str | None = None, now: float | None = None) -> dict:
+    """读反馈台账，算同一 (file, method) 的**连续 no_def 次数**（默认 7 天窗口）。
+
+    「连续」= 从最后一条往回数，直到遇到非 `no_def` 记录为止。
+    窗口外的旧记录不计（避免永久记忆）。
+
+    Returns:
+        ``{"streak": int, "window_days": float, "records": int, "last_ts": float|None}``
+    """
+    _out = {"streak": 0, "window_days": 0.0, "records": 0, "last_ts": None}
+    try:
+        import config as _c
+        _d = float(days if days is not None else
+                   getattr(_c, "M445_FEEDBACK_WINDOW_DAYS", 7.0))
+    except Exception as _e:
+        silent_exc(_e, where="criteria_window::no_def_streak cfg", level="debug")
+        _d = 7.0
+    _out["window_days"] = _d
+    _p = generation_feedback_path(path)
+    if not os.path.exists(_p):
+        return _out
+    _now = float(now if now is not None else time.time())
+    _cut = _now - max(0.1, _d) * 86400.0
+    _rows = []
+    try:
+        with io.open(_p, encoding="utf-8", errors="replace") as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if not _line:
+                    continue
+                try:
+                    _r = _json350.loads(_line)
+                except ValueError as _je:
+                    silent_exc(_je, where="criteria_window::no_def_streak 坏行",
+                               level="debug")
+                    continue
+                if not isinstance(_r, dict):
+                    continue
+                if str(_r.get("file") or "") != str(file or ""):
+                    continue
+                if str(_r.get("method") or "") != str(method or ""):
+                    continue
+                if float(_r.get("ts") or 0) < _cut:
+                    continue
+                _rows.append(_r)
+    except OSError as _e:
+        silent_exc(_e, where="criteria_window::no_def_streak read", level="warning")
+        return _out
+    _out["records"] = len(_rows)
+    if not _rows:
+        return _out
+    _out["last_ts"] = float(_rows[-1].get("ts") or 0) or None
+    _streak = 0
+    for _r in reversed(_rows):
+        if str(_r.get("reason") or "") != "no_def":
+            break
+        _streak += 1
+    _out["streak"] = _streak
+    return _out
+
+
 def converge_voided_ledger_path(path: str | None = None) -> str:
     """台账路径（`path` 仅供隔离验证注入，铁律158）。"""
     if path:

@@ -6912,6 +6912,15 @@ M444_DEAD_CODE_REFRESH_SEC = 1800.0
 # 永远过不了派单闸却会永久占着 pending。超过这个天数仍未人工确认 ⇒ obsolete 归档。
 M444_O3_EMPTY_CODE_MAX_DAYS = 3.0
 
+# ===== ★445刀1：片段→完整方法 包裹器 =====
+# off / shadow（默认，只留痕不改）/ apply（真写回 modified_code）
+M445_WRAP_FRAGMENT_MODE = "shadow"
+M445_WRAP_TRACE_PATH = "data/patches/wrap_trace.jsonl"
+
+# ===== ★445刀2：284 作废反馈回灌 =====
+M445_FEEDBACK_WINDOW_DAYS = 7.0
+M445_REQUIRE_FULL_DEF_STREAK = 2
+
 
 # ★351刀5：问题池「消费+回灌」节拍（单位=主循环**拍**，不是秒）。
 #   默认 300 拍 = 现行行为，**本批不改默认**（改默认需裁决）。
