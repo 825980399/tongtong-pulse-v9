@@ -696,6 +696,9 @@ class VerificationLearningHub:
         """
         try:
             from nucleus.evolution import hypothesis_criteria as _hc
+            # ★449刀2：先记「进来之前有没有标记」——`annotate_new_entry` 会原地改 entry，
+            #   查完再判就永远是 True（同一个坑 409 自己在 is_new 上栽过一次）。
+            _was_marked = bool(entry.get(_hc.F_MISSING))
             _rep = _hc.annotate_new_entry(entry, treat_as_new=is_new)
             if _rep.get("skipped"):
                 return
@@ -705,10 +708,38 @@ class VerificationLearningHub:
             if not _bits:
                 return
             _tag = "（新增）" if is_new else "（老条目）"
-            self._log(LogLevel.WARNING,
-                      f"[409刀1] 假设缺可观测判据 {str(key)[:60]}{_tag}："
-                      f"{'；'.join(_bits)}"
-                      f" ⇒ 已标 missing_criterion=True，不阻断入库")
+            # ★449刀2：只有**这一次真的打上标记**才 WARNING。
+            #   判据取「本次实际写进 entry 的字段」而不是「有没有缺字段」——
+            #   老条目每轮都缺字段，但只在第一轮被标记。
+            _newly = _hc.F_MISSING in (_rep.get("applied") or [])
+            if not _was_marked and not _newly and bool(_rep.get("missing")):
+                # 老条目（is_new=False）`annotate_new_entry` **不会**替它打标记，
+                # 那是 `mark_legacy_entries` 的活。这里补一次，保证"首次"语义自洽，
+                # 也让下一轮必然走 DEBUG（幂等）。
+                entry[_hc.F_MISSING] = True
+                _newly = True
+            _quiet = True
+            try:
+                import config as _c449h
+                _quiet = bool(getattr(_c449h, "ENABLE_M449_HYP_QUIET", True))
+            except Exception as _e449h:
+                silent_exc(_e449h,
+                           where="verification_learning_hub::_m409_annotate_entry 449开关",
+                           level="debug")
+            if _newly or not _quiet:
+                self._log(LogLevel.WARNING,
+                          f"[409刀1] 假设缺可观测判据 {str(key)[:60]}{_tag}："
+                          f"{'；'.join(_bits)}"
+                          f" ⇒ 已标 missing_criterion=True，不阻断入库")
+            else:
+                # ★449刀2：已标过的老条目降为 DEBUG（109 条/8h → 预期 <10）。
+                #   计数留在实例上，供活体/报表读"压掉了多少条"，不是静默。
+                self._m449_suppressed = int(
+                    getattr(self, "_m449_suppressed", 0)) + 1
+                self._log(LogLevel.DEBUG,
+                          f"[449刀2] 假设缺判据（已标过，降为DEBUG）"
+                          f"{str(key)[:60]}{_tag}：{'；'.join(_bits)}"
+                          f"｜累计压掉 {self._m449_suppressed} 条")
         except Exception as _e:
             silent_exc(_e,
                        where="verification_learning_hub::_m409_annotate_entry",

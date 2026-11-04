@@ -7614,3 +7614,44 @@ M448_PROBLEM_GONE_TRACE_PATH = "data/patches/problem_gone_trace.jsonl"
 #   读取点：nucleus/reasoning/PatchManager.py::_m448_calc_trust()
 ENABLE_M448_TRUST_CALC = True
 M448_TRUST_TRACE_PATH = "data/patches/trust_calc_trace.jsonl"
+
+# ==================== ★449批：WARNING 告警降噪 ====================
+#
+# ENABLE_M449_MEM_STEADY_ALARM
+#   默认值：True
+#   语义：True  ⇒ 内存"增长率"闸改由**稳态窗 + 阶跃 + 持续**判定
+#                （`runtime_metrics._m449_growth_verdict`）：
+#                  · 稳态 = 最近 M449_MEM_STEADY_WINDOW_SEC 的平均增长率；
+#                  · 突增(spike) = 瞬时 ≥ 阈值 ∧ 瞬时 ≥ M449_MEM_SPIKE_RATIO × max(稳态, 阈值)
+#                    ∧ 已持续 ≥ M449_MEM_SPIKE_HOLD_SEC；
+#                  · 阶跃(step) = 瞬时窗内 RSS 抬升 ≥ M449_MEM_STEP_JUMP_MB（加载组件，非泄漏）；
+#                  · **真泄漏照样抓**：稳态本身 ≥ 阈值就直接告警（与比值判据并列，不替换）。
+#        False ⇒ 逐字回到 66/427 口径（瞬时 5 分钟斜率 ≥ 阈值即告警）。
+#   读取点：nucleus/runtime_metrics.py::_m449_growth_verdict()
+#   ★为什么改：2026-11-04 19:18~19:20 实测三条 WARNING 相隔 40s，RSS 几乎没动
+#     （4770.8→4773.7→4771.2MB），增长率却给 183.9 / 93.1 / 92.3 MB/分 ——
+#     短窗两点之差除以跨度，任何一次分配抖动都被除成"每分钟"。
+ENABLE_M449_MEM_STEADY_ALARM = True
+M449_MEM_INSTANT_WINDOW_SEC = 300.0     # 瞬时窗（原 5 分钟口径）
+M449_MEM_STEADY_WINDOW_SEC = 1800.0     # 稳态窗（30 分钟平均）
+M449_MEM_SPIKE_RATIO = 2.0              # 瞬时 / 稳态 的倍数门槛
+M449_MEM_SPIKE_HOLD_SEC = 300.0         # 突增必须持续多久才算
+M449_MEM_STEP_JUMP_MB = 1024.0          # 瞬时窗内涨幅达到多少算"阶跃"
+#
+# ENABLE_M449_MEM_TRACE / M449_MEM_TRACE_PATH
+#   默认值：True / "data/reports/memory_alarm_trace.jsonl"
+#   语义：**模式变化时**才落一行（不逐拍写：5s 一拍 ×8h = 5760 行，会变成新噪声源）。
+#   读取点：nucleus/runtime_metrics.py::_m449_note()
+ENABLE_M449_MEM_TRACE = True
+M449_MEM_TRACE_PATH = "data/reports/memory_alarm_trace.jsonl"
+#
+# ENABLE_M449_HYP_QUIET
+#   默认值：True
+#   语义：True  ⇒ 验证学习枢纽「假设缺可观测判据」只在**首次打上
+#                `missing_criterion=True`** 时 WARNING；同一条目后续每轮只 DEBUG
+#                （实例上 `_m449_suppressed` 累计压掉的条数，可读）。
+#        False ⇒ 逐字回到 409 口径（每轮都 WARNING）。
+#   读取点：nucleus/mnemosyne/verification_learning_hub.py::_m409_annotate_entry()
+#   ★为什么改：盘账 40 条**全部**已带标记，而每批规则落盘都会重新扫一遍 ⇒
+#     同一批老条目每轮刷同样的 WARNING（实测 109 条/8h）。
+ENABLE_M449_HYP_QUIET = True

@@ -12,7 +12,9 @@ runtime_metrics.py —— 运行时指标
 """
 
 import logging
+import os
 import queue
+import sys
 import threading
 import time
 import traceback
@@ -720,6 +722,154 @@ class RuntimeMetrics:
             silent_exc(e, where="nucleus.runtime_metrics::get_memory_growth_rate L440", level="debug")
             return 0.0
 
+    # ==================== ★449刀1：稳态窗 + 阶跃标记 ====================
+    #
+    # 病因（实测盘面，2026-11-04 19:18~19:20）：
+    #   三条 WARNING 相隔 40s 连着刷，而 RSS 几乎没动（4770.8 → 4773.7 → 4771.2MB）：
+    #       增长率 183.934MB/分  → 93.076 → 92.307
+    #   同一个 40 秒内，同一个指标给出 184 与 92 两个读数 —— 因为分子是 5 分钟窗内
+    #   两点之差，分母是两点跨度：**短窗里任何一次 GC/分配抖动都会被除成"每分钟"**。
+    #   这不是"内存涨了"，是"短窗算不出速率"。
+    #
+    # 本刀的口径（任务书 §刀1）：
+    #   · `steady`（稳态增长率）= 最近 `M449_MEM_STEADY_WINDOW_SEC`（默认 30 分钟）的平均；
+    #   · `instant`（瞬时增长率）= 最近 `M449_MEM_INSTANT_WINDOW_SEC`（默认 5 分钟），
+    #     只作为"突增"的输入，**不再单独决定告警**；
+    #   · 突增（spike）告警要同时满足三条：instant ≥ 阈值 ∧ instant ≥ 2×max(steady, 阈值)
+    #     ∧ 该状态持续 ≥ `M449_MEM_SPIKE_HOLD_SEC`（默认 300s）；
+    #   · 阶跃（step）：瞬时窗内 RSS 最低点 → 当前值 的增量 ≥ `M449_MEM_STEP_JUMP_MB`
+    #     （默认 1024MB），单独标一种模式（这类是加载大组件，不是泄漏）；
+    #   · **真泄漏照样抓**：steady 本身 ≥ 阈值（默认 10MB/min）就直接告警 ——
+    #     泄漏的特征正是"稳态一直在涨"，这时 instant/steady 的比值接近 1，
+    #     光看比值反而会漏。两条判据是**并列**的，不是替代。
+
+    def _m449_growth_verdict(self, now: float | None = None) -> dict:
+        """★449刀1：返回 ``{mode, alarm, instant, steady, ratio, step_delta, held_sec, ...}``。
+
+        ``mode`` 取值：``""``（不告警）/ ``step`` / ``steady_leak`` / ``spike``。
+        **纯观测**：不写盘、不改任何判定，只有 `_m449_note` 负责留痕。
+        """
+        _now = float(now if now is not None else time.time())
+        _out = {
+            "mode": "", "alarm": False, "instant": 0.0, "steady": 0.0,
+            "ratio": 0.0, "step_delta": 0.0, "held_sec": 0.0,
+            "threshold": 10.0, "ratio_thr": 2.0, "hold_sec": 300.0,
+            "step_mb": 1024.0, "phase": "", "why": "",
+        }
+        try:
+            import config as _c449
+            _on = bool(getattr(_c449, "ENABLE_M449_MEM_STEADY_ALARM", True))
+            _inst_w = float(getattr(_c449, "M449_MEM_INSTANT_WINDOW_SEC", 300.0) or 300.0)
+            _stdy_w = float(getattr(_c449, "M449_MEM_STEADY_WINDOW_SEC", 1800.0) or 1800.0)
+            _ratio = float(getattr(_c449, "M449_MEM_SPIKE_RATIO", 2.0) or 2.0)
+            _hold = float(getattr(_c449, "M449_MEM_SPIKE_HOLD_SEC", 300.0) or 300.0)
+            _step_mb = float(getattr(_c449, "M449_MEM_STEP_JUMP_MB", 1024.0) or 1024.0)
+            _thr = float(getattr(_c449, "MEMORY_GROWTH_ALARM_MB_PER_MIN", 10.0) or 10.0)
+        except Exception as _e:
+            silent_exc(_e, where="runtime_metrics::_m449_growth_verdict config", level="debug")
+            _on, _inst_w, _stdy_w = True, 300.0, 1800.0
+            _ratio, _hold, _step_mb, _thr = 2.0, 300.0, 1024.0, 10.0
+        _out.update({"threshold": _thr, "ratio_thr": _ratio,
+                     "hold_sec": _hold, "step_mb": _step_mb})
+        if not _on:
+            return _out
+        try:
+            _inst = self.get_memory_growth_report(window_sec=_inst_w)
+            _stdy = self.get_memory_growth_report(window_sec=_stdy_w)
+            _i = float(_inst.get("growth_mb_per_min") or 0.0)
+            _s = float(_stdy.get("growth_mb_per_min") or 0.0)
+            _out["instant"], _out["steady"] = round(_i, 3), round(_s, 3)
+            _out["phase"] = str(_stdy.get("phase") or "")
+            # 阶跃：瞬时窗内的最低 RSS → 当前 RSS
+            _pts = [p for p in list(self._history) if p.get("mem_rss_mb")]
+            _cut = _now - _inst_w
+            _win = [p for p in _pts if float(p.get("ts") or 0.0) >= _cut]
+            if _win:
+                _min = min(float(p.get("mem_rss_mb") or 0.0) for p in _win)
+                _out["step_delta"] = round(
+                    float(_win[-1].get("mem_rss_mb") or 0.0) - _min, 1)
+            # ramp 期的高斜率不是泄漏（既有 427 口径，不重复计一次告警）
+            _floor = max(_thr, 1e-9)
+            _out["ratio"] = round(_i / max(abs(_s), _floor), 3) if _i > 0 else 0.0
+            _spike_cond = (_i >= _thr) and (_i >= _ratio * max(abs(_s), _floor))
+            _leak_cond = abs(_s) >= _thr
+            _step_cond = _out["step_delta"] >= _step_mb
+            # 持续窗：只有"连续满足"才算，抖动一次就清零
+            _since = getattr(self, "_m449_spike_since", None)
+            if _spike_cond:
+                if _since is None:
+                    self._m449_spike_since = _now
+                    _since = _now
+                _out["held_sec"] = round(max(0.0, _now - float(_since)), 1)
+            else:
+                self._m449_spike_since = None
+                _out["held_sec"] = 0.0
+            _held = _out["held_sec"] >= _hold
+            if _out["phase"] == "ramp":
+                _out["mode"], _out["why"] = "", "ramp 期不判增长（427 口径）"
+            elif _step_cond:
+                _out["mode"] = "step"
+                _out["why"] = (f"阶跃 +{_out['step_delta']:.0f}MB ≥ {_step_mb:.0f}MB"
+                               "（加载组件，非泄漏）")
+            elif _leak_cond:
+                _out["mode"] = "steady_leak"
+                _out["why"] = (f"稳态 {_s:.1f}MB/min ≥ 阈值 {_thr:.1f}"
+                               "（持续增长=真泄漏形态）")
+            elif _spike_cond and _held:
+                _out["mode"] = "spike"
+                _out["why"] = (f"瞬时 {_i:.1f} 是稳态 {_s:.1f} 的 "
+                               f"{_out['ratio']:.1f} 倍，且已持续 {_out['held_sec']:.0f}s")
+            else:
+                _out["why"] = (f"未达告警条件（瞬时={_i:.1f} 稳态={_s:.1f} "
+                               f"比值={_out['ratio']:.2f} 持续={_out['held_sec']:.0f}s）")
+            _out["alarm"] = bool(_out["mode"])
+            return _out
+        except Exception as _e:
+            silent_exc(_e, where="runtime_metrics::_m449_growth_verdict 计算", level="warning")
+            return _out
+
+    def _m449_note(self, verdict: dict) -> None:
+        """★449刀1：把**模式变化/真告警**写进留痕（不逐拍刷，只在有意义时写）。
+
+        为什么不是每拍都写：5s 一拍、8 小时 = 5760 行，留痕会变成另一个噪声源。
+        只在「本次 mode ≠ 上次 mode」或「本次真的告警」时落一行。
+        """
+        try:
+            import json as _json449
+
+            import config as _c449n
+            if not bool(getattr(_c449n, "ENABLE_M449_MEM_TRACE", True)):
+                return
+            _mode = str((verdict or {}).get("mode") or "")
+            _last = getattr(self, "_m449_last_mode", "")
+            if _mode == _last:
+                return
+            self._m449_last_mode = _mode
+            _rel = str(getattr(_c449n, "M449_MEM_TRACE_PATH",
+                               "data/reports/memory_alarm_trace.jsonl") or "")
+            if not _rel:
+                return
+            if not os.path.isabs(_rel):
+                _rel = os.path.join(os.path.dirname(os.path.dirname(
+                    os.path.abspath(__file__))), _rel)
+            if "pytest" in sys.modules:
+                _def = os.path.join(os.path.dirname(os.path.dirname(
+                    os.path.abspath(__file__))),
+                    "data/reports/memory_alarm_trace.jsonl")
+                if os.path.normcase(os.path.normpath(_rel)) == os.path.normcase(
+                        os.path.normpath(_def)):
+                    return
+            _dir = os.path.dirname(_rel)
+            if _dir:
+                os.makedirs(_dir, exist_ok=True)
+            _row = dict(verdict or {})
+            _row["ts"] = time.time()
+            _row["at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+            with open(_rel, "a", encoding="utf-8") as _f:
+                _f.write(_json449.dumps(_row, ensure_ascii=False) + "\n")
+        except Exception as _e:
+            silent_exc(_e, where="runtime_metrics::_m449_note", level="debug")
+
     def check_memory_alarm_detailed(self, threshold_percent: float = 80.0,
                                     auto_gc: bool = False) -> dict[str, Any]:
         """★主线第66批 T1.4：内存告警增强——同时监控使用率与增长率，可选自动GC。
@@ -752,6 +902,11 @@ class RuntimeMetrics:
         _grep427 = self.get_memory_growth_report(window_sec=float(
             getattr(self, "_sample_interval", 5.0) or 5.0) * 60.0)
         _growth = float(_grep427.get("growth_mb_per_min") or 0.0)
+        # ★449刀1：growth 闸改由「稳态窗 + 阶跃 + 持续」判定；
+        #   瞬时 5 分钟斜率只作为 spike 的输入，不再单独决定告警（19:18 实测
+        #   40 秒内给出 184 与 92 两个读数，全是短窗除法噪声）。
+        _m449 = self._m449_growth_verdict()
+        self._m449_note(_m449)
         # ★364刀B1②：三闸并列 —— 使用率≥阈值 或 RSS≥8GB 或 增长率≥阈值。
         #   原判据缺 RSS 阈值 ⇒ `MEMORY_AUTO_GC_RSS_MB=8192.0` 是个**读了没人用**的配置
         #   （366 星轨现场复核：8192 阈值未接入判据）。
@@ -760,7 +915,7 @@ class RuntimeMetrics:
             _triggers.append("percent")
         if _rss >= _rss_thr:
             _triggers.append("rss")
-        if _growth >= _growth_thr:
+        if _m449.get("alarm"):
             _triggers.append("growth")
         _triggered = bool(_triggers)
         _gc_done = False
@@ -769,10 +924,15 @@ class RuntimeMetrics:
                 # ★364刀B1②：告警按**真实闸因**说清楚，不再用 else 兜着。
                 # ★403刀4③：三条分支合并为一条消息并走状态机 —— 原来每次采样最多打 3 条
                 #   WARNING，10s 一轮，21 分钟 150 条，全是同一件事。
-                _msg = ("[运行时指标] 内存告警（闸因=%s）：使用率 %.1f%%（阈值 %.1f%%），"
-                        "RSS=%.1fMB（自动GC阈值 %.1fMB），增长率 %.3fMB/分钟（阈值 %.1f）"
-                        % (",".join(_triggers), _pct, threshold_percent,
-                           _rss, _rss_thr, _growth, _growth_thr))
+                _msg = (
+                    f"[运行时指标] 内存告警（闸因={','.join(_triggers)}，"
+                    f"模式={_m449.get('mode') or '-'}）：使用率 {_pct:.1f}%"
+                    f"（阈值 {threshold_percent:.1f}%），RSS={_rss:.1f}MB"
+                    f"（自动GC阈值 {_rss_thr:.1f}MB），"
+                    f"瞬时 {(_m449.get('instant') or 0.0):.1f}MB/分 / "
+                    f"稳态 {(_m449.get('steady') or 0.0):.1f}MB/分"
+                    f"（阈值 {_growth_thr}），阶跃 +{(_m449.get('step_delta') or 0.0):.0f}MB"
+                    f"｜{_m449.get('why') or ''}")
                 self._m403_alarm_transition(
                     _logger, "memory_detailed", True, _msg,
                     "[运行时指标] 内存告警解除（使用率 %.1f%%，RSS=%.1fMB）" % (_pct, _rss))
@@ -827,7 +987,13 @@ class RuntimeMetrics:
                 # ★433刀4：稳态斜率的真实窗口（秒）—— 与 steady_growth 同源，
                 #   用于一眼看出"这个速率是几分钟算出来的"。
                 "steady_window_sec": _grep427.get("steady_window_sec"),
-                "uptime_sec": _grep427.get("uptime_sec")}
+                "uptime_sec": _grep427.get("uptime_sec"),
+                # ★449刀1：判定明细（模式/稳态/瞬时/持续时长），观测面直接可读
+                "m449_mode": _m449.get("mode") or "",
+                "m449_steady_mb_per_min": _m449.get("steady"),
+                "m449_instant_mb_per_min": _m449.get("instant"),
+                "m449_held_sec": _m449.get("held_sec"),
+                "m449_step_delta_mb": _m449.get("step_delta")}
 
     # _m65_t2_get_system_load_done
 
