@@ -121,6 +121,19 @@ class Test403Evidence(unittest.TestCase):
         _restore_cache(self)
 
     def test_403响应体留证含body与头(self):
+        """★450刀4 改钉（回滚点：`git show 280188c3:tests/test_t105d_wiki_querier.py`）。
+
+        规格没放宽，只是**级别**变了：一次查询内部 3 次重试原先刷 3 条一模一样的
+        WARNING（6 秒 3 条），450 起前两次降 DEBUG、第 3 次才 WARNING。
+        因此本用例改为：
+          · `warning` **恰好一条**（连续第 3 次）；
+          · 证据（响应体 + Retry-After + X-Baidu-Error）在 **warning + debug 合计**里
+            必须全部可见 —— 留证是规格，不能因为降噪而丢。
+        """
+        import nucleus.log_state as _ls
+        from nucleus import alert_dedup as _ad
+        _ad.reset_all()
+        _ls.reset(None)
         config.ENABLE_WIKI_QUERIER_RATE_LIMIT = True
         _logger_mock = mock.Mock()
 
@@ -132,9 +145,11 @@ class Test403Evidence(unittest.TestCase):
                 mock.patch.object(_wq_mod, "_logger", _logger_mock), self.assertRaises(HTTPError):
             _wq_mod._default_fetch("http://127.0.0.1/zh/wiki/x", timeout=1.0)
         _texts = [str(c.args[0]) for c in _logger_mock.warning.call_args_list]
-        _joined = "\n".join(_texts)
-        self.assertTrue(any("403 反爬命中" in t for t in _texts),
-                        "应留证 403 反爬命中日志")
+        _dbg = [str(c.args[0]) for c in _logger_mock.debug.call_args_list]
+        _joined = "\n".join(_texts + _dbg)
+        self.assertEqual(len(_texts), 1, f"连续 3 次只应 WARNING 一条，实际 {len(_texts)} 条")
+        self.assertIn("连续第 3 次", _texts[0], "WARNING 应标明连续次数")
+        self.assertIn("403 反爬命中", _joined, "应留证 403 反爬命中日志（任意级别）")
         self.assertIn("403 反爬验证文本 body", _joined, "应保留 403 响应体前 512B")
         self.assertIn("Retry-After", _joined, "应保留 Retry-After 头")
         self.assertIn("X-Baidu-Error", _joined, "应保留 X-Baidu-Error 头")

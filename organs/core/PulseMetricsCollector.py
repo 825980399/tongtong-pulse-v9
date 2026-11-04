@@ -293,6 +293,142 @@ def _m421_max_ts(rows: list, field: str):
     return _m
 
 
+# ==================== ★450刀1：补丁链环节漏斗 ====================
+#
+# 病因（11-04 实测）：`patch_chain.state=degraded` 只说明「apply=0 但 queue>0」，
+# 看不出**断在哪一段**：
+#     history.gen=0（已落地的） queue=1 apply=0 ledger=0
+# 而同期 `data/reports/converge_voided.jsonl` 今天有 **16** 条作废 —— 也就是说
+# 今天确实生成过 16 条，只是**全被作废**（no_def=16），一条都没进 history。
+# 旧口径把这 16 条完全丢掉 ⇒ 「生成侧没产出」与「产出了但全废」读起来一模一样，
+# 于是 442 那条 degraded 告警连续 8 次都在说「查审批是否卡住」，而审批根本没收到东西。
+#
+# 本刀补三个环节（**不进 `_M421_PC_FIELDS`**，不参与 state 判定；理由见 config 注释）：
+#   gen_voided  本轮作废   ← data/reports/converge_voided.jsonl
+#   gen_pending 本轮入队   ← pending_patches.json 的 generated_at
+#   approved    今日审批通过 ← data/patches/approval_trace.jsonl
+# 加上既有 gen（history 落地）/ queue / apply / ledger，五段一次列全。
+_M450_FUNNEL_FIELDS = ("gen_voided", "gen_pending", "approved")
+_m450_funnel_log_at = 0.0
+
+
+def _m450_count_jsonl(path: str, *, lo: float, hi: float,
+                      need: dict | None = None) -> int | None:
+    """数 JSONL 里 `ts` 落在 ``[lo, hi)`` 的行（可选等值过滤）。读不到返回 **None**。
+
+    ★返回 None 而不是 0：文件缺失/坏行 ≠ 「今天 0 条」（铁律 156）。
+    """
+    if not os.path.exists(path):
+        return None
+    _n = 0
+    try:
+        with open(path, encoding="utf-8", errors="replace") as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if not _line:
+                    continue
+                try:
+                    _r = json.loads(_line)
+                except ValueError as _e:
+                    # ★`continue` 也是静默（447 同型坑）：坏行留痕再跳过。
+                    #   半行/轮转断行是常态，故用 debug，不占 WARNING。
+                    silent_exc(_e, where="PulseMetricsCollector::_m450_count_jsonl 坏行",
+                               level="debug")
+                    continue
+                if not isinstance(_r, dict):
+                    continue
+                _ts = _r.get("ts")
+                if isinstance(_ts, bool) or not isinstance(_ts, (int, float)):
+                    continue
+                if not (lo <= float(_ts) < hi):
+                    continue
+                if need:
+                    _skip = False
+                    for _k, _v in need.items():
+                        if _r.get(_k) != _v:
+                            _skip = True
+                            break
+                    if _skip:
+                        continue
+                _n += 1
+    except Exception as _e:
+        silent_exc(_e, where="PulseMetricsCollector::_m450_count_jsonl", level="debug")
+        return None
+    return _n
+
+
+def _m450_bottleneck(funnel: dict) -> str:
+    """按五段读数自报瓶颈环节（判据写死在这里，别在报告里另算一套）。
+
+    返回短句，供日志与看板直接读；读数不全 ⇒ 返回"读数不全，不判"。
+    """
+    _g = funnel.get("gen")
+    _gp = funnel.get("gen_pending")
+    _gv = funnel.get("gen_voided")
+    _q = funnel.get("queue")
+    _ap_ok = funnel.get("approved")
+    _ap = funnel.get("apply")
+    if any(_v is None for _v in (_g, _gp, _gv, _q, _ap_ok, _ap)):
+        return "读数不全，不判"
+    _gv, _gp, _g, _q = int(_gv), int(_gp), int(_g), int(_q)
+    _ap_ok, _ap = int(_ap_ok), int(_ap)
+    # 「本轮生成」= 作废 + 入队待审 + 已落地（三条互斥：同一件只会处在其中一段）
+    _gen_all = _gv + _gp + _g
+    # ①生成侧压根没产出
+    if _gen_all == 0:
+        return "生成侧无产出"
+    # ②作废是本轮**最大流失段**（占生成量一半以上）⇒ 生成质量问题。
+    #   ★为什么按"最大流失"而不是按判据顺序：11-04 实测 16 作废 + 1 入队，
+    #     若先判"入队>0"就会报成「审批侧」，而审批根本只看到 1 条陈件 ——
+    #     报告会把人引到错误的环节。
+    if _gv > 0 and _gv * 2 >= _gen_all:
+        _tail = []
+        if _gp > 0:
+            _tail.append(f"另 {_gp} 条在队列")
+        if _q > 0 and _ap_ok == 0:
+            _tail.append(f"队列 {_q} 条今日 0 条通过")
+        return (f"生成侧质量（{_gv}/{_gen_all} 条作废，入队 {_gp} 落地 {_g}）"
+                + ("；" + "，".join(_tail) if _tail else ""))
+    # ③入队了但批不出来
+    if _gp > 0 and _q > 0 and _ap_ok == 0:
+        return f"审批侧（{_q} 条在队列，今日 0 条通过）"
+    # ④批了但没落地
+    if _ap_ok > 0 and _ap == 0:
+        return f"应用侧（今日通过 {_ap_ok} 条，落地 0）"
+    # ⑤落地了但没落账
+    if _ap > 0 and not funnel.get("ledger"):
+        return "落账侧（有落地，verify 台账 0）"
+    return "无阻断（各环节均有数）"
+
+
+def _m450_funnel_log(funnel: dict) -> None:
+    """按 `M450_CHAIN_FUNNEL_LOG_SEC` 打一条 INFO 漏斗；五段一起列。"""
+    global _m450_funnel_log_at
+    try:
+        import config as _c450
+        if not bool(getattr(_c450, "ENABLE_M450_CHAIN_FUNNEL", True)):
+            return
+        from nucleus import alert_dedup as _ad450f
+        _iv = _ad450f.cfg_num("M450_CHAIN_FUNNEL_LOG_SEC", 1800.0)
+    except Exception as _e:
+        silent_exc(_e, where="PulseMetricsCollector::_m450_funnel_log config", level="debug")
+        return
+    _now = time.time()
+    if (_now - float(_m450_funnel_log_at or 0.0)) < _iv:
+        return
+    _m450_funnel_log_at = _now
+    try:
+        import logging as _lg450
+        _lg450.getLogger("pulse.module.PulseMetricsCollector").info(
+            "[450刀1][补丁链漏斗] 作废=%s → 入队=%s → 落地(history)=%s ｜"
+            "队列=%s 审批通过=%s 应用=%s 落账=%s ｜瓶颈=%s",
+            funnel.get("gen_voided"), funnel.get("gen_pending"), funnel.get("gen"),
+            funnel.get("queue"), funnel.get("approved"), funnel.get("apply"),
+            funnel.get("ledger"), _m450_bottleneck(funnel))
+    except Exception as _e:
+        silent_exc(_e, where="PulseMetricsCollector::_m450_funnel_log", level="debug")
+
+
 def _m421_patch_chain_read(root: str | None = None) -> dict:
     """读三个源组装 patch_chain 块（★421刀6）。读不到的源记 errors，**不写 0**。"""
     from nucleus.data.DataAccessLayer import safe_read_json
@@ -349,6 +485,9 @@ def _m421_patch_chain_read(root: str | None = None) -> dict:
                     if _t429 is not None:
                         _out["last_gen_at_pending"] = _t429
                         break
+                # ★450刀1：本轮**入队**条数（与 history 的"落地"分开数）
+                _out["gen_pending"] = _m421_count_today(
+                    _pend, "generated_at", _lo, _hi)
             else:
                 _errs["pending_patches"] = "读不出列表"
         else:
@@ -402,6 +541,21 @@ def _m421_patch_chain_read(root: str | None = None) -> dict:
         _out["gen_seen_source"] = "pending"
     # 两源都读不到 ⇒ 保持 None（不填 0：铁律 156，读不到 ≠ 是 0）
 
+    # ★450刀1：作废与审批两个补充源（读不到 ⇒ None，不填 0）
+    try:
+        _cvp = os.path.join(_root, "data", "reports", "converge_voided.jsonl")
+        _out["gen_voided"] = _m450_count_jsonl(_cvp, lo=_lo, hi=_hi)
+    except Exception as _e4:
+        silent_exc(_e4, where="PulseMetricsCollector::_m421_patch_chain_read[voided]", level="debug")
+        _out["gen_voided"] = None
+    try:
+        _atp = os.path.join(_root, "data", "patches", "approval_trace.jsonl")
+        _out["approved"] = _m450_count_jsonl(
+            _atp, lo=_lo, hi=_hi, need={"approved": True})
+    except Exception as _e5:
+        silent_exc(_e5, where="PulseMetricsCollector::_m421_patch_chain_read[approved]", level="debug")
+        _out["approved"] = None
+
     _miss = sum(1 for _f in _M421_PC_FIELDS if _out[_f] is None)
     _out["state"] = ("ok" if _miss == 0
                      else "unavailable" if _miss == len(_M421_PC_FIELDS)
@@ -418,21 +572,46 @@ def _m421_patch_chain_read(root: str | None = None) -> dict:
             _out["state_reason"] = f"apply=0 但 pending={_qu}"
             # ★442刀2：degraded 要有告警出口 —— 441 实测"降级了没有任何程序据此动作"。
             #   放在这里（读数点）而不是看板：机器也要能看见。10 分钟一条，防刷屏。
+            # ★450刀5：442 的时间窗（600s）在"采样间隔 10 分钟"的现场等于没有节流
+            #   （实测 9 条/78 分钟）。改成**内容去重**：状态串不变就不重报，
+            #   数字一变立刻报（瓶颈换了段，读者必须马上知道）。
             try:
                 global _M442_DEGRADED_WARN_AT
-                if time.time() - float(_M442_DEGRADED_WARN_AT or 0) >= 600.0:
+                _m450_body = (
+                    f"[442刀2][补丁链降级] patch_chain.state=degraded：{_out.get('state_reason')} "
+                    f"（作废={_out.get('gen_voided')} 入队={_out.get('gen_pending')} "
+                    f"落地={_out.get('gen')} 队列={_qu} 审批={_out.get('approved')} "
+                    f"应用={_ap} 落账={_out.get('ledger')}）｜"
+                    f"瓶颈={_m450_bottleneck(_out)}｜处置：按瓶颈段查（生成质量→审批→应用→落账）")
+                _m450_sig = "|".join(str(x) for x in (
+                    _out.get("state_reason"), _out.get("gen_voided"),
+                    _out.get("gen_pending"), _out.get("gen"), _qu,
+                    _out.get("approved"), _ap, _out.get("ledger")))
+                try:
+                    from nucleus import alert_dedup as _ad450m
+                    _m450_emit, _m450_sup = _ad450m.should_warn_content(
+                        "metrics.patch_chain_degraded", _m450_sig,
+                        renotify_sec=_ad450m.cfg_num(
+                            "M450_METRIC_WARN_RENOTIFY_SEC", 3600.0))
+                except Exception as _d450m:
+                    silent_exc(_d450m, where="PulseMetricsCollector::_m450_degraded_dedup",
+                               level="debug")
+                    _m450_emit, _m450_sup = True, 0
+                if _m450_emit:
                     _M442_DEGRADED_WARN_AT = time.time()
                     import logging as _lg442
                     _lg442.getLogger("pulse.module.PulseMetricsCollector").warning(
-                        "[442刀2][补丁链降级] patch_chain.state=degraded：%s "
-                        "（gen=%s queue=%s apply=%s ledger=%s）｜"
-                        "处置：查审批是否卡住/派单是否选中/基线闸门是否拦截",
-                        _out.get("state_reason"), _out.get("gen"), _qu, _ap, _out.get("ledger"))
+                        "%s（此前同内容已压掉 %d 条）", _m450_body, int(_m450_sup))
             except Exception as _w_e:
                 silent_exc(_w_e, where="PulseMetricsCollector::_m442_degraded_warn", level="debug")
     except Exception as _e:
         silent_exc(_e, where="PulseMetricsCollector::_m421_patch_chain_read degraded", level="debug")
     _out["errors"] = _errs
+    # ★450刀1：五段漏斗 INFO（默认 30 分钟一条；与 degraded 的 10 分钟 WARNING 分开）
+    try:
+        _m450_funnel_log(_out)
+    except Exception as _e6:
+        silent_exc(_e6, where="PulseMetricsCollector::_m421_patch_chain_read[funnel_log]", level="debug")
     _out["day"] = time.strftime("%Y-%m-%d", time.localtime(_lo))
     _out["read_at"] = time.time()
     return _out

@@ -1049,10 +1049,26 @@ def persist_pool(report: dict, root: str | None = None, audit_dir_path: str | No
     # ★367 后续：低危限额（必须在全局截断**之前**：否则全局截断先砍，限额就形同虚设）
     _kept, _low_dropped = cap_low_severity(_kept)
     if _low_dropped:
-        _module_logger.warning(
-            "[367低危限额] 低危条目超限：保留 %d 条，本快照未收录 %d 条"
-            "（review_only 类，非丢弃：生成侧幂等，下拍仍会送来）",
-            MAX_LOW_ENTRIES, len(_low_dropped))
+        # ★450刀5：这条是**配置事实**（cap=600 vs 实际 995 条），不是事故。
+        #   367 起每拍快照都 WARNING 一遍（实测 7 条/78 分钟，间隔 11 分钟）——
+        #   任务书写的"5 分钟去重"一条也压不掉（11 > 5），所以改判据：
+        #   **内容（cap|超出数）一变立刻报，不变则按 M450_POOL_WARN_RENOTIFY_SEC 重报**。
+        _m450_pool_sig = f"{MAX_LOW_ENTRIES}|{len(_low_dropped)}|{len(_kept)}"
+        try:
+            from nucleus import alert_dedup as _ad450p
+            _m450_p_emit, _m450_p_sup = _ad450p.should_warn_content(
+                "problem_pool.low_cap", _m450_pool_sig,
+                renotify_sec=_ad450p.cfg_num(
+                    "M450_POOL_WARN_RENOTIFY_SEC", 21600.0))
+        except Exception as _d450p:
+            silent_exc(_d450p, where="audit_problem_pool::_m450_low_cap_dedup", level="debug")
+            _m450_p_emit, _m450_p_sup = True, 0
+        if _m450_p_emit:
+            _module_logger.warning(
+                "[367低危限额] 低危条目超限：保留 %d 条，本快照未收录 %d 条"
+                "（review_only 类，非丢弃：生成侧幂等，下拍仍会送来）"
+                "（此前同内容已压掉 %d 条）",
+                MAX_LOW_ENTRIES, len(_low_dropped), int(_m450_p_sup))
     _truncated = 0
     if len(_kept) > MAX_POOL_ENTRIES:
         # ★383刀4：同上，stale 排后（它不该占截断名额，但仍算未结案）。

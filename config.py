@@ -7655,3 +7655,94 @@ M449_MEM_TRACE_PATH = "data/reports/memory_alarm_trace.jsonl"
 #   ★为什么改：盘账 40 条**全部**已带标记，而每批规则落盘都会重新扫一遍 ⇒
 #     同一批老条目每轮刷同样的 WARNING（实测 109 条/8h）。
 ENABLE_M449_HYP_QUIET = True
+
+# ==================== ★450批：P1第一批（口径修正 + 观测 + 降噪）====================
+
+# ---- 通用降噪底座（nucleus/alert_dedup.py）----
+# ENABLE_M450_ALERT_DEDUP
+#   默认值：True
+#   语义：True  ⇒ 四类告警走「连续计数 / 内容去重」；关 ⇒ 逐字回到 450 之前在
+#                的"每次都报"（streak 仍计数，便于线上临时放开看全量）。
+ENABLE_M450_ALERT_DEDUP = True
+# M450_CTRL_EXC_STREAK_THRESHOLD / M450_CTRL_EXC_RENOTIFY_SEC
+#   默认值：3 / 600
+#   语义：控制器「异常已忽略（需关注）」同一位置同一异常类型**连续 3 次**才 WARNING，
+#        单次/前两次降 DEBUG；已达阈值后每 600s 再报一次（渠道一直挂着还能看见）。
+#   ★只对**超时族**聚合（TimeoutError/socket.timeout/消息含 timed out）；
+#     其它异常类型一律立即 WARNING —— 聚合不能把真 bug 藏起来。
+M450_CTRL_EXC_STREAK_THRESHOLD = 3
+M450_CTRL_EXC_RENOTIFY_SEC = 600
+# M450_CTRL_SEMANTIC_RENOTIFY_SEC / M450_CTRL_PW_TIMEOUT_RENOTIFY_SEC
+#   默认值：1800 / 600
+#   语义：控制器另两类**重复但内容各异**的告警按窗口聚合：
+#        「语义增强提取与主题零重叠」（每轮抓取都可能触发，实测 9 条/2 小时）
+#        「Playwright搜索超时…已降级」（有兜底的正常路径，实测 4 条/2 小时）。
+#   ★为什么要单列：这两条不是"连续 N 次"语义（streak），是"同一类消息多久没念了"，
+#     内容每次不同但事件相同 ⇒ 用窗口去重，压掉的条数写在消息尾部（降噪不等于消失）。
+M450_CTRL_SEMANTIC_RENOTIFY_SEC = 1800
+M450_CTRL_PW_TIMEOUT_RENOTIFY_SEC = 600
+# M450_WIKI_403_STREAK_THRESHOLD / M450_WIKI_403_RENOTIFY_SEC
+#   默认值：3 / 600
+#   语义：百科查询 403 同一站点连续 3 次才 WARNING（一次查询内部有 3 次重试，
+#        6 秒内 3 条同一件事）；超过阈值后每 600s 再报一次。
+M450_WIKI_403_STREAK_THRESHOLD = 3
+M450_WIKI_403_RENOTIFY_SEC = 600
+# M450_METRIC_WARN_RENOTIFY_SEC / M450_POOL_WARN_RENOTIFY_SEC
+#   默认值：3600 / 21600
+#   语义：指标采集器降级告警「内容不变则 1 小时才重报」；问题池低危限额是**配置事实**
+#        （cap=600 vs 995 条），不是事故 ⇒ 6 小时才重报，且数字一变立刻报。
+#   ★为什么不是任务书写的"5 分钟去重"：实测这两条告警的间隔本来就是 10/11 分钟，
+#     5 分钟窗一条都压不掉（见 450 交付报告 §0）。
+M450_METRIC_WARN_RENOTIFY_SEC = 3600
+M450_POOL_WARN_RENOTIFY_SEC = 21600
+
+# ---- 刀1：patch_chain 环节漏斗 ----
+# ENABLE_M450_CHAIN_FUNNEL
+#   默认值：True
+#   语义：True  ⇒ patch_chain 多算三个环节字段
+#                `gen_voided`（本轮作废，源 `data/reports/converge_voided.jsonl`）/
+#                `gen_pending`（本轮入队，源 pending_patches.json 的 generated_at）/
+#                `approved`（今日审批通过，源 approval_trace.jsonl），
+#                并按 `M450_CHAIN_FUNNEL_LOG_SEC` 打一条 INFO 漏斗（五个环节一起列）。
+#   ★新字段**不进** `_M421_PC_FIELDS`：那四个字段决定 `state` 判定（ok/partial/
+#     unavailable），往里加会让"老字段齐了但新源读不到"被误判成 partial。
+ENABLE_M450_CHAIN_FUNNEL = True
+M450_CHAIN_FUNNEL_LOG_SEC = 1800
+
+# ---- 刀2：KAL 命中率观测 ----
+# ENABLE_M450_KAL_HIT
+#   默认值：True
+#   语义：True  ⇒ KAL 查询口（get_node/get_nodes_batch/各 search_*/semantic_search）
+#                记「总查询 / 命中 / 未命中 / 按器官分」，每 M450_KAL_FLUSH_SEC 汇总
+#                一行落 `M450_KAL_TRACE_PATH`。**只观测，不改任何返回**。
+#   ★器官归属用调用栈第一层 `organs/` 或 `nucleus/` 模块名推导（按模块名缓存），
+#     不要求调用方改签名。
+ENABLE_M450_KAL_HIT = True
+M450_KAL_TRACE_PATH = "data/kal_hit_trace.jsonl"
+M450_KAL_FLUSH_SEC = 3600
+
+# ---- 刀3：O-A4 OBSERVE 影子 ----
+# ENABLE_M450_OA4_OBSERVE
+#   默认值：True
+#   语义：True  ⇒ 每次 `observe_llm_answer`（383 单向影子）除了内存计数，再落一行
+#                旁路记录到 `M450_OA4_TRACE_PATH`：O-A4 规则侧**建议**是什么、
+#                实际回答走了哪条路、两者一致/不一致。
+#        **不改任何决策**：`resolve()` 调用方一字未动，只旁路记录。
+ENABLE_M450_OA4_OBSERVE = True
+M450_OA4_TRACE_PATH = "data/o_a4_observe_trace.jsonl"
+
+# ---- 刀6：449 内存告警回归修复 ----
+# M450_MEM_STEADY_COVER_RATIO
+#   默认值：0.9
+#   语义：只有稳态斜率**真实覆盖**了 `M449_MEM_STEADY_WINDOW_SEC × 该比例` 才允许
+#        判 `steady_leak`；覆盖不足 ⇒ 不判（why 里写明"稳态窗覆盖不足"）。
+#   ★病因（11-04 20:09~20:28 实测）：进程 19:59:32 启动，20:09 起每 40s 一条
+#     `steady_leak`（29 分钟 26 条），而同期瞬时 −0.2MB/分、RSS 纹丝不动。
+#     基点是"ramp 后第一个样本"（20:09），稳态斜率把**仍在爬升的预热尾巴**当成了泄漏。
+# M450_MEM_RENOTIFY_SEC
+#   默认值：600
+#   语义：内存告警已触发后，每 600s 才允许重报一次（403 刀4 的 30s 节流对
+#        "采样间隔 ~40s"等于没有节流，实测 26 条/29 分钟）。
+M450_MEM_STEADY_COVER_RATIO = 0.9
+M450_MEM_RENOTIFY_SEC = 600
+

@@ -25,6 +25,8 @@ KAL 定义统一的知识访问接口，使**底层存储可透明替换**：
 """
 import logging
 import os
+import sys
+import threading
 import time
 from collections.abc import Iterator
 from typing import Any, Optional
@@ -680,6 +682,278 @@ class KnowledgeAccessLayer:
         if self._node_pool is None:
             return None
         return self._node_pool.upgrade_node_level(*args, **kwargs)
+
+
+# ==================== ★450刀2：KAL 命中率观测 ====================
+#
+# 任务书 §刀2：全局 KAL 已注入 node_pool（444刀2），但**命中率多少没人知道** ——
+# 于是"要不要把更多器官迁到 KAL"只能靠猜。本刀只**观测**，不改任何返回。
+#
+# 三条纪律：
+#   1. 计数走**包装器**（模块末尾 `_m450_install_kal_hit_probe()`），不往 9 个
+#      query 方法体里插代码 —— 方法体是公共 API，插计数会让"读代码的人以为
+#      命中判定在那里"。
+#   2. 器官归属从**调用栈**推导（第一层 `organs.*` / `nucleus.*` 模块名），
+#      不要求调用方改签名；按模块名缓存（frame walk 只在未命中缓存时发生）。
+#   3. 任何异常都不能影响查询本身：计数失败 ⇒ 静默（silent_exc debug），照常返回。
+#
+# 落盘：每 `M450_KAL_FLUSH_SEC`（默认 3600s）追加一行到 `M450_KAL_TRACE_PATH`，
+#       带本窗口增量 + 累计 + 按器官/按 API 分档 + 命中率。窗口内零查询**不落行**
+#       （不留"0 查询"的空行，否则 8 小时又是 8 行噪声）。
+_M450_KAL_TRACE_REL_DEFAULT: str = os.path.join("data", "kal_hit_trace.jsonl")
+_M450_KAL_PROJECT_ROOT: str = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+#: 要观测的查询口（9 个；都是"读"口，写口 save_node/delete_node 不算查询）
+_M450_KAL_APIS: tuple = (
+    "get_node", "get_nodes_batch", "search_by_keywords", "search_by_path",
+    "search_by_evol_level", "search_by_time_range", "search_by_source_organ",
+    "semantic_search", "query_nodes",
+)
+
+_M450_KAL_LOCK = threading.Lock()
+_m450_kal_stat: dict = {
+    "since": time.time(),
+    "total": 0, "hit": 0, "miss": 0,
+    "by_organ": {}, "by_api": {},
+    "last_flush": time.time(), "flushes": 0,
+}
+#: 上一次 flush 时的累计快照（用来算窗口增量）
+_m450_kal_last: dict = {"total": 0, "hit": 0, "miss": 0,
+                        "by_organ": {}, "by_api": {}}
+_m450_kal_organ_cache: dict[str, str] = {}
+_m450_kal_wrapped: bool = False
+
+
+def _m450_kal_on() -> bool:
+    """★450刀2 开关 `ENABLE_M450_KAL_HIT`（默认 True）。"""
+    try:
+        import config as _c
+        return bool(getattr(_c, "ENABLE_M450_KAL_HIT", True))
+    except Exception as _e:
+        silent_exc(_e, where="knowledge_access_layer::_m450_kal_on", level="debug")
+        return True
+
+
+def _m450_organ_of() -> str:
+    """从调用栈推导"谁在查 KAL"：取第一层 `organs.*` / `nucleus.*` 模块的叶子名。"""
+    try:
+        _f = sys._getframe(2)          # 0=本函数 1=_wrapped 2=真正的调用方
+    except Exception as _e:
+        silent_exc(_e, where="knowledge_access_layer::_m450_organ_of frame", level="debug")
+        return "unknown"
+    for _ in range(12):
+        if _f is None:
+            break
+        try:
+            _mod = str(_f.f_globals.get("__name__") or "")
+        except Exception as _e2:
+            silent_exc(_e2, where="knowledge_access_layer::_m450_organ_of name", level="debug")
+            _mod = ""
+        if _mod and not _mod.startswith("nucleus.knowledge_access_layer") \
+                and not _mod.startswith("nucleus.alert_dedup"):
+            _hit = _m450_kal_organ_cache.get(_mod)
+            if _hit is not None:
+                return _hit
+            if _mod.startswith(("organs.", "nucleus.")):
+                _leaf = _mod.rsplit(".", 1)[-1]
+                _m450_kal_organ_cache[_mod] = _leaf
+                return _leaf
+        _f = _f.f_back
+    return "unknown"
+
+
+def _m450_is_hit(result: Any) -> bool:
+    """命中判定：容器看长度，标量看是否非 None。"""
+    if result is None:
+        return False
+    try:
+        if isinstance(result, (list, tuple, dict, set)):
+            return len(result) > 0
+    except Exception as _e:
+        silent_exc(_e, where="knowledge_access_layer::_m450_is_hit len", level="debug")
+        return False
+    return True
+
+
+def _m450_bump(bucket: dict, key: str, hit: bool) -> None:
+    _b = bucket.get(key)
+    if not isinstance(_b, dict):
+        _b = {"total": 0, "hit": 0, "miss": 0}
+        bucket[key] = _b
+    _b["total"] = int(_b.get("total") or 0) + 1
+    _b["hit" if hit else "miss"] = int(_b.get("hit" if hit else "miss") or 0) + 1
+
+
+def _m450_note_query(api: str, hit: bool) -> None:
+    """记一次查询；顺手判断要不要 flush（**绝不抛异常**）。"""
+    if not _m450_kal_on():
+        return
+    try:
+        _organ = _m450_organ_of()
+        _now = time.time()
+        with _M450_KAL_LOCK:
+            _s = _m450_kal_stat
+            _s["total"] = int(_s["total"]) + 1
+            _s["hit" if hit else "miss"] = int(_s["hit" if hit else "miss"]) + 1
+            _m450_bump(_s["by_organ"], _organ, hit)
+            _m450_bump(_s["by_api"], str(api), hit)
+            _due = False
+            try:
+                from nucleus import alert_dedup as _ad450k
+                _iv = _ad450k.cfg_num("M450_KAL_FLUSH_SEC", 3600.0)
+            except Exception as _e:
+                silent_exc(_e, where="knowledge_access_layer::_m450_note_query cfg", level="debug")
+                _iv = 3600.0
+            _due = (_now - float(_s.get("last_flush") or 0.0)) >= _iv
+        if _due:
+            _m450_kal_flush()
+    except Exception as _e:
+        silent_exc(_e, where="knowledge_access_layer::_m450_note_query", level="debug")
+
+
+def _m450_delta(cur: dict, last: dict) -> dict:
+    """`cur - last` 的浅层差值（数值键逐个相减；嵌套桶逐个键相减）。"""
+    _out: dict = {}
+    for _k, _v in (cur or {}).items():
+        if isinstance(_v, dict):
+            _prev = (last or {}).get(_k) or {}
+            _sub = {}
+            for _kk, _vv in _v.items():
+                if isinstance(_vv, dict):
+                    _p2 = _prev.get(_kk) or {}
+                    _sub[_kk] = {_m: int(_vv.get(_m) or 0) - int(_p2.get(_m) or 0)
+                                 for _m in ("total", "hit", "miss")}
+                else:
+                    _sub[_kk] = int(_vv or 0) - int(_prev.get(_kk) or 0)
+            _out[_k] = _sub
+        elif isinstance(_v, (int, float)):
+            _out[_k] = _v - (last or {}).get(_k, 0)
+    return _out
+
+
+def _m450_kal_flush() -> str:
+    """把本窗口增量 + 累计写一行 JSONL。窗口内零查询**不写**。返回写入路径或空串。"""
+    try:
+        import json as _json
+        with _M450_KAL_LOCK:
+            _s = dict(_m450_kal_stat)
+            _s["by_organ"] = {k: dict(v) for k, v in _m450_kal_stat["by_organ"].items()}
+            _s["by_api"] = {k: dict(v) for k, v in _m450_kal_stat["by_api"].items()}
+            _last = _m450_kal_last
+        _win = _m450_delta(
+            {"total": _s["total"], "hit": _s["hit"], "miss": _s["miss"],
+             "by_organ": _s["by_organ"], "by_api": _s["by_api"]}, _last)
+        _wt = int(_win.get("total") or 0)
+        if _wt <= 0:
+            with _M450_KAL_LOCK:
+                _m450_kal_stat["last_flush"] = time.time()
+            return ""
+        _org = _win.get("by_organ") or {}
+        _top = sorted(((_k, int((_v or {}).get("total") or 0)) for _k, _v in _org.items()),
+                      key=lambda x: -x[1])[:8]
+        _tot = int(_s["total"]) or 0
+        _row = {
+            "ts": time.time(),
+            "at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "kind": "kal_hit",
+            "window_total": _wt,
+            "window_hit": int(_win.get("hit") or 0),
+            "window_miss": int(_win.get("miss") or 0),
+            "window_hit_rate_pct": (round(int(_win.get("hit") or 0) * 100.0 / _wt, 2)),
+            "cum_total": _tot,
+            "cum_hit": int(_s["hit"]),
+            "cum_miss": int(_s["miss"]),
+            "cum_hit_rate_pct": (round(int(_s["hit"]) * 100.0 / _tot, 2) if _tot else None),
+            "top_organs": [{"organ": _k, "total": _v} for _k, _v in _top],
+            "by_organ": _org,
+            "by_api": _win.get("by_api") or {},
+            "uptime_sec": round(time.time() - float(_s.get("since") or time.time()), 1),
+        }
+        try:
+            import config as _c
+            _rel = str(getattr(_c, "M450_KAL_TRACE_PATH",
+                               _M450_KAL_TRACE_REL_DEFAULT) or "")
+        except Exception as _e:
+            silent_exc(_e, where="knowledge_access_layer::_m450_kal_flush cfg", level="debug")
+            _rel = _M450_KAL_TRACE_REL_DEFAULT
+        if not _rel:
+            return ""
+        _p = _rel if os.path.isabs(_rel) else os.path.join(_M450_KAL_PROJECT_ROOT, _rel)
+        # ★测试进程不许写**默认生产路径**（446/447 三次同型坑的护栏）
+        if "pytest" in sys.modules and os.path.normcase(os.path.normpath(_p)) == \
+                os.path.normcase(os.path.normpath(os.path.join(
+                    _M450_KAL_PROJECT_ROOT, _M450_KAL_TRACE_REL_DEFAULT))):
+            return ""
+        os.makedirs(os.path.dirname(_p), exist_ok=True)
+        with open(_p, "a", encoding="utf-8", newline="\n") as _f:
+            _f.write(_json.dumps(_row, ensure_ascii=False) + "\n")
+        with _M450_KAL_LOCK:
+            _m450_kal_last.clear()
+            _m450_kal_last.update({"total": _s["total"], "hit": _s["hit"],
+                                   "miss": _s["miss"],
+                                   "by_organ": _s["by_organ"], "by_api": _s["by_api"]})
+            _m450_kal_stat["last_flush"] = time.time()
+            _m450_kal_stat["flushes"] = int(_m450_kal_stat.get("flushes") or 0) + 1
+        return _p
+    except Exception as _e:
+        silent_exc(_e, where="knowledge_access_layer::_m450_kal_flush", level="debug")
+        return ""
+
+
+def kal_hit_stats() -> dict:
+    """★450刀2：命中率台面读数（累计 + 窗口是否就绪）。只读拷贝。"""
+    try:
+        with _M450_KAL_LOCK:
+            _s = _m450_kal_stat
+            _tot = int(_s["total"]) or 0
+            return {
+                "enabled": _m450_kal_on(),
+                "wrapped": bool(_m450_kal_wrapped),
+                "total": _tot, "hit": int(_s["hit"]), "miss": int(_s["miss"]),
+                "hit_rate_pct": (round(int(_s["hit"]) * 100.0 / _tot, 2) if _tot else None),
+                "by_organ": {k: dict(v) for k, v in _s["by_organ"].items()},
+                "by_api": {k: dict(v) for k, v in _s["by_api"].items()},
+                "flushes": int(_s.get("flushes") or 0),
+                "since": _s.get("since"), "last_flush": _s.get("last_flush"),
+            }
+    except Exception as _e:
+        silent_exc(_e, where="knowledge_access_layer::kal_hit_stats", level="debug")
+        return {"enabled": False, "wrapped": False, "total": 0}
+
+
+def _m450_install_kal_hit_probe(force: bool = False) -> bool:
+    """把 9 个查询口包一层计数。幂等（`_m450_kal_wrapped` 守）；返回是否已装。"""
+    global _m450_kal_wrapped
+    if _m450_kal_wrapped and not force:
+        return True
+    if not _m450_kal_on():
+        return False
+
+    def _mk(_fn, _api):
+        def _wrapped(self, *a, **kw):
+            _r = _fn(self, *a, **kw)
+            try:
+                if _kal_enabled():
+                    _m450_note_query(_api, _m450_is_hit(_r))
+            except Exception as _e:
+                silent_exc(_e, where="knowledge_access_layer::_m450_wrapped",
+                           level="debug")
+            return _r
+        _wrapped.__name__ = getattr(_fn, "__name__", _api)
+        _wrapped.__doc__ = getattr(_fn, "__doc__", None)
+        _wrapped.__wrapped__ = _fn
+        return _wrapped
+
+    for _api in _M450_KAL_APIS:
+        _f = getattr(KnowledgeAccessLayer, _api, None)
+        if not callable(_f):
+            continue
+        setattr(KnowledgeAccessLayer, _api, _mk(_f, _api))
+    _m450_kal_wrapped = True
+    return True
+
+
+_m450_install_kal_hit_probe()
 
 
 def get_kal(node_pool: Any = None, snapshot: Any = None,

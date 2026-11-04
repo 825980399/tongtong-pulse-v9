@@ -16,10 +16,15 @@
 """
 from __future__ import annotations
 
+import json
+import os
+import sys
+import time
 from datetime import datetime as _dt
 from typing import Any
 
 import config as _cfg
+from nucleus._silent_except import silent_exc
 
 
 def _enabled() -> bool:
@@ -60,7 +65,7 @@ def _m383_shadow_on() -> bool:
     return bool(getattr(_cfg, "ENABLE_M383_OA4_SHADOW", True))
 
 
-def observe_llm_answer(request_text: str, llm_answer: str) -> dict:
+def _m383_observe_impl(request_text: str, llm_answer: str) -> dict:
     """★383刀2（T-383-OA4单向影子）：拿**已有的** LLM 回答做单向对照，记录规则覆盖率与凭证可见率。
 
     ★绝不调用 LLM、绝不调用 `resolve()`（避免递归观测）、绝不产生 IO。
@@ -95,6 +100,213 @@ def observe_llm_answer(request_text: str, llm_answer: str) -> dict:
     return _out
 
 
+def observe_llm_answer(request_text: str, llm_answer: str) -> dict:
+    """★383刀2 原语义 + ★450刀3 旁路观测（**只记不改**：返回值逐字不变）。
+
+    包装而不改内层的原因：内层有 4 个 return 分支（关/无规则/无凭证/有结论），
+    在每个分支里插记录会漏一个；包装层只在一个地方兜住全部返回。
+    """
+    _out = _m383_observe_impl(request_text, llm_answer)
+    try:
+        _m450_note_observe(request_text, llm_answer, _out)
+    except Exception as _e:
+        silent_exc(_e, where="active_memory_dual::observe_llm_answer wrap", level="debug")
+    return _out
+
+
+# ==================== ★450刀3：O-A4 OBSERVE 影子观测 ====================
+#
+# 任务书 §刀3：O-A4 还没开，先开**影子观测** —— 只记录不改行为，看命中率与差异。
+#
+# 能观测什么、不能观测什么（说清楚，不夸大）
+# ------------------------------------------
+# 383 那套是**单向**影子：拿"已经产出的 LLM 回答"做规则对照，零额外调用。
+# 因此本刀能回答：
+#   · 规则覆盖率 —— 有多少请求本来能被确定性规则免掉 LLM；
+#   · 可省未省率（diverged）—— 规则命中了、却还是调了 LLM 的比例；
+#   · 凭证可见率（agree）—— 规则命中且有本地凭证时，凭证是否出现在回答里。
+# 它**不能**回答「规则答案与 LLM 答案语义是否一致」—— 那需要双向（同一 prompt
+# 走两遍），会让 LLM 调用翻倍，本批明确不做。
+#
+# 落盘策略（为什么不逐条写）
+# --------------------------
+# `_m40_trace_call` 是**每次** LLM 调用都会经过的收口（实测 ~84 次/小时）。
+# 逐条落盘 = 2000 行/天，观测文件自己变成噪声源（与 449 治的是同一种病）。
+# 所以：
+#   · **规则命中**的观测一律落行（这类少，且正是"差异"所在）；
+#   · 其余按 `M450_OA4_SUMMARY_SEC`（默认 3600s）落一行**汇总**（带精确计数）；
+#   · 汇总行也保证"文件还在写"这件事本身可验证。
+#
+# ★不改决策：`resolve()` 的调用方一字未动，本模块只读 `_match_rule` 与 `_m182_local_evidence`。
+_M450_OA4_TRACE_REL_DEFAULT: str = os.path.join("data", "o_a4_observe_trace.jsonl")
+_M450_OA4_ROOT: str = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))))
+
+_M450_OA4_STAT: dict = {
+    "since": time.time(), "scored": 0, "rule_hit": 0, "no_rule": 0,
+    "diverged": 0, "would_agree": 0, "would_disagree": 0,
+    "rows": 0, "summaries": 0, "last_summary": time.time(),
+}
+
+
+def _m450_oa4_on() -> bool:
+    """★450刀3 开关 `ENABLE_M450_OA4_OBSERVE`（默认 True）。"""
+    try:
+        return bool(getattr(_cfg, "ENABLE_M450_OA4_OBSERVE", True))
+    except Exception as _e:
+        silent_exc(_e, where="active_memory_dual::_m450_oa4_on", level="debug")
+        return True
+
+
+def _m450_oa4_path() -> str:
+    """留痕文件绝对路径（相对路径按仓根解析）；空串表示不写。"""
+    try:
+        _rel = str(getattr(_cfg, "M450_OA4_TRACE_PATH",
+                           _M450_OA4_TRACE_REL_DEFAULT) or "")
+    except Exception as _e:
+        silent_exc(_e, where="active_memory_dual::_m450_oa4_path cfg", level="debug")
+        _rel = _M450_OA4_TRACE_REL_DEFAULT
+    if not _rel:
+        return ""
+    return _rel if os.path.isabs(_rel) else os.path.join(_M450_OA4_ROOT, _rel)
+
+
+def _m450_oa4_write(row: dict) -> bool:
+    """追加一行；默认生产路径**在测试进程里拒写**（446/447 三次同型坑的护栏）。"""
+    try:
+        _p = _m450_oa4_path()
+        if not _p:
+            return False
+        if "pytest" in sys.modules and os.path.normcase(os.path.normpath(_p)) == \
+                os.path.normcase(os.path.normpath(
+                    os.path.join(_M450_OA4_ROOT, _M450_OA4_TRACE_REL_DEFAULT))):
+            return False
+        os.makedirs(os.path.dirname(_p), exist_ok=True)
+        with open(_p, "a", encoding="utf-8", newline="\n") as _f:
+            _f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        _M450_OA4_STAT["rows"] = int(_M450_OA4_STAT.get("rows") or 0) + 1
+        return True
+    except Exception as _e:
+        silent_exc(_e, where="active_memory_dual::_m450_oa4_write", level="debug")
+        return False
+
+
+def _m450_oa4_summary(force: bool = False) -> str:
+    """按 `M450_OA4_SUMMARY_SEC` 落一行汇总。返回写入路径或空串。"""
+    try:
+        if not _m450_oa4_on():
+            return ""
+        from nucleus import alert_dedup as _ad450o
+        _iv = _ad450o.cfg_num("M450_OA4_SUMMARY_SEC", 3600.0)
+        _now = time.time()
+        if not force and (_now - float(_M450_OA4_STAT.get("last_summary") or 0.0)) < _iv:
+            return ""
+        _s = _M450_OA4_STAT
+        _n = int(_s.get("scored") or 0)
+        _h = int(_s.get("rule_hit") or 0)
+        _row = {
+            "ts": _now, "at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "kind": "summary", "mode": "observe",
+            "scored": _n, "rule_hit": _h, "no_rule": int(_s.get("no_rule") or 0),
+            "rule_coverage_pct": (round(_h * 100.0 / _n, 2) if _n else None),
+            "diverged": int(_s.get("diverged") or 0),
+            "diverged_pct_of_hit": (round(int(_s.get("diverged") or 0) * 100.0 / _h, 2)
+                                     if _h else None),
+            "would_agree": int(_s.get("would_agree") or 0),
+            "would_disagree": int(_s.get("would_disagree") or 0),
+            "uptime_sec": round(_now - float(_s.get("since") or _now), 1),
+            "note": "单向影子：只用已有 LLM 回答，零额外调用；不改任何决策",
+        }
+        _p = _m450_oa4_write(_row)
+        _s["last_summary"] = _now
+        if _p:
+            _s["summaries"] = int(_s.get("summaries") or 0) + 1
+        return _p
+    except Exception as _e:
+        silent_exc(_e, where="active_memory_dual::_m450_oa4_summary", level="debug")
+        return ""
+
+
+def _m450_note_observe(request_text: str, llm_answer: str, out: dict) -> None:
+    """★450刀3：把一次单向影子观测记进计数，并按策略落盘（**绝不抛异常**）。"""
+    try:
+        if not _m450_oa4_on():
+            return
+        _o = out or {}
+        if not _o.get("on"):
+            return                       # 383 影子自己关着 ⇒ 不记（否则分母掺假）
+        _s = _M450_OA4_STAT
+        _s["scored"] = int(_s.get("scored") or 0) + 1
+        _bucket = str(_o.get("bucket") or "")
+        _rule_hit = bool(_o.get("rule_hit"))
+        if _rule_hit:
+            _s["rule_hit"] = int(_s.get("rule_hit") or 0) + 1
+            # 规则命中却仍走了 LLM ⇒ "可省未省"，这就是 O-A4 与现有决策的差异
+            _s["diverged"] = int(_s.get("diverged") or 0) + 1
+        else:
+            _s["no_rule"] = int(_s.get("no_rule") or 0) + 1
+        _agree = _o.get("agree")
+        if _agree is True:
+            _s["would_agree"] = int(_s.get("would_agree") or 0) + 1
+        elif _agree is False:
+            _s["would_disagree"] = int(_s.get("would_disagree") or 0) + 1
+        # 规则命中 ⇒ 逐条落（差异样本）；否则交给汇总
+        if _rule_hit:
+            _m450_oa4_write({
+                "ts": time.time(), "at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "kind": "observe", "mode": "observe",
+                "request_head": str(request_text or "")[:120],
+                "o_a4_suggestion": (f"deterministic:{_o.get('rule_id')}"
+                                     if _o.get("rule_id") else "llm"),
+                "actual_decision": "llm",
+                "diverged": True,
+                "rule_id": str(_o.get("rule_id") or ""),
+                "bucket": _bucket,
+                "agree": _agree,
+                "answer_len": len(str(llm_answer or "")),
+                "note": "规则可免 LLM 但实际仍调用 ⇒ 可省未省（不改决策，仅观测）",
+            })
+        _m450_oa4_summary()
+    except Exception as _e:
+        silent_exc(_e, where="active_memory_dual::_m450_note_observe", level="debug")
+
+
+def o_a4_observe_stats() -> dict:
+    """★450刀3：影子观测台面读数（精确计数；供快照/单测读）。"""
+    try:
+        _s = dict(_M450_OA4_STAT)
+        _n = int(_s.get("scored") or 0)
+        _h = int(_s.get("rule_hit") or 0)
+        return {
+            "enabled": _m450_oa4_on(), "mode": "observe",
+            "scored": _n, "rule_hit": _h, "no_rule": int(_s.get("no_rule") or 0),
+            "rule_coverage_pct": (round(_h * 100.0 / _n, 2) if _n else None),
+            "diverged": int(_s.get("diverged") or 0),
+            "would_agree": int(_s.get("would_agree") or 0),
+            "would_disagree": int(_s.get("would_disagree") or 0),
+            "rows": int(_s.get("rows") or 0),
+            "summaries": int(_s.get("summaries") or 0),
+            "since": _s.get("since"), "last_summary": _s.get("last_summary"),
+            "trace_path": _m450_oa4_path(),
+        }
+    except Exception as _e:
+        silent_exc(_e, where="active_memory_dual::o_a4_observe_stats", level="debug")
+        return {"enabled": False, "mode": "observe", "scored": 0}
+
+
+def reset_observe_stats() -> None:
+    """清空影子观测计数（**仅供测试**）。"""
+    try:
+        for _k in list(_M450_OA4_STAT):
+            if _k in ("since", "last_summary"):
+                _M450_OA4_STAT[_k] = time.time()
+            elif isinstance(_M450_OA4_STAT[_k], int):
+                _M450_OA4_STAT[_k] = 0
+    except Exception as _e:
+        silent_exc(_e, where="active_memory_dual::reset_observe_stats", level="debug")
+
+
+
 def shadow_stats() -> dict:
     """★383刀2（T-383-OA4单向影子）：影子读数 —— 覆盖率 / 凭证可见率分开算，**不给合并结论**。"""
     _s = dict(_M383_SHADOW)
@@ -111,6 +323,10 @@ def shadow_stats() -> dict:
         "agree_rate_pct": (round(int(_s.get("agree", 0)) * 100.0 / _scorable, 2)
                             if _scorable else None),
         "note": "单向影子：只用已有 LLM 回答，零额外调用；agree_rate 仅在…有凭证时可算",
+        # ★450刀3：把 OBSERVE 影子的落盘计数一并给观测面（443 已把 shadow_stats
+        #   接进 `_build_observability_snapshot()["oa4_shadow"]`）——
+        #   否则"影子开了没开、落了几行"只能去翻文件。
+        "observe": o_a4_observe_stats(),
     }
 
 

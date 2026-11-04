@@ -540,8 +540,14 @@ class RuntimeMetrics:
                 "percent": round(_pct, 1)}
 
     def _m403_alarm_transition(self, logger, key: str, triggered: bool,
-                               alarm_msg: str, recover_msg: str) -> None:
-        """★403刀4③：阈值告警状态机（正常→超阈值 WARNING / 持续 30s 节流 / 恢复 INFO）。
+                               alarm_msg: str, recover_msg: str,
+                               renotify_sec: float | None = None) -> None:
+        """★403刀4③：阈值告警状态机（正常→超阈值 WARNING / 持续节流 / 恢复 INFO）。
+
+        ★450刀6：`renotify_sec` 允许调用方指定「持续态多久再报一次」，缺省沿用
+          `_M403_ALARM_THROTTLE_S`（30s）—— **既有调用方一字未改**。
+          为什么需要：30s 节流对「采样间隔 ~40s」等于没有节流（每拍都超 30s），
+          内存告警实测 26 条/29 分钟。
 
         为什么必须做：RSS 超阈值后本方法每 10s 被调一次，现场 21 分钟刷了 150 条
         一模一样的 WARNING，真正的异常全被淹掉。告警应该是**状态变化**的通知，
@@ -549,13 +555,20 @@ class RuntimeMetrics:
         """
         _st = _M403_ALARM_STATE.setdefault(str(key), {"state": "normal", "last": 0.0})
         _now = time.time()
+        # ★450刀6：重报间隔可由调用方指定；缺省仍是 403 的 30s（既有调用方零改动）
+        try:
+            _ren = (_M403_ALARM_THROTTLE_S if renotify_sec is None
+                    else max(0.0, float(renotify_sec)))
+        except Exception as _ren_e:
+            silent_exc(_ren_e, where="runtime_metrics._m403_alarm_transition ren", level="debug")
+            _ren = _M403_ALARM_THROTTLE_S
         try:
             if triggered:
                 if _st["state"] != "alarm":
                     logger.warning(alarm_msg)
                     _st["state"] = "alarm"
                     _st["last"] = _now
-                elif (_now - float(_st.get("last") or 0.0)) >= _M403_ALARM_THROTTLE_S:
+                elif (_now - float(_st.get("last") or 0.0)) >= _ren:
                     # 持续超阈值：30s 才允许再念一次（证明还活着，但不再刷屏）
                     logger.warning(alarm_msg)
                     _st["last"] = _now
@@ -765,10 +778,14 @@ class RuntimeMetrics:
             _hold = float(getattr(_c449, "M449_MEM_SPIKE_HOLD_SEC", 300.0) or 300.0)
             _step_mb = float(getattr(_c449, "M449_MEM_STEP_JUMP_MB", 1024.0) or 1024.0)
             _thr = float(getattr(_c449, "MEMORY_GROWTH_ALARM_MB_PER_MIN", 10.0) or 10.0)
+            # ★450刀6：稳态窗覆盖率下限（见 config 同名注释里的 26 条假泄漏实测）
+            _cov_ratio = float(getattr(
+                _c449, "M450_MEM_STEADY_COVER_RATIO", 0.9) or 0.9)
         except Exception as _e:
             silent_exc(_e, where="runtime_metrics::_m449_growth_verdict config", level="debug")
             _on, _inst_w, _stdy_w = True, 300.0, 1800.0
             _ratio, _hold, _step_mb, _thr = 2.0, 300.0, 1024.0, 10.0
+            _cov_ratio = 0.9
         _out.update({"threshold": _thr, "ratio_thr": _ratio,
                      "hold_sec": _hold, "step_mb": _step_mb})
         if not _on:
@@ -792,7 +809,20 @@ class RuntimeMetrics:
             _floor = max(_thr, 1e-9)
             _out["ratio"] = round(_i / max(abs(_s), _floor), 3) if _i > 0 else 0.0
             _spike_cond = (_i >= _thr) and (_i >= _ratio * max(abs(_s), _floor))
-            _leak_cond = abs(_s) >= _thr
+            # ★450刀6：稳态斜率必须**真的覆盖**了稳态窗，才允许判泄漏。
+            #   病因（11-04 20:09~20:28 实测）：进程 19:59:32 启动，稳态基点是
+            #   「ramp 后第一个样本」= 20:09 左右 —— 此时内存仍在爬升（预热尾巴），
+            #   于是 (rss_now - 基点)/分钟 被算成 130~136MB/分，判成 steady_leak；
+            #   而同期**瞬时 −0.2MB/分、RSS 纹丝不动**，两者直接矛盾。
+            #   判据：`steady_window_sec >= 稳态窗 × M450_MEM_STEADY_COVER_RATIO`。
+            #   覆盖不足时**不判**（宁可不报，也不拿预热斜率冒充泄漏）。
+            _cov_s = _stdy.get("steady_window_sec")
+            _cov_ok = (isinstance(_cov_s, (int, float))
+                       and float(_cov_s) >= float(_stdy_w) * float(_cov_ratio))
+            _out["steady_window_sec_read"] = (
+                round(float(_cov_s), 1) if isinstance(_cov_s, (int, float)) else None)
+            _out["steady_cover_ok"] = bool(_cov_ok)
+            _leak_cond = bool(_cov_ok) and abs(_s) >= _thr
             _step_cond = _out["step_delta"] >= _step_mb
             # 持续窗：只有"连续满足"才算，抖动一次就清零
             _since = getattr(self, "_m449_spike_since", None)
@@ -822,6 +852,12 @@ class RuntimeMetrics:
             else:
                 _out["why"] = (f"未达告警条件（瞬时={_i:.1f} 稳态={_s:.1f} "
                                f"比值={_out['ratio']:.2f} 持续={_out['held_sec']:.0f}s）")
+                if (not _cov_ok) and abs(_s) >= _thr:
+                    _out["why"] += (
+                        f"；稳态 {_s:.1f} 虽越阈值，但稳态窗只覆盖 "
+                        f"{(float(_cov_s) if isinstance(_cov_s, (int, float)) else 0.0):.0f}s"
+                        f" < 需 {float(_stdy_w) * float(_cov_ratio):.0f}s"
+                        " ⇒ 不判泄漏（预热尾巴尚未出窗，450刀6）")
             _out["alarm"] = bool(_out["mode"])
             return _out
         except Exception as _e:
@@ -933,9 +969,16 @@ class RuntimeMetrics:
                     f"稳态 {(_m449.get('steady') or 0.0):.1f}MB/分"
                     f"（阈值 {_growth_thr}），阶跃 +{(_m449.get('step_delta') or 0.0):.0f}MB"
                     f"｜{_m449.get('why') or ''}")
+                # ★450刀6：持续态重报间隔改 600s（30s 节流对 40s 采样等于没有）
+                try:
+                    _m450_ren = float(getattr(_c, "M450_MEM_RENOTIFY_SEC", 600.0) or 600.0)
+                except Exception as _ren_e:
+                    silent_exc(_ren_e, "runtime_metrics.py:_m450_ren", level="debug")
+                    _m450_ren = 600.0
                 self._m403_alarm_transition(
                     _logger, "memory_detailed", True, _msg,
-                    "[运行时指标] 内存告警解除（使用率 %.1f%%，RSS=%.1fMB）" % (_pct, _rss))
+                    "[运行时指标] 内存告警解除（使用率 %.1f%%，RSS=%.1fMB）" % (_pct, _rss),
+                    renotify_sec=_m450_ren)
             except Exception as _se:
                 silent_exc(_se, "runtime_metrics.py:435", level="debug")
             if auto_gc and _enable_gc:
@@ -993,7 +1036,10 @@ class RuntimeMetrics:
                 "m449_steady_mb_per_min": _m449.get("steady"),
                 "m449_instant_mb_per_min": _m449.get("instant"),
                 "m449_held_sec": _m449.get("held_sec"),
-                "m449_step_delta_mb": _m449.get("step_delta")}
+                "m449_step_delta_mb": _m449.get("step_delta"),
+                # ★450刀6：稳态窗覆盖率（判 leak 的前置条件，观测面必须能看见）
+                "m449_steady_window_sec_read": _m449.get("steady_window_sec_read"),
+                "m449_steady_cover_ok": _m449.get("steady_cover_ok")}
 
     # _m65_t2_get_system_load_done
 

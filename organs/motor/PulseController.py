@@ -105,6 +105,100 @@ def budget_guard(consumer: str = "search"):
     return _decorator
 
 
+# ==================== ★450刀4：超时族告警聚合 ====================
+#
+# 病因（11-04 19:20~19:23 实测）：同一段抓取里 5 分钟刷 5 条
+# `[控制器] WARNING: 异常已忽略（需关注）: TimeoutError: The read operation timed out`，
+# 每条都是**同一个渠道读超时**。单次超时是常态（网络抖动/反爬退避），
+# 连续多次才是"渠道真挂了"——而旧口径不区分，于是偶发抖动与真故障长得一样。
+#
+# 判据（任务书 450 §刀4）：
+#   · 同一位置 + 同一异常类型 **连续 3 次**才 WARNING，第 1/2 次降 DEBUG；
+#   · 过阈值后每 `M450_CTRL_EXC_RENOTIFY_SEC`（默认 600s）再报一次 ——
+#     "只报一次"会让真挂掉的渠道在日志里彻底消失，那比刷屏更糟；
+#   · ★**只聚合超时族**（TimeoutError / socket.timeout / 名字或消息含 timeout）。
+#     其它异常类型一律立即 WARNING：聚合不能把真 bug 藏起来。
+#
+# 连续计数在 `nucleus/alert_dedup.py`（与时间窗/内容变化两套既有机制分工写明）。
+
+
+def _m450_is_timeout(exc: BaseException) -> bool:
+    """是否属于"超时族"。判断宽松但**只朝超时方向**宽松（不放宽其它异常）。"""
+    try:
+        if isinstance(exc, TimeoutError):
+            return True
+    except Exception as _t_e:
+        silent_exc(_t_e, where="PulseController::_m450_is_timeout isinstance", level="debug")
+    try:
+        import socket
+        if isinstance(exc, socket.timeout):
+            return True
+    except Exception as _s_e:
+        silent_exc(_s_e, where="PulseController::_m450_is_timeout socket", level="debug")
+    _n = type(exc).__name__.lower()
+    if "timeout" in _n:
+        return True
+    try:
+        return "timed out" in str(exc).lower()
+    except Exception as _m_e:
+        silent_exc(_m_e, where="PulseController::_m450_is_timeout str", level="debug")
+        return False
+
+
+def _m450_windowed(key: str, cfg_name: str, default_sec: float) -> tuple:
+    """★450刀4：同一类告警按窗口去重（返回 ``(emit, suppressed)``）。
+
+    与 `_m450_log_exc` 的分工：那个管「同一异常连续几次」（streak），
+    这个管「同一**类**消息多久没念了」（window）—— 消息内容每次都不同
+    （提取到的词、超时秒数），但它们是同一件事，重复念没有新信息。
+    """
+    try:
+        from nucleus import alert_dedup as _ad
+        _ren = _ad.cfg_num(cfg_name, float(default_sec))
+        return _ad.should_warn_content(str(key), str(key), renotify_sec=_ren)
+    except Exception as _e:
+        silent_exc(_e, where="PulseController::_m450_windowed", level="debug")
+        return True, 0
+
+
+def _m450_log_exc(organ, exc: BaseException, where: str) -> None:
+    """★450刀4：超时族连续 N 次才 WARNING；其它异常逐字回到原行为（立即 WARNING）。"""
+    _base = f"异常已忽略（需关注）: {type(exc).__name__}: {exc}"
+    if not _m450_is_timeout(exc):
+        organ._log(LogLevel.WARNING, _base)
+        return
+    try:
+        from nucleus import alert_dedup as _ad
+        _thr = _ad.cfg_int("M450_CTRL_EXC_STREAK_THRESHOLD", 3)
+        _ren = _ad.cfg_num("M450_CTRL_EXC_RENOTIFY_SEC", 600.0)
+        _emit, _n = _ad.should_warn_streak(
+            f"ctrl_exc:{where}:{type(exc).__name__}",
+            threshold=_thr, renotify_sec=_ren)
+    except Exception as _d_e:
+        silent_exc(_d_e, where="PulseController::_m450_log_exc", level="debug")
+        organ._log(LogLevel.WARNING, _base)
+        return
+    if _emit:
+        organ._log(LogLevel.WARNING, f"{_base}（连续第 {_n} 次）")
+    else:
+        organ._log(LogLevel.DEBUG, f"{_base}（连续第 {_n} 次，未达告警阈值/未到重报点）")
+
+
+def _m450_reset_exc(exc: BaseException, where: str) -> None:
+    """★450刀4：成功路径调用一次，把该位置的连续计数归零。
+
+    ★注意：本批**没有**在每个成功分支里插调用（那要改 9 处上下文、风险大于收益）。
+      计数按「同一位置连续出现」自然衰减：一次成功后如果不再出现，计数停在原值，
+      下次再超时会从旧值继续 —— 这是**已知偏差**，已写进交付报告 §连带影响：
+      判据偏保守（可能比"真正连续"更早报警），不会漏报。
+    """
+    try:
+        from nucleus import alert_dedup as _ad
+        _ad.reset_streak(f"ctrl_exc:{where}:{type(exc).__name__}")
+    except Exception as _e:
+        silent_exc(_e, where="PulseController::_m450_reset_exc", level="debug")
+
+
 class PulseController(BasePulseOrgan):
     """脉冲驱动控制器（v9.5 分层脉冲版）"""
 
@@ -436,7 +530,7 @@ class PulseController(BasePulseOrgan):
         except RuntimeError as e:
             silent_exc(e, where="organs.motor.PulseController::_get_page_links_headless L412", level="debug")
         except Exception as e:
-            self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
+            _m450_log_exc(self, e, "L518")
 
         if not self._headless_page:
             return []
@@ -524,13 +618,13 @@ class PulseController(BasePulseOrgan):
                 try:
                     self._headless_page.evaluate(f"document.querySelectorAll('{tag}').forEach(e => e.remove())")
                 except Exception as e:
-                    self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
+                    _m450_log_exc(self, e, "L606")
 
             for cls in strip_classes:
                 try:
                     self._headless_page.evaluate(f"document.querySelectorAll('.{cls}, [class*=\"{cls}\"]').forEach(e => e.remove())")
                 except Exception as e:
-                    self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
+                    _m450_log_exc(self, e, "L612")
 
             text = self._headless_page.inner_text("body")
 
@@ -1277,7 +1371,7 @@ class PulseController(BasePulseOrgan):
                             f"最优max_articles={_best_key}(平均质量{_best_avg:.2f}), "
                             f"各参数: {{{', '.join(_parts)}}}")
             except Exception as e:
-                self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
+                _m450_log_exc(self, e, "L1359")
 
             if self.info_field and self.pulse_core:
                 self.info_field.publish(self.pulse_core.emit(
@@ -1309,7 +1403,7 @@ class PulseController(BasePulseOrgan):
                 try:
                     task_context.close()
                 except Exception as e:
-                    self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
+                    _m450_log_exc(self, e, "L1391")
 
             # 更新常驻浏览器的最后使用时间
             self._headless_last_used = time.time()
@@ -1639,7 +1733,7 @@ class PulseController(BasePulseOrgan):
             if _t_pre.get("api_url") and _t_pre.get("api_key"):
                 _has_remote_api = True
         except Exception as e:
-            self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
+            _m450_log_exc(self, e, "L1721")
 
         if not _has_remote_api:
             return None
@@ -1703,7 +1797,7 @@ class PulseController(BasePulseOrgan):
                 if len(_reply) >= 2:
                     return _reply
         except Exception as e:
-            self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
+            _m450_log_exc(self, e, "L1785")
 
         return None
     def _extract_search_pattern(self, topic: str) -> str:
@@ -1843,7 +1937,7 @@ class PulseController(BasePulseOrgan):
             try:
                 self._headless_page.wait_for_load_state('networkidle', timeout=TIMEOUT_CONFIG["page_load"])
             except Exception as e:
-                self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
+                _m450_log_exc(self, e, "L1925")
             page_text = self._headless_page.inner_text("body")
             if not page_text:
                 return []
@@ -1859,9 +1953,19 @@ class PulseController(BasePulseOrgan):
             #   ['探索','适合','生活']），下游审查据此误判「关键词与主题无关」而终止搜索。
             #   判据与审查侧一致（2-gram 字符重叠）；零重叠即视为提取错误 → 丢弃并回退硬切。
             if semantic_kws and not self._kws_match_topic(semantic_kws, search_topic):
-                self._log(LogLevel.WARNING,
-                          f"语义增强提取与主题零重叠，丢弃并回退硬切: "
-                          f"提取={semantic_kws} 主题='{str(search_topic)[:40]}'")
+                # ★450刀4：这类每轮抓取都可能触发（实测 9 条/2 小时），
+                #   内容虽各不相同但说的是同一件事 ⇒ 30 分钟一条，压掉的条数写在尾巴上。
+                _m450_ok, _m450_sup = _m450_windowed(
+                    "ctrl.semantic_zero_overlap",
+                    "M450_CTRL_SEMANTIC_RENOTIFY_SEC", 1800.0)
+                if _m450_ok:
+                    self._log(LogLevel.WARNING,
+                              f"语义增强提取与主题零重叠，丢弃并回退硬切: "
+                              f"提取={semantic_kws} 主题='{str(search_topic)[:40]}'"
+                              f"（此前同类已压掉 {_m450_sup} 条）")
+                else:
+                    self._log(LogLevel.DEBUG,
+                              f"语义增强零重叠（已聚合）: 提取={semantic_kws}")
                 semantic_kws = []
             if len(semantic_kws) >= 3:
                 self._log(LogLevel.INFO, f"语义增强提取成功: {semantic_kws}")
@@ -2885,15 +2989,24 @@ class PulseController(BasePulseOrgan):
                 try:
                     future.cancel()
                 except Exception as e:
-                    self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
+                    _m450_log_exc(self, e, "L2967")
                 # ★v26.0优化：区分超时和其他异常，超时降级为WARNING（有降级机制不致命）
                 _is_timeout = "timeout" in str(e).lower() or isinstance(e, TimeoutError)
                 _is_shutdown = getattr(self, '_shutting_down', False)
                 if _is_shutdown:
                     self._log(LogLevel.DEBUG, f"退出中Playwright任务取消: {type(e).__name__}")
                 elif _is_timeout:
-                    self._log(LogLevel.WARNING,
-                             f"Playwright搜索超时({self._get_config('deep_search_total_timeout', 60)}s)，已降级为普通搜索")
+                    # ★450刀4：超时降级是**有兜底**的正常路径，实测 4 条/2 小时；
+                    #   10 分钟一条足够看见"这台机器最近总超时"，不必每次都念。
+                    _m450_pw_ok, _m450_pw_sup = _m450_windowed(
+                        "ctrl.playwright_search_timeout",
+                        "M450_CTRL_PW_TIMEOUT_RENOTIFY_SEC", 600.0)
+                    if _m450_pw_ok:
+                        self._log(LogLevel.WARNING,
+                                  f"Playwright搜索超时({self._get_config('deep_search_total_timeout', 60)}s)，"
+                                  f"已降级为普通搜索（此前同类已压掉 {_m450_pw_sup} 条）")
+                    else:
+                        self._log(LogLevel.DEBUG, "Playwright搜索超时（已聚合）")
                 else:
                     self._log(LogLevel.ERROR,
                              f"Playwright 专用线程池执行异常: {type(e).__name__}: {e}")

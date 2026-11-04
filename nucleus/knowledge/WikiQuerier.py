@@ -21,7 +21,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 from urllib.error import HTTPError
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 from urllib.request import Request, urlopen
 
 from nucleus._silent_except import silent_exc
@@ -29,6 +29,47 @@ from nucleus.data.DataAccessLayer import safe_read_json
 from nucleus.logger import get_module_logger
 
 _logger = get_module_logger("WikiQuerier")
+
+
+# ==================== ★450刀4：403 反爬告警聚合 ====================
+#
+# 病因（11-04 19:36 / 20:09 实测）：一次查询内部有 3 次重试（403 降级退避后再试），
+# 于是**同一个 URL 在 6 秒内刷出 3 条一模一样的 WARNING**（6 条/78 分钟里 2 个查询）。
+#
+# 判据（任务书 450 §刀4）：同一站点连续 3 次才 WARNING，前两次降 DEBUG；
+# 过阈值后每 `M450_WIKI_403_RENOTIFY_SEC`（默认 600s）再报一次。
+#
+# ★留证不打折：**三次都带完整证据**（body512 + 关键响应头），只是级别从
+#   WARNING 降到 DEBUG —— 「留证」是规格，「每次都 WARNING」是噪声。
+#   `tests/test_t105d_wiki_querier.py` 因此改为：证据在 warning+debug 合计里必须可见，
+#   且 WARNING 恰好一条（连续第 3 次）。
+
+
+def _m450_note_403(url: str, body512: Any, headers: Any) -> None:
+    """★450刀4：403 留证 + 按站点聚合告警级别。"""
+    _msg = (f"[WikiQuerier] 403 反爬命中: url={url[:80]} "
+            f"body512={body512!r} headers={headers}")
+    try:
+        _host = urlsplit(url).netloc or "unknown"
+    except Exception as _u_e:
+        silent_exc(_u_e, where="WikiQuerier::_m450_note_403 url", level="debug")
+        _host = "unknown"
+    try:
+        from nucleus import alert_dedup as _ad
+        _emit, _n = _ad.should_warn_streak(
+            f"wiki_403:{_host}",
+            threshold=_ad.cfg_int("M450_WIKI_403_STREAK_THRESHOLD", 3),
+            renotify_sec=_ad.cfg_num("M450_WIKI_403_RENOTIFY_SEC", 600.0))
+    except Exception as _d_e:
+        silent_exc(_d_e, where="WikiQuerier::_m450_note_403 dedup", level="debug")
+        _logger.warning(_msg)
+        return
+    if _emit:
+        _logger.warning(f"{_msg}（连续第 {_n} 次）")
+    else:
+        _logger.debug(f"{_msg}（连续第 {_n} 次，已聚合）")
+
+
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _CACHE_DIR = os.path.join(_PROJECT_ROOT, "data", "wiki_cache")
@@ -138,9 +179,7 @@ def _default_fetch(url: str, timeout: float = 8.0) -> str:
                         _body512 = _body512.decode("utf-8", "replace")
                     _ev_hdr = {_k: _he.headers.get(_k) for _k in
                                ("Retry-After", "X-Baidu-Error", "X-Baidu-Trace")}
-                    _logger.warning(
-                        f"[WikiQuerier] 403 反爬命中: url={url[:80]} "
-                        f"body512={_body512!r} headers={_ev_hdr}")
+                    _m450_note_403(url, _body512, _ev_hdr)
                 except Exception as _le:
                     _logger.debug(f"[WikiQuerier] 403 留证异常: {_le}")
             if getattr(_he, "code", None) == 403 and _i < _attempts - 1:
