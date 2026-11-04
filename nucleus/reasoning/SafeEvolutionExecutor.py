@@ -40,6 +40,32 @@ from nucleus.reasoning.SelfCalibrator import evidence_confidence as _evidence_co
 _module_logger = get_module_logger("SafeEvolutionExecutor")
 
 
+def _m451_llm_repair_should_warn(key: str) -> tuple:
+    """★451刀4：LLM 修复失败**连续 3 次**才 WARNING（前两次 DEBUG）。
+
+    病因（11-04 实测）：`[LLM修复] 调用未返回可用结果` 16 条里 **6 条挤在 4 秒内**
+    （20:34:00~03 同一次退避重试），其余是零散的 21:04 / 21:24。渠道抖动一次就刷 6 条，
+    而真正"渠道长时间挂了"反而淹没在里面。
+
+    判据（与 450 刀4 的控制器超时聚合同型）：
+      · 同一类失败连续 3 次才 WARNING，前两次 DEBUG；
+      · 过阈值后每 `M451_LLM_REPAIR_RENOTIFY_SEC`（默认 600s）再报一次 ——
+        "只报一次"会让真挂掉的渠道在日志里彻底消失，比刷屏更糟。
+    """
+    try:
+        from nucleus import alert_dedup as _ad
+        return _ad.should_warn_streak(
+            f"llm_repair:{key}",
+            threshold=_ad.cfg_int("M451_LLM_REPAIR_STREAK_THRESHOLD", 3),
+            renotify_sec=_ad.cfg_num("M451_LLM_REPAIR_RENOTIFY_SEC", 600.0))
+    except Exception as _e:
+        silent_exc(_e, where="SafeEvolutionExecutor::_m451_llm_repair_should_warn",
+                   level="debug")
+        return True, 1
+
+
+
+
 #: ★445刀2：连续 no_def 作废后追加到 prompt 末尾的**硬性要求**。
 #:   抽成模块级纯函数：可单测、可 grep、不掺进生成器内部策略字段。
 M445_FULL_DEF_REQUIREMENT = (
@@ -1590,16 +1616,25 @@ class SafeEvolutionExecutor:
                         #   content 会是空串；旧代码静默返回 ""，外层再静默 return None，
                         #   导致「LLM 补丁通道零产出」长期无迹可循。此处必须留痕。
                         _usage = _data.get("usage") or {}
-                        _module_logger.warning(
+                        # ★451刀4：同一类失败连续 3 次才 WARNING（前两次 DEBUG）
+                        _m451_emit, _m451_n = _m451_llm_repair_should_warn("empty_content")
+                        _m451_log = (_module_logger.warning if _m451_emit
+                                     else _module_logger.debug)
+                        _m451_log(
                             "[LLM修复] 模型返回 content 为空（finish_reason=%s, completion_tokens=%s, "
-                            "reasoning_content=%d字, max_tokens=%d）"
+                            "reasoning_content=%d字, max_tokens=%d，连续第 %d 次）"
                             "——疑似推理预算被耗尽，请上调 _LLM_REPAIR_MAX_TOKENS",
                             _choices[0].get("finish_reason"), _usage.get("completion_tokens"),
-                            len(_msg.get("reasoning_content") or ""), _LLM_REPAIR_MAX_TOKENS)
+                            len(_msg.get("reasoning_content") or ""), _LLM_REPAIR_MAX_TOKENS,
+                            _m451_n)
                     return _content
-            _module_logger.warning(
-                "[LLM修复] 调用未返回可用结果（HTTP ok=%s, data_type=%s）",
-                _ok, type(_data).__name__)
+            # ★451刀4：连续 3 次才 WARNING（实测 16 条里 6 条挤在 4 秒内）
+            _m451_emit2, _m451_n2 = _m451_llm_repair_should_warn("no_result")
+            _m451_log2 = (_module_logger.warning if _m451_emit2
+                          else _module_logger.debug)
+            _m451_log2(
+                "[LLM修复] 调用未返回可用结果（HTTP ok=%s, data_type=%s，连续第 %d 次）",
+                _ok, type(_data).__name__, _m451_n2)
             return None
 
         # 第一轮

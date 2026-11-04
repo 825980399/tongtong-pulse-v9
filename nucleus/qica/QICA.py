@@ -612,7 +612,24 @@ class QICA(BasePulseOrgan):
         except Exception:
             return anchor
         _scores = (anchor.get("fusion") or {}).get("intent_scores")
-        new_intent, reason = linguistic_refine_intent(text, cur, _scores)
+        # ★451刀1：先走**高频意图硬规则兜底**，再走既有语言学精修。
+        #   病因（11-04 实测）：7 条对话里 4 条被判成 `情感问候`（57%），
+        #   而 `linguistic_refine_intent` 的 `_CONFUSABLE` **不含情感问候**
+        #   ⇒ 一旦落进这一类，7 条语言规则一条都不跑，问日志/问代码全成了问身份。
+        #   ★边界：`PROTECTED`（用户明确下了动作指令的意图）不覆盖；
+        #     问句含"什么是/是什么/区别"时本层直接让位（见 intent_fallback 模块头）。
+        new_intent, reason = "", ""
+        try:
+            from nucleus.qica import intent_fallback as _m451_if
+            _hf_intent, _hf_rule = _m451_if.classify(text)
+            if (_hf_intent and _hf_intent != cur
+                    and _m451_if.may_override(cur)):
+                new_intent, reason = _hf_intent, f"high-freq:{_hf_rule}"
+        except Exception as _hf_e:
+            _module_logger.debug("[451刀1] 高频规则兜底失败，回退既有精修: %s: %s",
+                                 type(_hf_e).__name__, _hf_e)
+        if not new_intent:
+            new_intent, reason = linguistic_refine_intent(text, cur, _scores)
         if not new_intent or new_intent == cur:
             return anchor
         # 重算路由：channel / method / knowledge_paths

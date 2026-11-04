@@ -188,14 +188,42 @@ class PulseMotivationCycle(BasePulseOrgan):
         _answer = payload.get("answer", "")
         _method = payload.get("method", "unknown")
         _confidence = payload.get("confidence", 0.5)
+        # ★451刀2：`confidence` 可能是**显式 None**（事件载荷里 `answer=None` 时常见，
+        #   见 PulseInnerWorld 的 meta_not_search 分支）。`None >= 0.8` 直接 TypeError，
+        #   而本方法外层没有 try ⇒ 整条体验记录被打掉、且日志里只剩一句异常。
+        #   非数值一律按"无信息"处理（0.5），不猜。
+        if isinstance(_confidence, bool) or not isinstance(_confidence, (int, float)):
+            _confidence = 0.5
         _user_name = payload.get("user_name", "")
 
         # 跳过系统内部推理（无用户参与）
         if not _user_name or _user_name == "系统":
             return {"status": "skipped", "reason": "无用户参与"}
 
+        # ★451刀2：**委托大模型 ≠ 答得差**。
+        #   病灶（11-04 实测，7 条对话里 5 条 confidence=0.0 / reward=0.1 / emotion=0.5）：
+        #   本地答不了时 PulseInnerWorld 发 `RESULT{answer=None, method=meta_not_search,
+        #   confidence=0.0}`，本方法把它当「低置信度 ⇒ 挫败体验」记进池子。
+        #   于是"把问题交给大模型"被记成"我答砸了"，而且这条挫败记录本身又会以
+        #   `derivation_type=unknown` 进推理经验库（实测 13/15 条就是这个来源），
+        #   下一轮经验路由命中它照样不产答案 —— **闭环自 poisoned**。
+        #   判据：只认"确实没有产出答案且走的是委托路径"这一种，不扩大到所有空答案。
+        _answer_txt = str(_answer or "").strip()
+        _DELEGATED_METHODS = ("meta_not_search", "inference_fallback_to_lung",
+                              "delegated_to_lung", "meta_honest")
+        _is_delegated = bool(_method in _DELEGATED_METHODS and not _answer_txt)
         # 根据置信度评估体验
-        if _confidence >= 0.8:
+        if _is_delegated:
+            # 委托兜底 → 中性事实（不是挫败，也不是成就）
+            _reward_type = "cognitive"
+            _reward_intensity = 0.3
+            _emotion_tags = ["平静"]
+            _emotion_intensity = 0.3
+            _process_pressure = 0.1
+            _pressure_type = "cognitive"
+            _motivation_desc = f"把「{_question[:30]}」交给大模型回答"
+            _m451_mode = "delegated"
+        elif _confidence >= 0.8:
             # 高置信度 → 正向体验
             _reward_type = "achievement" if _method == "rule" else "cognitive"
             _reward_intensity = min(0.9, 0.5 + _confidence * 0.4)
@@ -204,6 +232,7 @@ class PulseMotivationCycle(BasePulseOrgan):
             _process_pressure = 0.1
             _pressure_type = "cognitive"
             _motivation_desc = f"回答用户关于「{_question[:30]}」的问题"
+            _m451_mode = "high"
         elif _confidence < 0.4:
             # 低置信度 → 负向体验
             _reward_type = "cognitive"
@@ -213,6 +242,7 @@ class PulseMotivationCycle(BasePulseOrgan):
             _process_pressure = 0.7
             _pressure_type = "frustration"
             _motivation_desc = f"不确定如何回答「{_question[:30]}」"
+            _m451_mode = "low"
         else:
             # 中等置信度 → 中性体验
             _reward_type = "cognitive"
@@ -222,6 +252,7 @@ class PulseMotivationCycle(BasePulseOrgan):
             _process_pressure = 0.3
             _pressure_type = "cognitive"
             _motivation_desc = f"尝试回答「{_question[:30]}」"
+            _m451_mode = "mid"
 
         self.experience_pool.record_experience(
             motivation=_motivation_desc,
@@ -232,14 +263,16 @@ class PulseMotivationCycle(BasePulseOrgan):
             reward_intensity=_reward_intensity,
             emotion_tags=_emotion_tags,
             emotion_intensity=_emotion_intensity,
-            content=f"用户{_user_name}提问：{_question[:50]}，回答方法：{_method}，置信度：{_confidence}"
+            content=(f"用户{_user_name}提问：{_question[:50]}，回答方法：{_method}，"
+                     f"置信度：{_confidence}，模式：{_m451_mode}")
         )
 
         self._log(LogLevel.DEBUG,
                  f"对话体验记录: confidence={_confidence}, reward={_reward_intensity}, "
-                 f"emotion={_emotion_intensity}")
+                 f"emotion={_emotion_intensity}, mode={_m451_mode}")
 
-        return {"status": "recorded", "confidence": _confidence}
+        return {"status": "recorded", "confidence": _confidence,
+                "mode": _m451_mode}
     def _run_cycle(self) -> dict[str, Any]:
         """执行一次动机闭环迭代（增强版：整体异常保护）"""
         # GIL-dependent atomic increment (safe on CPython 3.11/3.12, review before free-threaded migration)

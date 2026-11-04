@@ -8669,11 +8669,30 @@ def o3_open_gate_report(min_graph_mtime: float | None = None, k: int = 20,
         _al = _cw343.check_unjudged_alarm()
         _rep["unjudged_alarm"] = _al
         if _al.get("alarm"):
-            _module_logger.error(
+            # ★451刀5：**同一批不可判条目只 ERROR 一次**（内容不变则降 DEBUG）。
+            #   病灶（11-04 实测）：5 分钟一轮自检，每轮都对同一批
+            #   「⑦ K1三证＋对表」再报一次 ERROR —— 2.5 小时 29 条，全是同一件事。
+            #   ★计数与判定**一个字没改**：`_UNJUDGED` 仍逐条登记、越线仍触发审计，
+            #     只把**日志**按内容去重（`_rep["unjudged_alarm"]` 里读数照旧完整）。
+            _m451_items = ",".join(
+                sorted({str(x.get("item")) for x in _al["items"]}))[:200]
+            try:
+                from nucleus import alert_dedup as _ad451
+                _m451_emit, _m451_sup = _ad451.should_warn_content(
+                    "self_inspector.unjudged_red", _m451_items,
+                    renotify_sec=_ad451.cfg_num(
+                        "M451_UNJUDGED_RENOTIFY_SEC", 3600.0))
+            except Exception as _m451_d_e:
+                silent_exc(_m451_d_e,
+                           where="self_inspector::o3_open_gate_report 451去重",
+                           level="debug")
+                _m451_emit, _m451_sup = True, 0
+            _m451_log = (_module_logger.error if _m451_emit
+                         else _module_logger.debug)
+            _m451_log(
                 "[343判据][红色告警] 不可判 %d 条 ≥ 阈值 %d ⇒ 自动触发审计"
-                "（items=%s；不可判 ≠ 没问题）",
-                _al["count"], _al["threshold"],
-                ",".join(str(x.get("item")) for x in _al["items"])[:200])
+                "（items=%s；不可判 ≠ 没问题；此前同内容已压掉 %d 条）",
+                _al["count"], _al["threshold"], _m451_items, int(_m451_sup))
     except Exception as _cw_e:
         silent_exc(_cw_e, where="self_inspector::o3_open_gate_report 343不可判告警", level="debug")
         _rep["unjudged_alarm"] = {"verdict": "UNAVAILABLE",

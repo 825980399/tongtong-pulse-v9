@@ -7746,3 +7746,33 @@ M450_OA4_TRACE_PATH = "data/o_a4_observe_trace.jsonl"
 M450_MEM_STEADY_COVER_RATIO = 0.9
 M450_MEM_RENOTIFY_SEC = 600
 
+# ==================== ★451批：P1第二批（意图/评分/降噪/扩容）====================
+
+# ENABLE_M451_INTENT_FALLBACK
+#   默认值：True
+#   语义：True  ⇒ QICA 分类后处理里加一层**高频意图硬规则兜底**
+#                （时间/日志/代码/身份四类）。只在当前意图不是"用户明确下指令"类
+#                （任务执行/子代理任务/否定质疑/健康检查）时纠正；
+#                问句含「什么是/是什么/区别/对比」时让位给既有分类。
+#        False ⇒ 逐字回到 451 前（软分类说啥就是啥）。
+#   读取点：nucleus/qica/intent_fallback.py::classify()
+ENABLE_M451_INTENT_FALLBACK = True
+# M451_LLM_REPAIR_STREAK_THRESHOLD / M451_LLM_REPAIR_RENOTIFY_SEC
+#   默认值：3 / 600
+#   语义：`[LLM修复] 调用未返回可用结果` / `模型返回 content 为空` 同一类失败
+#        **连续 3 次**才 WARNING（前两次 DEBUG），过阈值后每 600s 再报一次。
+#   ★实测依据：16 条里 6 条挤在 4 秒内（同一次退避重试）。
+M451_LLM_REPAIR_STREAK_THRESHOLD = 3
+M451_LLM_REPAIR_RENOTIFY_SEC = 600
+# M451_UNJUDGED_RENOTIFY_SEC
+#   默认值：3600
+#   语义：自检视「[343判据][红色告警] 不可判 N 条」同一批条目只 ERROR 一次，
+#        内容不变则每小时重报一次（读数与审计触发**不受影响**）。
+#   ★实测依据：5 分钟一轮，2.5 小时 29 条，全是「⑦ K1三证＋对表」同一批。
+M451_UNJUDGED_RENOTIFY_SEC = 3600
+# M451_MAX_LOW_ENTRIES
+#   默认值：2000（原常量 600）
+#   语义：问题池**低危条目**单快照上限。实测现场 995 条，600 的额度外溢 395~401 条。
+#        high/medium 不受此限（全量保留）；`MAX_POOL_ENTRIES=5000` 仍是总闸。
+M451_MAX_LOW_ENTRIES = 2000
+

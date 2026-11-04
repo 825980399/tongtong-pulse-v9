@@ -146,7 +146,20 @@ MAX_POOL_ENTRIES = 5000
 #:   · 只作用于 low；high/medium **全量保留**（限额绝不挤掉可修项）；
 #:   · **不是丢弃**：超限条数进 `low_severity_capped` 计数并打 warning（不吞不弃）；
 #:   · 截下的只是「本拍快照视图」，下一拍 issues 仍会重新送来（生成侧幂等）。
-MAX_LOW_ENTRIES = 600
+#: ★451刀6：600 → **2000**（任务书 §刀6）。为什么必须扩：
+#:   367 设 600 时的实测是"死代码 646 条"，而 11-04 现场已经是 **995 条**
+#:   （保留 600、未收录 395~401），超出了 65%。继续按 600 截，等于每天把
+#:   近 40% 的低危条目挡在快照之外 —— 而它们 `review_only` 本就只用于复核，
+#:   不进任何自动修复通道，容量压力远小于"看不见"的代价。
+#:   ★上限仍然有（不是无限制）：2000 相对 `MAX_POOL_ENTRIES=5000` 仍是 40%，
+#:     且**可配**（`M451_MAX_LOW_ENTRIES`），现场再涨可继续调。
+try:
+    import config as _cfg451
+    MAX_LOW_ENTRIES = int(getattr(_cfg451, "M451_MAX_LOW_ENTRIES", 2000) or 2000)
+except Exception as _m451_cfg_e:  # 导入期兜底：配置读不到也要能用默认值起服务
+    silent_exc(_m451_cfg_e, where="audit_problem_pool::MAX_LOW_ENTRIES 配置读取",
+               level="debug")
+    MAX_LOW_ENTRIES = 2000
 
 #: 池 schema 版本
 SCHEMA = "audit_problem_pool/345.v2"

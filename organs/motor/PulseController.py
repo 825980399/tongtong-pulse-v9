@@ -1959,7 +1959,11 @@ class PulseController(BasePulseOrgan):
                     "ctrl.semantic_zero_overlap",
                     "M450_CTRL_SEMANTIC_RENOTIFY_SEC", 1800.0)
                 if _m450_ok:
-                    self._log(LogLevel.WARNING,
+                    # ★451刀3：降为 INFO。理由（与 403刀4③ 把 GC 降 DEBUG 同型）：
+                    #   这是**有兜底的成功降级** —— 提取不相关就丢弃、回退硬切，
+                    #   搜索照常进行。实测 9 条/2.07h 全是同一个正常路径。
+                    #   ★留证不打折：文案逐字不变，只是级别从 WARNING 降 INFO。
+                    self._log(LogLevel.INFO,
                               f"语义增强提取与主题零重叠，丢弃并回退硬切: "
                               f"提取={semantic_kws} 主题='{str(search_topic)[:40]}'"
                               f"（此前同类已压掉 {_m450_sup} 条）")
