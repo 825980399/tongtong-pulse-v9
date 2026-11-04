@@ -2730,6 +2730,292 @@ class PatchManager:
             _out["carried"] = True
         return _out
 
+    # ==================== ★448批：把八闸里"死的两闸"供上数 ====================
+    #
+    # 【为什么要这两块】
+    # 447 把审批桥接进 repair 后实测：真实补丁过 **5/8** 闸 ——
+    #   trust=30~40 < 60（`M439_APPROVE_MIN_TRUST`）
+    #   problem_gone=None（八闸⑤只认显式 True）
+    # 这两闸不是判据错，是**上游从来没供过数**（446 只补了 baseline_errors）。
+    #
+    # 【安全边界（必须先读）】
+    # 抬高 trust **只影响审批桥那一道闸**（门槛 60），不影响任何自动应用面：
+    #   · `EVOLUTION_CONFIG["auto_apply_min_trust"]` = **40**，改前就已达线；
+    #   · `PATCH_AUTO_APPROVE_TRUST_THRESHOLD` = **40**，同上；
+    #   · `_check_patch_safety` 用的也是 40。
+    # 所以 40→70 不会新开任何自动应用通道（这次改动只把"审批桥能不能看一眼"打开）。
+    # 真正决定能不能落地的是审批桥外面那四条安全边界（447 刀1）+ 应用侧既有闸。
+
+    #: 448 信任加分明细（任务书 §刀1 逐条落地）
+    _M448_TRUST_RULES: ClassVar[tuple] = (
+        ("risk_low", 20.0),
+        ("single_file", 10.0),
+        ("blast_le_1", 10.0),
+        ("baseline_positive", 10.0),
+        ("problem_gone_true", 20.0),
+    )
+
+    @staticmethod
+    def _m448_trace_path(rel: str, cfg_name: str) -> str:
+        """留痕路径（相对路径按仓根解析；配置为空串 ⇒ 关闭）。"""
+        try:
+            import config as _c448
+            _p = str(getattr(_c448, cfg_name, rel) or "").strip()
+        except Exception as _e:
+            silent_exc(_e, where="PatchManager::_m448_trace_path", level="debug")
+            _p = rel
+        if not _p:
+            return ""
+        if os.path.isabs(_p):
+            return _p
+        return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__)))), _p)
+
+    @staticmethod
+    def _m448_note(rel: str, cfg_name: str, row: dict, *, extra_cfg: str) -> bool:
+        """追加一行留痕。**失败绝不影响入队/判定**（铁律40）。
+
+        ★测试进程 + 默认生产路径 ⇒ 不写（446/447 同款护栏；本批两个口一开始就带上，
+          省得又出现"跑一遍 pytest 灌一堆假判定"）。
+        """
+        try:
+            import config as _c448w
+            if not bool(getattr(_c448w, extra_cfg, True)):
+                return False
+        except Exception as _e:
+            silent_exc(_e, where="PatchManager::_m448_note 开关", level="debug")
+        try:
+            _p = PatchManager._m448_trace_path(rel, cfg_name)
+            if not _p:
+                return False
+            _def = os.path.normcase(os.path.normpath(
+                os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+                    os.path.abspath(__file__)))), rel)))
+            if "pytest" in sys.modules and os.path.normcase(
+                    os.path.normpath(_p)) == _def:
+                return False
+            _dir = os.path.dirname(_p)
+            if _dir:
+                os.makedirs(_dir, exist_ok=True)
+            with open(_p, "a", encoding="utf-8") as _f:
+                _f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            return True
+        except Exception as _e:
+            silent_exc(_e, where="PatchManager::_m448_note 写盘", level="warning")
+            return False
+
+    @staticmethod
+    def _m448_calc_trust(patch) -> dict:
+        """★448刀1：按证据加分的信任分（只升不降），并留痕每一项加分。
+
+        模型（任务书 §刀1 原文）::
+
+            risk=低        +20
+            单文件         +10
+            blast<=1       +10
+            baseline>0     +10
+            problem_gone   +20
+            ---------------------
+            满分 70（够 60 那道门）
+
+        ★三个刻意的口径选择，都有理由：
+          ① **不设基础分**：任务书说"加起来应该能到≥60"，那就是 70，不是 40+70。
+          ② **只升不降**（`max(旧值, 新值)`）：信任分是**多个面共用的字段**
+             （自动应用线 40 / 审批线 60）。若某条证据不全就把它从 40 压到 20，
+             会顺手关掉本来能过的自动应用面 —— 那是本批没授权、也没评估过的副作用。
+          ③ **证据不全不等于低分**：五项全不成立时新分=0，`max` 保住旧值，
+             不会把"这条没证据"变成"这条更可疑"。
+        """
+        _out = {"before": None, "after": None, "score": 0.0, "applied": False,
+                "items": [], "reason": ""}
+        if not isinstance(patch, dict) or not patch:
+            _out["reason"] = "patch 为空"
+            return _out
+        try:
+            import config as _c448t
+            if not bool(getattr(_c448t, "ENABLE_M448_TRUST_CALC", True)):
+                _out["reason"] = "ENABLE_M448_TRUST_CALC=False"
+                return _out
+        except Exception as _e:
+            silent_exc(_e, where="PatchManager::_m448_calc_trust 开关", level="debug")
+
+        _old = patch.get("trust_score")
+        try:
+            _old_f = float(_old) if _old is not None else 0.0
+        except (TypeError, ValueError) as _e:
+            silent_exc(_e, where="PatchManager::_m448_calc_trust 旧值", level="debug")
+            _old_f = 0.0
+        _out["before"] = _old
+
+        _files = []
+        _f1 = str(patch.get("file") or "")
+        if _f1:
+            _files.append(_f1)
+        _fl = patch.get("files")
+        if isinstance(_fl, (list, tuple, set)):
+            _files.extend([str(x) for x in _fl if str(x).strip()])
+        _files = list(dict.fromkeys(_files))
+        _blast = len(_files)
+        _base = patch.get("baseline_errors")
+
+        _facts = {
+            "risk_low": (str(patch.get("risk_level") or "").strip() in ("低", "low"),
+                         f"risk_level={patch.get('risk_level')!r}"),
+            "single_file": (len(_files) == 1, f"文件数={len(_files)}"),
+            "blast_le_1": (_blast <= 1, f"blast={_blast}"),
+            "baseline_positive": (isinstance(_base, (int, float)) and _base > 0,
+                                  f"baseline_errors={_base!r}"),
+            "problem_gone_true": (patch.get("problem_gone") is True,
+                                  f"problem_gone={patch.get('problem_gone')!r}"),
+        }
+        _score = 0.0
+        for _name, _delta in PatchManager._M448_TRUST_RULES:
+            _ok, _why = _facts.get(_name, (False, "未判"))
+            _score += _delta if _ok else 0.0
+            _out["items"].append({"rule": _name, "ok": bool(_ok),
+                                  "delta": _delta if _ok else 0.0, "why": _why})
+        _score = max(0.0, min(100.0, _score))
+        _out["score"] = _score
+        _new = max(_old_f, _score)
+        if _new > _old_f or _old is None:
+            patch["trust_score"] = round(_new, 1)
+            patch["trust_calc_score"] = round(_score, 1)
+            patch["trust_calc_at"] = time.time()
+            _out["applied"] = True
+        _out["after"] = patch.get("trust_score")
+        _out["reason"] = f"按证据加分 {_score} → 取 max(旧,新)"
+        PatchManager._m448_note(
+            os.path.join("data", "patches", "trust_calc_trace.jsonl"),
+            "M448_TRUST_TRACE_PATH",
+            {"ts": time.time(),
+             "at": time.strftime("%Y-%m-%d %H:%M:%S"),
+             "kind": "trust_calc",
+             "patch_id": str(patch.get("id") or "")[:64],
+             "file": str(patch.get("file") or ""),
+             "method": str(patch.get("method") or ""),
+             "issue_type": str(patch.get("issue_type") or ""),
+             "before": _out["before"],
+             "after": _out["after"],
+             "score": _score,
+             "applied": bool(_out["applied"]),
+             "items": _out["items"]},
+            extra_cfg="ENABLE_M448_TRUST_CALC")
+        return _out
+
+    def _m448_verdict_for(self, patch_id: str) -> dict:
+        """从 `data/evolution/effect_verify.json` 取该补丁的判定（取不到 → 空 dict）。"""
+        _pid = str(patch_id or "").strip()
+        if not _pid:
+            return {}
+        _root = str(getattr(self, "_project_root", "") or "")
+        _p = os.path.join(_root, "data", "evolution", "effect_verify.json")
+        try:
+            with open(_p, "r", encoding="utf-8") as _f:
+                _doc = json.load(_f)
+        except (OSError, ValueError) as _e:
+            silent_exc(_e, where="PatchManager::_m448_verdict_for", level="debug")
+            return {}
+        _v = (_doc.get("verdicts") or {}).get(_pid) if isinstance(_doc, dict) else None
+        return _v if isinstance(_v, dict) else {}
+
+    def _m448_sync_problem_gone(self, patch) -> dict:
+        """★448刀2：把 `problem_gone` 带到补丁**顶层**，并留痕判定来源与理由。
+
+        流转事实（T0 实测，不是推测）：
+          · `EvolutionEffectVerifier.verify()` 只把判定写进
+            `effect_verify.json → verdicts[id].dims.problem_gone`，**从不写补丁顶层**；
+          · 而 `verify()` 是**应用之后**才跑的；`approval_bridge` 是**应用之前**判的
+            ⇒ 对一条新 pending 件，`verdicts` 里根本没有它的记录
+            （实测 43 条 verdict 与 pending 的**交集 = 0**）。
+          所以「审批前从台账同步」对**新件**是空操作。
+
+        本函数的取数顺序（先强后弱，各记来源）：
+          ① 顶层已有显式布尔 ⇒ 不覆盖（人/上游已经判过）；
+          ② `effect_verify` 台账里有该 id 的 `dims.problem_gone` ⇒ 用它（重新入队的件）；
+          ③ **静态复现**：`active_reprobe(original_code, modified_code)` 的结论按
+             `_M375_PROBLEM_GONE_MAP` 映射（`true_pass` ⇒ True）。
+             ★这是 375刀4 已经采信的同一条映射，不是新口径；差别只在"应用前先算"。
+             语义要说清：它是「**修复后的代码里静态检测不到该缺陷**」，
+             不是「运行时问题消失了」。八闸⑤要的正是前者这种"显式为真的证据"。
+
+        Returns:
+            ``{"changed", "problem_gone", "source", "reason", "verdict"}``
+        """
+        _out = {"changed": False, "problem_gone": None, "source": "", "reason": "",
+                "verdict": ""}
+        if not isinstance(patch, dict) or not patch:
+            _out["reason"] = "patch 为空"
+            return _out
+        try:
+            import config as _c448p
+            if not bool(getattr(_c448p, "ENABLE_M448_PROBLEM_GONE_SYNC", True)):
+                _out["reason"] = "ENABLE_M448_PROBLEM_GONE_SYNC=False"
+                return _out
+        except Exception as _e:
+            silent_exc(_e, where="PatchManager::_m448_sync_problem_gone 开关", level="debug")
+
+        _cur = patch.get("problem_gone")
+        if _cur is True or _cur is False:
+            _out.update(problem_gone=_cur, source="existing",
+                        reason="顶层已有显式布尔，不覆盖")
+            return _out
+
+        _pg, _src, _why, _verd = None, "", "", ""
+        _v = self._m448_verdict_for(patch.get("id"))
+        if _v:
+            _dims = _v.get("dims") or {}
+            _vp = _dims.get("problem_gone")
+            if _vp is True or _vp is False:
+                _pg, _src = _vp, "effect_verify"
+                _why = (f"台账判定 problem_gone={_vp!r}"
+                        f"（{str(_v.get('reason') or '')[:120]}）")
+                _verd = str(_v.get("passed"))
+
+        if _pg is None and not _src:
+            try:
+                from nucleus.evolution.EvolutionEffectVerifier import (
+                    EvolutionEffectVerifier as _EV448,
+                )
+                from nucleus.evolution.patch_active_reprobe import (
+                    active_reprobe as _m448_reprobe,
+                )
+                _r = _m448_reprobe(patch)
+                _verd = str(_r.get("reprobe_verdict") or "")
+                _pg, _why = _EV448.problem_gone_from_reprobe(_r)
+                _src = "reprobe"
+                patch["reprobe_verdict"] = _verd or patch.get("reprobe_verdict")
+                patch["reprobe_baseline_hits"] = _r.get("reprobe_baseline_hits")
+            except Exception as _e:
+                silent_exc(_e, where="PatchManager::_m448_sync_problem_gone 复现",
+                           level="warning")
+                _why = f"{type(_e).__name__}: {_e}"
+                _src = "error"
+
+        if _pg is True or _pg is False:
+            patch["problem_gone"] = _pg
+            patch["problem_gone_source"] = _src
+            patch["problem_gone_at"] = time.time()
+            _out["changed"] = True
+        _out.update(problem_gone=_pg, source=_src, reason=_why, verdict=_verd)
+
+        PatchManager._m448_note(
+            os.path.join("data", "patches", "problem_gone_trace.jsonl"),
+            "M448_PROBLEM_GONE_TRACE_PATH",
+            {"ts": time.time(),
+             "at": time.strftime("%Y-%m-%d %H:%M:%S"),
+             "kind": "problem_gone",
+             "patch_id": str(patch.get("id") or "")[:64],
+             "file": str(patch.get("file") or ""),
+             "method": str(patch.get("method") or ""),
+             "issue_type": str(patch.get("issue_type") or ""),
+             "problem_gone": _pg,
+             "source": _src,
+             "reprobe_verdict": _verd,
+             "baseline_errors": patch.get("baseline_errors"),
+             "reason": str(_why or "")[:300]},
+            extra_cfg="ENABLE_M448_PROBLEM_GONE_SYNC")
+        return _out
+
     @staticmethod
     def _m343_auto_fix_exempt(patch) -> bool:
         """该条目是否来自自主修复通道（豁免 298刀1 形态拒绝）。"""
@@ -3871,6 +4157,31 @@ class PatchManager:
         except Exception as _m438_bp_e:
             silent_exc(_m438_bp_e,
                        where="nucleus.reasoning.PatchManager::save_pending_patch 438基线探测",
+                       level="warning")
+        # ★448刀2：先把 problem_gone 带到顶层（八闸⑤只认显式布尔）
+        try:
+            _m448_pg = self._m448_sync_problem_gone(patch)
+            if _m448_pg.get("changed"):
+                _module_logger.info(
+                    "[448刀2] problem_gone=%r（来源=%s）%s:%s",
+                    _m448_pg.get("problem_gone"), _m448_pg.get("source"),
+                    patch.get("file", ""), patch.get("method", ""))
+        except Exception as _m448_pge:
+            silent_exc(_m448_pge, where="PatchManager::save_pending_patch 448 problem_gone",
+                       level="warning")
+        # ★448刀1：再按证据算信任分（要看上一步刚写进来的 problem_gone）
+        try:
+            _m448_tc = self._m448_calc_trust(patch)
+            if _m448_tc.get("applied"):
+                _module_logger.info(
+                    "[448刀1] trust %r → %r（加分 %.0f；明细=%s）%s:%s",
+                    _m448_tc.get("before"), _m448_tc.get("after"),
+                    _m448_tc.get("score"),
+                    ",".join(f"{i['rule']}{'' if i['ok'] else '(未过)'}"
+                             for i in _m448_tc.get("items") or []),
+                    patch.get("file", ""), patch.get("method", ""))
+        except Exception as _m448_tce:
+            silent_exc(_m448_tce, where="PatchManager::save_pending_patch 448 trust",
                        level="warning")
         # ★446刀2：四个基线字段**随 patch 落 pending**（缺则补 None，不改值）。
         #   位置：必须紧贴 append —— 上面任何一步早退（284作废/352拒收/280错配）

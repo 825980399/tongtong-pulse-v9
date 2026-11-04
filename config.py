@@ -7588,3 +7588,29 @@ M447_APPROVE_DAILY_CAP = 1
 ENABLE_M447_APPLY_TRACE = True
 M447_APPLY_TRACE_PATH = "data/patches/apply_trace.jsonl"
 M447_APPLY_TRACE_MAX_CHARS = 0
+
+# ==================== ★448批：把八闸里"死的两闸"供上数 ====================
+#
+# ENABLE_M448_PROBLEM_GONE_SYNC
+#   默认值：True
+#   语义：True  ⇒ 入队口把 `problem_gone` 写到补丁**顶层**（八闸⑤只认显式布尔）。
+#                取数顺序：顶层已有布尔 → effect_verify 台账 → **静态复现**（true_pass⇒True）。
+#        False ⇒ 不写该字段（八闸⑤永远拿 None ⇒ 审批必拒）。
+#   ★语义声明：静态复现给的 True 是「修复后的代码里静态检测不到该缺陷」，
+#     不是「运行时问题消失了」。八闸⑤要的正是这种"显式为真的证据"。
+#   读取点：nucleus/reasoning/PatchManager.py::_m448_sync_problem_gone()
+ENABLE_M448_PROBLEM_GONE_SYNC = True
+M448_PROBLEM_GONE_TRACE_PATH = "data/patches/problem_gone_trace.jsonl"
+#
+# ENABLE_M448_TRUST_CALC
+#   默认值：True
+#   语义：True  ⇒ 入队口按证据加分算信任分：risk低+20 / 单文件+10 / blast≤1+10 /
+#                baseline>0+10 / problem_gone=True+20（满分 70），**只升不降**
+#                （`max(旧值, 新值)`）—— 信任分是多面共用字段，降它等于顺手关掉
+#                本来能过的自动应用线，那是本批没授权也没评估过的副作用。
+#        False ⇒ 逐字回到 447 行为（trust 只由族表/生成侧决定）。
+#   ★安全性：抬 trust **只影响审批桥那道 60 分的闸**；`auto_apply_min_trust` 与
+#     `PATCH_AUTO_APPROVE_TRUST_THRESHOLD` 都是 **40**，改前就已达线 ⇒ 不新开自动应用通道。
+#   读取点：nucleus/reasoning/PatchManager.py::_m448_calc_trust()
+ENABLE_M448_TRUST_CALC = True
+M448_TRUST_TRACE_PATH = "data/patches/trust_calc_trace.jsonl"
