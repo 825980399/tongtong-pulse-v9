@@ -262,11 +262,231 @@ def detect_code_optimization(code: Any) -> list[dict[str, Any]]:
     return []
 
 
+# ==================== ★446刀1：top3 issue_type 的静态检测器 ====================
+#
+# 【为什么补这三个】
+# `approval_bridge.decision()` 八项硬条件里的 `baseline_positive` 要求
+# `baseline_errors > 0`，而 `baseline_probe.probe_code_repro()` 的基线来自本模块的
+# 检测器。没有检测器 ⇒ `not_applicable` ⇒ `baseline_errors=None` ⇒ 该闸永远拒。
+# 实测（2026-11-04，`data/patches/patch_history.json` 87 条）：
+#   silent_exception 57 / Traceback 9 / print_instead_of_log 8 /
+#   cross_module_singleton_call 5 / code_optimization 3 / bare_return_none_in_except 3 /
+#   sql_injection 1 / dead_code_candidate 1
+#   ⇒ `periodic_task_no_reentry` 与 `non_atomic_write` 历史样本 **0 条**，
+#     `cross_module_singleton_call` 5 条。任务书说的「top3」按**诊断侧产出量**成立
+#     （`audit_problem_pool` 口径：cross_module 23 / periodic 11 / non_atomic 6），
+#     按**补丁历史**则只有 cross_module 有样本 —— 如实记在这里。
+#
+# 【与诊断侧同一来源】
+# 三条规则不是新发明：逐条对齐 `nucleus/self_inspector.py` 的同名诊断器
+# （`_check_periodic_task_no_reentry` / `_check_non_atomic_write` /
+#  `_check_cross_module_singleton_call`），常量同名同值（`_M446_*`）。
+# 诊断侧说"这里有病"、复现侧说"复现不出来"，是 `false_pass` 的主要来源之一；
+# 同源后同一处代码在两侧应得同一结论。
+#
+# ★两处**有意**的差异（都用「复现侧更准」的方向，且已在 446 报告里量化）：
+#   ① 诊断侧用正则扫**原始文本**，不认注释/文档串 ⇒ 注释里写一句
+#      `open(x, 'w')` 或 `_schedule_next_beat()` 就被判缺陷（实测 3+1 条）。
+#      本模块走 AST，注释天然不参与。
+#   ② 诊断侧的 `open\(([^)]*['\"])w['\"]` 里 `[^)]*` 遇到嵌套括号（`os.path.join(...)`）
+#      就断 ⇒ 真正的 `open(join(a, b), 'w')` 反而漏报（实测 4 条）。
+#      AST 判的是调用实参，不受括号层级影响。
+#   ③ `cross_module_singleton_call` 诊断侧有「来源分档」（`get_xxx` 定义在
+#      `organs.*` 才算跨器官直调）；那需要读目标文件，本模块是**纯函数**、只吃
+#      代码片段 ⇒ 只在片段里自带 `from <mod> import get_xxx` 时才能分档。
+#      片段外 import 解析不出 ⇒ **仍计入**（与诊断侧「来源解析不出仍报」同向）。
+#      实测仓内 32 处里 9 处属此类，偏差方向是"多算"，不会把真问题判成修好。
+
+#: 重入守卫标志名（与 `self_inspector._check_periodic_task_no_reentry` 同源同值）
+_M446_REENTRY_GUARD: tuple[str, ...] = ("_in_progress", "_is_running", "_busy")
+
+#: 构造器不是周期任务（同源 `self_inspector._M356_NO_REENTRY_SKIP`）
+_M446_REENTRY_SKIP: frozenset[str] = frozenset(
+    {"__init__", "__new__", "__del__", "__post_init__"})
+
+#: 周期信号前缀（同源：`_schedule_` / `_schedule_next` / `threading.Timer`）
+_M446_PERIODIC_PREFIX: str = "_schedule_"
+_M446_PERIODIC_TIMER: str = "Timer"
+
+#: 契约三件套（同源 `self_inspector._M356_CONTRACT_SINGLETONS`）⇒ 直连是正门，不报
+_M446_CONTRACT_SINGLETONS: frozenset[str] = frozenset(
+    {"get_insight_board", "get_event_bus", "get_pulse_bus"})
+
+#: 原子写信号（同源 `_check_non_atomic_write`）：整块出现任一即视为已原子化
+_M446_ATOMIC_SIGNALS: tuple[str, ...] = (".tmp", "tempfile", "os.replace", "os.rename")
+
+#: 器官包名（同源 `self_inspector._M374_ORGAN_PKG`）
+_M446_ORGAN_PKG: str = "organs"
+
+
+def _m446_call_name(func: ast.AST) -> str:
+    """取调用名：`f()` → `f`；`a.f()` → `f`；其余 → 空串。"""
+    if isinstance(func, ast.Name):
+        return func.id
+    if isinstance(func, ast.Attribute):
+        return func.attr
+    return ""
+
+
+def _m446_identifiers(node: ast.AST) -> list[str]:
+    """节点内所有标识符名（`Name.id` / `Attribute.attr`）—— **不含注释与字符串**。"""
+    _out = []
+    for _n in ast.walk(node):
+        if isinstance(_n, ast.Name):
+            _out.append(_n.id)
+        elif isinstance(_n, ast.Attribute):
+            _out.append(_n.attr)
+    return _out
+
+
+def detect_periodic_task_no_reentry(code: Any) -> list[dict[str, Any]]:
+    """检测「周期任务缺重入守卫」（``issue_type == "periodic_task_no_reentry"``）。
+
+    判据（AST）：方法体内出现周期信号（调用名以 ``_schedule_`` 开头 /
+    ``Timer(...)``），且方法体内**任何标识符**都不含 ``_in_progress`` /
+    ``_is_running`` / ``_busy``（与诊断侧的子串口径同义，但只在标识符上匹配，
+    注释里的守卫名不算数）。
+    """
+    _tree = parse_snippet(code)
+    if _tree is None:
+        return []
+    _out = []
+    for _n in ast.walk(_tree):
+        if not isinstance(_n, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if _n.name in _M446_REENTRY_SKIP:
+            continue
+        _sig = ""
+        for _c in ast.walk(_n):
+            if not isinstance(_c, ast.Call):
+                continue
+            _nm = _m446_call_name(_c.func)
+            if _nm.startswith(_M446_PERIODIC_PREFIX):
+                _sig = _nm
+                break
+            if _nm == _M446_PERIODIC_TIMER:
+                _sig = _M446_PERIODIC_TIMER
+                break
+        if not _sig:
+            continue
+        _ids = _m446_identifiers(_n)
+        if any(_g in _x for _x in _ids for _g in _M446_REENTRY_GUARD):
+            continue
+        _out.append({"line": _n.lineno,
+                     "why": f"{_n.name}: 周期信号={_sig} 无重入守卫"})
+    return _out
+
+
+def _m446_open_mode(call: ast.Call) -> str:
+    """取 ``open(...)`` 的写模式串：第 2 个位置实参，或 ``mode=`` 关键字。"""
+    _m = ""
+    if len(call.args) >= 2:
+        _a = call.args[1]
+        if isinstance(_a, ast.Constant) and isinstance(_a.value, str):
+            _m = _a.value
+    for _kw in call.keywords:
+        if _kw.arg == "mode" and isinstance(_kw.value, ast.Constant)                 and isinstance(_kw.value.value, str):
+            _m = _kw.value.value
+    return _m
+
+
+def detect_non_atomic_write(code: Any) -> list[dict[str, Any]]:
+    """检测「非原子写」（``issue_type == "non_atomic_write"``）。
+
+    判据（AST）：存在 ``open(...)`` 且模式串含 ``w``；整块**未**出现
+    ``.tmp`` / ``tempfile`` / ``os.replace`` / ``os.rename``（与诊断侧同源）。
+    """
+    _tree = parse_snippet(code)
+    if _tree is None:
+        return []
+    if any(_s in code for _s in _M446_ATOMIC_SIGNALS):
+        return []
+    _out = []
+    for _n in ast.walk(_tree):
+        if not isinstance(_n, ast.Call):
+            continue
+        if _m446_call_name(_n.func) != "open":
+            continue
+        _mode = _m446_open_mode(_n)
+        if "w" not in _mode:
+            continue
+        _out.append({"line": _n.lineno,
+                     "why": f"open(mode={_mode!r}) 无 tmp+replace 原子写"})
+    return _out
+
+
+def _m446_import_origins(tree: ast.AST) -> dict[str, str]:
+    """片段内 ``from <mod> import get_x`` → ``{get_x: <mod>}``（诊断侧 import 表的子集）。"""
+    _out: dict[str, str] = {}
+    for _n in ast.walk(tree):
+        if isinstance(_n, ast.ImportFrom) and _n.module:
+            for _a in _n.names:
+                _out[_a.asname or _a.name] = _n.module
+    return _out
+
+
+def detect_cross_module_singleton_call(code: Any) -> list[dict[str, Any]]:
+    """检测「跨模块单例直调」（``issue_type == "cross_module_singleton_call"``）。
+
+    判据（AST）：``get_xxx().method(...)`` 形态 —— 接收者本身是 ``get_xxx()`` 的
+    返回值。``self.get_x().y()`` 天然不命中（接收者是属性而非名字），与诊断侧
+    「``self.`` 前缀不算跨模块」同义。契约三件套豁免。片段内能解析出
+    ``get_xxx`` 来自非 ``organs.*`` 模块时豁免（基础设施工厂是正门）。
+    """
+    _tree = parse_snippet(code)
+    if _tree is None:
+        return []
+    _origins = _m446_import_origins(_tree)
+    _out = []
+    for _n in ast.walk(_tree):
+        if not isinstance(_n, ast.Call):
+            continue
+        _f = _n.func
+        if not isinstance(_f, ast.Attribute):
+            continue
+        _inner = _f.value
+        if not isinstance(_inner, ast.Call):
+            continue
+        _g = _inner.func
+        if not isinstance(_g, ast.Name) or not _g.id.startswith("get_"):
+            continue
+        if _g.id in _M446_CONTRACT_SINGLETONS:
+            continue
+        _origin = _origins.get(_g.id)
+        if _origin is not None and _origin.split(".", 1)[0] != _M446_ORGAN_PKG:
+            continue
+        _out.append({"line": _n.lineno,
+                     "why": "{}().{}(...) 来源={}".format(
+                         _g.id, _f.attr, _origin or "片段外未解析")})
+    return _out
+
+
+def detector_hits(issue_type: Any, code: Any) -> list[dict[str, Any]]:
+    """★446刀1：取「该 issue_type 的检测器在 code 上的**命中明细**」。
+
+    `active_reprobe()` 只回计数，留痕需要「命中规则」（`why`）。本口是只读旁路：
+    **不改 `active_reprobe` 的返回值契约**（铁律54：只加不改的口）。
+    无检测器 / 解析失败 ⇒ 空列表（与 `detector_for` 判 None 同义）。
+    """
+    _det = detector_for(issue_type)
+    if _det is None or not isinstance(code, str) or not code.strip():
+        return []
+    try:
+        return list(_det(code) or [])
+    except Exception as _e:
+        silent_exc(_e, where="patch_active_reprobe::detector_hits", level="debug")
+        return []
+
+
 #: ``issue_type`` → 检测器
 _DETECTORS: dict[str, Callable[[Any], list]] = {
     "silent_exception": detect_silent_exception,
     "print_instead_of_log": detect_print_instead_of_log,
     "code_optimization": detect_code_optimization,
+    # ★446刀1：三类此前无检测器 ⇒ baseline 恒不可判定 ⇒ 审批 `baseline_positive` 必拒
+    "periodic_task_no_reentry": detect_periodic_task_no_reentry,
+    "non_atomic_write": detect_non_atomic_write,
+    "cross_module_singleton_call": detect_cross_module_singleton_call,
 }
 
 

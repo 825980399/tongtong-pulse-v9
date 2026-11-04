@@ -28,6 +28,7 @@
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import sys
@@ -64,6 +65,65 @@ def _log_debug(msg: str, *args: Any) -> None:
     """标准库 logging（本模块可能在 nucleus.logger 装配前被导入）。"""
     import logging
     logging.getLogger("pulse.module.baseline_probe").debug(msg, *args)
+
+
+# ---------------------------------------------------------------- ★446刀1 留痕
+#: 默认留痕相对路径（测试进程写默认路径时会被拒绝，见 `note_detector_hit`）
+_DEFAULT_DETECTOR_TRACE_REL: str = "data/patches/detector_trace.jsonl"
+
+
+def detector_trace_path() -> str:
+    """`data/patches/detector_trace.jsonl` 的绝对路径（相对路径按仓根解析）。"""
+    _p = str(_cfg("M446_DETECTOR_TRACE_PATH",
+                  _DEFAULT_DETECTOR_TRACE_REL) or "").strip()
+    if not _p:
+        return ""
+    return _p if os.path.isabs(_p) else os.path.join(_PROJECT_ROOT, _p)
+
+
+def note_detector_hit(*, issue_type: Any, file: str = "", method: str = "",
+                      rule: str = "", baseline: Any = None, after: Any = None,
+                      verdict: str = "", patch_id: str = "",
+                      source: str = "enqueue") -> bool:
+    """把一次检测器命中追加到留痕文件。**失败绝不影响调用方**（铁律40）。
+
+    Returns:
+        True 表示真的写进去了（供单测断言），False 表示跳过/写失败。
+    """
+    if not bool(_cfg("ENABLE_M446_DETECTOR_TRACE", True)):
+        return False
+    try:
+        _p = detector_trace_path()
+        if not _p:
+            return False
+        # ★测试进程不许写**默认生产路径**（445 的 wrap_trace 已被 pytest 灌过脏行）。
+        #   显式把 M446_DETECTOR_TRACE_PATH 指到别处（单测都这么做）⇒ 照常写。
+        if "pytest" in sys.modules and _p == os.path.join(
+                _PROJECT_ROOT, _DEFAULT_DETECTOR_TRACE_REL):
+            return False
+        _dir = os.path.dirname(_p)
+        if _dir:
+            os.makedirs(_dir, exist_ok=True)
+        _row = {
+            "ts": time.time(),
+            "at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "kind": "detector_hit",
+            "source": str(source or ""),
+            "patch_id": str(patch_id or "")[:64],
+            "issue_type": issue_type if isinstance(issue_type, str) else str(issue_type),
+            "file": str(file or ""),
+            "method": str(method or ""),
+            "rule": str(rule or "")[:200],
+            "baseline": baseline,
+            "after": after,
+            "verdict": str(verdict or ""),
+        }
+        with open(_p, "a", encoding="utf-8") as _f:
+            _f.write(json.dumps(_row, ensure_ascii=False) + "\n")
+        return True
+    except Exception as _e:
+        _log_debug("detector_trace 写入失败: %s: %s", type(_e).__name__, _e)
+        return False
 
 
 def enabled() -> bool:
@@ -193,6 +253,26 @@ def probe_code_repro(patch: dict) -> dict:
         return {"baseline_errors": None, "baseline_source": SOURCE_UNAVAILABLE,
                 "detail": f"无检测器/无法解析，不可判定（verdict={_verdict}）{_detail}"[:200],
                 "baseline_verdict": _verdict or "not_applicable"}
+    # ★446刀1：命中留痕 —— issue_type / file / method / 命中规则 / baseline 计数。
+    #   只让"检测器真的命中了"的样本落盘：0 命中是 `false_pass`（复现不出），
+    #   没有"命中规则"可记；把它也写进去会把留痕文件变成"什么都没发生"的流水账。
+    try:
+        if _hits > 0:
+            from nucleus.evolution.patch_active_reprobe import (
+                detector_hits as _m446_hits,
+            )
+            _rules = [str(_h.get("why") or "")
+                      for _h in _m446_hits(patch.get("issue_type"),
+                                           patch.get("original_code"))][:3]
+            note_detector_hit(
+                issue_type=patch.get("issue_type"),
+                file=str(patch.get("file") or ""),
+                method=str(patch.get("method") or ""),
+                rule=" ; ".join(_rules),
+                baseline=int(_hits), after=None, verdict=_verdict,
+                patch_id=str(patch.get("id") or ""), source="enqueue")
+    except Exception as _e:
+        _log_debug("446刀1 命中留痕失败: %s: %s", type(_e).__name__, _e)
     return {
         "baseline_errors": int(_hits),
         "baseline_source": SOURCE_CODE_REPRO,

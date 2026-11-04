@@ -7526,3 +7526,35 @@ ENABLE_M417_HEARTBEAT_ASYNC_CACHE = True
 #        False ⇒ 零让出（排障/测纯扫描耗时时用）。
 #   读取点：nucleus/self_inspector.py::m417_yield_on()
 ENABLE_M417_SCAN_YIELD = True
+
+# ==================== ★446批：让补丁"可被判" ====================
+#
+# ENABLE_M446_DETECTOR_TRACE
+#   默认值：True
+#   语义：True  ⇒ `baseline_probe.probe_code_repro()` 每有一处检测器命中，就往
+#                `M446_DETECTOR_TRACE_PATH` 追加一行（issue_type/file/method/规则/baseline）。
+#        False ⇒ 不落任何命中留痕（**只影响留痕，不影响检测器与判定**）。
+#   读取点：nucleus/evolution/baseline_probe.py::note_detector_hit()
+ENABLE_M446_DETECTOR_TRACE = True
+M446_DETECTOR_TRACE_PATH = "data/patches/detector_trace.jsonl"
+#
+# ENABLE_M446_EFFECT_VERIFY_TRACE
+#   默认值：True
+#   语义：True  ⇒ `EvolutionEffectVerifier.verify()` 每次判定都追加一行到
+#                `M446_EFFECT_VERIFY_TRACE_PATH`（patch_id/verdict/problem_gone/
+#                baseline_errors/判定理由），未判定的也记（`verdict=null`）。
+#        False ⇒ 不落判定留痕。
+#   读取点：nucleus/evolution/EvolutionEffectVerifier.py::note_effect_verify()
+ENABLE_M446_EFFECT_VERIFY_TRACE = True
+M446_EFFECT_VERIFY_TRACE_PATH = "data/patches/effect_verify_trace.jsonl"
+#
+# ENABLE_M446_EFFECT_STRICT
+#   默认值：True
+#   语义：True  ⇒ `passed=True` 只允许 `problem_gone is True`。历史里
+#                `passed=True` 但 `problem_gone=None`（只靠功能/性能两维凑齐）的
+#                自证一律降为 `None`（不可判定，不奖不罚）。
+#        False ⇒ 逐字回到 375刀4 之后的旧口径（三维齐且全过即通过）。
+#   ★为什么默认 True：`effect_verify.json` 实测 41 条里 **20 条**是
+#     `passed=True / problem_gone=None` —— 「没测出问题是否消失」被记成「验证有效」。
+#   读取点：nucleus/evolution/EvolutionEffectVerifier.py::_m446_strict_on()
+ENABLE_M446_EFFECT_STRICT = True

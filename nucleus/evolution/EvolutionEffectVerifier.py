@@ -17,6 +17,7 @@ import difflib
 import json
 import os
 import re
+import sys
 import threading
 import time
 from typing import Any
@@ -65,6 +66,116 @@ _M375_PROBLEM_GONE_MAP: dict[str, tuple[bool | None, str]] = {
 
 # ★第九批：测试隔离用默认目录（tools/test_isolation_shim.redirect_all 会重定向到 ISO_DIR）
 _ISO_BASE_DIR: str | None = None
+
+#: ★446刀2：判定留痕的相对路径（相对仓根）
+_M446_TRACE_REL: str = "data/patches/effect_verify_trace.jsonl"
+_M446_ROOT: str = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))))
+
+
+def _m446_strict_on() -> bool:
+    """★446刀2 灰度开关：`passed=True` 只允许 `problem_gone is True`（缺省开）。"""
+    try:
+        import config as _c446
+        return bool(getattr(_c446, "ENABLE_M446_EFFECT_STRICT", True))
+    except Exception as _e:
+        silent_exc(_e, where="EvolutionEffectVerifier::_m446_strict_on", level="debug")
+        return True
+
+
+def effect_verify_trace_path() -> str:
+    """判定留痕文件绝对路径（相对路径按仓根解析；空 ⇒ 关闭）。"""
+    try:
+        import config as _c446t
+        _p = str(getattr(_c446t, "M446_EFFECT_VERIFY_TRACE_PATH",
+                         _M446_TRACE_REL) or "").strip()
+    except Exception as _e:
+        silent_exc(_e, where="EvolutionEffectVerifier::effect_verify_trace_path",
+                   level="debug")
+        _p = _M446_TRACE_REL
+    if not _p:
+        return ""
+    return _p if os.path.isabs(_p) else os.path.join(_M446_ROOT, _p)
+
+
+def note_effect_verify(verdict: dict[str, Any], patch: dict[str, Any] | None = None,
+                       *, source: str = "verify") -> bool:
+    """★446刀2：把一次效果验证判定追加到留痕文件。
+
+    任务书要求记：patch_id / verdict / problem_gone / baseline_errors / 判定理由。
+    **失败绝不影响返回值**（铁律40）—— 留痕只写信，不参与判定。
+    """
+    try:
+        import config as _c446w
+        if not bool(getattr(_c446w, "ENABLE_M446_EFFECT_VERIFY_TRACE", True)):
+            return False
+    except Exception as _e:
+        silent_exc(_e, where="EvolutionEffectVerifier::note_effect_verify 开关", level="debug")
+    try:
+        _p = effect_verify_trace_path()
+        if not _p:
+            return False
+        # ★测试进程不许写**默认生产路径**（否则跑一遍单测就灌一堆假判定）。
+        #   显式把 M446_EFFECT_VERIFY_TRACE_PATH 指到别处 ⇒ 照常写（单测都这么做）。
+        if "pytest" in sys.modules and _p == os.path.join(_M446_ROOT, _M446_TRACE_REL):
+            return False
+        _dims = (verdict or {}).get("dims") or {}
+        _src = patch or {}
+        _row = {
+            "ts": time.time(),
+            "at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "kind": "effect_verify",
+            "source": str(source or ""),
+            "patch_id": str((verdict or {}).get("patch_id") or _src.get("id") or "")[:64],
+            "file": str((verdict or {}).get("file") or _src.get("file") or ""),
+            "issue_type": str((verdict or {}).get("issue_type") or ""),
+            "verdict": (verdict or {}).get("passed"),
+            "problem_gone": _dims.get("problem_gone"),
+            "function_ok": _dims.get("function_ok"),
+            "perf_ok": _dims.get("perf_ok"),
+            "baseline_errors": _src.get("baseline_errors"),
+            "baseline_source": _src.get("baseline_source"),
+            "trust_delta": (verdict or {}).get("trust_delta"),
+            "strict": bool((verdict or {}).get("strict")),
+            "reason": str((verdict or {}).get("reason") or "")[:300],
+        }
+        _dir = os.path.dirname(_p)
+        if _dir:
+            os.makedirs(_dir, exist_ok=True)
+        with open(_p, "a", encoding="utf-8") as _f:
+            _f.write(json.dumps(_row, ensure_ascii=False) + "\n")
+        return True
+    except Exception as _e:
+        silent_exc(_e, where="EvolutionEffectVerifier::note_effect_verify 写盘", level="debug")
+        return False
+
+
+def normalize_strict_passed(verdicts: dict[str, Any]) -> dict[str, Any]:
+    """★446刀2：把一批**历史**判定按严格口径重判（纯函数，原地改 + 返回统计）。
+
+    严格口径：`passed=True` 只允许 `dims.problem_gone is True`。
+    违反者降为 `None`，并把原值留在 `passed_raw`、打 `legacy_self_certified=True`
+    —— 审计要能看出「它曾经被判过 True、后来被谁改的」（不能凭空抹掉）。
+    """
+    _fixed, _ok, _other = 0, 0, 0
+    for _pid, _v in list((verdicts or {}).items()):
+        if not isinstance(_v, dict):
+            _other += 1
+            continue
+        _pg = ((_v.get("dims") or {}).get("problem_gone"))
+        if _v.get("passed") is True and _pg is not True:
+            _v["passed_raw"] = _v.get("passed")
+            _v["passed"] = None
+            _v["strict_normalized_at"] = time.time()
+            _v["legacy_self_certified"] = True
+            _v["reason"] = (
+                f"[446严格口径] 原 passed=True 但 problem_gone={_pg!r}"
+                f" ⇒ 降为不可判定；原理由：{_v.get('reason', '')}")[:400]
+            _fixed += 1
+        else:
+            _ok += 1
+    return {"total": len(verdicts or {}), "normalized": _fixed,
+            "kept": _ok, "skipped": _other}
 
 
 class EvolutionEffectVerifier:
@@ -242,6 +353,18 @@ class EvolutionEffectVerifier:
                        " ⇒ 覆盖不足，不奖不罚")
             _delta = 0
 
+        # ★446刀2：**硬不变式** —— `passed=True` 只允许 `problem_gone is True`。
+        #   为什么还要加这一道（375刀4 已经把「三维不齐」判成 None）：
+        #   ① 375 的判据是 `len(_known) == 3`，属"覆盖数"；任务书要的是
+        #      「**问题消失**是唯一可通过的锚」——两者在 `problem_gone=None 但三维齐`
+        #      时不等价，而那种组合在历史台账里真实存在（41 条里 20 条）。
+        #   ② 判据写在链尾，后续任何人加分支都会绕过前面那串 if/elif。
+        #   降级为 None（不可判定）而不是 False：测不出≠做错了，不奖不罚。
+        if _passed is True and _d1 is not True and _m446_strict_on():
+            _reason = (f"★446严格口径拦截：problem_gone={_d1!r} 不得判通过"
+                       f"（原判 True；{_reason}）")[:400]
+            _passed, _delta = None, 0
+
         # ★428刀3：三维度**数值**也落盘（改造前只用一次就算丢）。
         #   任务书问"验证一个补丁后真有 perf_delta_ms 字段吗"——改造前没有：
         #   `verify()` 把入参用一次算 `perf_ok` 就返回，verdict 里只剩一个布尔
@@ -271,12 +394,18 @@ class EvolutionEffectVerifier:
             "perf_mem_mb": (float(_perf_mem)
                             if isinstance(_perf_mem, (int, float)) else None),
             "perf_ab_mode": str(_pd.get("ab_mode") or ""),
+            # ★446刀2：判定时用的是不是严格口径 + 当时的基线，事后可复核
+            "strict": _m446_strict_on(),
+            "baseline_errors": patch.get("baseline_errors"),
+            "baseline_source": patch.get("baseline_source"),
             "verified_at": time.time(),
         }
         with self._lock:
             self._verdicts[_pid] = _verdict
             self._verdicts = dict(list(self._verdicts.items())[-500:])
         self.save()
+        # ★446刀2：每次判定都留痕（未判定的也记 —— "没判出来"本身就是读数）
+        note_effect_verify(_verdict, patch, source="verify")
         _log("info", f"[效果验证] {_pid[:16]} 通过={_passed} 信任分{_delta:+d} | {_reason}")
         return _verdict
 

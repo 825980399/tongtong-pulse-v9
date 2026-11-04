@@ -2561,6 +2561,56 @@ class PatchManager:
     _M343_AUTO_FIX_SOURCES = ("llm_auto_fix",)
     _m343_shape_exempt_count = 0     # 豁免计数（回归指标：应只见于自主修复通道）
 
+    #: ★446刀2：入队口必须随 patch 落 pending 的基线四字段（任务书 §刀2 第一条）
+    _M446_BASELINE_FIELDS = ("baseline_errors", "baseline_source",
+                             "baseline_window_sec", "baseline_shadow")
+
+    @staticmethod
+    def _m446_ensure_baseline_fields(patch) -> dict:
+        """★446刀2：保证四个基线字段**在条目上存在**（缺则补 None，不覆盖已有值）。
+
+        为什么「键存在」比「值对不对」更关键：`baseline_probe.apply_to_patch()` 有四条
+        早退分支（总开关关、`file` 为空、已有基线、探测异常），它们**一个字都不写** ⇒
+        条目上根本没有这个键。读的人于是无法区分：
+
+            · 键缺失     = 这条走的是不探测的路径（或入队时 438 还没上线）
+            · 值为 None  = 探测了，但判不了（窗口未覆盖 / 无检测器）
+
+        两者在 `approval_bridge.baseline_positive` 眼里都是「不放行」，但对账时是两回事
+        （见 `effect_verify_health` 的 `missing` 与 `unavailable` 之分）。
+        ★只补缺失、绝不改值 —— `setdefault` 语义，零判定影响。
+        """
+        _filled = []
+        if not isinstance(patch, dict):
+            return {"filled": _filled}
+        for _k in PatchManager._M446_BASELINE_FIELDS:
+            if _k not in patch:
+                patch[_k] = None
+                _filled.append(_k)
+        return {"filled": _filled}
+
+    @staticmethod
+    def _m446_carry_baseline_to_history(patch) -> dict:
+        """★446刀2：应用落 `patch_history` 前把基线四字段一并带过去，并留 carry 时间戳。
+
+        盘面事实（2026-11-04 实测）：`patch_history.json` **87 条里**
+        `baseline_source` **0 条**、`baseline_window_sec` **0 条**、
+        `baseline_shadow` **0 条**。不是被谁删了 —— 这些条目入队时（438 之前）
+        根本没有这些键，`history.append(patch)` 自然带不出不存在的东西。
+        本口保证从这一批起，每条落 history 的补丁都带四字段；
+        真带得出 `baseline_source` 的打 `baseline_carried_at`，事后可数、可对账。
+        """
+        _out = {"filled": [], "baseline_source": None, "carried": False}
+        if not isinstance(patch, dict):
+            return _out
+        _out["filled"] = PatchManager._m446_ensure_baseline_fields(patch)["filled"]
+        _src = patch.get("baseline_source")
+        _out["baseline_source"] = _src
+        if _src and not patch.get("baseline_carried_at"):
+            patch["baseline_carried_at"] = time.time()
+            _out["carried"] = True
+        return _out
+
     @staticmethod
     def _m343_auto_fix_exempt(patch) -> bool:
         """该条目是否来自自主修复通道（豁免 298刀1 形态拒绝）。"""
@@ -3702,6 +3752,21 @@ class PatchManager:
         except Exception as _m438_bp_e:
             silent_exc(_m438_bp_e,
                        where="nucleus.reasoning.PatchManager::save_pending_patch 438基线探测",
+                       level="warning")
+        # ★446刀2：四个基线字段**随 patch 落 pending**（缺则补 None，不改值）。
+        #   位置：必须紧贴 append —— 上面任何一步早退（284作废/352拒收/280错配）
+        #   都不会走到这里，写进去也无意义；这里写进去的，就一定在待审池里。
+        try:
+            _m446_fill = PatchManager._m446_ensure_baseline_fields(patch)
+            if _m446_fill.get("filled"):
+                _module_logger.info(
+                    "[446刀2] 基线字段补齐（原路径未写）: id=%s 补=%s "
+                    "file=%s method=%s",
+                    str(patch.get("id") or "")[:16],
+                    ",".join(_m446_fill["filled"]),
+                    patch.get("file", ""), patch.get("method", ""))
+        except Exception as _m446_e:
+            silent_exc(_m446_e, where="PatchManager::save_pending_patch 446基线字段",
                        level="warning")
         pending.append(patch)
         self._save_patch_list(self._pending_file, pending)
@@ -6029,6 +6094,18 @@ class PatchManager:
                     patch["apply_error"] = "原始代码未找到，可能已被修改"
                     results["failed"] += 1
 
+                # ★446刀2：基线字段随 patch 带进 history（并留 baseline_carried_at）
+                try:
+                    _m446_c = PatchManager._m446_carry_baseline_to_history(patch)
+                    if _m446_c.get("carried"):
+                        _module_logger.info(
+                            "[446刀2] baseline_source 已带入 history: id=%s src=%s "
+                            "file=%s method=%s",
+                            str(patch.get("id") or "")[:16], _m446_c["baseline_source"],
+                            patch.get("file", ""), patch.get("method", ""))
+                except Exception as _m446_ce:
+                    silent_exc(_m446_ce, where="PatchManager::apply 446带基线入账",
+                               level="warning")
                 history.append(patch)
 
             except Exception as e:
