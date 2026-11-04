@@ -261,6 +261,19 @@ def _m335_o3_consume(now: float | None = None, project_root: str | None = None,
 
     # ── ① 闸门结论（**只读**，不改判据） ──
     if gate_report is None:
+        # ★444刀1：先确保判死池新鲜 —— streak 只在 `as_of` 变化时 +1，
+        #   而 `as_of` 只有 `_detect_dead_code()` 跑完才更新（单次 ~25s）。
+        #   没有这一拍，重启后要等自检视的数小时轮次才能攒够 3 轮，O3 永远开不了闸。
+        #   刷新走**后台线程**（25s 不能塞进 5 分钟节拍里同步跑），本轮仍用现有池。
+        try:
+            _rf444 = _si.refresh_dead_code_review_async()
+            if isinstance(_rf444, dict) and _rf444.get("status") in ("started", "start_failed"):
+                _module_logger.info(
+                    "[444刀1][判死池] 后台刷新 %s（age=%s） proc_gen=%s",
+                    _rf444.get("status"), _rf444.get("age_sec"), _m335_pg())
+        except Exception as _rf_e:
+            silent_exc(_rf_e, where="PatchExecutionDispatch._m335_o3_consume 444刀1 刷新",
+                       level="debug")
         try:
             # ★337批刀2：补传重启时刻——否则「重启后新图」判据恒不可判 ⇒ 开闸永不可能 OPEN
             gate_report = _si.o3_open_gate_report(

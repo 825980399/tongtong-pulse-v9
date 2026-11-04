@@ -7031,6 +7031,84 @@ _M340_DEAD_CODE_HARD_SEVERITY = "low"
 _M340_SEVERITY_ORDER = {"high": 3, "medium": 2, "low": 1, "info": 0}
 #: 连续 tick 计数（**进程内**；跨进程不拼接，与 proc_gen 纪律同源）
 _M340_JUDGE_ACTION_STATE = {"streak": 0, "last_tick": None, "last_open": False}
+
+
+# ===== ★444刀1：判死池的后台刷新 =====
+#: `streak` **只在 `as_of` 变化时才 +1**（340 刀3 的幂等设计：同一轮扫描重复调用不虚增）。
+#: 而 `as_of` 只有 `_detect_dead_code()` 跑完才更新，该函数在生产里只由
+#: `detect_code_issues()` 的自检视节拍触发（实测数小时一轮）⇒ 单进程内要爬满
+#: 3 轮得等 9+ 小时，**一重启就归零** ⇒ O3 永远开不了闸
+#: （443 实测：老进程 `连续=8/3 OPEN`，新进程 `0/3`）。
+#: 本函数把「判死池过期就后台重扫」做成显式节拍，让 streak 有料可涨。
+_M444_REFRESH_LOCK = threading.Lock()
+_M444_REFRESH_LAST_START = 0.0
+_M444_REFRESH_RUNNING = False
+
+
+def refresh_dead_code_review_async(max_age_sec: float | None = None) -> dict:
+    """判死池为空/过期时，**后台线程**跑一次 `_detect_dead_code()`（不阻塞调用方）。
+
+    单次扫描实测 ~25s（1418 文件 AST），绝不能塞进 5 分钟的 O3 节拍里同步跑。
+    并发保护：同一时刻最多一个扫描线程。
+
+    Returns:
+        ``{"status": fresh|started|running|disabled|skipped_test, "age_sec": float|None}``
+    """
+    global _M444_REFRESH_RUNNING, _M444_REFRESH_LAST_START
+    _out: dict = {"status": "skipped", "age_sec": None}
+    _max_age = 1800.0
+    try:
+        import config as _c444
+        if not bool(getattr(_c444, "ENABLE_M444_DEAD_CODE_REFRESH", True)):
+            _out["status"] = "disabled"
+            return _out
+        if max_age_sec is not None:
+            _max_age = float(max_age_sec)
+        else:
+            _max_age = float(getattr(_c444, "M444_DEAD_CODE_REFRESH_SEC", 1800.0) or 1800.0)
+        # 测试模式下不自动起线程（除非调用方显式给 max_age_sec）：避免单测里
+        # 冒出 25s 的后台扫描，把用例拖成"偶发超时"。
+        if max_age_sec is None and os.environ.get("PULSE_TEST_MODE") == "1":
+            _out["status"] = "skipped_test"
+            return _out
+    except Exception as _ce:
+        silent_exc(_ce, where="self_inspector::refresh_dead_code_review_async cfg", level="debug")
+
+    _as_of = float(_DEAD_CODE_REVIEW_STATS.get("as_of") or 0.0)
+    _age = (time.time() - _as_of) if _as_of > 0 else None
+    _out["age_sec"] = _age
+    if _age is not None and _age < max(60.0, _max_age):
+        _out["status"] = "fresh"
+        return _out
+
+    with _M444_REFRESH_LOCK:
+        if _M444_REFRESH_RUNNING:
+            _out["status"] = "running"
+            return _out
+        _M444_REFRESH_RUNNING = True
+        _M444_REFRESH_LAST_START = time.time()
+
+    def _worker() -> None:
+        global _M444_REFRESH_RUNNING
+        try:
+            get_self_inspector()._detect_dead_code()
+        except Exception as _we:
+            silent_exc(_we, where="self_inspector::refresh_dead_code_review_async worker",
+                       level="warning")
+        finally:
+            with _M444_REFRESH_LOCK:
+                _M444_REFRESH_RUNNING = False
+
+    try:
+        threading.Thread(target=_worker, name="m444_dead_code_refresh", daemon=True).start()
+        _out["status"] = "started"
+    except Exception as _te:
+        silent_exc(_te, where="self_inspector::refresh_dead_code_review_async start",
+                   level="warning")
+        with _M444_REFRESH_LOCK:
+            _M444_REFRESH_RUNNING = False
+        _out["status"] = "start_failed"
+    return _out
 #: 候选数上限建议（小林：N=50—100）
 _O3_CANDIDATE_MAX = 100
 #: 图外可达证据的类型（**不看调用图**，避免拿判据自证判据）

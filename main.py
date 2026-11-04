@@ -381,6 +381,18 @@ class PulseFramework:
         _np_max_hot = config.RUNTIME_PARAMS.get("nodepool_max_hot", config.NODE_POOL["max_hot"])
         _np_max_warm = config.RUNTIME_PARAMS.get("nodepool_max_warm", config.NODE_POOL["max_warm"])
         self.node_pool = PulseNodePool(max_hot=_np_max_hot, max_warm=_np_max_warm)
+        # ★444刀2：把 node_pool 注入**全局** KAL 单例（`get_kal()`）。
+        #   为什么必须在这里注入：`get_kal()` 的全局实例 `_node_pool` 此前**恒为 None**
+        #   —— 全仓没有任何 `get_kal(node_pool=...)` 调用（443 普查结论）。后果是所有
+        #   走全局单例的读取（PulseKidney/PulseStomach 的兜底分支、PulseLiver 的
+        #   node_count、自检视的节点抽样）都**静默返回 None/0**，"KAL 优先"只是字面存在。
+        #   放在这里（池刚建好、器官装配之前）：后面任何器官/分析器用全局单例都能拿到真池。
+        try:
+            from nucleus.knowledge_access_layer import get_kal as _get_kal_m444
+            _get_kal_m444(node_pool=self.node_pool)
+            self._log(LogLevel.INFO, "[444刀2] 全局 KAL 已注入 node_pool")
+        except Exception as _kal_e444:
+            silent_exc(_kal_e444, "main.py[444刀2 全局KAL注入pool]", level="warning")
         # ★登顶路线图-山 1 P1：启动记忆验证闭环定时调度
         # 周期性检验记忆活性（强化活跃/沉睡重要/清理过时），
         # daemon 线程不块塞主链路；如平台配置关闭则跳过。
@@ -858,6 +870,13 @@ class PulseFramework:
         self.node_pool.set_resonance_engine(self.resonance_engine)
         # PulseSnapshot 注入节点池和共振引擎
         self.snapshot.set_node_pool(self.node_pool)
+        # ★444刀2：snapshot 就绪后补注给全局 KAL（`get_kal` 只在字段为 None 时填，
+        #   所以这里再调一次是安全且必要的 —— 否则全局单例的 snapshot 永远空）。
+        try:
+            from nucleus.knowledge_access_layer import get_kal as _get_kal_m444b
+            _get_kal_m444b(node_pool=self.node_pool, snapshot=self.snapshot)
+        except Exception as _kal_e444b:
+            silent_exc(_kal_e444b, "main.py[444刀2 全局KAL注入snapshot]", level="warning")
         # ★第81批补 T2：显式再绑定冷召回源双保险（与 set_node_pool 内自动绑定不冲突）
         if hasattr(self.snapshot, "set_cold_recall_source") and hasattr(self.node_pool, "recall_cold_nodes_batch"):
             self.snapshot.set_cold_recall_source(self.node_pool.recall_cold_nodes_batch)
@@ -4202,7 +4221,11 @@ def _m422_periodic_apply_tick(framework, now: float | None = None) -> dict:
         _appr_n = int(_cnt.get("approved", 0) or 0)
         _last_appr = _cnt.get("last_approved_at") or 0
         _age_h = ((time.time() - float(_last_appr)) / 3600.0) if _last_appr else -1.0
-        _logger.warning(
+        # ★444刀4：**分级**——「队列里本来就没东西」和「有东西却批不出来」是两件事。
+        #   442 一律打 WARNING ⇒ 夜间 10 小时 106 条，其中绝大多数是 pending=0 的空转。
+        #   pending==0 ⇒ DEBUG（无事可做不是告警）；pending>0 ⇒ WARNING（真卡住了）。
+        _log444 = _logger.warning if _pend_n > 0 else _logger.debug
+        _log444(
             "[422刀3][周期apply] approved=0 ⇒ 本轮不应用：pending=%d approved=%d "
             "最近一条 approved=%s（%.1f 小时前）｜建议：检查审批桥是否放行、"
             "pending 是否全被判 stale、或基线闸门 baseline_positive 是否拦住了",

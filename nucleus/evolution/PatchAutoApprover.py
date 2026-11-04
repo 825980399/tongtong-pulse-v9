@@ -199,6 +199,22 @@ class PatchAutoApprover:
         """
         _rel = patch.get("file") or ""
         _orig = (patch.get("original_code") or "").strip()
+        # ★444刀5：O3 死代码候选**本身不带代码**（`original_code`/`modified_code` 皆空，
+        #   它只是"待人工确认是否删除"的线索）。这类条目永远过不了派单闸
+        #   （空码 + 高风险 + trust=0），却会**永久占着 pending**。
+        #   给一个有界生命周期：超过 `M444_O3_EMPTY_CODE_MAX_DAYS`（默认 3 天）
+        #   仍未被人工确认 ⇒ obsolete 归档。不是放宽派单闸，是给它一个终点。
+        if str(patch.get("source") or "") in ("o3_open_gate", "o3") \
+                and not (patch.get("modified_code") or "").strip():
+            _age_d = (time.time() - float(patch.get("generated_at")
+                                          or patch.get("created_at") or 0.0)) / 86400.0
+            try:
+                import config as _c444
+                _max_d = float(getattr(_c444, "M444_O3_EMPTY_CODE_MAX_DAYS", 3.0))
+            except Exception as _ce:
+                silent_exc(_ce, where="PatchAutoApprover.is_obsolete 444刀5 cfg", level="debug")
+                _max_d = 3.0
+            return _age_d >= max(0.5, _max_d)
         if not _rel or not _orig:
             return False
         _p = os.path.join(_project_root(), _rel)
@@ -210,6 +226,20 @@ class PatchAutoApprover:
         except Exception as e:
             _logger.debug(f"过期检测读取失败: {type(e).__name__}: {e}")
             return False
+        # ★444刀5：**方法本身不存在** ⇒ 也是 obsolete。
+        #   为什么必须加：原判据只看 `original_code` 是否仍是文件子串，
+        #   而补丁写的往往是**方法体片段** —— 同一段体可能存在于另一个方法里
+        #   （实测 `PulseSubconscious.update` 已不存在，但那段体仍是文件的子串）
+        #   ⇒ 判据返回 False，这条补丁**永远留在 pending 里占位**。
+        #   只在 `original_code` 非空时判（空原码 = 新增方法，允许不存在）。
+        _m = str(patch.get("method") or "").strip()
+        if _m and _m.isidentifier() and _orig:
+            import re as _re444
+            if not _re444.search(rf"^\s*def {_re444.escape(_m)}\(", _src, _re444.MULTILINE):
+                _logger.info(
+                    "[444刀5] 目标方法在文件里不存在 ⇒ obsolete: %s::%s",
+                    _rel, _m)
+                return True
         return _orig not in _src
 
     def _is_stale_by_age(self, patch: dict[str, Any]) -> bool:

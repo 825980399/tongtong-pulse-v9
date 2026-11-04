@@ -5758,7 +5758,10 @@ ENABLE_EXPERIENCE_QUARANTINE_RESTORE = True
 #   双闸：调用点 auto_gc=True ＋ 本开关；判据＝使用率≥80% 或 RSS≥8GB 或 增长率≥阈值。
 #   重启生效；阈值下调须等 A1 归属结论＋一周实测回落幅度另议。
 ENABLE_MEMORY_AUTO_GC = True
-MEMORY_GROWTH_ALARM_MB_PER_MIN = 10.0
+# ★444刀4：10.0 → 50.0。实测夜间 10 小时 growth 闸触发 232 条 WARNING（10s 一轮采样），
+#   而稳态 RSS 在 3.3~4.6GB 之间正常波动，10MB/分钟本身就是噪声量级。
+#   真泄漏的量级是「每小时数百 MB」，50MB/分钟仍然能抓到，只是不再把抖动当泄漏。
+MEMORY_GROWTH_ALARM_MB_PER_MIN = 50.0
 #: ★427刀4：启动后的「加载期」（秒）。这段时间在装配组件/建索引，RSS 是
 #: 台阶式上涨 —— 与泄漏无关。期内 `growth_mb_per_min` 照常给出（观测面要看），
 #: 但 `phase="ramp"`、`is_leak_signal=False`，不再把启动阶跃当泄漏报。
@@ -6019,6 +6022,13 @@ M439_APPROVE_MIN_TRUST = 60.0
 #   M438_BASELINE_SOURCE = "code_repro"（默认，静态复现，不依赖日志）
 #                        = "log"        （438 的日志窗口口径，保留可回退）
 M438_BASELINE_SOURCE = "code_repro"
+# ===== ★444刀4：进程资源告警阈值 =====
+# 实测（11-04 夜间 10h）：[382刀9] 线程超阈值告警 283 条，全部是 `线程 121~136 > 50`。
+# 稳态线程本就 120+（器官 57 个 + 线程池 + 原生线程），50 这个线是"建库时的想象值"。
+# 150 = 稳态上限 + 余量：真·线程泄漏（每次泄漏几十条）仍会越线，日常不再刷屏。
+PROC_THREADS_WARN = 150
+PROC_HANDLES_WARN = 5000
+
 PARQUET_COMPRESSION = "snappy"
 PARQUET_SHARD_BY_EVOL_LEVEL = True
 PARQUET_BATCH_SIZE = 5000
@@ -6890,6 +6900,17 @@ M443_DATA_SAMPLE_LIMIT = 200
 # "事件型"写方法，没有事件就一条都不写。这里按固定节流补一个 process_rss 采样点。
 ENABLE_M443_INFLUX_RSS_SAMPLE = True
 M443_INFLUX_RSS_INTERVAL_SEC = 60.0
+
+# ===== ★444刀1：判死池后台刷新 =====
+# streak 只在 `as_of` 变化时 +1，而 as_of 只有 _detect_dead_code()（单次 ~25s）跑完才更新。
+# 没有独立冲刷拍，重启后要等自检视的数小时轮次才能攒够 3 轮 ⇒ O3 永远开不了闸。
+ENABLE_M444_DEAD_CODE_REFRESH = True
+M444_DEAD_CODE_REFRESH_SEC = 1800.0
+
+# ===== ★444刀5：O3 空码候选的有界生命周期 =====
+# O3 死代码候选只有 file/method、没有代码（"待人工确认是否删除"的线索），
+# 永远过不了派单闸却会永久占着 pending。超过这个天数仍未人工确认 ⇒ obsolete 归档。
+M444_O3_EMPTY_CODE_MAX_DAYS = 3.0
 
 
 # ★351刀5：问题池「消费+回灌」节拍（单位=主循环**拍**，不是秒）。
