@@ -7803,3 +7803,56 @@ KNOWLEDGE_BOUNDARY_THRESHOLD = 0.6
 ENABLE_PATCH_FAILURE_EXPERIENCE = True
 M452_FAILURE_EXPERIENCE_PATH = "data/patches/failure_experience.jsonl"
 
+# ==================== ★453批：推理能力注入上线 MVV（第一次改变回答路径）====================
+# 性质：453 是「检索证据真正拼进 prompt」的实弹批。全部护栏由
+#       nucleus/evidence_injection.py + nucleus/evidence_sanitizer.py 提供，
+#       PulseLung 只留薄接线。★开关关闭时接线一行都不进入，逐字回到 452 行为。
+#
+# ENABLE_EVIDENCE_INJECTION
+#   默认值：**False**（本批默认关，重启后由人工开）
+#   语义：True ⇒ 仅 `origin == user_query` 的请求在 `_call_via_channels` 入口
+#         取 top-2 条证据（score≥0.65）、过 8 类净化、拼进 user prompt 末尾。
+#   ★秒级 kill switch：该值**每请求重新读取**（不缓存），运行期把它置 False
+#     或经 data/config_override.json 热重载，下一次请求立即不注入，无需重启。
+#   ★烛微《453批前置风险深挖》用的名字是 `ENABLE_LUNG_EVIDENCE_INJECT`；
+#     读取层同时认这两个别名，主名优先（不新增第二个 config 键）。
+ENABLE_EVIDENCE_INJECTION = False
+#
+# M453_DISABLE_L2_FOR_INJECTION
+#   默认值：True
+#   语义：对**注入请求**跳过 L2 语义缓存的查表与写入。
+#   ★为什么不直接把 ENABLE_SEMANTIC_CACHE_L2 改成 False：该开关 2026-09-27
+#     已被星轨开启（config.py:5098），且 test_m92_switch_registry 有
+#     「既有开关值逐字不变」的硬断言；全局关会削减所有流量的缓存命中。
+#     L2 按原始 query 存取，带证据生成的回答会污染纯 prompt 请求（烛微 §二.3），
+#     而污染只发生在注入请求上 ⇒ 只对该类请求关，等价且零跨流量副作用。
+M453_DISABLE_L2_FOR_INJECTION = True
+#
+# ---- 刀6：证据选取口径（烛微 §〇 MVV / §4.4 成本闸）----
+# 2 条 × 100 字 ≈ +130 tokens；user_query 基线 prompt 995 / total 1260
+# ⇒ prompt +13.1% / total +10.3%，均在 +20% / +15% 门内。
+# 3×120 字会到 +19% total，超门，故不采用。
+M453_EVIDENCE_MIN_SCORE = 0.65          # 影子 score 集中 0.62~0.69，0.6 无区分度
+M453_EVIDENCE_TOP_K = 2                 # top-2（不是 top-3）
+M453_EVIDENCE_MAX_CHARS = 100           # 每条硬截 100 字
+M453_EVIDENCE_MAX_AGE_DAYS = 30         # 经验自身 timestamp 超 30 天丢弃
+#
+# ---- 刀7：28s 三段式（烛微 §三）----
+# ①首试带证据 ≤18s ②超时/空 ⇒ 剔除证据重试 ≤8s ③再失败 ⇒ 本地兜底 ≤0.2s
+# ★deadline 传进渠道循环：每轮渠道尝试前检查剩余，并把渠道自身 30s
+#   超时夹到本阶段剩余预算内（只在外层计时挡不住 2 轮 × N 渠道）。
+M453_TOTAL_BUDGET_SEC = 28.0
+M453_FIRST_TRY_SEC = 18.0
+M453_RETRY_SEC = 8.0
+M453_FALLBACK_SEC = 0.2
+M453_RETRY_SEMAPHORE = 2                # 全局重试并发上限，防并发风暴
+# ★两段都失败时返回固定兜底话术「我暂时想不起来，稍后再试」；
+#   设 False 则回到 452 语义（返回 None，由上层回退本地 Ollama）。
+#   任务书刀7 要求固定话术 ⇒ 默认 True；观察期若发现质量下降，改 False 一键回退。
+M453_USE_FIXED_FALLBACK = True
+#
+# ---- 刀8：eval 质量闸 ----
+# 判定：52 题 胜+平 ≥ N ⇒ 建议保留注入；< N ⇒ 建议关闭。
+# ★eval_runner 是离线独立进程，**不会自动写回本开关**（红线：跑分不得决定配置）；
+#   对比报告只给 recommendation，由人工裁决。
+M453_EVAL_GATE_MIN = 45

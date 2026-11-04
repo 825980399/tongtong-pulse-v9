@@ -68,6 +68,117 @@ def load_answers(path: str) -> dict:
     return out
 
 
+def load_score_source(path: str) -> tuple:
+    """★453刀8：``--before/--after`` 支持两种输入。
+
+    452 版只吃**答案文件**；而任务书要求传 ``baseline_b0.json`` /
+    ``baseline_b2.json``（**跑分结果**，含 ``rows``）。若照旧把结果 JSON
+    当答案映射，52 题答案全部变成一个 dict 的字符串 ⇒ 分数恒 0 ⇒ 假对比。
+    返回 ``("result", dict)`` 或 ``("answers", dict)``。
+    """
+    with open(path, encoding="utf-8") as f:
+        d = json.load(f)
+    if isinstance(d, dict) and isinstance(d.get("rows"), list) and "total" in d:
+        return ("result", d)
+    if isinstance(d, dict) and isinstance(d.get("before"), dict) \
+            and isinstance(d.get("after"), dict):
+        return ("compare", d)
+    return ("answers", load_answers(path))
+
+
+def run_repeated(questions: list, answers: dict, adapter=None,
+                 repeat: int = 1) -> dict:
+    """★453刀5：同题 N 次取**逐题中位数**。
+
+    ★离线答案是固定文件 ⇒ N 次结果必然逐字相同；本函数不伪造差异，
+      而是把 ``identical=True`` 如实写进结果，供交付报告说明「3 次中位数
+      退化为 1 次」这一事实。
+    """
+    n = max(1, int(repeat))
+    runs = [run(questions, answers, adapter=adapter) for _ in range(n)]
+    if n == 1:
+        out = dict(runs[0])
+        out.update({"repeat": 1, "identical": True, "runs": [runs[0]["total"]]})
+        return out
+    import statistics
+    base = dict(runs[0])
+    merged = []
+    for i, r0 in enumerate(base["rows"]):
+        vals = [float(rr["rows"][i]["score"]) for rr in runs]
+        row = dict(r0)
+        row["score"] = float(statistics.median(vals))
+        row["score_runs"] = vals
+        merged.append(row)
+    base["rows"] = merged
+    base["total"] = round(sum(r["score"] for r in merged), 2)
+    base["max"] = float(len(merged))
+    base["pct"] = round(100.0 * base["total"] / max(1, len(merged)), 1)
+    dims = {}
+    for r in merged:
+        dims.setdefault(r["dim"], []).append(r["score"])
+    base["by_dimension"] = {
+        k: {"avg": round(sum(v) / len(v), 3), "sum": round(sum(v), 3),
+            "count": len(v)} for k, v in sorted(dims.items())}
+    totals = [rr["total"] for rr in runs]
+    base.update({"repeat": n, "identical": len(set(totals)) == 1,
+                 "runs": totals})
+    return base
+
+
+def gate_verdict(c: dict, gate_min: int = 45) -> dict:
+    """★453刀8：只给**建议**，绝不自动改开关。
+
+    理由（项目红线「日志/跑分不得决定返回值或配置」）：eval_runner 是
+    **离线独立进程**，改它自己的 ``config`` 属性对框架进程零影响；
+    改 ``config.py`` 又需重启且会与「开关默认 False」冲突。
+    ⇒ 自动关开关在本架构下是**假动作**，如实上报请人工裁决。
+    """
+    wt = int(c["win"]) + int(c["tie"])
+    return {"win_tie": wt, "threshold": int(gate_min),
+            "passed": wt >= int(gate_min),
+            "recommendation": "keep" if wt >= int(gate_min) else "disable",
+            "auto_applied": False,
+            "note": "离线进程无法影响框架开关；由人工按本建议裁决"}
+
+
+def render_comparison_md(before: dict, after: dict, c: dict, gate: dict) -> str:
+    """★453刀8：对比报告（离线缺的遥测一律写 N/A，不编造）。"""
+    lines = ["# 453 批 · B0 → B2 eval 对比报告", "",
+            "> 生成：tools/eval_runner.py --report ｜口径：规则硬匹配 must_contain",
+            "", "## 总分与胜平负", "",
+            "| 项 | 值 |", "|---|---|",
+            (f"| B0 总分 | {before.get('total')} / {before.get('max')} "
+             f"({before.get('pct')}%) |"),
+            (f"| B2 总分 | {after.get('total')} / {after.get('max')} "
+             f"({after.get('pct')}%) |"),
+            f"| Δ 总分 | {c.get('delta'):+g} |",
+            f"| 胜 / 平 / 负 | {c.get('win')} / {c.get('tie')} / {c.get('loss')} |",
+            "", "## 各维度变化", "",
+            "| 维度 | B0 均分 | B2 均分 | Δ |", "|---|---|---|---|"]
+    bd, ad = before.get("by_dimension", {}), after.get("by_dimension", {})
+    for k in sorted(set(bd) | set(ad)):
+        a = float(bd.get(k, {}).get("avg", 0.0))
+        b = float(ad.get(k, {}).get("avg", 0.0))
+        lines.append(f"| {k} | {a:.3f} | {b:.3f} | {b - a:+.3f} |")
+    for label, key in (("证据被引用次数", "evidence_cited"),
+                      ("token 增量", "token_delta"),
+                      ("延迟增量", "latency_delta")):
+        v = after.get(key, before.get(key))
+        if v is None:
+            lines.append(f"\n- **{label}**：N/A（离线评测无该遥测，需在线采样）")
+        else:
+            lines.append(f"\n- **{label}**：{v}")
+    lines += ["", "## 质量闸", "",
+             (f"- 胜+平 = **{gate['win_tie']}** / 阈值 {gate['threshold']} "
+              f"⇒ **{'通过' if gate['passed'] else '不通过'}**"),
+             f"- 建议：**{gate['recommendation']}**；自动应用：{gate['auto_applied']}",
+             f"- {gate['note']}",
+             "", "★ 判据有效性警告：本批开关默认 False 且答案为离线固定文件，",
+             "B0 与 B2 由同一份输入产生 ⇒ 恒 52 平，**该 gate 无判别力**，",
+             "不能作为「注入成功」的证据。真判据需开注入 + 在线答案重跑。", ""]
+    return "\n".join(lines)
+
+
 def _load_adapter(path: str):
     spec = importlib.util.spec_from_file_location("m452_eval_adapter", path)
     if spec is None or spec.loader is None:
@@ -172,6 +283,12 @@ def main() -> int:
     ap.add_argument("--demo", action="store_true", help="空答案跑通全部题目（证明脚本可用）")
     ap.add_argument("--out", default=None, help="结果 JSON 落盘路径")
     ap.add_argument("--json", action="store_true", help="只输出 JSON（不打表格）")
+    ap.add_argument("--repeat", type=int, default=1,
+                    help="同题跑 N 次取逐题中位数（453 刀5 默认 1，B0 用 3）")
+    ap.add_argument("--gate", type=int, default=45,
+                    help="质量闸：胜+平 ≥ N 才建议保留注入（453 刀8 默认 45）")
+    ap.add_argument("--report", default=None,
+                    help="对比模式：额外落一份 Markdown 对比报告")
     args = ap.parse_args()
 
     meta, qs = load_set(args.set)
@@ -180,17 +297,30 @@ def main() -> int:
         if not (args.before and args.after):
             print("--before 与 --after 必须同时给", file=sys.stderr)
             return 2
-        r1 = run(qs, load_answers(args.before))
-        r2 = run(qs, load_answers(args.after))
+        k1, v1 = load_score_source(args.before)
+        k2, v2 = load_score_source(args.after)
+        # 结果 JSON 直接复用；答案文件则现跑一次分
+        r1 = v1 if k1 == "result" else run(qs, v1)
+        r2 = v2 if k2 == "result" else run(qs, v2)
+        if k1 == "compare":
+            r1, r2 = v1["before"], v1["after"]
         c = compare(r1, r2)
+        gate = gate_verdict(c, args.gate)
         print("=" * 66)
         print(f"  对比：{os.path.basename(args.before)} → {os.path.basename(args.after)}")
         print(f"  总分 {c['before_total']} → {c['after_total']}（Δ {c['delta']:+g}）")
         print(f"  胜 {c['win']} ｜ 平 {c['tie']} ｜ 负 {c['loss']}")
+        print(f"  [453质量闸] 胜+平={gate['win_tie']} / {gate['threshold']} "
+              f"⇒ 建议 {gate['recommendation']}（不自动改开关）")
         print("=" * 66)
+        if args.report:
+            os.makedirs(os.path.dirname(os.path.abspath(args.report)), exist_ok=True)
+            with open(args.report, "w", encoding="utf-8", newline="\n") as f:
+                f.write(render_comparison_md(r1, r2, c, gate))
+            print(f"  对比报告已落盘: {args.report}")
         if args.out:
             with open(args.out, "w", encoding="utf-8", newline="\n") as f:
-                json.dump({"compare": c, "before": r1, "after": r2},
+                json.dump({"compare": c, "gate": gate, "before": r1, "after": r2},
                           f, ensure_ascii=False, indent=2)
         return 0
 
@@ -199,7 +329,7 @@ def main() -> int:
     if not args.answers and adapter is None and not args.demo:
         print("需要 --answers / --adapter / --demo 之一", file=sys.stderr)
         return 2
-    result = run(qs, answers, adapter=adapter)
+    result = run_repeated(qs, answers, adapter=adapter, repeat=args.repeat)
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:

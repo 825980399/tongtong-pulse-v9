@@ -28,6 +28,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sys
@@ -42,7 +43,16 @@ DEFAULT_TRACE_REL: str = os.path.join("data", "eval", "evidence_trace.jsonl")
 _ROOT: str = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 _SCORE_KEYS = ("score", "_score")
-_TEXT_KEYS = ("text", "content", "snippet", "answer", "body", "example_question")
+_TEXT_KEYS = ("text", "content", "snippet", "answer", "body", "example_question",
+              # ★453刀1：经验池的真实正文字段（烛微 §1.1 实测）。
+              #   452 时只认前 6 个 ⇒ 对真实经验命中 text 恒为空串。
+              "motivation", "summary", "explanation", "hypothesis")
+# 经验池一条记录是「motivation + summary」两字段共同构成正文，
+# 只取 `_get` 的第一个命中键会把「动机循环内部评估」这半句丢掉。
+# 口径与 nucleus.mnemosyne.experience_retriever.experience_text 逐字一致。
+_PRIMARY_TEXT_KEYS = ("text", "content", "snippet", "answer", "body",
+                      "example_question")
+_MULTI_TEXT_KEYS = ("motivation", "summary", "explanation", "hypothesis")
 _SOURCE_KEYS = ("source", "file", "path", "origin", "doc_id")
 
 #: 正文最长保留字数（只留判据，不把整篇文档灌进留痕）
@@ -82,6 +92,57 @@ def _get(hit: Any, keys: tuple, default: Any = None) -> Any:
     return default
 
 
+def _text_of(hit: Any) -> str:
+    """★453刀1：单键优先；经验池形态按 motivation。summary 拼装。
+
+    与 ``experience_retriever.experience_text`` 同口径（本模块不 import 检索器，
+    避免观测层把重型编码器依赖带进来）。
+    """
+    # ★先判「通用单键」：经验池的 motivation/summary 属于 _TEXT_KEYS，
+    #   若直接用 _get(_TEXT_KEYS) 会只拿到 motivation，把 summary 半句丢掉。
+    single = str(_get(hit, _PRIMARY_TEXT_KEYS, "") or "")
+    if single:
+        return single[:_MAX_TEXT]
+    parts = [str(_get(hit, (k,), "") or "").strip() for k in _MULTI_TEXT_KEYS]
+    return "。".join(p for p in parts if p)[:_MAX_TEXT]
+
+
+def _reward_of(hit: Any) -> float:
+    """经验池 ``result_reward`` 是 **dict**（377/377 实测），取 intensity。"""
+    v = _get(hit, ("result_reward", "reward"), None)
+    if isinstance(v, dict):
+        v = v.get("intensity")
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return 0.0
+    return max(0.0, min(1.0, float(v)))
+
+
+def quality_weight(hit: Any, score: float | None = None) -> float:
+    """★453刀2：可解释的质量权重（0~1），模板 / 低 reward / 高风险逐项打折。
+
+    • ``is_template=True``  ⇒ ×0.1（经验池 220/377 = 58.4% 是模板）
+    • ``result_reward``    ⇒ 线性加成（Q&A 里只有 8 条 ≥0.5）
+    • ``pollution_risk``  ⇒ high ×0.5 / medium ×0.8
+    • 检索 score          ⇒ 最终乘子
+    """
+    _s = float(score) if score is not None else (_score_of(hit) or 0.0)
+    _r = _reward_of(hit)
+    _w = 0.35 + 0.45 * _r + 0.20 * max(0.0, min(1.0, _s))
+    if bool(_get(hit, ("is_template",), False)):
+        _w *= 0.1
+    _risk = str(_get(hit, ("pollution_risk",), "") or "").lower()
+    if _risk == "high":
+        _w *= 0.5
+    elif _risk == "medium":
+        _w *= 0.8
+    return round(max(0.0, min(1.0, _w)), 4)
+
+
+def stable_request_id(query: str) -> str:
+    """调用方没给 request_id 时的稳定兜底：同一问题必然共享一个 id。"""
+    return hashlib.sha1(str(query or "").encode("utf-8", "ignore")).hexdigest()[:16]
+
+
 def _score_of(hit: Any) -> float | None:
     v = _get(hit, _SCORE_KEYS)
     if isinstance(v, bool) or not isinstance(v, (int, float)):
@@ -112,16 +173,24 @@ def build_evidence_block(retriever: Callable[[str, int], list[Any]] | None,
         if s is None or s < float(min_score):
             continue
         out.append({
-            "text": str(_get(h, _TEXT_KEYS, "") or "")[:_MAX_TEXT],
+            "text": _text_of(h),
             "source": str(_get(h, _SOURCE_KEYS, "") or "")[:120],
             "score": round(s, 4),
+            # ★453刀2：质量字段随命中一起给注入层，避免二次查池
+            "quality_weight": quality_weight(h, s),
+            "is_template": bool(_get(h, ("is_template",), False)),
+            "result_reward": _reward_of(h),
+            "pollution_risk": str(_get(h, ("pollution_risk",), "") or ""),
+            "timestamp": _get(h, ("timestamp", "ts"), None),
         })
-    out.sort(key=lambda x: -x["score"])
+    # ★453刀2：按质量权重降序（模板/低 reward 沉底），权重相同再比 score。
+    out.sort(key=lambda x: (-x["quality_weight"], -x["score"]))
     return out[:max(0, int(top_k))]
 
 
 def note_hits(query: str, hits: list[Any], *, top_k: int = 3,
-              min_score: float = 0.6) -> int:
+              min_score: float = 0.6,
+              request_id: str | None = None) -> int:
     """★452刀1：把**已经取到**的 hits 落 `evidence_trace.jsonl`（一行一条命中）。
 
     为什么按命中逐行而不是按 query 一行：抽查时按 text/source/score 直接 grep / jq
@@ -137,6 +206,10 @@ def note_hits(query: str, hits: list[Any], *, top_k: int = 3,
     if "pytest" in sys.modules and os.path.normcase(os.path.normpath(p)) == \
             os.path.normcase(os.path.normpath(default)):
         return 0
+    # ★453刀3：同一次请求（多渠道 × 多轮）共享一个 request_id。
+    #   调用方（PulseLung._call_via_channels 入口）生成 uuid 并透传；
+    #   未透传时按 query 稳定派生，保证「同问题不虚高计数」。
+    _rid = str(request_id or "").strip() or stable_request_id(query)
     rows: list[dict] = []
     for i, h in enumerate(list(hits)[:max(1, int(top_k))]):
         s = _score_of(h)
@@ -144,13 +217,21 @@ def note_hits(query: str, hits: list[Any], *, top_k: int = 3,
             "ts": time.time(),
             "at": time.strftime("%Y-%m-%d %H:%M:%S"),
             "kind": "evidence_dry_run",
+            "request_id": _rid,
             "query": str(query or "")[:200],
             "rank": i,
             "score": round(s, 4) if s is not None else None,
             "kept": bool(s is not None and s >= float(min_score)),
             "min_score": float(min_score),
-            "text": str(_get(h, _TEXT_KEYS, "") or "")[:_MAX_TEXT],
+            "text": _text_of(h),
             "source": str(_get(h, _SOURCE_KEYS, "") or "")[:120],
+            # ★453刀2：数据闸要按「不同问题 + 可用证据」判，不是按行数
+            "is_template": bool(_get(h, ("is_template",), False)),
+            "result_reward": _reward_of(h),
+            "quality_weight": quality_weight(h, s),
+            "pollution_risk": str(_get(h, ("pollution_risk",), "") or ""),
+            "activation_count": _get(h, ("activation_count",), None),
+            "exp_timestamp": _get(h, ("timestamp", "ts"), None),
             "note": "影子 dry-run：只记录，不注入 prompt / 不改回答",
         })
     try:
@@ -161,3 +242,47 @@ def note_hits(query: str, hits: list[Any], *, top_k: int = 3,
     except Exception as _e:
         silent_exc(_e, where="evidence_trace::note_hits 写盘", level="debug")
         return 0
+
+def trace_stats(path: str | None = None, *, min_score: float = 0.65,
+                min_evidence: int = 2) -> dict:
+    """★453刀3：按 ``distinct(request_id)`` 统计留痕，供数据闸读数。
+
+    ``eligible_requests`` = 该 request_id 拥有 ≥ ``min_evidence`` 条
+    ``score >= min_score`` 证据的请求数 —— 烛微 §4.1 的数据闸口径
+    （"≥30 个不同请求，且每条有 ≥2 条 score≥0.65 的证据"）。
+
+    ★文件不存在 / 读失败一律返回全 0 + ``available=False``，
+      绝不抛异常（留痕是可观测附加物，不是主链路）。
+    """
+    p = str(path or "").strip() or _trace_path()
+    if not p or not os.path.isabs(p):
+        p = os.path.join(_ROOT, p)
+    out = {"rows": 0, "distinct_requests": 0, "eligible_requests": 0,
+           "available": False, "path": p}
+    if not os.path.exists(p):
+        return out
+    buckets: dict = {}
+    try:
+        with open(p, encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                try:
+                    r = json.loads(line)
+                except ValueError as _bad:
+                    silent_exc(_bad, where="evidence_trace::trace_stats 坏行", level="debug")
+                    continue
+                out["rows"] += 1
+                rid = str(r.get("request_id") or "") or stable_request_id(str(r.get("query") or ""))
+                b = buckets.setdefault(rid, {"rows": 0, "strong": 0})
+                b["rows"] += 1
+                s = r.get("score")
+                if isinstance(s, (int, float)) and not isinstance(s, bool) and s >= float(min_score):
+                    b["strong"] += 1
+        out["available"] = True
+        out["distinct_requests"] = len(buckets)
+        out["eligible_requests"] = sum(
+            1 for b in buckets.values() if b["strong"] >= int(min_evidence))
+    except Exception as _e:
+        silent_exc(_e, where="evidence_trace::trace_stats 读盘", level="debug")
+    return out

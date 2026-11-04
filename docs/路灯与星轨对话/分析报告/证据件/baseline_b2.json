@@ -1,0 +1,789 @@
+{
+  "rows": [
+    {
+      "id": "D1-01",
+      "dim": "D1_multi_step",
+      "score": 0.0,
+      "hits": 0,
+      "total": 4,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D1-02",
+      "dim": "D1_multi_step",
+      "score": 0.0,
+      "hits": 0,
+      "total": 4,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D1-03",
+      "dim": "D1_multi_step",
+      "score": 0.0,
+      "hits": 0,
+      "total": 4,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D1-04",
+      "dim": "D1_multi_step",
+      "score": 0.0,
+      "hits": 0,
+      "total": 4,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D1-05",
+      "dim": "D1_multi_step",
+      "score": 0.0,
+      "hits": 0,
+      "total": 4,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D1-06",
+      "dim": "D1_multi_step",
+      "score": 0.0,
+      "hits": 0,
+      "total": 4,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D3-01",
+      "dim": "D3_evidence",
+      "score": 0.0,
+      "hits": 0,
+      "total": 3,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D3-02",
+      "dim": "D3_evidence",
+      "score": 0.0,
+      "hits": 0,
+      "total": 3,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D3-03",
+      "dim": "D3_evidence",
+      "score": 0.0,
+      "hits": 0,
+      "total": 3,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D3-04",
+      "dim": "D3_evidence",
+      "score": 0.0,
+      "hits": 0,
+      "total": 3,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D3-05",
+      "dim": "D3_evidence",
+      "score": 0.0,
+      "hits": 0,
+      "total": 4,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D3-06",
+      "dim": "D3_evidence",
+      "score": 0.0,
+      "hits": 0,
+      "total": 3,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D4-01",
+      "dim": "D4_long_task",
+      "score": 0.0,
+      "hits": 0,
+      "total": 4,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D4-02",
+      "dim": "D4_long_task",
+      "score": 0.0,
+      "hits": 0,
+      "total": 3,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D4-03",
+      "dim": "D4_long_task",
+      "score": 0.0,
+      "hits": 0,
+      "total": 4,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D4-04",
+      "dim": "D4_long_task",
+      "score": 0.0,
+      "hits": 0,
+      "total": 3,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D4-05",
+      "dim": "D4_long_task",
+      "score": 0.0,
+      "hits": 0,
+      "total": 3,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D5-01",
+      "dim": "D5_metacognition",
+      "score": 0.0,
+      "hits": 0,
+      "total": 4,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D5-02",
+      "dim": "D5_metacognition",
+      "score": 0.0,
+      "hits": 0,
+      "total": 4,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D5-03",
+      "dim": "D5_metacognition",
+      "score": 0.0,
+      "hits": 0,
+      "total": 3,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D5-04",
+      "dim": "D5_metacognition",
+      "score": 0.0,
+      "hits": 0,
+      "total": 2,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D5-05",
+      "dim": "D5_metacognition",
+      "score": 0.0,
+      "hits": 0,
+      "total": 3,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D5-06",
+      "dim": "D5_metacognition",
+      "score": 0.0,
+      "hits": 0,
+      "total": 3,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D5-07",
+      "dim": "D5_metacognition",
+      "score": 0.0,
+      "hits": 0,
+      "total": 3,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D6-01",
+      "dim": "D6_critical",
+      "score": 0.0,
+      "hits": 0,
+      "total": 4,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D6-02",
+      "dim": "D6_critical",
+      "score": 0.0,
+      "hits": 0,
+      "total": 4,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D6-03",
+      "dim": "D6_critical",
+      "score": 0.0,
+      "hits": 0,
+      "total": 4,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D6-04",
+      "dim": "D6_critical",
+      "score": 0.0,
+      "hits": 0,
+      "total": 3,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D6-05",
+      "dim": "D6_critical",
+      "score": 0.0,
+      "hits": 0,
+      "total": 4,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D6-06",
+      "dim": "D6_critical",
+      "score": 0.0,
+      "hits": 0,
+      "total": 4,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D7-01",
+      "dim": "D7_abstract",
+      "score": 0.0,
+      "hits": 0,
+      "total": 4,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D7-02",
+      "dim": "D7_abstract",
+      "score": 0.0,
+      "hits": 0,
+      "total": 4,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D7-03",
+      "dim": "D7_abstract",
+      "score": 0.0,
+      "hits": 0,
+      "total": 4,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D7-04",
+      "dim": "D7_abstract",
+      "score": 0.0,
+      "hits": 0,
+      "total": 3,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D7-05",
+      "dim": "D7_abstract",
+      "score": 0.0,
+      "hits": 0,
+      "total": 4,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D7-06",
+      "dim": "D7_abstract",
+      "score": 0.0,
+      "hits": 0,
+      "total": 4,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D8-01",
+      "dim": "D8_creative",
+      "score": 0.0,
+      "hits": 0,
+      "total": 4,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D8-02",
+      "dim": "D8_creative",
+      "score": 0.0,
+      "hits": 0,
+      "total": 4,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D8-03",
+      "dim": "D8_creative",
+      "score": 0.0,
+      "hits": 0,
+      "total": 4,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D8-04",
+      "dim": "D8_creative",
+      "score": 0.0,
+      "hits": 0,
+      "total": 4,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D8-05",
+      "dim": "D8_creative",
+      "score": 0.0,
+      "hits": 0,
+      "total": 3,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D8-06",
+      "dim": "D8_creative",
+      "score": 0.0,
+      "hits": 0,
+      "total": 4,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "BASE-01",
+      "dim": "base",
+      "score": 0.0,
+      "hits": 0,
+      "total": 2,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "BASE-02",
+      "dim": "base",
+      "score": 0.0,
+      "hits": 0,
+      "total": 2,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D2-01",
+      "dim": "D2_cot_trace",
+      "score": 0.0,
+      "hits": 0,
+      "total": 3,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D2-02",
+      "dim": "D2_cot_trace",
+      "score": 0.0,
+      "hits": 0,
+      "total": 3,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D2-03",
+      "dim": "D2_cot_trace",
+      "score": 0.0,
+      "hits": 0,
+      "total": 3,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D2-04",
+      "dim": "D2_cot_trace",
+      "score": 0.0,
+      "hits": 0,
+      "total": 3,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D2-05",
+      "dim": "D2_cot_trace",
+      "score": 0.0,
+      "hits": 0,
+      "total": 3,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "D2-06",
+      "dim": "D2_cot_trace",
+      "score": 0.0,
+      "hits": 0,
+      "total": 3,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "EXTRA-01",
+      "dim": "D3_evidence",
+      "score": 0.0,
+      "hits": 0,
+      "total": 3,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "EXTRA-02",
+      "dim": "D5_metacognition",
+      "score": 0.0,
+      "hits": 0,
+      "total": 3,
+      "hit_ratio": 0.0,
+      "matched": [],
+      "score_runs": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  ],
+  "by_dimension": {
+    "D1_multi_step": {
+      "avg": 0.0,
+      "sum": 0.0,
+      "count": 6
+    },
+    "D2_cot_trace": {
+      "avg": 0.0,
+      "sum": 0.0,
+      "count": 6
+    },
+    "D3_evidence": {
+      "avg": 0.0,
+      "sum": 0.0,
+      "count": 7
+    },
+    "D4_long_task": {
+      "avg": 0.0,
+      "sum": 0.0,
+      "count": 5
+    },
+    "D5_metacognition": {
+      "avg": 0.0,
+      "sum": 0.0,
+      "count": 8
+    },
+    "D6_critical": {
+      "avg": 0.0,
+      "sum": 0.0,
+      "count": 6
+    },
+    "D7_abstract": {
+      "avg": 0.0,
+      "sum": 0.0,
+      "count": 6
+    },
+    "D8_creative": {
+      "avg": 0.0,
+      "sum": 0.0,
+      "count": 6
+    },
+    "base": {
+      "avg": 0.0,
+      "sum": 0.0,
+      "count": 2
+    }
+  },
+  "total": 0.0,
+  "max": 52.0,
+  "pct": 0.0,
+  "repeat": 3,
+  "identical": true,
+  "runs": [
+    0.0,
+    0.0,
+    0.0
+  ]
+}

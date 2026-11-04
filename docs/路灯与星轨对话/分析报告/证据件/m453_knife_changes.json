@@ -1,0 +1,116 @@
+{
+  "batch": 453,
+  "date": "2026-11-05",
+  "nature": "推理能力注入上线 MVV（第一次改变用户可见回答路径）",
+  "switch_default": {
+    "ENABLE_EVIDENCE_INJECTION": false
+  },
+  "knives": [
+    {
+      "knife": 1,
+      "name": "修阻断A：dry-run 正文为空（_TEXT_KEYS 补字段）",
+      "before": "_TEXT_KEYS 6 键，不认经验池 motivation/summary；对真实命中 text 恒为空串",
+      "after": "_TEXT_KEYS 补 motivation/summary/explanation/hypothesis；新增 _text_of 按 motivation。summary 拼装，与 experience_retriever.experience_text 逐字同口径",
+      "files": [
+        "nucleus/evidence_trace.py"
+      ],
+      "evidence": "经验池 hit 实测 text: '维持系统平衡' → '维持系统平衡。动机循环内部评估'；同口径断言 True"
+    },
+    {
+      "knife": 2,
+      "name": "修阻断B：trace 加质量过滤字段",
+      "before": "note_hits 只落 ts/query/rank/score/kept/min_score/text/source/note",
+      "after": "每行补 is_template/result_reward/quality_weight/pollution_risk/activation_count/exp_timestamp；build_evidence_block 按 quality_weight 降序",
+      "files": [
+        "nucleus/evidence_trace.py"
+      ],
+      "evidence": "经验池 377 条：is_template True=220(58.4%)；result_reward 377/377 是 dict，需取 intensity；全池 reward>=0.5 共 249 条（Q&A 子类只有 8 条）"
+    },
+    {
+      "knife": 3,
+      "name": "修阻断C：trace 加 request_id 去重",
+      "before": "一次请求 3 渠道 × 2 轮最多写 6 行，无 request_id，数据闸被行数虚高满足",
+      "after": "调用方生成 uuid4().hex[:12] 透传；未透传按 sha1(query)[:16] 稳定派生；新增 trace_stats 按 distinct(request_id) + eligible 统计",
+      "files": [
+        "nucleus/evidence_trace.py",
+        "nucleus/evidence_injection.py",
+        "organs/body/PulseLung.py"
+      ],
+      "evidence": "6 行同请求 trace → distinct_requests=1；data/eval/evidence_trace.jsonl 当前不存在（重启后无 user_query）"
+    },
+    {
+      "knife": 4,
+      "name": "sanitize_evidence 过滤 8 类污染",
+      "before": "无 prompt 层净化；PlaceholderSanitizer 只管占位符、sanitizer.py 只管日志脱敏",
+      "after": "新增 nucleus/evidence_sanitizer.py（纯函数）：注入攻击/乱码/PII/标签逃逸/角色前缀/指令句/重复/过期；filter_evidence 汇总 dropped",
+      "files": [
+        "nucleus/evidence_sanitizer.py"
+      ],
+      "evidence": "8 类逐一冒烟：injection/garble/pii_dense/标签转义/角色剥离/imperative/duplicate/expired 全部命中；正常经验正文不被误杀"
+    },
+    {
+      "knife": 5,
+      "name": "B0 eval 基线跑分",
+      "before": "eval_runner 只支持单次离线打分；--before/--after 只吃答案文件",
+      "after": "--repeat N 逐题取中位数（identical 如实标注）、结果 JSON 兼容；落 data/eval/baseline_b0.json",
+      "files": [
+        "tools/eval_runner.py",
+        "data/eval/baseline_b0.json"
+      ],
+      "evidence": "52 题 × 3 次：identical=True（离线答案固定）；--demo 全空答案 ⇒ 总分 0.0/52.0（脚本连通性基线，非能力基线）"
+    },
+    {
+      "knife": 6,
+      "name": "注入 MVV 接线（核心刀）",
+      "before": "452 只 dry-run 不落 prompt；无开关；origin 在 _call_via_channels 而非 _build_channel_messages",
+      "after": "新增 nucleus/evidence_injection.py；PulseLung 在 _call_via_channels 入口一次检索 + user_query 闸 + 2×100字 + <evidence> 标签 + 开关每请求读取；config 末尾登记 ENABLE_EVIDENCE_INJECTION=False",
+      "files": [
+        "nucleus/evidence_injection.py",
+        "nucleus/evidence_sanitizer.py",
+        "organs/body/PulseLung.py",
+        "config.py"
+      ],
+      "evidence": "build_injection 实测产出 2 条 <evidence id=E1/E2 source=... score=...>；开关关时接线块不进入；L2 只对注入请求短路（未改全局开关值）"
+    },
+    {
+      "knife": 7,
+      "name": "超时降级兜底（28s 三段式）",
+      "before": "_call_via_channels 2 轮 × N 渠道，每渠道 http_read 30s，最坏 60s+；外层无总预算",
+      "after": "Budget 纯对象（28/18/8/0.2）；deadline 传进 for _round 与 for _ch；_call_channel 单次 timeout 夹到本阶段预算；剔除证据重试 1 次（全局信号量 2）；固定兜底话术可回退",
+      "files": [
+        "nucleus/evidence_injection.py",
+        "organs/body/PulseLung.py",
+        "config.py"
+      ],
+      "evidence": "stage1 channel_timeout(30)=18.0；stage2=8.0；should_try 在 deadline 后 False；信号量第 3 次 acquire=False"
+    },
+    {
+      "knife": 8,
+      "name": "B2 eval 对比跑分",
+      "before": "无对比报告；--before/--after 传跑分结果 JSON 会被当答案映射（分数恒 0 的假对比）",
+      "after": "load_score_source 双形态；gate_verdict 只给 recommendation（不自动改开关）；render_comparison_md 落 data/eval/b2_comparison.md",
+      "files": [
+        "tools/eval_runner.py",
+        "data/eval/baseline_b2.json",
+        "data/eval/b2_comparison.md",
+        "data/eval/b2_comparison.json"
+      ],
+      "evidence": "B0→B2：胜 0 / 平 52 / 负 0，胜+平=52≥45 ⇒ 建议 keep；★判据无判别力（开关默认关 + 同一份离线输入），已写进报告与 md"
+    }
+  ],
+  "task_book_deviations": [
+    "任务书刀2「trace 里 59% 是模板」实为经验池分布（377 条 / 220 模板 = 58.4%）；data/eval/evidence_trace.jsonl 当前不存在",
+    "_TEXT_KEYS 实为 6 键（452 已加 example_question），任务书写 5 键",
+    "result_reward 是 dict（377/377），不是数值；reward≥0.5 须取 intensity",
+    "ENABLE_L2_CACHE 不存在，真名 ENABLE_SEMANTIC_CACHE_L2 且 2026-09-27 已开启为 True",
+    "origin 不在 _build_channel_messages（无该参数），在 _call_via_channels 的 _m40_origin",
+    "eval_runner --before/--after 原本只吃答案文件，任务书要传跑分结果 JSON（接口不匹配，已兼容）",
+    "B0「52题×3次取中位数」离线答案固定 ⇒ 3 次全等，identical=True 如实标注",
+    "刀8「胜+平<45 自动关开关」是假动作（离线独立进程改不了框架配置）⇒ 改为给 recommendation，请人工裁决",
+    "刀7「p95延迟≤26.7s」离线单测无法给出，需在线采样",
+    "刀5「关 L2 在 config 里临时改」未照做：改为只对注入请求短路，避免改既有开关值打红 m92 硬断言",
+    "452 已生效（pid 20184 @00:56:57 > 452 提交 00:26:32），但 evidence_trace.jsonl 无行 ⇒ 数据闸 distinct=0，注入内容会很少"
+  ],
+  "pending_restart": true,
+  "note": "本批代码改动需重启框架才加载；开关默认关，重启后由人工开启并观察前 24 小时"
+}
