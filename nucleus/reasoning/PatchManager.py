@@ -22,6 +22,7 @@ import shutil
 import subprocess
 import sys
 import textwrap
+import threading
 import time
 from typing import Any, ClassVar
 
@@ -2560,6 +2561,124 @@ class PatchManager:
     #   判据只认这个显式标记 + 白名单 source，不从理由串里找关键字（铁律153）。
     _M343_AUTO_FIX_SOURCES = ("llm_auto_fix",)
     _m343_shape_exempt_count = 0     # 豁免计数（回归指标：应只见于自主修复通道）
+
+    #: ★447刀2：落地留痕（相对仓根）+ 进程级 apply 锁
+    _M447_APPLY_TRACE_REL = os.path.join("data", "patches", "apply_trace.jsonl")
+    _M447_APPLY_LOCK = threading.Lock()
+
+    @staticmethod
+    def _m447_apply_trace_path() -> str:
+        """落地留痕文件绝对路径（相对路径按仓根解析；空串 ⇒ 关闭）。"""
+        try:
+            import config as _c447t
+            _p = str(getattr(_c447t, "M447_APPLY_TRACE_PATH",
+                             PatchManager._M447_APPLY_TRACE_REL) or "").strip()
+            if not _p:
+                return ""
+            if os.path.isabs(_p):
+                return _p
+            return os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(
+                    os.path.abspath(__file__)))), _p)
+        except Exception as _e:
+            silent_exc(_e, where="PatchManager::_m447_apply_trace_path", level="debug")
+            return ""
+
+    @staticmethod
+    def _m447_note_apply(patch, before: str, after: str, **extra) -> bool:
+        """★447刀2：**落地那一刻**把修改前/后完整内容写进 `apply_trace.jsonl`。
+
+        任务书原文：「修改前/修改后完整内容 100% 留痕，就算改错了也能追溯」。
+        所以这里**不截断**（`M447_APPLY_TRACE_MAX_CHARS=0` 缺省不截）；
+        要临时收缩排障时把该配置设成正数即可（截断会置 `truncated=True`，不是静默丢）。
+
+        ★失败绝不影响 apply：本方法内部吞掉一切异常，只返回 bool（铁律40）。
+        """
+        try:
+            import config as _c447w
+            if not bool(getattr(_c447w, "ENABLE_M447_APPLY_TRACE", True)):
+                return False
+            _cap = int(getattr(_c447w, "M447_APPLY_TRACE_MAX_CHARS", 0) or 0)
+        except Exception as _e:
+            silent_exc(_e, where="PatchManager::_m447_note_apply 读配置", level="debug")
+            _cap = 0
+        try:
+            _p = PatchManager._m447_apply_trace_path()
+            if not _p:
+                return False
+            # ★测试进程不许写**默认生产路径**（446 给 detector/effect 两个口加过同款护栏；
+            #   本口漏了这一步，实测一次 pytest 就灌进 4 行空 patch 的假落地记录）。
+            #   单测把 M447_APPLY_TRACE_PATH 指到 tmp ⇒ 照常写。
+            #   ★路径比较必须 normcase+normpath：配置里写的是 `data/patches/...`
+            #   （正斜杠），`_M447_APPLY_TRACE_REL` 是 `os.path.join` 出来的反斜杠，
+            #   直接字符串比会永远不等 ⇒ 护栏静默失效（446 的同类坑）。
+            _def_path = os.path.normcase(os.path.normpath(os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(
+                    os.path.abspath(__file__)))),
+                PatchManager._M447_APPLY_TRACE_REL)))
+            if "pytest" in sys.modules and os.path.normcase(
+                    os.path.normpath(_p)) == _def_path:
+                return False
+            _b = str(before if before is not None else "")
+            _a = str(after if after is not None else "")
+            _trunc = False
+            if _cap > 0 and (len(_b) > _cap or len(_a) > _cap):
+                _b, _a, _trunc = _b[:_cap], _a[:_cap], True
+            import hashlib as _hl
+            _row = {
+                "ts": time.time(),
+                "at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "kind": "apply",
+                "patch_id": str((patch or {}).get("id") or "")[:64],
+                "file": str((patch or {}).get("file") or ""),
+                "method": str((patch or {}).get("method") or ""),
+                "issue_type": str((patch or {}).get("issue_type") or ""),
+                "backup_path": str((patch or {}).get("backup_path") or ""),
+                "rollback_path": str((patch or {}).get("backup_path") or ""),
+                "rollback_available": (patch or {}).get("rollback_available"),
+                "before_sha256": _hl.sha256(_b.encode("utf-8", "replace")).hexdigest(),
+                "after_sha256": _hl.sha256(_a.encode("utf-8", "replace")).hexdigest(),
+                "truncated": _trunc,
+                "before_chars": len(str(before if before is not None else "")),
+                "after_chars": len(str(after if after is not None else "")),
+                "before_content": _b,
+                "after_content": _a,
+            }
+            _row.update({k: v for k, v in (extra or {}).items()})
+            _dir = os.path.dirname(_p)
+            if _dir:
+                os.makedirs(_dir, exist_ok=True)
+            with open(_p, "a", encoding="utf-8") as _f:
+                _f.write(json.dumps(_row, ensure_ascii=False) + "\n")
+            return True
+        except Exception as _e:
+            silent_exc(_e, where="PatchManager::_m447_note_apply 写盘", level="warning")
+            return False
+
+    def apply_approved_once(self, *, reason: str = "m447_tick") -> dict[str, Any]:
+        """★447刀2：带**进程级锁**的 apply 入口（`only_approved=True` 的唯一并发安全路径）。
+
+        为什么必须有这道锁：apply 现在有三个触发口（周期 5 分钟 tick / 进程退出 finally /
+        `has_apply_request()` 立即请求），三者可能同时进 —— 同一补丁被两路同时
+        `str.replace` + `os.replace`，后果是「后写覆盖前写」且两边都报 applied。
+
+        ★非阻塞语义：抢不到锁**直接返回**（`skipped_locked=True`），不排队。
+        排队会让退出 finally 卡住等满一整轮 apply；跳过更安全 —— 下一拍还会再来。
+        """
+        _lock = PatchManager._M447_APPLY_LOCK
+        if not _lock.acquire(blocking=False):
+            _module_logger.info(
+                "[447刀2] apply 进行中，本次并发调用直接跳过: reason=%s", reason)
+            return {"applied": 0, "failed": 0, "details": [],
+                    "skipped_locked": True, "apply_reason": reason}
+        try:
+            _r = self.apply_all_pending(only_approved=True)
+            _out = dict(_r) if isinstance(_r, dict) else {
+                "applied": 0, "failed": 0, "details": []}
+            _out["apply_reason"] = reason
+            return _out
+        finally:
+            _lock.release()
 
     #: ★446刀2：入队口必须随 patch 落 pending 的基线四字段（任务书 §刀2 第一条）
     _M446_BASELINE_FIELDS = ("baseline_errors", "baseline_source",
@@ -5850,6 +5969,14 @@ class PatchManager:
                     #   派单侧的 set_status(FIXED) 已改为只认本字段。
                     patch["landed"] = True
                     patch["landed_at"] = patch["applied_at"]
+                    # ★447刀2：落地即留痕 —— 修改前/后**完整内容** + 备份/回滚路径。
+                    #   位置刻意选在这里：`os.replace` 已落盘（真落地），
+                    #   而 `full_content` / `modified_full` 两个对象都还在作用域里
+                    #   —— 事后想复算"到底改了什么"，只有这一刻能拿到两侧全文。
+                    PatchManager._m447_note_apply(
+                        patch, full_content, modified_full,
+                        line=patch.get("line"),
+                        applied_at=patch["applied_at"])
                     # ★375刀5：可回滚标记改为**实测**后再置。存量实测（375 刀5）：
                     #   applied=76 条**全部**标 True、**全部**有 backup_path，
                     #   但备份物理可读只有 20 条 —— 56 条早被 code_backups 保留策略清掉。

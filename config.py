@@ -7558,3 +7558,33 @@ M446_EFFECT_VERIFY_TRACE_PATH = "data/patches/effect_verify_trace.jsonl"
 #     `passed=True / problem_gone=None` —— 「没测出问题是否消失」被记成「验证有效」。
 #   读取点：nucleus/evolution/EvolutionEffectVerifier.py::_m446_strict_on()
 ENABLE_M446_EFFECT_STRICT = True
+
+# ==================== ★447批：让补丁"被批准"+"落地" ====================
+#
+# ENABLE_M447_APPROVAL_BRIDGE
+#   默认值：True
+#   语义：True  ⇒ `SafeEvolutionExecutor.repair_with_distillation` 每保存一条补丁，
+#                立刻调 `approval_bridge.maybe_approve_scoped()`（八闸不改，外面多一层
+#                安全边界：risk=低+非核心+单文件+blast≤1，加日限额，全程留痕）。
+#        False ⇒ 逐字回到 446 的行为（保存完就没人审批）。
+#   读取点：nucleus/reasoning/SafeEvolutionExecutor.py::_m447_approval_enabled()
+ENABLE_M447_APPROVAL_BRIDGE = True
+#
+# M447_APPROVE_DAILY_CAP
+#   默认值：1（小林拍板：每天最多自动批准 1 条）
+#   语义：<=0 ⇒ 关闭自动批准（只留痕不写状态）。
+#   计数口径：数 `data/patches/approval_trace.jsonl` 里**当天 approved=True 的行**，
+#            不数 auto_approved.json（那份含人工批准，混在一起就说不清"本层放了几条"）。
+#   读取点：nucleus/evolution/approval_bridge.py::daily_cap()
+M447_APPROVE_DAILY_CAP = 1
+#
+# ENABLE_M447_APPLY_TRACE / M447_APPLY_TRACE_PATH / M447_APPLY_TRACE_MAX_CHARS
+#   默认值：True / "data/patches/apply_trace.jsonl" / 0（0 = 不截断）
+#   语义：落地那一刻把**修改前/修改后完整内容**写进 apply_trace.jsonl，附
+#        before/after sha256、备份路径、回滚路径。任务书要求"100% 留痕"，
+#        故缺省不截断；排障时把 MAX_CHARS 设正数可临时收缩（会置 truncated=True，
+#        不是静默丢弃）。关掉 ⇒ 只留 PatchManager 既有备份，不留全文台账。
+#   读取点：nucleus/reasoning/PatchManager.py::_m447_note_apply()
+ENABLE_M447_APPLY_TRACE = True
+M447_APPLY_TRACE_PATH = "data/patches/apply_trace.jsonl"
+M447_APPLY_TRACE_MAX_CHARS = 0

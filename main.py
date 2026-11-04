@@ -4297,7 +4297,10 @@ def _apply_pending_patches_and_restart(framework) -> bool:
             _logger.info("[补丁] 自我修改约束已触发，跳过自动应用补丁")
             _patch_result = {"applied": 0, "failed": 0, "details": [], "skipped_constraint": True}
         else:
-            _patch_result = _patch_mgr.apply_all_pending(only_approved=True)
+            # ★447刀2：统一走带锁入口 —— 周期 tick / 退出 finally / 立即请求
+            #   三个触发口可能同时进，裸调 apply_all_pending 会让同一补丁被两路
+            #   同时替换（后写覆盖前写，两边都报 applied）。
+            _patch_result = _patch_mgr.apply_approved_once(reason="main:apply_pending")
         # ★422刀3：把本次结果挂到周期 apply 的运行态上（重试队列从这里消费）
         _M422_APPLY_TICK["last_result"] = _patch_result
         if _patch_result["applied"] > 0 or _patch_result["failed"] > 0:

@@ -740,6 +740,53 @@ def _issue_file_out_of_scope(file_path: str, project_root: str = "") -> bool:
     return bool(_issue_filter_reason(file_path, project_root))
 
 
+def _m447_approval_enabled() -> bool:
+    """`ENABLE_M447_APPROVAL_BRIDGE`（缺省 True）。关 ⇒ 保存后不再过审批桥。"""
+    try:
+        import config as _c447
+        return bool(getattr(_c447, "ENABLE_M447_APPROVAL_BRIDGE", True))
+    except Exception as _e:
+        silent_exc(_e, where="SafeEvolutionExecutor::_m447_approval_enabled", level="debug")
+        return True
+
+
+def _m447_try_approve(patch: dict, patch_manager, *, source: str = "repair") -> dict:
+    """★447刀1：补丁保存后**立刻**过一次审批桥（安全边界 + 日限额 + 全留痕）。
+
+    为什么接在 `save_pending_patch` 之后而不是更早：审批写的状态落在 **pending** 上，
+    条目不存在时 `approve_patch_by_id` 只会回 ok=False（入队被 284/352 拒收的件）。
+    先保存再审批，留痕里那条 reject 才有对应的真实条目可查。
+
+    为什么接在这里而不是定时器上：生成侧是全仓唯一"新补丁出现"的时刻，
+    接在定时器上会让一条验证通过的棋子等到下一拍才被看一眼，期间可能已被 prune 归档。
+
+    ★不抛异常、不改判定：审批桥自己 fail-closed（八闸任一不过即拒）。
+    """
+    _out = {"called": False, "approved": False, "blocked": "", "reason": ""}
+    if not isinstance(patch, dict) or not patch:
+        return _out
+    if not _m447_approval_enabled():
+        _out["reason"] = "ENABLE_M447_APPROVAL_BRIDGE=False"
+        return _out
+    try:
+        from nucleus.evolution import approval_bridge as _ab
+        _r = _ab.maybe_approve_scoped(patch, patch_manager, by="auto:bridge_447")
+    except Exception as _e:
+        silent_exc(_e, where="SafeEvolutionExecutor::_m447_try_approve", level="warning")
+        return _out
+    _out.update({"called": True, "approved": bool(_r.get("approved")),
+                 "blocked": str(_r.get("blocked") or ""),
+                 "reason": str(_r.get("reason") or "")[:200]})
+    try:
+        _module_logger.info(
+            "[447刀1] 审批桥 %s %s:%s ⇒ approved=%s blocked=%s（%s）",
+            source, patch.get("file", ""), patch.get("method", ""),
+            _out["approved"], _out["blocked"] or "-", _out["reason"])
+    except Exception as _le:
+        silent_exc(_le, where="SafeEvolutionExecutor::_m447_try_approve 日志", level="debug")
+    return _out
+
+
 class SafeEvolutionExecutor:
     """
     安全进化执行器。
@@ -2564,6 +2611,8 @@ class SafeEvolutionExecutor:
                     _local_patch["needs_runtime_verify"] = True
                     self._patch_manager.save_pending_patch(_local_patch)
                     _local_submitted += 1
+                    # ★447刀1：保存后立刻过审批桥（八闸不改，只多一层安全边界与留痕）
+                    _m447_try_approve(_local_patch, self._patch_manager, source="local")
                     _module_logger.info(
                         f"[自主修复] {_organ}.{_method} ({_type}) 本地补丁验证通过，提交待审批"
                         f"{'（大模型方案更优，建议人工对比）' if _llm_is_better else ''}")  # type: ignore[possibly-unbound]
@@ -2581,6 +2630,8 @@ class SafeEvolutionExecutor:
                     _llm_patch["needs_runtime_verify"] = True
                     self._patch_manager.save_pending_patch(_llm_patch)
                     _submitted += 1
+                    # ★447刀1：保存后立刻过审批桥（同上；LLM 件在八闸里本就难全过）
+                    _m447_try_approve(_llm_patch, self._patch_manager, source="llm")
                     _module_logger.info(
                         f"[自主修复] {_organ}.{_method} ({_type}) 本地修复失败，LLM补丁验证通过，提交待审批")
                 except Exception as _se:

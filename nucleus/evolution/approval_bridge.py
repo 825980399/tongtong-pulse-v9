@@ -231,3 +231,215 @@ def maybe_approve(patch: dict, patch_manager: Any, *, by: str = "auto:bridge",
     _out["status_written"] = bool(_wr.get("ok"))
     _out["write_result"] = _wr
     return _out
+
+
+# ==================== ★447刀1：接进生产的「安全边界 + 全留痕」外层 ====================
+#
+# 【为什么要有这一层，而不是直接调 maybe_approve】
+# 439 的 `maybe_approve()` 只回答「八闸过不过」，它不知道生产侧答应过什么。
+# 447 的接线边界（小林拍板）是四条**额外**约束，八闸里一条都没有：
+#   ① 只对 risk=低（八闸①）**且** 非核心（八闸⑦）**且** 单文件（八闸⑧）**且** blast≤1（八闸⑥）开
+#      —— 这四条与八闸重合，但**必须单独再判一次**：八闸是"能不能放行"，
+#      这里是"本批接线敢不敢自动放行"，两者日后会各自演化，不能共用一个布尔。
+#   ② 每天最多自动批准 1 条（八闸里没有频次概念）
+#   ③ 失败自动回滚（由 PatchManager 既有的 rollback/applied 机制负责，本层只记）
+#   ④ 所有决策留痕（含被边界挡下的那些 —— 它们才是"为什么今天没批准"的答案）
+#
+# ★本层**不改任何闸判据**：`decision()` 一个字没动；放行仍由
+#   `PatchManager.approve_patch_by_id()` 这个唯一写口执行。
+# ★本层**不 import 执行器**，不写 pending、不改源码 —— 与模块原有的硬边界一致。
+
+#: 审批留痕（相对仓根）
+APPROVAL_TRACE_REL = os.path.join("data", "patches", "approval_trace.jsonl")
+
+
+def approval_trace_path(root: str | None = None) -> str:
+    """审批留痕文件绝对路径。`root` 供隔离验证注入；生产不传。"""
+    _root = root or os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.abspath(__file__))))
+    return os.path.join(_root, APPROVAL_TRACE_REL)
+
+
+def daily_cap() -> int:
+    """每天最多自动批准几条（`M447_APPROVE_DAILY_CAP`，缺省 1；<=0 视为关闭自动批准）。"""
+    try:
+        return int(_cfg("M447_APPROVE_DAILY_CAP", 1))
+    except (TypeError, ValueError) as _e:
+        _log_debug("M447_APPROVE_DAILY_CAP 取值非法，回落 1: %s", _e)
+        return 1
+
+
+def scope_ok(patch: dict) -> tuple[bool, str]:
+    """447 安全边界：`risk=低 + 非核心 + 单文件 + blast<=1`。
+
+    Returns:
+        ``(ok, why)`` —— `why` 是给人看的判据串（会原样进留痕）。
+    """
+    _risk = str((patch or {}).get("risk_level") or "").strip()
+    _files = target_files(patch or {})
+    _core = [f for f in _files if any(f.replace("\\", "/").startswith(p)
+                                      for p in CORE_PREFIXES)]
+    _why = []
+    if _risk not in ("低", "low"):
+        _why.append(f"risk={_risk!r}(需低)")
+    if _core:
+        _why.append(f"核心文件={','.join(_core)}")
+    if len(_files) != 1:
+        _why.append(f"文件数={len(_files)}(需1)")
+    if len(_files) > 1:
+        _why.append(f"blast={len(_files)}(需<=1)")
+    return (not _why), ("; ".join(_why) if _why else "边界通过")
+
+
+def approved_today(root: str | None = None, *, now: float | None = None) -> int:
+    """今天（本地日）已经自动批准了多少条 —— 数**留痕**，不数别的账本。
+
+    为什么数留痕而不是 `auto_approved.json`：那份账本只记决策，
+    而本层要数的是"本层放行了几条"，两者在人工批准混入后会分叉。
+    """
+    _p = approval_trace_path(root)
+    _now = float(now if now is not None else time.time())
+    _day = time.strftime("%Y-%m-%d", time.localtime(_now))
+    _n = 0
+    try:
+        if not os.path.isfile(_p):
+            return 0
+        with open(_p, "r", encoding="utf-8") as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if not _line:
+                    continue
+                try:
+                    _row = json.loads(_line)
+                except ValueError as _e:
+                    _log_debug("审批留痕坏行（跳过，不影响计数）: %s", _e)
+                    continue
+                if str(_row.get("day") or "") == _day and _row.get("approved") is True:
+                    _n += 1
+    except OSError as _e:
+        _log_debug("读审批留痕失败（按 0 计，不阻断）: %s", _e)
+        return 0
+    return _n
+
+
+def note_approval_trace(patch: dict, decision_result: dict, *, approved: bool,
+                        hit: str = "", scope: str = "", blocked: str = "",
+                        patch_manager: Any = None, root: str | None = None,
+                        now: float | None = None) -> bool:
+    """把**一次审批判定**追加到 `approval_trace.jsonl`。失败绝不影响主流程。
+
+    任务书硬性要求：补丁 id、八闸每闸的判定结果、最终决策、决策理由、
+    **修改前/修改后完整内容**。
+
+    Args:
+        decision_result: ``decision()`` 的返回（含 `gates` / `reason`）。
+        approved: 最终是否真的放了行（边界挡下时为 False，即使八闸全过）。
+        hit: 边界/频次挡下的原因（空串表示没被挡）。
+        scope: `scope_ok()` 的判据串。
+        blocked: 机器可读的挡下分类：``scope`` / ``daily_cap`` / ``gates`` / ``""``。
+    """
+    try:
+        _p = approval_trace_path(root)
+        # ★测试进程 + 默认生产路径 ⇒ 不写（与 446 两个留痕口同款护栏）。
+        #   `root` 显式传入（单测都传 tmp）⇒ 照常写。
+        if root is None and "pytest" in sys.modules:
+            _def = approval_trace_path()
+            if _p == _def:
+                return False
+        _dir = os.path.dirname(_p)
+        if _dir:
+            os.makedirs(_dir, exist_ok=True)
+        _now = float(now if now is not None else time.time())
+        _gates = (decision_result or {}).get("gates") or {}
+        _patch = patch or {}
+        _row = {
+            "ts": _now,
+            "at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(_now)),
+            "day": time.strftime("%Y-%m-%d", time.localtime(_now)),
+            "kind": "approval",
+            "patch_id": str(_patch.get("id") or "")[:64],
+            "file": str(_patch.get("file") or ""),
+            "method": str(_patch.get("method") or ""),
+            "issue_type": str(_patch.get("issue_type") or ""),
+            "risk_level": str(_patch.get("risk_level") or ""),
+            "trust_score": _patch.get("trust_score"),
+            # 八闸逐条（ok + 判据串）—— 少记一闸，事后就说不清"它为什么没过"
+            "gates": {k: {"ok": bool(v.get("ok")), "why": str(v.get("why") or "")}
+                      for k, v in _gates.items()},
+            "gates_total": len(_gates),
+            "gates_passed": sum(1 for v in _gates.values() if v.get("ok")),
+            "decision_reason": str((decision_result or {}).get("reason") or "")[:300],
+            "approved": bool(approved),
+            "blocked": str(blocked or ""),
+            "blocked_why": str(hit or "")[:300],
+            "scope": str(scope or "")[:300],
+            "baseline_errors": _patch.get("baseline_errors"),
+            "baseline_source": _patch.get("baseline_source"),
+            "problem_gone": _patch.get("problem_gone"),
+            # ★留痕铁律：修改前/修改后**完整内容**（不截断）
+            "original_code": _patch.get("original_code") or "",
+            "modified_code": _patch.get("modified_code") or "",
+            "original_len": len(str(_patch.get("original_code") or "")),
+            "modified_len": len(str(_patch.get("modified_code") or "")),
+        }
+        with open(_p, "a", encoding="utf-8") as _f:
+            _f.write(json.dumps(_row, ensure_ascii=False) + "\n")
+        return True
+    except Exception as _e:
+        _log_debug("审批留痕写入失败（不影响判定）: %s: %s", type(_e).__name__, _e)
+        return False
+
+
+def maybe_approve_scoped(patch: dict, patch_manager: Any, *,
+                         root: str | None = None,
+                         by: str = "auto:bridge_447",
+                         now: float | None = None) -> dict:
+    """★447刀1：生产用入口 —— 先过安全边界与日限额，再走八闸，全程留痕。
+
+    Returns:
+        ``{"approved", "reason", "gates", "blocked", "daily_used", "trace"}``
+    """
+    _out: dict = {"approved": False, "reason": "", "gates": {},
+                  "blocked": "", "daily_used": 0, "trace": False}
+    if not isinstance(patch, dict) or not patch:
+        _out["reason"] = "patch 为空"
+        _out["blocked"] = "scope"
+        return _out
+
+    _scope_ok, _scope_why = scope_ok(patch)
+    _out["scope"] = _scope_why
+    if not _scope_ok:
+        _out["blocked"] = "scope"
+        _out["reason"] = "安全边界拦下: " + _scope_why
+        _out["trace"] = note_approval_trace(
+            patch, {"gates": {}, "reason": _out["reason"]}, approved=False,
+            hit=_scope_why, scope=_scope_why, blocked="scope", root=root, now=now)
+        _log_debug("[447刀1] 边界拦下 %s: %s", str(patch.get("id") or "")[:16], _scope_why)
+        return _out
+
+    _cap = daily_cap()
+    _used = approved_today(root, now=now)
+    _out["daily_used"] = _used
+    if _cap <= 0 or _used >= _cap:
+        _out["blocked"] = "daily_cap"
+        _out["reason"] = f"日限额已用尽（今日已批准 {_used} / 上限 {_cap}）"
+        _out["trace"] = note_approval_trace(
+            patch, {"gates": {}, "reason": _out["reason"]}, approved=False,
+            hit=_out["reason"], scope=_scope_why, blocked="daily_cap",
+            root=root, now=now)
+        return _out
+
+    _r = maybe_approve(patch, patch_manager, by=by, root=root)
+    _out["reason"] = _r.get("reason", "")
+    _out["gates"] = _r.get("gates", {})
+    _out["approved"] = bool(_r.get("approved")) and bool(_r.get("status_written"))
+    if _r.get("approved") and not _r.get("status_written"):
+        _out["blocked"] = "status_write"
+        _out["reason"] = (f"{_out['reason']}（状态未写成: "
+                          f"{(_r.get('write_result') or {}).get('reason', '')}）")
+    elif not _r.get("approved"):
+        _out["blocked"] = "gates"
+    _out["trace"] = note_approval_trace(
+        patch, _r, approved=_out["approved"], hit="" if _out["approved"] else _out["reason"],
+        scope=_scope_why, blocked=_out["blocked"], root=root, now=now)
+    return _out
