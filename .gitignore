@@ -123,6 +123,9 @@ data/_archive/
 data/backups/
 # logs目录下所有文件（不仅仅是*.log）
 logs/
+# 例外：docs/logs/里的关键节点日志要入库
+!docs/logs/
+!docs/logs/*.log
 # 配置备份文件（config.py.bak_*）
 config.py.bak*
 *.bak_*
