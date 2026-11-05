@@ -1,8 +1,8 @@
 {
  "schema": "cw3-consistency/1",
  "anchor_rev": "HEAD",
- "anchor_sha": "66e2b6e26ebfa4be049a363405f12fcb8e133df5",
- "observed_at": "2026-11-05T00:26:11",
+ "anchor_sha": "4b7a0b64585ab62ddfcc4905a7bb0a705d615707",
+ "observed_at": "2026-11-05T12:51:29",
  "watch": [
   "organs/brain/PulseInnerWorld.py",
   "organs/brain/pulse_inner_world_*"
@@ -10,19 +10,19 @@
  "files": {
   "organs/brain/PulseInnerWorld.py": {
    "metrics": {
-    "try": 221,
-    "except": 222,
+    "try": 223,
+    "except": 224,
     "except_pass": 0,
-    "if": 1821,
-    "for": 291,
+    "if": 1828,
+    "for": 292,
     "while": 1,
-    "return": 803,
+    "return": 807,
     "raise": 0,
     "await": 0,
     "emit_calls": 104,
-    "methods": 353,
-    "lines": 17951,
-    "ast_sha256_12": "1a9b6a2c9d8d"
+    "methods": 355,
+    "lines": 18042,
+    "ast_sha256_12": "ee19378a9056"
    },
    "priority_hist": {
     "2": 4,
@@ -101,8 +101,8 @@
   },
   "organs/brain/pulse_inner_world_support.py": {
    "metrics": {
-    "try": 32,
-    "except": 31,
+    "try": 33,
+    "except": 32,
     "except_pass": 0,
     "if": 278,
     "for": 27,
@@ -112,8 +112,8 @@
     "await": 0,
     "emit_calls": 1,
     "methods": 42,
-    "lines": 2135,
-    "ast_sha256_12": "cb5c5e77741f"
+    "lines": 2154,
+    "ast_sha256_12": "3547b5e51e98"
    },
    "priority_hist": {
     "2": 1
@@ -121,6 +121,6 @@
    "event_hist": {}
   }
  },
- "delta_reason": "367后续 E11（学习目标漂移修复，CI 基线单笔 [ci-gate-change]）：PulseInnerWorld 新增**模块级**函数 goal_area_path_prefixes（methods +1）及其 3 个分支/3 个 return；评估判据里 nodes_after 改走别名前缀（if +2）、失败分支前加「无样本」挡板（if +1、return +1）、failed_domains 的单字遍历改整体匹配（if ±0）。合计 if 1813→1818(+5)、return 794→799(+5)、methods 351→352(+1)。★try/except 未变（215/216 不变）—— 本笔不新增异常处理器。★这两项增量只覆盖本笔：后续任何人再改 IW 的 if/return/methods 都会被硬门禁抓到。｜★373顺带/刀13批2（高危 __main__ 自测块收口 8 块，本笔同提交更新基准）：PulseInnerWorld.py 删除 `if __name__ == \"__main__\"` 演示块 83 行 ⇒ if 1818→1816（−2）、methods 352→350（−2）、lines 17791→17708，try/except/for/return/await/emit 与两个直方**全部不变**（演示块不含 emit）。另：原 expected_delta {if:5, return:5, methods:1} 系 367后续 E11 的授权增量，但基准当年未随代码重生成；本笔把基准对齐实况后**清空该组授权**——留着一个已满足的预期增量，会让将来恰好 +5 的夹带被静默放行。｜★406刀3（经验路由阈值埋点 + 纯知识拦截放开）：`_detect_experience_route` 加埋点调用 1 处，并新增 4 个方法（_m406_route_trace_on / _m406_knowledge_guard_params / _m406_knowledge_hit_count / _m406_trace_experience_route）；原「纯知识一律跳过」改写为「本地命中 < min_hits 才放行」。合计 try 215→219(+4)、except 216→220(+4)、if 1816→1822(+6)、for 289→290(+1)、return 799→806(+7)、methods 350→354(+4)、lines 17708→17841(+133)。★emit_calls 104→104、priority_hist、event_hist **全部不变** —— 本笔不新增任何发射点，埋点只打 DEBUG 日志。★4 个新方法里的 try/except 全部用于 `getattr(config,…)` 兜底与探针异常兜底，每个 except 都走 silent_exc（cw2 门禁五项 PASS）。本笔**把基准对齐实况并保持 expected_delta 为空**，不留已满足的授权增量。｜★407刀2（经验回路类型闸，CI 基线单笔 [ci-gate-change]）：`_detect_experience_route` 把 `_SKIP_TYPES` 从 `search()` **之后**提到**之前**（仅移动定义位置，清单一字未改），注入 `search(..., exclude_types=_SKIP_TYPES)`；`_derive_experience_default` 新增 `if not self._m407_reuse_example_answer(): return None`（不再把 example_question 当答案 —— 经验池 128 条没有任何字段承载答案）。新增 staticmethod `_m407_reuse_example_answer`（methods +1、try +1、except +1、return +2），`_derive_experience_default` 的 if +1 / return +1。合计 try 219→220、except 220→221、if 1822→1823、return 806→809、methods 354→355。★for/while/raise/await/emit_calls 均未变 —— 本笔不动事件发射面与循环结构。★这些增量只覆盖本笔：后续任何人再改 IW 的 if/return/methods 都会被硬门禁抓到。 ｜★408刀1（CI 基线单笔 [ci-gate-change]）：删除 407 批留下的「复用经验库结论当答案」整条错答案路 —— 方法 `_derive_experience_default` 与静态判据 `_m407_reuse_example_answer` 双双删除（methods -2），连带 try -1 / except -1 / if -3 / return -6（前者自带 if/return 分支，后者是一段带守卫的 return 语句）。调用方 `_detect_experience_route` 的 `_use_default` 派发分支不再产出答案，只保留 `self._log` 留痕，让 `_experience_result` 保持 None ⇒ 落 `_fallback_to_lung_model()`。**这是净删除，不是语义改写**；`expected_delta` 仍留空，靠本次刷新锚定。｜★411刀4（经验池命中接入观测，CI 基线单笔 [ci-gate-change]）：`_build_memory_context` 末尾新增 **1 个 try/except** —— `observe()` 算 top2 经验命中，异常走 silent_exc 退化成「没命中」，不许让整段记忆上下文崩掉；结果写两个独立键 `experience_hits` / `experience_hit_n`，**不动 `search_experience`**（那是搜索工具经验 best_tool/success_rate 的语义，覆盖它会让下游读到不存在的东西）。合计 try 219→220(+1)、except 220→221(+1)，lines 17851→17867；if/for/return/methods/emit_calls 与 priority_hist、event_hist **全部不变** —— 本笔只加一条观测支路，不新增分支、不新增发射点、不拼进 prompt。｜★452批（推理能力P0第一批，CI 基线单笔 [ci-gate-change]）：①刀3 修 `_detect_knowledge_boundary_and_inquire` 的两层时序/口径 bug —— 核心词提取循环提到全部边界信号之前（for +1），相关性判断新增配置读取 try/except 各 +1 与阈值 if +1；比较口径从「2~4字块集合 ∩ 2字核心词」改成子串判据。②刀8-2 `_KNOWN_DERIVATION_TYPES` 只加一个元素，不改控制流。③`pulse_inner_world_support._trace_inference` 新增寒暄闸门 if +1 与其早退 return +1，trace_entry 只加字段不改分支。合计 PulseInnerWorld.py: try/except/if/for 各 +1；pulse_inner_world_support.py: if +1 / return +1。★emit_calls / priority_hist / event_hist 全部不变 —— 本批不新增任何事件发射点，不新增 prompt 注入（刀1 是 dry-run 只落盘）。★按既有惯例把基准对齐实况并保持 expected_delta 为空，不留已满足的授权增量。",
+ "delta_reason": "367后续 E11（学习目标漂移修复，CI 基线单笔 [ci-gate-change]）：PulseInnerWorld 新增**模块级**函数 goal_area_path_prefixes（methods +1）及其 3 个分支/3 个 return；评估判据里 nodes_after 改走别名前缀（if +2）、失败分支前加「无样本」挡板（if +1、return +1）、failed_domains 的单字遍历改整体匹配（if ±0）。合计 if 1813→1818(+5)、return 794→799(+5)、methods 351→352(+1)。★try/except 未变（215/216 不变）—— 本笔不新增异常处理器。★这两项增量只覆盖本笔：后续任何人再改 IW 的 if/return/methods 都会被硬门禁抓到。｜★373顺带/刀13批2（高危 __main__ 自测块收口 8 块，本笔同提交更新基准）：PulseInnerWorld.py 删除 `if __name__ == \"__main__\"` 演示块 83 行 ⇒ if 1818→1816（−2）、methods 352→350（−2）、lines 17791→17708，try/except/for/return/await/emit 与两个直方**全部不变**（演示块不含 emit）。另：原 expected_delta {if:5, return:5, methods:1} 系 367后续 E11 的授权增量，但基准当年未随代码重生成；本笔把基准对齐实况后**清空该组授权**——留着一个已满足的预期增量，会让将来恰好 +5 的夹带被静默放行。｜★406刀3（经验路由阈值埋点 + 纯知识拦截放开）：`_detect_experience_route` 加埋点调用 1 处，并新增 4 个方法（_m406_route_trace_on / _m406_knowledge_guard_params / _m406_knowledge_hit_count / _m406_trace_experience_route）；原「纯知识一律跳过」改写为「本地命中 < min_hits 才放行」。合计 try 215→219(+4)、except 216→220(+4)、if 1816→1822(+6)、for 289→290(+1)、return 799→806(+7)、methods 350→354(+4)、lines 17708→17841(+133)。★emit_calls 104→104、priority_hist、event_hist **全部不变** —— 本笔不新增任何发射点，埋点只打 DEBUG 日志。★4 个新方法里的 try/except 全部用于 `getattr(config,…)` 兜底与探针异常兜底，每个 except 都走 silent_exc（cw2 门禁五项 PASS）。本笔**把基准对齐实况并保持 expected_delta 为空**，不留已满足的授权增量。｜★407刀2（经验回路类型闸，CI 基线单笔 [ci-gate-change]）：`_detect_experience_route` 把 `_SKIP_TYPES` 从 `search()` **之后**提到**之前**（仅移动定义位置，清单一字未改），注入 `search(..., exclude_types=_SKIP_TYPES)`；`_derive_experience_default` 新增 `if not self._m407_reuse_example_answer(): return None`（不再把 example_question 当答案 —— 经验池 128 条没有任何字段承载答案）。新增 staticmethod `_m407_reuse_example_answer`（methods +1、try +1、except +1、return +2），`_derive_experience_default` 的 if +1 / return +1。合计 try 219→220、except 220→221、if 1822→1823、return 806→809、methods 354→355。★for/while/raise/await/emit_calls 均未变 —— 本笔不动事件发射面与循环结构。★这些增量只覆盖本笔：后续任何人再改 IW 的 if/return/methods 都会被硬门禁抓到。 ｜★408刀1（CI 基线单笔 [ci-gate-change]）：删除 407 批留下的「复用经验库结论当答案」整条错答案路 —— 方法 `_derive_experience_default` 与静态判据 `_m407_reuse_example_answer` 双双删除（methods -2），连带 try -1 / except -1 / if -3 / return -6（前者自带 if/return 分支，后者是一段带守卫的 return 语句）。调用方 `_detect_experience_route` 的 `_use_default` 派发分支不再产出答案，只保留 `self._log` 留痕，让 `_experience_result` 保持 None ⇒ 落 `_fallback_to_lung_model()`。**这是净删除，不是语义改写**；`expected_delta` 仍留空，靠本次刷新锚定。｜★411刀4（经验池命中接入观测，CI 基线单笔 [ci-gate-change]）：`_build_memory_context` 末尾新增 **1 个 try/except** —— `observe()` 算 top2 经验命中，异常走 silent_exc 退化成「没命中」，不许让整段记忆上下文崩掉；结果写两个独立键 `experience_hits` / `experience_hit_n`，**不动 `search_experience`**（那是搜索工具经验 best_tool/success_rate 的语义，覆盖它会让下游读到不存在的东西）。合计 try 219→220(+1)、except 220→221(+1)，lines 17851→17867；if/for/return/methods/emit_calls 与 priority_hist、event_hist **全部不变** —— 本笔只加一条观测支路，不新增分支、不新增发射点、不拼进 prompt。｜★452批（推理能力P0第一批，CI 基线单笔 [ci-gate-change]）：①刀3 修 `_detect_knowledge_boundary_and_inquire` 的两层时序/口径 bug —— 核心词提取循环提到全部边界信号之前（for +1），相关性判断新增配置读取 try/except 各 +1 与阈值 if +1；比较口径从「2~4字块集合 ∩ 2字核心词」改成子串判据。②刀8-2 `_KNOWN_DERIVATION_TYPES` 只加一个元素，不改控制流。③`pulse_inner_world_support._trace_inference` 新增寒暄闸门 if +1 与其早退 return +1，trace_entry 只加字段不改分支。合计 PulseInnerWorld.py: try/except/if/for 各 +1；pulse_inner_world_support.py: if +1 / return +1。★emit_calls / priority_hist / event_hist 全部不变 —— 本批不新增任何事件发射点，不新增 prompt 注入（刀1 是 dry-run 只落盘）。★按既有惯例把基准对齐实况并保持 expected_delta 为空，不留已满足的授权增量。｜★454批（P1 第一批，CI 基线单笔 [ci-gate-change]）：①刀1 `_generate_task_plan` 拆成 `_generate_task_plan_base` + 同签名包装，新增 `_m454_annotate_plan`（含 op 判据 if 链 + for + return），包装新增一次配置读取 try/except；②刀5 `_multi_step_execute` 循环内新增旁路行组装与 `set_plan` 的 try/except，共新增 return/for/if 若干；③`pulse_inner_world_support._trace_inference` 新增 get_plan 的 try/except 各 +1。合计 PulseInnerWorld.py：try/except 各 +2、if +7、for +1、return +4、methods +2；pulse_inner_world_support.py：try/except 各 +1。★emit_calls / priority_hist / event_hist 全部不变 —— 本批不新增事件发射点，三算子纯本地 0 次 LLM，计划 v3 只打标不执行。★按既有惯例把基准对齐实况并保持 expected_delta 为空，不留已满足的授权增量。",
  "expected_delta": {}
 }
