@@ -8081,3 +8081,58 @@ M458_HANDLER_LIVE_SALT = "m458"
 #         自动把 PCT 归零并 WARNING 留痕（内存级，重启复位；不写 config 文件）。
 M458_HANDLER_BREAKER_WINDOW = 20
 M458_HANDLER_BREAKER_FAILS = 2
+
+
+# ==================== [M460-CFG] 第460批（自裁决闭环：证据准入 + 真回退 + 同类错误冷却）====================
+# 授权来源：2026-11-06 星轨对话裁决 —— 「闭环内的裁决角色让曈曈自己裁决」，
+#   **推翻 459 之后路灯建议的「保留人工裁决闸」**。安全感改由三件事提供：
+#     ① 证据准入门（复现探针先回填，不可判定 ⇒ 不放行）
+#     ② 真自动回退（改前字节快照 + 失败 rollback，不是只记不执行）
+#     ③ 同类错误冷却（结构化 error_type 进失败经验库 + 连续同类自动停手）
+#   全部新增键，不覆盖 457/458/459 任何键；本批不改八闸判据本身。
+#
+# ENABLE_M460_SELF_VERDICT
+#   默认值：True（★按裁决生效，不留人工闸）
+#   语义：总闸。False ⇒ 逐字节回到 460 前行为（八闸照旧拿不到复现证据），
+#         用于 A/B 复现「两闸恒不可判定」的旧现场。
+ENABLE_M460_SELF_VERDICT = True
+#
+# ENABLE_M460_AUTO_APPLY / ENABLE_M460_AUTO_ROLLBACK
+#   默认值：True / True
+#   语义：前者允许裁决通过后自动写状态；后者允许验证失败时**真的执行**回退。
+#   ★447 批注释写了「失败自动回滚」，但 maybe_approve_scoped 里一次 rollback
+#     都没调 —— 本批补的是「执行」，不是再写一条注释。
+ENABLE_M460_AUTO_APPLY = True
+ENABLE_M460_AUTO_ROLLBACK = True
+#
+# M460_TICKET_AGGREGATE_SEC
+#   默认值：900.0（15 分钟）
+#   语义：问题单聚合窗口。同一 dedup_key 在窗口内重复出现 ⇒ 合并计数、不重复派单。
+#   ★457 事故教训：Playwright page_load 超时整天在报，若每条 ERROR 都派单会刷爆队列。
+M460_TICKET_AGGREGATE_SEC = 900.0
+#
+# M460_MAX_REPRO_RETRY
+#   默认值：3
+#   语义：`inconclusive`（证据不足）问题的**重试上限**。达到上限转 `reject` 并记经验，
+#         既不丢弃也不无限重排队（铁律55：状态位反复入队必须配重试上限）。
+M460_MAX_REPRO_RETRY = 3
+#
+# M460_LESSON_COOLDOWN_N / M460_LESSON_COOLDOWN_SEC
+#   默认值：2 / 86400.0（1 天）
+#   语义：同一 (dedup_key, error_type) 连续失败达 N 次 ⇒ 该问题进入冷却，
+#         冷却期内不再生成补丁。这是「一次改错、下次不再犯同样错」的**硬**保证；
+#         `append_reminder` 的提示段只是**软**保证，两者都要。
+M460_LESSON_COOLDOWN_N = 2
+M460_LESSON_COOLDOWN_SEC = 86400.0
+#
+# M460_MAX_BLAST_FILES
+#   默认值：1
+#   语义：自裁决允许改动的文件数上限。与八闸 blast_le_1 数值相同但**独立判据**：
+#         八闸管「能不能放行」，这里管「本批接线敢不敢自动放行」，日后各自演化。
+M460_MAX_BLAST_FILES = 1
+#
+# M460_SNAPSHOT_DIR_REL / M460_LEDGER_REL
+#   默认值：data/patches/self_verdict_snapshots / data/patches/self_verdict_ledger.jsonl
+#   ★data/ 整目录被 .gitignore 排除 ⇒ 交付时需复制证据件副本到 docs/.../证据件/。
+M460_SNAPSHOT_DIR_REL = "data/patches/self_verdict_snapshots"
+M460_LEDGER_REL = "data/patches/self_verdict_ledger.jsonl"

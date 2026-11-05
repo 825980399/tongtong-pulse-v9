@@ -36,6 +36,8 @@ import sys
 import time
 from typing import Any
 
+from nucleus._silent_except import silent_exc  # ★460 批：自裁决接线的静默 except 记账
+
 #: 核心代数：命中即人工（不自动）
 CORE_PREFIXES = ("nucleus/", "nucleus\\", "main.py", "config.py", "utils/")
 
@@ -429,7 +431,24 @@ def maybe_approve_scoped(patch: dict, patch_manager: Any, *,
             root=root, now=now)
         return _out
 
-    _r = maybe_approve(patch, patch_manager, by=by, root=root)
+    # ★460 批：自裁决闭环（星轨对话裁决「让曈曈自己裁决」）。
+    #   审批前统一调用既有静态复现探针，回填八闸一直拿不到的证据字段。
+    #   ★三道降级：总闸关 / 准入未过 / 依赖异常 ⇒ 一律用**原 patch**，
+    #     逐字节回到 460 前行为（可用 ENABLE_M460_SELF_VERDICT=False 做 A/B）。
+    #   ★本层不新增写口、不改 decision() 判据、不改原 patch 对象。
+    _m460_prep: dict = {}
+    _m460_patch = patch
+    try:
+        from nucleus.evolution.self_verdict import prepare as _m460_prepare
+        _m460_prep = _m460_prepare(patch, root=root, now=now)
+        if _m460_prep.get("admitted") and isinstance(_m460_prep.get("patch"), dict):
+            _m460_patch = _m460_prep["patch"]
+    except Exception as _e:
+        silent_exc(_e, where="approval_bridge::460 prepare", level="debug")
+        _m460_prep = {}
+        _m460_patch = patch
+
+    _r = maybe_approve(_m460_patch, patch_manager, by=by, root=root)
     _out["reason"] = _r.get("reason", "")
     _out["gates"] = _r.get("gates", {})
     _out["approved"] = bool(_r.get("approved")) and bool(_r.get("status_written"))
@@ -442,4 +461,21 @@ def maybe_approve_scoped(patch: dict, patch_manager: Any, *,
     _out["trace"] = note_approval_trace(
         patch, _r, approved=_out["approved"], hit="" if _out["approved"] else _out["reason"],
         scope=_scope_why, blocked=_out["blocked"], root=root, now=now)
+
+    # ★460 批 finalize：应用后验证；验证失败 ⇒ **真的**按字节快照回退，
+    #   并把结构化失败原因写进既有 patch_failure_experience（下次生成 prompt 会带提醒）。
+    #   ★留痕/回退绝不改变审批返回值（日志不决定返回值，铁律40）。
+    if _m460_prep:
+        try:
+            from nucleus.evolution.self_verdict import finalize as _m460_finalize
+            _m460_fin = _m460_finalize(_m460_prep, _out, patch_manager,
+                                       root=root, now=now)
+            _out["self_verdict"] = {
+                "verdict": _m460_fin.get("verdict"),
+                "verified": _m460_fin.get("verified"),
+                "rolled_back": _m460_fin.get("rolled_back"),
+                "why": str(_m460_fin.get("why") or "")[:120],
+            }
+        except Exception as _e:
+            silent_exc(_e, where="approval_bridge::460 finalize", level="debug")
     return _out
