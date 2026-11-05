@@ -20,16 +20,22 @@ def _items():
         return json.load(f)
 
 
-def test_30条落盘():
+def test_40条落盘():
+    """★456 刀5：30 → 40（补 10 条 D9 假设类种子）。
+
+    回滚点：把 human_seed_evidence.json 里 hs31~hs40 删掉并把 count 改回 30，
+    本断言随之改回 30。
+    """
     d = _items()
-    assert d["count"] == 30 and len(d["items"]) == 30
+    assert d["count"] == 40 and len(d["items"]) == 40
 
 
 def test_覆盖8维度且D1_D3_D6优先():
     dims = {}
     for x in _items()["items"]:
         dims[x["dim"]] = dims.get(x["dim"], 0) + 1
-    assert len(dims) == 8, dims
+    # ★456 刀5：8 → 9（新增 D9_hypothesis）
+    assert len(dims) == 9, dims
     for k in ("D1_multi_step", "D3_evidence", "D6_critical"):
         assert dims[k] >= 5, dims
 
@@ -46,7 +52,8 @@ def test_每条格式齐全且不是万能答案():
 
 def test_问题模式互不相同不会被去重误杀():
     qs = [x["question_pattern"] for x in _items()["items"]]
-    assert len(set(qs)) == 30
+    # ★456 刀5：30 → 40
+    assert len(set(qs)) == 40
 
 
 def test_白名单已含human_seed():
@@ -57,15 +64,16 @@ def test_白名单已含human_seed():
 def test_候选同一入口统计达标_不是数文件条数():
     s = SE.candidate_stats(score_mode="pool")
     assert s["available"] is True
-    assert s["total_rows"] == 50, s
+    # ★456 刀5：human_seed 30→40 ⇒ 总行数 50→60（kal 20 条不变）
+    assert s["total_rows"] == 60, s
     assert s["raw_admitted"] >= 15, s           # ★任务书：从 2 涨到 ≥15
-    assert s["by_source"].get("human_seed") == 30, s
+    assert s["by_source"].get("human_seed") == 40, s
     assert s["injectable"] >= 15, s             # 真的能进 build_injection
 
 
 def test_query模式是线上单次请求口径():
     s = SE.candidate_stats("对比 A 和 B 的性能差异", score_mode="query")
-    assert s["available"] is True and s["raw_admitted"] <= 50
+    assert s["available"] is True and s["raw_admitted"] <= 60
     assert s["score_mode"] == "query"
 
 

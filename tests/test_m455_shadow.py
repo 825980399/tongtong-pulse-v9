@@ -200,15 +200,24 @@ def test_shadow_no_evidence_does_not_spend_llm(monkeypatch):
     assert EI.llm_ops_used() == 0
 
 
-def test_in_answer_switch_only_warns(monkeypatch):
-    """★本批不进答案：即使 ENABLE_M455_HYPOTHESIZE=True，也只告警、仍只写影子行。"""
+def test_in_answer_switch_no_longer_warns(monkeypatch):
+    """★456 刀1 改钉：455 批此处在「开关开」时只打一条 WARNING（本批不进答案）。
+
+    456 批已实现进答案路径 ⇒ 不再告警；假设正文改走请求级 ContextVar，
+    **不进 trace 行**（455 刀5「只存摘要」的纪律不破）。
+
+    回滚点：若撤掉进答案实现，恢复 455 的「只告警」断言。
+    """
     monkeypatch.setattr(config, "ENABLE_M455_HYPOTHESIZE", True, raising=False)
     _stub_hyp(monkeypatch, _OK)
     logs = []
     row = _inst(logs)._m455_run_hypothesize_shadow(
         "如果…会怎样", {"step_id": "S1"}, [{"result": "结论", "success": True}])
     assert row["status"] == H.STATUS_OK
-    assert any("只实现 shadow" in x for x in logs), logs
+    assert not any("只实现 shadow" in x for x in logs), logs
+    # 正文不在 trace 行里，但仍被暂存到请求级上下文（供收口拼答案）
+    assert "hypotheses" not in row
+    assert IW._M456_HYPS.get(), "假设没有进请求级暂存"
 
 
 # ---------------------------------------------------------------- 刀5：trace 落盘

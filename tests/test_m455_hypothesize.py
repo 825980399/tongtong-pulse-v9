@@ -73,7 +73,10 @@ def _run(stub, *, question="如果负载翻十倍会怎样", evidence=None, dead
 # ---------------------------------------------------------------- 配置口径
 def test_config_defaults():
     assert config.ENABLE_M455_HYPOTHESIZE_SHADOW is True
-    assert config.ENABLE_M455_HYPOTHESIZE is False        # 本批不进答案
+    # ★456 刀1：455 批此处钉 False（「本批不进答案」）；456 批按任务书把它打开，
+    #   假设由 PulseInnerWorld._m456_attach_hypotheses 统一拼到答案末尾。
+    #   回滚点：把 config 该键改回 False **并**把本行改回 is False（两处必须一起动）。
+    assert config.ENABLE_M455_HYPOTHESIZE is True
     assert config.M455_MAX_LLM_OPS == 1
     assert config.M455_HYPOTHESIZE_TIMEOUT_SEC == 8.0
     assert config.M455_HYPOTHESIZE_MAX_TOKENS == 320

@@ -7927,11 +7927,11 @@ M454_SEED_MIN_SCORE = 0.55
 ENABLE_M455_HYPOTHESIZE_SHADOW = True
 #
 # ENABLE_M455_HYPOTHESIZE
-#   默认值：False
-#   语义：假设**进答案**的开关。★本批未实现该路径（任务书要求纯 shadow），
-#         置 True 只会在日志里留一条 WARNING 提示，不改变任何答案。
-#         进答案的实现留待 456 批（需先有 shadow 实盘的解析成功率与合理率）。
-ENABLE_M455_HYPOTHESIZE = False
+#   默认值：True（★456 批开启；455 批为 False）
+#   语义：假设**进最终答案**的总闸。关掉 ⇒ 完全回到 455 的纯 shadow 行为
+#         （假设只写 trace，答案一个字都不变）—— 这是本批唯一需要的回滚开关。
+#         质量闸见 M456_HYPOTHESIS_* 三档（confidence 分档前缀）。
+ENABLE_M455_HYPOTHESIZE = True
 #
 # M455_MAX_LLM_OPS
 #   默认值：1
@@ -7958,3 +7958,28 @@ M455_MIN_START_SEC = 12.0
 M455_HYPOTHESIZE_TIMEOUT_SEC = 8.0
 M455_HYPOTHESIZE_MAX_TOKENS = 320
 M455_HYPOTHESIZE_TEMPERATURE = 0.4
+
+
+# ==================== [M456-CFG] 第456批（hypotheses 进答案 + 意图 handler shadow）====================
+#
+# ENABLE_M456_INTENT_SHADOW
+#   默认值：True
+#   语义：意图 handler 的**影子**开关。True ⇒ 在 `_ir_dispatch_qica_method` 最前面
+#         按 `strategy_context["qica_intent_type"]` 算一次 would_handler 并写 trace，
+#         **绝不**执行 handler（不改答案路径）。False ⇒ 整块不进入（秒级回退）。
+#   ★与 ENABLE_M455_HYPOTHESIZE 相互独立：一个是假设进答案，一个是意图分流预演。
+ENABLE_M456_INTENT_SHADOW = True
+#
+# M456_HYPOTHESIS_STRONG_CONF / M456_HYPOTHESIS_MIN_CONF_IN_ANSWER
+#   默认值：0.6 / 0.35
+#   语义：假设进答案的两道质量闸（任务书刀1）：
+#         conf >= 0.6      ⇒ 归入主答案，前缀「较有依据的推测：」
+#         0.35 <= conf < 0.6 ⇒ 只进答案末尾，前缀「【未验证推测】：」
+#         conf < 0.35      ⇒ **不进答案**，只写 trace（不排除、不删除）
+M456_HYPOTHESIS_STRONG_CONF = 0.6
+M456_HYPOTHESIS_MIN_CONF_IN_ANSWER = 0.35
+#
+# M456_OP_MAX_EVIDENCE
+#   默认值：4
+#   语义：compare/exclude 真执行时，从前序步骤收集的证据条数上限（刀6）。
+M456_OP_MAX_EVIDENCE = 4

@@ -10,6 +10,7 @@ PulseInnerWorld —— 内在世界核心推理器官
 机制: 通过QICA意图分类确定处理路径，使用共振引擎五维打分检索知识节点，支持语义关系扩展和多节点融合汇总，最终生成本地化回答或转大模型兜底。
 定位: 框架的认知核心，是大脑皮层的主要执行器官，上接大脑皮层的决策调度，下连知识快照和向量库的底层存储。
 """
+import contextvars
 import logging
 import os
 import re
@@ -1269,7 +1270,130 @@ class PulseInnerWorld(
         return None
 
 
+    # ============ ★456 刀3/刀4：意图 handler 影子（只预演，不执行）============
+    #: 刀3「代码/文件/报错/架构」词表。★只用于**判据**，不参与答案生成。
+    _M456_CODE_WORDS = (
+        "代码", "函数", "报错", "异常", "堆栈", "traceback", "Traceback",
+        "架构", "接口", "编译", "脚本", "模块", "依赖", "重构", "日志",
+        "配置文件", "内存", "线程", "死锁", "类", "变量", "SQL", "API",
+    )
+    #: 证据正文里认「这确实是一条代码类证据」的词（比问题词表更严：要求可核对）
+    _M456_CODE_EVIDENCE_WORDS = (
+        "报错", "异常", "traceback", "Traceback", "Error", "error",
+        "函数", "文件", "接口", "栈", "日志", "配置", "依赖", "版本",
+        "代码", "行号", "def ", "class ", "import ",
+    )
+
+    @staticmethod
+    def _m456_intent_shadow_on() -> bool:
+        """刀3/刀4 灰度：影子开关（默认 True）。关 ⇒ 整块不进入，零开销。"""
+        try:
+            import config as _c
+            return bool(getattr(_c, "ENABLE_M456_INTENT_SHADOW", True))
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::_m456_intent_shadow_on",
+                       level="debug")
+            return False
+
+    @classmethod
+    def _m456_code_evidence_count(cls, question: str, context_text: str = "") -> int:
+        """数「代码类证据」条数。
+
+        ★本批**不新增检索**（shadow 不该改变请求开销）：证据只来自本请求
+          已经算出来的上下文（``ctx._memory_context``，detectors 阶段可能已填）。
+          问题本身命中代码词时至少记 1 条 —— 那是"用户已经给了代码线索"。
+          口径写进 trace 的 reason，避免把"上下文特征"误读成"检索命中"。
+        """
+        _q = str(question or "")
+        _ctx_text = str(context_text or "")
+        _n = 0
+        # 证据正文按句切，逐句判（不按词计，避免同一句里 5 个词算 5 条）
+        for _seg in re.split(r"[。；;！!？?\n]+", _ctx_text):
+            _s = _seg.strip()
+            if len(_s) < 8:
+                continue
+            if any(_w in _s for _w in cls._M456_CODE_EVIDENCE_WORDS):
+                _n += 1
+            if _n >= 6:
+                break
+        if _n == 0 and any(_w in _q for _w in cls._M456_CODE_WORDS):
+            _n = 1
+        return _n
+
+    @classmethod
+    def _m456_would_handler(cls, intent_type: str, question: str,
+                            code_evidence_count: int) -> tuple:
+        """算 would_handler（**纯函数**，不碰任何依赖）。
+
+        返回 ``(would_handler, reason)``：
+          · ``"self_report"``   —— ``qica_intent_type == "元认知报告"``（刀4）
+          · ``"code_reasoning"``—— ``"技术推理"`` + 代码词 + 有代码类证据（刀3）
+          · ``""``              —— 不触发
+        ★刀4/刀2 的防重复：``handled_by`` 已标 ``self_report`` 时不再预演
+          （实弹接线时同一个 handler 不会跑两遍）。
+        """
+        _it = str(intent_type or "")
+        _q = str(question or "")
+        if _it == "元认知报告":
+            return "self_report", "intent=元认知报告"
+        if _it == "技术推理":
+            _hit = [w for w in cls._M456_CODE_WORDS if w in _q]
+            if not _hit:
+                return "", "intent=技术推理 但问题无代码/文件/报错/架构词"
+            if int(code_evidence_count or 0) <= 0:
+                return "", (f"intent=技术推理 命中词={','.join(_hit[:3])}"
+                            f" 但无代码类证据")
+            return "code_reasoning", (f"intent=技术推理 词={','.join(_hit[:3])}"
+                                      f" 代码证据={int(code_evidence_count)}")
+        return "", f"intent={_it or '(空)'} 不在本批两个 handler 的触发面内"
+
+    def _m456_intent_shadow(self, ctx: "PulseInnerWorld.InferenceContext") -> dict:
+        """刀3/刀4：在 QICA 方法派发**之前**预演一次意图分流，只写 trace。
+
+        ★三不原则：不改 ``INTENT_TO_METHOD``、不调 handler、不影响返回值。
+          出任何异常都只留 debug（影子不该把主链路带崩）。
+        """
+        if not self._m456_intent_shadow_on():
+            return {}
+        try:
+            _sc = ctx.payload.get("strategy_context", {}) or {}
+            _it = str(_sc.get("qica_intent_type") or "")
+            _q = str(ctx.question or "")
+            _ctx_text = str(getattr(ctx, "_memory_context", "") or "")
+            _cn = self._m456_code_evidence_count(_q, _ctx_text)
+            _would, _why = self._m456_would_handler(_it, _q, _cn)
+            # ★刀4 防重复：handler 已实弹处理过（handled_by 标记）⇒ 本轮不再预演
+            _handled = str(_sc.get("handled_by") or "")
+            if _handled:
+                _would, _why = "", f"已由 {_handled[:20]} 处理，跳过预演"
+            try:
+                from nucleus import dialogue_process_trace as _tr
+                _tr.stamp(ctx.correlation_id,
+                          qica_intent_type=_it,
+                          would_handler=_would or None,
+                          code_evidence_count=_cn,
+                          reason=_why,
+                          handled_by=_handled or None)
+            except Exception as _e2:
+                silent_exc(_e2, where="PulseInnerWorld::_m456_intent_shadow stamp",
+                           level="debug")
+            if _would:
+                # ★不执行 handler，只在日志里留一行（实盘可据此判断影子准不准）
+                self._log(LogLevel.INFO,
+                          f"[456刀3/4] 意图影子: would_handler={_would} "
+                          f"intent={_it or '-'} 代码证据={_cn} 原因={_why}")
+            else:
+                self._log(LogLevel.DEBUG,
+                          f"[456刀3/4] 意图影子未触发: {_why}")
+            return {"would_handler": _would, "code_evidence_count": _cn,
+                    "reason": _why}
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::_m456_intent_shadow", level="debug")
+            return {}
+
     def _ir_dispatch_qica_method(self, ctx: "PulseInnerWorld.InferenceContext") -> dict:
+        # ★456刀3/刀4：意图 handler 影子（只算 would_handler + 写 trace，绝不执行 handler）
+        self._m456_intent_shadow(ctx)
         # ===== ★v22.0重构：QICA建议方法优先执行 =====
         _qica_method = ctx.payload.get("strategy_context", {}).get("qica_suggested_method", "")
         _qica_paths = ctx.payload.get("strategy_context", {}).get("qica_knowledge_paths", [])  # type: ignore[possibly-unbound]
@@ -1954,10 +2078,21 @@ class PulseInnerWorld(
 
 
     def _on_inference_request(self, payload: dict) -> dict[str, Any]:
+        """推理入口外壳（★456刀1 拆分）：构造上下文 → 跑原主体 → 统一收口假设。
+
+        ★为什么拆：假设要拼进**最终**答案，而答案可能由十几条路径中的任意一条产出；
+          在每条 return 处各拼一次既难维护也必然漏。外壳只做三件事：
+          清暂存 → 跑原主体 → 拼假设。原主体的每一行逻辑**一字未动**。
+        """
         _ctx = self._ir_build_context(payload)
         if _ctx is None:
             return {"status": "skipped", "reason": "空问题"}
+        self._m456_reset_pending()
+        _result = self._m456_request_core(_ctx, payload)
+        return self._m456_attach_hypotheses(_result, _ctx)
 
+    def _m456_request_core(self, _ctx, payload: dict) -> dict[str, Any]:
+        """★456刀1：``_on_inference_request`` 的**原样**主体（拆分只为统一收口）。"""
         _explicit = self._ir_try_explicit_search(_ctx)
         if _explicit is not None:
             return _explicit
@@ -14589,6 +14724,33 @@ class PulseInnerWorld(
     _M455_FACTUAL_RE = re.compile(
         r"(是什么|是啥|多少|哪一年|哪年|几点|多大|多久|谁|什么意思|的定义)")
 
+    # ===== ★456 刀1：假设进答案（唯一拼装点在 _m456_attach_hypotheses）=====
+    #: 请求级假设暂存。★用 ContextVar 而**不是**实例属性：IW 是单例，
+    #: 实例属性在并发请求间会串味（454 的 `_model_cache` 1 小时串味是同一类坑）。
+    _M456_HYPS: contextvars.ContextVar = contextvars.ContextVar(
+        "m456_pending_hypotheses", default=None)
+
+    @staticmethod
+    def _m456_strong_conf() -> float:
+        """刀1 质量闸上档：>= 该值归入"较有依据的推测"。"""
+        try:
+            import config as _c
+            return float(getattr(_c, "M456_HYPOTHESIS_STRONG_CONF", 0.6))
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::_m456_strong_conf", level="debug")
+            return 0.6
+
+    @staticmethod
+    def _m456_min_conf_in_answer() -> float:
+        """刀1 质量闸下档：< 该值**不进答案**（只留在 trace 里）。"""
+        try:
+            import config as _c
+            return float(getattr(_c, "M456_HYPOTHESIS_MIN_CONF_IN_ANSWER", 0.35))
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::_m456_min_conf_in_answer",
+                       level="debug")
+            return 0.35
+
     @staticmethod
     def _m455_hypothesize_shadow_on() -> bool:
         """刀5 灰度：shadow 开关（默认 True，只生成不进答案）。关闭 ⇒ 整块不进入。"""
@@ -14684,10 +14846,8 @@ class PulseInnerWorld(
         没有证据时 ``hypothesize`` 内部直接 ``insufficient_evidence``，不花 LLM。
         """
         _t0 = time.time()
-        if self._m455_hypothesize_in_answer_on():
-            self._log(LogLevel.WARNING,
-                      "[455刀5] ENABLE_M455_HYPOTHESIZE=True 但本批只实现 shadow，"
-                      "假设仍不进答案（进答案路径留待 456）")
+        # ★456刀1：进答案开关打开后不再告警 —— 生成物由 `_m456_attach_hypotheses`
+        #   统一拼装（v2 内部只负责"生成 + 暂存"，绝不自己往答案里写）。
         _ev: list[dict] = []
         for _r in list(prev_results or []):
             if not isinstance(_r, dict) or not _r.get("success"):
@@ -14731,6 +14891,12 @@ class PulseInnerWorld(
         _row["avg_confidence"] = _res.get("avg_confidence")
         _row["elapsed_ms"] = _res.get("elapsed_ms")
         _row["fail_reason"] = str(_res.get("reason") or "")[:60]
+        # ★456刀1：假设**正文不进 trace 行**（455 刀5「只存摘要」的纪律不破），
+        #   走请求级 ContextVar 交给收口拼答案；trace 里仍然只有 count/avg。
+        #   ★只在「进答案」开关打开时才暂存：纯 shadow 模式不该往 pending 里写东西。
+        _m456_hyps = list(_res.get("hypotheses") or [])
+        if _m456_hyps and self._m455_hypothesize_in_answer_on():
+            self._m456_push_pending(_m456_hyps)
         self._log(LogLevel.INFO,
                   f"[455刀5] 假设影子: status={_row['status']} "
                   f"n={_row['hypothesis_count']} avg={_row['avg_confidence']} "
@@ -14755,6 +14921,349 @@ class PulseInnerWorld(
         if _row:
             _row["idx"] = 1
         self._m455_flush_trace([_step], [_row] if _row else [])
+
+    # ================= ★456 刀6：本地算子真执行（compare / exclude）=================
+    @staticmethod
+    def _m456_op_max_evidence() -> int:
+        try:
+            import config as _c
+            return max(1, int(getattr(_c, "M456_OP_MAX_EVIDENCE", 4) or 4))
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::_m456_op_max_evidence", level="debug")
+            return 4
+
+    def _m456_collect_evidence(self, prev_results: list | None) -> list[dict]:
+        """把前序**成功**步骤的结论收成 local_ops 认的证据行（最多 N 条）。
+
+        ★只收 success 的步骤：失败/跳过的步骤文本是降级叙述，喂进算子只会
+          把「没查到」当成事实，产出虚假的「相同点」。
+        ★按**行**拆而非整段塞一条：``local_ops.compare`` 有 ``len(rows) < 2``
+          的硬闸（一条整段文本会让算子恒 ``evidence_insufficient``，等于没接）；
+          按行拆也保住了「同一行里的维度切片」不被切碎。
+        """
+        _max = self._m456_op_max_evidence()
+        _ev: list[dict] = []
+        for _r in list(prev_results or []):
+            if not isinstance(_r, dict) or not _r.get("success"):
+                continue
+            _t = str(_r.get("result") or "").strip()
+            if not _t:
+                continue
+            _sc = _r.get("confidence")
+            for _seg in re.split(r"\n+", _t):
+                _seg = _seg.strip()
+                if len(_seg) < 8:
+                    continue
+                _ev.append({"id": f"E{len(_ev) + 1}", "text": _seg[:400],
+                            "score": _sc if isinstance(_sc, (int, float)) else None})
+                if len(_ev) >= _max:
+                    return _ev
+        return _ev
+
+    @staticmethod
+    def _m456_split_operands(question: str) -> list[str]:
+        """从问题里拆出被比较的两个对象。
+
+        ★只认**明确的连接词**（与/和/跟/vs/对比/比较）；拆不出就返回空列表 ——
+          ``local_ops.compare`` 会因此返回 ``insufficient_evidence``，
+          而不是拿半截问题当对象硬比（不编造）。
+        ★实测（456 批 T0）：真实问法几乎都带尾巴（「…的性能、复杂度、运维」
+          「…的区别」），不切掉尾巴时 operand 在证据里永远搜不到 ⇒ 算子恒
+          ``operand_without_evidence``，等于没接。故：先切问句尾巴，再按
+          「的」截断每个 operand，并给长度上限防止把整句当对象。
+        """
+        # ★显式写出 strip 的字符集（等价于无参 strip），是为了**不和** m31 测试的
+        #   源码切片锚点撞行：撞了会把切片起点挪到本方法，截出 480 行非法代码
+        #   （实测 IndentationError: unindent does not match any outer indentation level）。
+        _q = str(question or "").strip(" \t\r\n")
+        _q = re.sub(r"^(请|帮我|麻烦|想|我)?\s*(对比|比较|分析|说说|看看)?(一下)?\s*", "", _q)
+        _q = re.sub(r"(有什么区别|有何不同|的区别|的不同|的差异|的优劣|哪个好|怎么选).*$",
+                    "", _q)
+        for _sep in ("与", "和", "跟", " vs ", " VS ", "对比", "比较", "vs", "VS"):
+            if _sep in _q:
+                _a, _, _b = _q.partition(_sep)
+                # 去掉「的…」尾巴（"单体架构的性能、复杂度" ⇒ "单体架构"）
+                _a = re.sub(r"的.*$", "", _a).strip(" ，,。？?：:、")
+                _b = re.sub(r"的.*$", "", _b).strip(" ，,。？?：:、")
+                if _a and _b and len(_a) <= 20 and len(_b) <= 20:
+                    return [_a[:40], _b[:40]]
+        return []
+
+    @staticmethod
+    def _m456_split_dimensions(question: str, evidence: list) -> list[str]:
+        """对照维度：先取问题/证据里出现的常见维度词，一个都没有就用「差异」兜底。
+
+        ★兜底是必要的：``compare`` 对空 dimensions 直接 ``bad_input``，
+          那样算子永远跑不起来（等于没接）。
+        """
+        _CAND = ("性能", "成本", "复杂度", "效率", "稳定性", "可维护性", "可扩展性",
+                 "安全", "适用场景", "优缺点", "优势", "劣势", "差异", "功能",
+                 "延迟", "吞吐", "运维", "学习成本", "资源占用", "一致性")
+        _blob = str(question or "") + " " + " ".join(
+            str(e.get("text") or "") for e in list(evidence or []) if isinstance(e, dict))
+        _hit = [w for w in _CAND if w in _blob]
+        return _hit[:6] or ["差异"]
+
+    @classmethod
+    def _m456_split_criteria(cls, question: str) -> dict:
+        """``exclude`` 的判定标准：从「排除/剔除/不是/不符合/错误的是」后取关键词。
+
+        取不到 ⇒ 空 dict（= 不排除任何候选，算子返回 ``status="ok"`` 且
+        ``dropped`` 为空）—— 宁可"没筛"，也不拿问题核心词乱筛。
+        """
+        _q = str(question or "")
+        _m = re.search(r"(?:排除|剔除|不符合|错误的是|不是)[^，,。？?；;]{0,20}", _q)
+        if not _m:
+            return {}
+        _kw = [w for w in re.findall(r"[\u4e00-\u9fff]{2,6}", _m.group(0))
+               if w not in ("排除", "剔除", "不符合", "错误的是", "不是")]
+        return {"must": _kw[:3]} if _kw else {}
+
+    @staticmethod
+    def _m456_op_digest(op: str, res: dict) -> str:
+        """把算子结果压成一句可读摘要（写进 step_results.result，供后续步骤使用）。"""
+        if op == "compare":
+            _s = len(res.get("similarities") or [])
+            _d = len(res.get("differences") or [])
+            _u = len(res.get("unknown_dimensions") or [])
+            _dims = "、".join(str(x) for x in (res.get("dimensions") or [])[:3])
+            if not _s and not _d:
+                return ""
+            _txt = f"逐维对照（{_dims}）：相同 {_s} 项、不同 {_d} 项"
+            if _u:
+                _txt += f"，{_u} 维无素材"
+            _diff_dims = [str(x.get("dimension") or "") for x in
+                          (res.get("differences") or [])[:3]]
+            if _diff_dims:
+                _txt += "；差异集中在 " + "、".join(_diff_dims)
+            return _txt
+        if op == "exclude":
+            _c = res.get("counts") or {}
+            _txt = (f"按标准筛选：保留 {_c.get('kept', 0)} / 共 {_c.get('total', 0)} 条"
+                    f"（排除 {_c.get('dropped', 0)} 条）")
+            if res.get("warning"):
+                _txt += "；" + str(res.get("warning"))[:40]
+            return _txt
+        return ""
+
+    def _m456_run_local_op(self, op: str, question: str, step: dict,
+                            prev_results: list | None) -> dict | None:
+        """刀6：真跑一次本地算子，返回 ``{ok, status, step_result, trace_row}``。
+
+        失败返回 ``None``（= 本步不接管，让它退回原检索路径）—— 只在**导入失败**
+        这种"算子根本不可用"的情况下发生；算子自身判定的证据不足是**正常结果**，
+        会以 ``status="insufficient_evidence"`` 落进 step_results。
+        """
+        try:
+            from nucleus.reasoning import local_ops as _lo
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::_m456_run_local_op import",
+                       level="warning")
+            return None
+        _ev = self._m456_collect_evidence(prev_results)
+        if op == "compare":
+            _res = _lo.compare(self._m456_split_operands(question),
+                               self._m456_split_dimensions(question, _ev), _ev)
+        else:
+            _cands = []
+            for _e0 in _ev:
+                for _s0 in re.split(r"[。；;\n]+", str(_e0.get("text") or "")):
+                    _s0 = _s0.strip()
+                    if len(_s0) >= 8:
+                        _cands.append({"text": _s0[:160], "score": _e0.get("score")})
+            _res = _lo.exclude(_cands, self._m456_split_criteria(question), _ev)
+
+        _status = str(_res.get("status") or "")
+        _ok = _status in ("ok", "all_excluded")
+        # all_excluded 不是"失败"：算子按「不静默清空」原样退回了集合，属于有结论
+        _conf = float(_res.get("confidence") or 0.0) if op == "compare" else (
+            1.0 if _ok else 0.0)
+        _digest = self._m456_op_digest(op, _res)
+        _result_text = _digest or f"（{op} 算子：{_status} / {_res.get('reason') or '-'}）"
+        _sid = str(step.get("step_id") or "")
+        return {
+            "ok": _ok,
+            "status": _status,
+            "step_result": {
+                "name": str(step.get("name") or op),
+                "result": _result_text,
+                "success": _ok,
+                "source": f"local_op:{op}",
+                "fail_reason": "" if _ok else _status,
+                "dep_context": "",
+                "op": op,
+                "confidence": round(_conf, 3),
+                "status": _status,
+                "output_digest": _result_text[:120],
+            },
+            "trace_row": {
+                "idx": 0,
+                "step_id": _sid,
+                "op": op,
+                "status": _status,
+                "hypothesis_count": 0,
+                "avg_confidence": round(_conf, 3),
+                "elapsed_ms": None,
+                "source": f"local_op:{op}",
+                "fail_reason": "" if _ok else str(_res.get("reason") or _status)[:60],
+            },
+        }
+
+    # ================= ★456 刀1：假设进答案（唯一拼装点）=================
+    @classmethod
+    def _m456_reset_pending(cls) -> None:
+        """请求开始时清零暂存（同 task 内的下一轮不继承上一轮的假设）。"""
+        try:
+            cls._M456_HYPS.set(None)
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::_m456_reset_pending", level="debug")
+
+    @classmethod
+    def _m456_push_pending(cls, hypotheses) -> None:
+        """把一批假设并入请求级暂存（最多留 2 条，与 max_hypotheses 同口径）。"""
+        _cur = cls._M456_HYPS.get() or []
+        _add = [h for h in list(hypotheses or []) if isinstance(h, dict)]
+        if not _add:
+            return
+        try:
+            cls._M456_HYPS.set((list(_cur) + _add)[:2])
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::_m456_push_pending", level="debug")
+
+    @classmethod
+    def _m456_take_pending(cls) -> list:
+        """取出并清空暂存（消费一次，避免同一批假设被拼两遍）。"""
+        try:
+            _cur = list(cls._M456_HYPS.get() or [])
+            cls._M456_HYPS.set(None)
+            return _cur
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::_m456_take_pending", level="debug")
+            return []
+
+    def _m456_generate_for_answer(self, ctx: "PulseInnerWorld.InferenceContext",
+                                  result: dict) -> list:
+        """v2 没跑过假设时（多数「如果…」进不了 v2 准入），用本轮答案当证据补一次。
+
+        ★为什么拿答案当证据：假设必须"站在已有结论上"，凭空假设没有价值；
+          本轮答案就是本请求已经付出代价得到的、最贴近的证据。只取前 400 字。
+        ★只花**一次** LLM：请求级假设券（M455_MAX_LLM_OPS）在 v2 已消耗时，
+          ``hypothesize`` 内部会直接返回 ``skipped_no_budget``，这里拿到空列表即止。
+        """
+        _ans = str((result or {}).get("answer") or "").strip()
+        if not _ans:
+            return []
+        _ev = [{"id": "E1", "text": _ans[:400], "source": "this_turn_answer"}]
+        try:
+            from nucleus.reasoning import hypothesize as _hyp
+            _res = _hyp.hypothesize(
+                ctx.question, _ev,
+                deadline=_hyp.request_deadline(),
+                origin="user_query",
+                max_hypotheses=2,
+                endpoint_resolver=self._m31_branch_endpoint,
+            )
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::_m456_generate_for_answer",
+                       level="warning")
+            return []
+        _hyps = list(_res.get("hypotheses") or [])
+        self._log(LogLevel.INFO,
+                  f"[456刀1] 答案后置假设: status={_res.get('status')} "
+                  f"n={len(_hyps)} 原因={str(_res.get('reason') or '')[:40]}")
+        return _hyps
+
+    @classmethod
+    def _m456_hypothesis_block(cls, hypotheses) -> str:
+        """按 confidence 分档拼文本：>=0.6 主答案 / 0.35~0.6 末尾 / <0.35 不出现。
+
+        ★证据约束（任务书刀1）：``evidence_ids`` 由 ``parse_hypotheses`` 保证只含
+          本次真实提供的 id（未知 id 已丢弃、无有效 id 时 confidence 封顶 0.3）。
+          这里**不再**二次校验，也不补任何 id —— 宁可少写，不编造。
+        """
+        _strong_gate = cls._m456_strong_conf()
+        _min_gate = cls._m456_min_conf_in_answer()
+        _strong: list[tuple] = []
+        _mid: list[tuple] = []
+        for _h in list(hypotheses or []):
+            if not isinstance(_h, dict):
+                continue
+            _claim = str(_h.get("claim") or "").strip()
+            if not _claim:
+                continue
+            try:
+                _conf = float(_h.get("confidence") or 0.0)
+            except (TypeError, ValueError) as _e:
+                # ★cw2 门禁：赋值型 except 也要 silent_exc（铁律4）
+                silent_exc(_e, where="PulseInnerWorld::_m456_hypothesis_block conf",
+                           level="debug")
+                _conf = 0.0
+            if _conf >= _strong_gate:
+                _strong.append((_conf, _h))
+            elif _conf >= _min_gate:
+                _mid.append((_conf, _h))
+            # else: 低于下档 ⇒ 不进答案（仍留在 trace 的 step_results 里）
+
+        def _fmt(_items: list[tuple]) -> list[str]:
+            _out = []
+            for _i, (_c, _h) in enumerate(_items, 1):
+                _claim = str(_h.get("claim") or "").strip()
+                _ids = [str(x) for x in (_h.get("evidence_ids") or []) if str(x)]
+                _asm = [str(x) for x in (_h.get("assumptions") or []) if str(x)]
+                _test = str(_h.get("test") or "").strip()
+                _tail = []
+                if _ids:
+                    _tail.append("依据 " + "/".join(_ids[:3]))
+                if _asm:
+                    _tail.append("前提：" + "；".join(_asm[:2]))
+                if _test:
+                    _tail.append("可验证：" + _test[:60])
+                _suffix = ("（" + "；".join(_tail) + "）") if _tail else ""
+                _out.append(f"{_i}. {_claim[:200]}{_suffix}")
+            return _out
+
+        _parts = []
+        if _strong:
+            _parts.append("较有依据的推测：\n" + "\n".join(_fmt(_strong)))
+        if _mid:
+            _parts.append("【未验证推测】：\n" + "\n".join(_fmt(_mid)))
+        return "\n\n".join(_parts)
+
+    def _m456_attach_hypotheses(self, result, ctx) -> dict:
+        """刀1 收口：**唯一**把假设写进最终答案的地方。
+
+        三条纪律：
+          1. 开关关 / 非假设类问题 / 无 answer ⇒ 原样返回（连 dict 都不复制）；
+          2. confidence 低于下档的假设**不出现在答案里**（只留 trace）；
+          3. 任何异常都只 warning 并返回原结果 —— 拼装失败不该毁掉这一轮回答。
+        """
+        try:
+            if not isinstance(result, dict):
+                return result
+            if not self._m455_hypothesize_in_answer_on():
+                return result
+            if not self._m455_is_hypothesis_question(getattr(ctx, "question", "")):
+                return result
+            _hyps = self._m456_take_pending()
+            if not _hyps:
+                _hyps = self._m456_generate_for_answer(ctx, result)
+            _block = self._m456_hypothesis_block(_hyps)
+            if not _block.strip():
+                return result
+            _ans = str(result.get("answer") or "")
+            if not _ans.strip() or _block.strip() in _ans:
+                return result
+            _out = dict(result)
+            _out["answer"] = _ans.rstrip() + "\n\n" + _block
+            _out["hypotheses_attached"] = len(_hyps)
+            self._log(LogLevel.INFO,
+                      f"[456刀1] 假设进答案: {len(_hyps)} 条 / 追加 {len(_block)} 字 "
+                      f"(答案 {len(_ans)}→{len(_out['answer'])} 字)")
+            return _out
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::_m456_attach_hypotheses",
+                       level="warning")
+            return result
 
     # ========== ★B-1（2026-09-08 第八批）：真多步推理 ==========
     @staticmethod
@@ -14974,9 +15483,44 @@ class PulseInnerWorld(
         # ★455 刀5：trace 行（含假设行）与答案合成用的 _step_results **严格分开** ——
         #   假设只进 trace，绝不进 _synthesize_step_results（shadow 的结构性保证）。
         _m455_rows: list[dict] = []
+        # ★456 刀6：确认「没产出有效结论」的步骤 id（算子 insufficient / 依赖被跳过）
+        _m456_failed_ids: set[str] = set()
         for _i, _step in enumerate(_plan):
             _t_step = time.time()
             _name = _step["name"]
+            # ★456 刀6：前序依赖没产出 ⇒ 本步 skipped_dependency（不冒充成功）
+            _m456_deps = [str(_x) for _x in (_step.get("depends_on") or []) if str(_x)]
+            if _m456_deps and any(_d in _m456_failed_ids for _d in _m456_deps):
+                _m456_sid = str(_step.get("step_id") or f"S{_i + 1}")
+                _m456_failed_ids.add(_m456_sid)
+                _m456_first_bad = next((d for d in _m456_deps if d in _m456_failed_ids), "")
+                _step_results.append({
+                    "name": _name,
+                    "result": f"（前序步骤 {_m456_first_bad} "
+                              f"未产出有效结论，本步跳过）",
+                    "success": False,
+                    "source": "skipped_dependency",
+                    "fail_reason": "skipped_dependency",
+                    "dep_context": "",
+                    "op": str(_step.get("op") or "retrieve"),
+                    "confidence": 0.0,
+                    "status": "skipped_dependency",
+                })
+                _m455_rows.append({
+                    "idx": len(_m455_rows) + 1,
+                    "step_id": _m456_sid,
+                    "op": str(_step.get("op") or "retrieve"),
+                    "status": "skipped_dependency",
+                    "hypothesis_count": 0,
+                    "avg_confidence": None,
+                    "elapsed_ms": round((time.time() - _t_step) * 1000, 1),
+                    "source": "skipped_dependency",
+                    "fail_reason": "skipped_dependency",
+                })
+                self._log(LogLevel.INFO,
+                          f"真多步推理·步骤{_i + 1}/{len(_plan)} [{_name}] "
+                          f"跳过: 依赖 {_m456_deps} 未产出")
+                continue
             # ★455 刀5：op=hypothesize 的步骤不检索、不进 _step_results
             if str(_step.get("op") or "") == "hypothesize":
                 _m455_hop = self._m455_run_hypothesize_shadow(
@@ -14985,6 +15529,24 @@ class PulseInnerWorld(
                     _m455_hop["idx"] = len(_m455_rows) + 1
                     _m455_rows.append(_m455_hop)
                 continue
+            # ★456 刀6：op=compare/exclude 真调本地算子（0 次 LLM、0 次网络）
+            _m456_op = str(_step.get("op") or "retrieve")
+            if _m456_op in ("compare", "exclude"):
+                _m456_r = self._m456_run_local_op(
+                    _m456_op, question, _step, _step_results)
+                if _m456_r is not None:
+                    _step_results.append(_m456_r["step_result"])
+                    _m456_r["trace_row"]["idx"] = len(_m455_rows) + 1
+                    _m455_rows.append(_m456_r["trace_row"])
+                    if not _m456_r["ok"]:
+                        _m456_failed_ids.add(str(_step.get("step_id") or ""))
+                    self._log(LogLevel.INFO,
+                              f"真多步推理·步骤{_i + 1}/{len(_plan)} [{_name}] "
+                              f"算子={_m456_op} status={_m456_r['status']} "
+                              f"conf={_m456_r['step_result'].get('confidence')} "
+                              f"耗时{time.time() - _t_step:.2f}s "
+                              f"输出=\"{_m456_r['step_result'].get('result', '')[:36]}\"")
+                    continue
             _prompt = _step["prompt"]
             if _core_str and _core_str not in _prompt:
                 _prompt = f"{_core_str} {_prompt}"

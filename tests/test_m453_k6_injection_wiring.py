@@ -28,9 +28,18 @@ def _gate_off_for_453_behavior_tests(monkeypatch):
     monkeypatch.setattr(config, "ENABLE_M453R_SOURCE_GATE", False, raising=False)
 
 
-def test_开关默认关():
-    assert config.ENABLE_EVIDENCE_INJECTION is False
-    assert EI.injection_enabled() is False
+def test_开关当前为开():
+    """★456 刀7：本条原为 `test_开关默认关`（断言 is False），455 批起是存量红。
+
+    变更依据：`03b77adc`（2026-11-05 13:23）由星轨**有意**把
+    `ENABLE_EVIDENCE_INJECTION` 置 True 做线上注入验证；455 批 A/B 已证
+    与本批改动无关（`git show HEAD:config.py` 当时即为 True、455 diff 该键改动 0）。
+
+    回滚点：若要把注入改回默认关 ⇒ 同时把 config.py 里该键改回 False **并**
+    把本断言改回 `is False`（两处必须一起动，否则测试与配置互相打脸）。
+    """
+    assert config.ENABLE_EVIDENCE_INJECTION is True
+    assert EI.injection_enabled() is True
 
 
 def test_秒级killswitch每次重新读config(monkeypatch):

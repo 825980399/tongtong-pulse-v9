@@ -61,7 +61,9 @@ def test_node_id作source仍被判为kal():
 def test_准入后by_source含kal():
     s = SE.candidate_stats(score_mode="pool")
     assert s["by_source"].get("kal") == 20, s
-    assert s["raw_admitted"] == 50, s
+    # ★456 刀5：human_seed 30→40 ⇒ 准入总数 50→60（kal 20 条不变）。
+    #   回滚点：删掉 hs31~hs40 并把本条改回 50。
+    assert s["raw_admitted"] == 60, s
 
 
 def test_KAL候选能进注入段():

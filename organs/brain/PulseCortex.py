@@ -1001,6 +1001,7 @@ class PulseCortex(BasePulseOrgan):
                                      file_paths=ctx.get("file_paths", []),
                                      code_blocks=ctx.get("code_blocks", []),
                                      suggested_method=_suggested_method,
+                                     intent_type=intent_type,
                                      knowledge_paths=_knowledge_paths)
 
     def extend_remediation_lock(self, correlation_id: str,
@@ -2352,7 +2353,8 @@ class PulseCortex(BasePulseOrgan):
                          content: str, user_name: str,
                          file_paths: list | None = None, code_blocks: list | None = None,
                          suggested_method: str = "knowledge_retrieve",
-                         knowledge_paths: list | None = None) -> dict[str, Any]:
+                         knowledge_paths: list | None = None,
+                         intent_type: str = "") -> dict[str, Any]:
         """根据意图执行路由（v9.5: 所有发射脉冲标记L1实时交互层）
 
         ★405刀4：首行的 `route_target` 不再赋值即弃 —— 由
@@ -2466,6 +2468,11 @@ class PulseCortex(BasePulseOrgan):
             # ★v22.0重构：注入QICA建议的推理方法和知识路径
             strategy_context["qica_suggested_method"] = suggested_method
             strategy_context["qica_knowledge_paths"] = knowledge_paths or ["/知识"]
+            # ★456刀2：把 QICA 的原始意图类型透传给下游 —— 此前只落在 trace 里，
+            #   `strategy_context` 从来不带这个键，而 PulseInnerWorld 的
+            #   `_detect_deep_review_report` 早就在读它 ⇒ 那条分支永远不成立。
+            #   传空串表示「未知」，不改任何既有判据（既有的都是 `in (..)` 白名单）。
+            strategy_context["qica_intent_type"] = str(intent_type or "")
             # ★P3 反思→行动回路：反思结论「优先规则推理」时，覆盖 QICA 默认建议，
             # 让下游推理真正改走规则推理（而非大模型），实现元认知「知行合一」。
             if (strategy_context.get("reasoning_preference") == "prefer_rule_inference"

@@ -268,6 +268,14 @@ def _sanitize(rec: dict) -> dict:
         #   会被静默丢掉（452 批同型坑）。只存摘要，不存用户原文。
         "plan": _trace_rows(rec.get("plan")),
         "step_results": _trace_rows(rec.get("step_results")),
+        # ★456刀3/刀4：意图 handler 影子（只记录，不执行）。
+        #   `_sanitize` 是**显式白名单** —— 不在这里登记，stamp() 传进来会被静默丢掉
+        #   （452/454 同型坑已经栽过两次）。
+        "qica_intent_type": _clip(rec.get("qica_intent_type"), 40) or None,
+        "would_handler": _clip(rec.get("would_handler"), 40) or None,
+        "code_evidence_count": rec.get("code_evidence_count"),
+        "reason": _clip(rec.get("reason"), 120) or None,
+        "handled_by": _clip(rec.get("handled_by"), 40) or None,
         "latency_ms": rec.get("latency_ms"),
         "error": _clip(rec.get("error"), 120) or None,
     }

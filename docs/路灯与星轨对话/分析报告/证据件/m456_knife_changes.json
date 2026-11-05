@@ -1,0 +1,234 @@
+{
+ "batch": 456,
+ "date": "2026-11-05",
+ "nature": "P1 第三批：hypotheses 进最终答案（confidence 三档质量闸）+ 意图 handler shadow（code_reasoning / self_report）+ compare/exclude 真执行",
+ "switch_default": {
+  "ENABLE_M455_HYPOTHESIZE": true,
+  "ENABLE_M455_HYPOTHESIZE_SHADOW": true,
+  "ENABLE_M456_INTENT_SHADOW": true,
+  "M456_HYPOTHESIS_STRONG_CONF": 0.6,
+  "M456_HYPOTHESIS_MIN_CONF_IN_ANSWER": 0.35,
+  "M456_OP_MAX_EVIDENCE": 4,
+  "M455_MAX_LLM_OPS": 1
+ },
+ "predecessor": "455（d4d43f89 业务 / 12562cff CI 基线 / eb2b4fb7+acf0f237 报告）",
+ "live_evidence": {
+  "pid": 26328,
+  "boot_at": "2026-11-05 13:33:59",
+  "last_boot_log": "logs/pulse.log 第 40697 行（轮转前），logs/pulse.log.1",
+  "log_rotated_at": "2026-11-05 15:47",
+  "455_committed_at": "2026-11-05 14:39",
+  "verdict": "455 与 456 均**未生效**：进程启动早于两次提交。本批所有开关默认值只在重启后才会被读到。",
+  "evidence_injection_live": "ENABLE_EVIDENCE_INJECTION 自 03b77adc（13:23:39）起为 True，但 455/456 的种子修正尚未加载 ⇒ 线上仍是 low_score:6 / 证据=0"
+ },
+ "knives": [
+  {
+   "knife": 1,
+   "name": "hypotheses 进最终答案（confidence 三档质量闸）",
+   "before": "455 只生成不拼装；且「如果…会怎样」类问题进不了 v2 准入 ⇒ _m455_shadow_only 传**空证据** ⇒ hypothesize 恒 insufficient_evidence，影子在假设类问题上是空转的（T0 实测）。",
+   "after": "`_on_inference_request` 拆成「外壳 + _m456_request_core」：外壳在内核跑完后调 `_m456_attach_hypotheses` 统一拼装（**唯一**拼装点）。假设来源两路：①v2 里 op=hypothesize 生成后经 ContextVar 暂存；②v2 没跑过时用本轮答案当唯一证据补生成一次（只 1 次 LLM，券由 M455_MAX_LLM_OPS=1 兜住）。分档：conf≥0.6 → 「较有依据的推测：」；0.35~0.6 → 「【未验证推测】：」；<0.35 → 不进答案只留 trace。假设**正文不进 trace 行**（455「只存摘要」纪律不破）。",
+   "files": [
+    "organs/brain/PulseInnerWorld.py",
+    "config.py"
+   ],
+   "verify": [
+    "tests/test_m456_hypothesis_answer.py（30 例）",
+    "tests/test_m455_shadow.py（改钉 1 例）"
+   ]
+  },
+  {
+   "knife": 2,
+   "name": "PulseCortex 透传 qica_intent_type",
+   "before": "`PulseInnerWorld._detect_deep_review_report` 一直在读 `strategy_context[\"qica_intent_type\"]`，但 Cortex 从来没写过这个键 ⇒ 那条 skip 判据永远不成立（T0：全仓日志 0 命中）。",
+   "after": "`_route_by_intent` 增可选参数 `intent_type`（默认空串），写入 `strategy_context[\"qica_intent_type\"]`；`_on_classify_result` 调用点传 `intent_type=intent_type`。老调用点（QICA 未注入的兜底路由）不传 ⇒ 空串（保持「未知」语义，不改任何既有白名单判据）。",
+   "files": [
+    "organs/brain/PulseCortex.py"
+   ],
+   "verify": [
+    "tests/test_m456_intent_shadow.py::test_cortex_*（3 例 + 源码接线 1 例）"
+   ]
+  },
+  {
+   "knife": 3,
+   "name": "意图 handler shadow：code_reasoning",
+   "before": "无 —— `code_reasoning` 在全仓 organs/nucleus/config 零命中（任务书新概念）。",
+   "after": "`_ir_dispatch_qica_method` 最前面调 `_m456_intent_shadow(ctx)`：按 qica_intent_type + 代码词 + 代码类证据算 would_handler，**只写 trace（qica_intent_type / would_handler / code_evidence_count / reason）与 INFO 日志，绝不执行 handler**。不改 INTENT_TO_METHOD、不改返回值。",
+   "files": [
+    "organs/brain/PulseInnerWorld.py",
+    "nucleus/dialogue_process_trace.py",
+    "config.py"
+   ],
+   "verify": [
+    "tests/test_m456_intent_shadow.py（22 例，含 never_calls_handler）"
+   ]
+  },
+  {
+   "knife": 4,
+   "name": "意图 handler shadow：self_report + handled_by 防重复",
+   "before": "`handled_by` 全仓只有一个注释提到（nucleus/processing_type.py），无实现。",
+   "after": "qica_intent_type==\"元认知报告\" ⇒ would_handler=\"self_report\"；`strategy_context[\"handled_by\"]` 已标时不再预演（reason 写明「已由 X 处理」）。实弹复用既有 `_execute_meta_cognitive_report`（Mixin 里已有），本批不新建。",
+   "files": [
+    "organs/brain/PulseInnerWorld.py"
+   ],
+   "verify": [
+    "tests/test_m456_intent_shadow.py::test_shadow_skips_when_handled_by_present"
+   ]
+  },
+  {
+   "knife": 5,
+   "name": "补 10 条假设类人工种子（D9_hypothesis）",
+   "before": "30 条种子全是「怎么解决 XX」的方法类；假设类问题实测命中 0~3 条（`假设负载翻十倍会不会扛不住`=0、`假如把缓存层去掉`=0）。",
+   "after": "补 hs31~hs40，覆盖「先列前提→推演分支→找反例→给条件」四类推理动作；question_pattern 的字面量按 `_match_score`（0.50+0.30*序列+0.20*汉字Jaccard）实测调过，让 6 个代表假设问法命中 4~18 条。",
+   "files": [
+    "data/eval/human_seed_evidence.json"
+   ],
+   "verify": [
+    "candidate_stats(query) 实测：11/4/5/13/7/18（原 3/0/0/4/1/13）",
+    "tests/test_m456_hypothesis_answer.py::test_hypothesis_queries_hit_at_least_3"
+   ]
+  },
+  {
+   "knife": 6,
+   "name": "compare / exclude 算子真执行（454 遗留）",
+   "before": "454 只给计划步骤打 op 标签，`local_ops.compare/exclude` 从未被调用。",
+   "after": "v2 步骤循环里 op=compare/exclude 真调 `local_ops`：证据 = 前序**成功**步骤结论（按行拆，最多 M456_OP_MAX_EVIDENCE=4 条）；operands 从问题里的连接词拆（与/和/跟/vs，切「的…」尾巴）、dimensions 取问题与证据里的维度词（无则「差异」兜底）、exclude 的 criteria 从「排除/不符合」句里取；结果写 step_results（status/confidence/output_digest）；算子 insufficient ⇒ 该步入 failed 集，依赖它的后续步骤标 skipped_dependency。",
+   "files": [
+    "organs/brain/PulseInnerWorld.py",
+    "nucleus/reasoning/local_ops.py（未改）",
+    "config.py"
+   ],
+   "verify": [
+    "tests/test_m456_local_ops_exec.py（19 例，含端到端 v2 真跑）"
+   ]
+  },
+  {
+   "knife": 7,
+   "name": "存量红修复：注入开关断言",
+   "before": "`tests/test_m453_k6_injection_wiring.py::test_开关默认关` 断言 ENABLE_EVIDENCE_INJECTION is False，而 03b77adc 已有意改 True ⇒ 455 批起存量红。",
+   "after": "改名为 `test_开关当前为开`，断言 is True，文件内注明变更依据（03b77adc）与**回滚点**（改 config 时必须同时把断言改回 False）。",
+   "files": [
+    "tests/test_m453_k6_injection_wiring.py"
+   ],
+   "verify": [
+    "该文件 25 passed（与 test_m454_k6 合计）"
+   ]
+  },
+  {
+   "knife": 8,
+   "name": "单测 + 门禁 + 留痕",
+   "before": "—",
+   "after": "新增 3 套单测 71 例；455 的 2 条「本批不进答案」规格断言改钉；454 k6/k7 的 6 处数量规格断言随种子 30→40 改钉；六项门禁 PASS；cw3-A 逐函数归因后重锚（基线单笔）；ruff 逐文件新增 0。",
+   "files": [
+    "tests/test_m456_hypothesis_answer.py",
+    "tests/test_m456_intent_shadow.py",
+    "tests/test_m456_local_ops_exec.py",
+    "tests/test_m455_hypothesize.py",
+    "tests/test_m455_shadow.py",
+    "tests/test_m454_k6_human_seed.py",
+    "tests/test_m454_k7_kal.py",
+    "tools/ci/baselines/iw_consistency_baseline.json"
+   ],
+   "verify": [
+    "见 quality 段"
+   ]
+  }
+ ],
+ "task_book_deviations": [
+  {
+   "no": 1,
+   "item": "刀1「拼法：假设拼在最终回答末尾」",
+   "task_book": "假设拼在最终回答末尾，加前缀「【未验证推测】：」",
+   "reality": "455 的 shadow 对「如果…会怎样」是**空转**的：这类问题一个 v2 准入词都不含⇒ 走 `_m455_shadow_only`，而那里传的证据是空列表 ⇒ hypothesize 直接 insufficient_evidence（T0 实测，0 次 LLM）。照任务书写法拼装，**永远不会**有假设可拼。",
+   "handling": "补「答案后置假设」通道：v2 没跑过时，用本轮答案（截 400 字）当唯一证据生成一次。这是任务书未提的必要前置。"
+  },
+  {
+   "no": 2,
+   "item": "刀1 质量闸的两句话自相矛盾",
+   "task_book": "conf≥0.6 ⇒ 进主答案（前缀「较有依据的推测：」）；0.35~0.6 ⇒ 进主答案末尾",
+   "reality": "两档都写「进主答案」/「进末尾」，没有定义「正文主体」在哪。",
+   "handling": "按「两个前缀 + 都追加在答案末尾」实现（不插入正文），≥0.6 用「较有依据的推测：」、0.35~0.6 用「【未验证推测】：」；<0.35 不出现。正文主体一字不改——这样「假设是否可信」在文本上可分辨。"
+  },
+  {
+   "no": 3,
+   "item": "刀1「evidence_ids 必须真实存在」",
+   "task_book": "假设里的 evidence_ids 必须真实存在，不编造",
+   "reality": "已由 455 的 `parse_hypotheses` 保证（未知 id 丢弃、无有效 id 时 conf 封顶 0.3）。",
+   "handling": "本批不重复校验、不补任何 id；单测 `test_block_never_invents_evidence_ids` 锁住。"
+  },
+  {
+   "no": 4,
+   "item": "刀2「下游 PulseInnerWorld 读这个字段做意图分流」",
+   "task_book": "PulseInnerWorld 读这个字段做意图分流",
+   "reality": "全仓只有 `_detect_deep_review_report` 一处读它，且只当**跳过检测器**的判据，不是分流；真正的分流在 `_ir_dispatch_qica_method` 里按 `qica_suggested_method` 走。",
+   "handling": "如实记录；本批新增的 shadow 分流就挂在 `_ir_dispatch_qica_method` 最前面。"
+  },
+  {
+   "no": 5,
+   "item": "刀3「方案A：不改 INTENT_TO_METHOD」",
+   "task_book": "不改 INTENT_TO_METHOD，在 _ir_dispatch_qica_method 最前面分流",
+   "reality": "`INTENT_TO_METHOD` 在 `nucleus/qica/IntentChannels.py:85`，与 IW 无调用关系。",
+   "handling": "确实没动它；shadow 挂在 IW 侧，符合「不动 QICA 表」的本意。"
+  },
+  {
+   "no": 6,
+   "item": "刀3「有代码类证据」无数据源",
+   "task_book": "qica_intent_type=技术推理 + 命中代码/文件/报错/架构词 + 有代码类证据",
+   "reality": "`_ir_dispatch_qica_method` 阶段 ctx 还没有检索证据（`_memory_context` 多为 None），且 `node_pool.query` 不支持关键词检索。",
+   "handling": "`code_evidence_count` 口径 = 「上下文里含代码特征的**句数**」（`ctx._memory_context`，detectors 阶段可能已填）+ 问题自身命中记 1。**不为此新增检索**（shadow 不该改变请求开销），口径写进 trace 的 reason。"
+  },
+  {
+   "no": 7,
+   "item": "刀4「防重复 handled_by」全仓无此字段",
+   "task_book": "handler 成功后写 handled_by=\"self_report\"，检测器首行检查该标记并跳过",
+   "reality": "`handled_by` 只在 `nucleus/processing_type.py` 的注释里被提到「全仓此前无」。",
+   "handling": "本批把标记位定在 `strategy_context[\"handled_by\"]`（与 qica_* 同层），shadow 侧读取并跳过预演；实弹写入留给接线那一批（本批不执行 handler）。"
+  },
+  {
+   "no": 8,
+   "item": "刀5「假设类 0 命中」不是全 0",
+   "task_book": "现在种子里假设类问题0命中",
+   "reality": "T0 实测 6 个代表问法：3/0/0/4/1/13 —— `如果当初不采用微服务架构会怎样` 已有 3 条。",
+   "handling": "如实固化；补种子后变成 11/4/5/13/7/18，仍以 `≥3` 作验收线。"
+  },
+  {
+   "no": 9,
+   "item": "刀6「自动拆成 operands」有硬闸",
+   "task_book": "输入：前序步骤的证据文本，自动拆成 operands",
+   "reality": "`local_ops.compare` 有 `len(rows) < 2 ⇒ insufficient_evidence` 的硬闸，把前序结论整段塞成 1 条证据会让算子**恒** insufficient（等于没接）；且真实问法都带尾巴（「…的性能、复杂度、运维」），不切尾巴时 operand 在证据里搜不到。",
+   "handling": "证据按**行**拆成多条；operands 先切问句尾巴再按「的」截断 + 长度上限；dimensions 给「差异」兜底（空 dimensions 会 bad_input）。三处都写进单测。"
+  },
+  {
+   "no": 10,
+   "item": "刀6 的「后续步骤 skipped_dependency」影响面",
+   "task_book": "insufficient_evidence 时标 status=insufficient，后续步骤 skipped_dependency",
+   "reality": "`_m454_annotate_plan` 给**每个**步骤都设了 `depends_on: prev[-1:]`（链式）。",
+   "handling": "只让**算子步骤**的 insufficient 进入 failed 集（普通 retrieve 失败仍照旧继续），避免把「某步检索没查到」放大成整条链跳过。"
+  },
+  {
+   "no": 11,
+   "item": "data/ 被 gitignore ⇒ 种子文件不入库",
+   "task_book": "新增 data/eval/human_seed_evidence.json 补 10 条",
+   "reality": "`.gitignore:160` 是 `/data/` ⇒ 该文件**从未进过仓库**（454 起就如此），`git log --all -- data/eval/*` 为空。",
+   "handling": "运行时文件仍写 `data/eval/`；另存一份到 `docs/路灯与星轨对话/分析报告/证据件/human_seed_evidence_456.json` 随仓库留档。"
+  },
+  {
+   "no": 12,
+   "item": "任务书未提：`_on_inference_request` 有 146 批金标测试",
+   "task_book": "（未提）",
+   "reality": "`tests/test_ir_golden_t146.py` 把这个入口的返回结构与事件序列钉成金标，拆分必须保行为等价。",
+   "handling": "外壳只做「清暂存 → 跑原主体 → 拼假设」，原主体的每一行**一字未动**（`_m456_request_core` 就是原文）。t146 实测 4 failed/5 passed，但 A/B 回退 IW 到 HEAD 后**同样 4 failed** ⇒ 存量红，非本批引入。"
+  }
+ ],
+ "quality": {
+  "unit_456": "71（30 + 22 + 19）",
+  "regression_455": "62（11 + 29 + 22）",
+  "regression_454": "57（10 + 7 + 7 + 7 + 8 + 10 + 8）",
+  "regression_iw_trace": "t147 4 / m31 24 / m33 8 / m34 26 / m406_k3 43 / m426_d5 6 / m44 42 / m92 14+3skip / m91 8+1skip",
+  "gates": "六项 PASS（cw2 静默 except / 事件字符串 / silent_exc 元数 / 废弃导入 / 断链 / 遗留装配）",
+  "cw3a": "6 项漂移 ⇒ 逐函数归因（try+13/except+13/if+47/for+8/return+46/methods+21，与门禁逐项相等）⇒ --update 重锚 + delta_reason + expected_delta {}",
+  "ruff": "逐文件 vs HEAD 新增 0（首轮 +19 全清）",
+  "eol": "PulseCortex 纯 CRLF（4182/0）；config/trace/IW/测试纯 LF；PulseLung 未动",
+  "known_red": "tests/test_ir_golden_t146.py 4 failed（deep_search / knowledge_boundary / multi_step / pipeline 期望 no_match、实际 experience_failed_to_lung）—— A/B 回退 IW 到 HEAD 与种子回退 30 条后均同样 4 failed ⇒ 存量红"
+ },
+ "pending_restart": "455 与 456 均未生效（pid 26328 @13:33:59 早于两次提交）。重启后：ENABLE_M455_HYPOTHESIZE=True 会让假设进答案，每个假设类问题最多 +1 次 LLM（8s 上限）；回滚只需把它置 False。"
+}
