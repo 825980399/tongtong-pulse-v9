@@ -36,7 +36,23 @@ DEFAULT_REL: str = os.path.join("data", "patches", "failure_experience.jsonl")
 _ROOT: str = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 #: 提醒段固定头（用于幂等判断，也便于日后从 prompt 里精确剥离）
-REMINDER_HEAD: str = "以下是最近容易犯的错误，请检查你的代码是否包含以下特征："
+#: ★459 刀2：把「审批/收敛阶段被作废」也写进提示（原来只说"最近容易犯的错误"，
+#:   生成侧看不出这些特征里有一半来自审批打回）。
+REMINDER_HEAD: str = ("以下是最近容易犯的错误（含审批被打回的），"
+                     "请检查你的代码是否包含以下特征：")
+
+#: ★459 刀2：voided 来源的 error_type 统一前缀，便于在提醒段里限额（≤一半）
+VOIDED_PREFIX: str = "voided_"
+
+#: voided 台账字段 → 一句话失败特征（★绝不塞完整 patch 代码，会炸 token）
+_VOIDED_FEATURES: tuple = (
+    ("no_def", "voided_no_def",
+     "审批作废：补丁缺函数定义，生成前须先定位 def 与缩进层级"),
+    ("mismatch", "voided_original_mismatch",
+     "审批作废：original_code 与仓库不一致，须按当前源码重取上下文"),
+    ("o3_dead_code", "voided_dead_code",
+     "审批作废：命中死代码/越权改动，不得顺手改无关方法"),
+)
 
 #: error_msg → error_type 的归类规则（顺序即优先级）
 _CLASSIFY_RULES: tuple = (
@@ -114,6 +130,40 @@ def record_failure(error_msg: str, *, error_type: str = "",
         return False
 
 
+def voided_feature(row: dict) -> tuple:
+    """★459 刀2：把一条 `converge_voided` 台账记录压成**一句话失败特征**。
+
+    返回 ``(error_type, sentence)``。优先级：结构标志 > issue_type > 兜底。
+    ★只读结构化字段，绝不把 ``reason`` / 补丁正文整段塞进来（任务书：不塞完整代码）。
+    """
+    r = row if isinstance(row, dict) else {}
+    for _flag, _kind, _sentence in _VOIDED_FEATURES:
+        if bool(r.get(_flag)):
+            return _kind, _sentence
+    _it = str(r.get("issue_type") or "").strip()
+    if _it:
+        _short = _it[:32].replace(" ", "_")
+        return (VOIDED_PREFIX + _short,
+                f"审批作废：issue_type={_short}，生成前须核对该类问题的准入条件")
+    return ("voided_structural_defect",
+            "审批作废：结构缺陷，生成前须核对方法边界与缩进")
+
+
+def record_voided(row: dict) -> bool:
+    """★459 刀2：一条 voided 记录 ⇒ 往经验库追加**一行特征**（不是复制台账）。
+
+    由 `criteria_window.note_converge_voided` 在台账写成功后调用 —— 那是
+    收敛/审批作废的**唯一写口**（229 条历史记录都从那里来）。
+    ``file_path`` 只带 ``file|method``，``patch_snippet`` 恒空。
+    """
+    _kind, _sentence = voided_feature(row)
+    _f = str((row or {}).get("file") or "")[:120]
+    _m = str((row or {}).get("method") or "")[:60]
+    _fp = f"{_f}|{_m}"
+    return record_failure(_sentence, error_type=_kind, file_path=_fp,
+                          patch_snippet="")
+
+
 def load_recent(limit: int = 100) -> list[dict]:
     """读最近 `limit` 行（坏行跳过）。读不到返回 `[]`。"""
     p = _path()
@@ -141,7 +191,12 @@ def load_recent(limit: int = 100) -> list[dict]:
 
 
 def build_reminder(*, top_n: int = 10, max_chars: int = 300) -> str:
-    """取最近记录里最常见的错误类型，拼提醒段。无记录 ⇒ 返回空串。"""
+    """取最近记录里最常见的错误类型，拼提醒段。无记录 ⇒ 返回空串。
+
+    ★459 刀2：新接的 voided 特征**占比不超过一半**（按字符数限额），
+      否则 229 条历史作废会把「代码验证失败」那类提醒整段挤掉 ——
+      经验库要的是"下次别再犯"，不是"把台账抄一遍"。
+    """
     if not _on():
         return ""
     rows = load_recent(200)
@@ -150,6 +205,9 @@ def build_reminder(*, top_n: int = 10, max_chars: int = 300) -> str:
     c = collections.Counter(str(r.get("error_type") or "other") for r in rows)
     top = c.most_common(max(1, int(top_n)))
     lines = [REMINDER_HEAD]
+    _cap = max(1, int(max_chars))
+    _voided_budget = _cap // 2
+    _voided_used = 0
     for kind, n in top:
         # 每种类型带一条最近的原始错误，便于 LLM 认出"长什么样"
         sample = ""
@@ -157,9 +215,14 @@ def build_reminder(*, top_n: int = 10, max_chars: int = 300) -> str:
             if str(r.get("error_type") or "other") == kind:
                 sample = str(r.get("error_msg") or "")[:60]
                 break
-        lines.append(f"- {kind}（近 {n} 次）{('：' + sample) if sample else ''}")
+        _line = f"- {kind}（近 {n} 次）{('：' + sample) if sample else ''}"
+        if kind.startswith(VOIDED_PREFIX):
+            if _voided_used + len(_line) > _voided_budget:
+                continue
+            _voided_used += len(_line)
+        lines.append(_line)
     text = "\n".join(lines)
-    return text[:max(1, int(max_chars))]
+    return text[:_cap]
 
 
 def append_reminder(prompt: str, *, max_chars: int = 300) -> str:

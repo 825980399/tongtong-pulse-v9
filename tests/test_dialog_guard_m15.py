@@ -226,12 +226,28 @@ class TestSourceWiring(unittest.TestCase):
         self.assertEqual(self.src.count("self._dialog_mark_output_done(correlation_id)"), 3)
 
     def test_head_no_e402_pattern(self):
-        """头部不得再出现「赋值语句关闭 import 区」的写法。"""
-        head = "\n".join(self.src.splitlines()[:60])
-        _i_logger = head.index("_module_logger = logging.getLogger(__name__)")
-        _i_utils = head.index("from utils.time_utils import get_current_datetime")
-        self.assertGreater(_i_logger, _i_utils,
+        """头部不得再出现「赋值语句关闭 import 区」的写法。
+
+        ★459 刀1 归因（红2）：m15 之后模块头陆续加了 import
+          （`from utils.time_utils import ...` 等），`_module_logger` 从第 5x 行
+          后移到第 **69** 行，原来「只看前 60 行」的硬编码窗口找不到它。
+        ★本批改成**动态定位**：先找 `_module_logger` 赋值行，再在它之前找
+          最后一个 import 行，断言前者在后。窗口不再依赖具体行数，
+          而且比改成固定 80 行更严（import 再增多少行都成立）。
+        """
+        _lines = self.src.splitlines()
+        _i_logger = next(
+            (i for i, ln in enumerate(_lines)
+             if "_module_logger = logging.getLogger(__name__)" in ln), -1)
+        self.assertGreaterEqual(_i_logger, 0, "模块头找不到 _module_logger 赋值")
+        _imports = [i for i, ln in enumerate(_lines[:_i_logger])
+                    if ln.startswith(("import ", "from "))]
+        self.assertTrue(_imports, "日志器赋值之前必须有 import 区")
+        self.assertGreater(_i_logger, max(_imports),
                            "_module_logger 赋值必须位于全部 import 之后（否则 E402）")
+        self.assertIn("from utils.time_utils import get_current_datetime",
+                      "\n".join(_lines[:_i_logger]),
+                      "新增的 import 必须仍排在日志器赋值之前")
 
 
 class TestCorrelationIdUnique(unittest.TestCase):

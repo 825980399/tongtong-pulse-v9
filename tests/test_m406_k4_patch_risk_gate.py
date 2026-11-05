@@ -395,7 +395,28 @@ class TestF_Structure(unittest.TestCase):
                 break
         self.assertIsNotNone(_fn)
         _seg = ast.get_source_segment(_src, _fn) or ""
-        self.assertIn("DIFF_NARROW_KINDS", _seg, "judge 必须引用常量集合")
+        # ★459 刀1 归因（红1）：412 批给 `narrow_kinds()` 加了 `_delete_only_enabled()`
+        #   灰度，430 批把 `judge` 从「直接引用 DIFF_NARROW_KINDS」改成「调用
+        #   narrow_kinds() 这个单一出口」。常量集合仍是唯一真源，只是不再出现在
+        #   judge 里 —— 属「代码改了、断言没跟上」，不是判定放宽。
+        # ★本批把断言**升级**为 AST 结构判据，比原来看字符串更严：
+        #   ① judge 必须调用 narrow_kinds()；
+        #   ② judge 里不得再出现 DIFF_NARROW_KINDS 或任何窄闸字面量
+        #      （防止有人绕过单一出口，把判定散回函数体里）。
+        _calls = [
+            (n.func.attr if isinstance(n.func, ast.Attribute)
+             else getattr(n.func, "id", ""))
+            for n in ast.walk(_fn) if isinstance(n, ast.Call)
+        ]
+        self.assertIn("narrow_kinds", _calls,
+                      "judge 必须走 narrow_kinds() 单一出口（430 批后的真实形态）")
+        self.assertNotIn("DIFF_NARROW_KINDS", _seg,
+                         "judge 不得直接引用常量集合，必须走单一出口")
+        for _lit in G.DIFF_NARROW_KINDS + (G.DELETE_ONLY_KIND,):
+            self.assertNotIn(f'"{_lit}"', _seg,
+                             f"judge 里散落了窄闸字面量 {_lit}")
+            self.assertNotIn(f"'{_lit}'", _seg,
+                             f"judge 里散落了窄闸字面量 {_lit}")
 
 
 if __name__ == "__main__":

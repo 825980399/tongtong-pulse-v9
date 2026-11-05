@@ -364,6 +364,16 @@ def note_converge_voided(patch_id, file: str = "", method: str = "",
     except OSError as _e:
         silent_exc(_e, where="criteria_window::note_converge_voided", level="warning")
         return ""
+    # ★459 刀2：这是收敛/审批阶段作废的**唯一写口**（台账 229 条都从这里来）。
+    #   以前只有「代码验证失败」会进补丁失败经验库，审批打回的一条都没有 ——
+    #   等于只统计了感冒、没统计骨折。这里补接线：只给一句话失败特征，
+    #   绝不复制补丁正文，写失败也不影响作废主流程。
+    try:
+        from nucleus.patch_failure_experience import record_voided as _m459_rec
+        _m459_rec(_rec)
+    except Exception as _e:
+        silent_exc(_e, where="criteria_window::note_converge_voided 459经验库",
+                   level="debug")
     return _p
 
 
