@@ -1,0 +1,140 @@
+{
+ "batch": 459,
+ "date": "2026-11-05/06",
+ "head_before": "30c63e9f",
+ "executor": "路灯",
+ "title": "两条存量红收口 + voided 失败经验库接线 + 稳态内存观察工具",
+ "switches": {
+  "新增开关": "无（任务书：本批无新开关）",
+  "ENABLE_M455_HYPOTHESIZE": "False（★止血态，本批未动）",
+  "ENABLE_M458_EXPERIENCE_NO_DELEGATE": "True（不变）",
+  "ENABLE_M458_HANDLER_LIVE": "False（不变）"
+ },
+ "t0_deviations": [
+  {
+   "id": 1,
+   "claim": "458 报告 §5「455/456/457/458 四批全未生效，先重启」",
+   "measured": "活体已在 **23:47:59** 重启为 `pid=27268`（晚于 458 三笔提交 23:17~23:25）⇒ 457/458 **已加载**；但重启后至今无用户对话，`[458刀1]/[457刀4]` 尚无实盘样本",
+   "impact": "交接改为「代码已加载、等一次真实对话取证」，不再写「四批未生效」"
+  },
+  {
+   "id": 2,
+   "claim": "刀2：`data/patches/` 下的 converge_voided 台账，20 条，含「缩进错误/逻辑错误/契约断裂/越权修改」等作废原因",
+   "measured": "真实文件是 `data/reports/converge_voided.jsonl`，**229 条**；`reason` 229/229 全是「284刀5 结构缺陷补丁作废」，没有上述文本。可提取特征的是结构化字段：no_def=216 / mismatch=13 / o3_dead_code=2 / issue_type=code_optimization 53 等",
+   "impact": "特征映射改为按标志位 + issue_type，一句话总结；不解析 reason、不复制补丁正文"
+  },
+  {
+   "id": 3,
+   "claim": "刀3：读 `data/metrics/runtime_metrics.jsonl` 的内存时间序列",
+   "measured": "该文件**不存在**；`data/metrics/` 只有 4 个非时序文件。真实时序在 `logs/pulse.log*` 的 `[T-107a] 资源采样: RSS=…GB … 进程启动≈…s … gen=…`（今日 95 条、跨多个 pid），另有 `data/monitor/health_snapshot.json` 单点快照",
+   "impact": "工具做「名义 jsonl 优先 + 日志兜底 + 按 gen 只取当前活体进程」；实测跑通，输出 `预热期`（当前 uptime 16.1min）"
+  },
+  {
+   "id": 4,
+   "claim": "刀2「经验库只记录了代码验证失败（1条）」",
+   "measured": "`data/patches/failure_experience.jsonl` 确实 1 行，但内容是 `error_type=other / error_msg=效果不明显`，不是编译/缩进错误",
+   "impact": "不改动这 1 行（任务书纪律）；新接线只**追加** voided 特征，不动旧记录"
+  },
+  {
+   "id": 5,
+   "claim": "刀1 两条红可直接改窗口/改断言",
+   "measured": "红1 = 412 批 `judge` 改调 `narrow_kinds()` 后 406 断言没跟上；红2 = import 区增长把 `_module_logger` 推到第 69 行、60 行硬窗口不够",
+   "impact": "两条都**升级**断言强度（AST 结构判据 / 动态行号定位），不是放宽；不删测试、不 --update"
+  },
+  {
+   "id": 6,
+   "claim": "批次标准动作：三笔提交（业务 / [ci-gate-change] / 报告）",
+   "measured": "本批**没有改任何 IW / pulse_inner_world_* 文件** ⇒ cw3-A 首检即 PASS、基线零漂移 ⇒ 无需重锚",
+   "impact": "本批 **2 笔**（业务 / 报告），不造一笔空的 [ci-gate-change] 充数"
+  },
+  {
+   "id": 7,
+   "claim": "开工时工作区只有 1 个 M + 若干 ??（458 批末状态）",
+   "measured": "收尾时多出 **349 条 ` D docs/**` 删除**（分析报告 102 / 路灯与星轨对话 37 / 微光 37 / 归档 30 …），非本批任何脚本所为；backup_sweep 只删过 1 个 .bak",
+   "impact": "不碰、不提交、不恢复（疑似星轨并发清理）；两笔提交全部显式路径；列入交接风险单，需星轨确认是有意归档还是误删"
+  }
+ ],
+ "knives": [
+  {
+   "no": 1,
+   "level": "P1",
+   "name": "两条存量红收口",
+   "files": [
+    "tests/test_m406_k4_patch_risk_gate.py",
+    "tests/test_dialog_guard_m15.py"
+   ],
+   "points": [
+    "红1：`test_06` 从「judge 里必须出现 DIFF_NARROW_KINDS」升级为 AST 结构判据 —— 必须调 `narrow_kinds()`，且函数体不得出现常量名或任何窄闸字面量（更严）",
+    "红2：`test_head_no_e402_pattern` 从 60 行硬窗口改为**动态定位日志器行 + 其前最后一个 import 行**，并保留 utils.time_utils 在前半区的断言（更严）",
+    "验收：406 全套 **153 passed**、m15 全套 **16 passed**"
+   ]
+  },
+  {
+   "no": 2,
+   "level": "P1",
+   "name": "voided 失败经验库接线",
+   "files": [
+    "nucleus/patch_failure_experience.py",
+    "nucleus/evolution/criteria_window.py"
+   ],
+   "points": [
+    "`voided_feature(row)` 纯函数：no_def / mismatch / o3_dead_code / issue_type → 一句话特征",
+    "`record_voided(row)` 只带 file|method + 一句话，`patch_snippet` 恒空",
+    "钩子挂在 `criteria_window.note_converge_voided`（收敛作废的**唯一写口**）写成功之后",
+    "`build_reminder`：voided 行按字符数限额 ≤ max_chars//2，总长仍 ≤300",
+    "`REMINDER_HEAD` 改含「（含审批被打回的）」",
+    "452 刀6 的 pytest 护栏 / 幂等 / 开关 / 两处接线断言全部保留"
+   ]
+  },
+  {
+   "no": 3,
+   "level": "P2",
+   "name": "稳态内存观察工具",
+   "files": [
+    "tools/xingrui/memory_steady_report.py"
+   ],
+   "points": [
+    "`--hours 4`；只读时序、不 import config、唯一落盘是报告 md",
+    "名义 jsonl 优先，日志 `[T-107a] 资源采样` 兜底，按 `gen=` 分组只取当前活体",
+    "1h/4h/24h + 启动前10分钟基线，最小二乘斜率 MB/min",
+    "判定：预热期 / 稳态泄漏（连续2h>5MB/min不回落）/ 预热期尾巴 / 正常波动",
+    "终端表格 + `data/reports/memory_steady_YYYYMMDD_HHMM.md`"
+   ]
+  }
+ ],
+ "readings": {
+  "tests_new": {
+   "test_m459_voided_experience.py": 14,
+   "test_m459_memory_steady_report.py": 12
+  },
+  "tests_regression": {
+   "406 k1/k2/k3/k4": "18 / 31 / 43 / 61 = 153 passed（验收线达成）",
+   "test_dialog_guard_m15.py": "16 passed（验收线达成）",
+   "test_m452_k6_failure_experience.py": "8 passed",
+   "344/345/375c9（voided 写口相关）": "28 / 24 / 24 = 76 passed"
+  },
+  "total": "279 passed，0 存量红",
+  "gates": {
+   "cw2": "PASS",
+   "event_string": "PASS",
+   "silent_exc_arity": "PASS",
+   "deprecated_imports": "PASS",
+   "broken_chain": "PASS",
+   "legacy_assembly": "PASS",
+   "cw3-B": "PASS",
+   "cw3-A": "PASS（零漂移，未重锚）"
+  },
+  "ruff": "新增 0（逐文件 vs HEAD + 新增文件 vs 空；首轮 20 条全清）",
+  "eol": {
+   "test_dialog_guard_m15.py": "CRLF 269 / bareLF 0",
+   "其余 6 个改动/新增 .py": "纯 LF"
+  },
+  "tool_dry_run": "python tools/xingrui/memory_steady_report.py --hours 4 → 判定=预热期（uptime 16.1min，基线 208.86MB/min，1h 62.49MB/min）"
+ },
+ "handoff": [
+  "①四条历史批次（455~458）代码已随 23:47 重启加载，等一次真实对话取 `[457刀4] / [458刀1] delegate / [458刀2]` 实盘样本",
+  "②90s 委派超时兜底仍需人为复现一次（把 DIALOG_DELEGATE_TIMEOUT_SEC 调小或让肺不回）",
+  "③重启后按 `--hours 4 / --hours 24` 各跑一次内存工具：30 分钟内应判预热期，2 小时后应给稳态/泄漏结论；steady_growth 38MB/min 的疑问由此给数",
+  "④handler 实弹仍锁死（G1 样本=0、PCT=0）；假设开关仍在止血态，需星轨单独决策"
+ ]
+}
