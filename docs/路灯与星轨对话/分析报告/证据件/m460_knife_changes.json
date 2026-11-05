@@ -1,0 +1,114 @@
+{
+ "batch": 460,
+ "date": "2026-11-06",
+ "authorization": "星轨对话裁决（无编号任务书）：按路灯建议自行裁决并施工；闭环内裁决角色交给曈曈自己，靠留痕/回退/经验学习降低改错概率。",
+ "head_at_start": "c27932e3",
+ "scope": "只改审批闭环内的证据准入与回退链路；不改并行架构（现状已具备后台线程 + 一次性子进程 + JSON 文件回传）、不改八闸判据、不新增状态写口、不 push。",
+ "t0_deviations": [
+  {
+   "id": 1,
+   "claim": "上一轮路灯建议③：闭环内保留人工裁决闸",
+   "measured": "星轨本轮明确裁决「让曈曈自己裁决，不担心她改错」",
+   "impact": "推翻建议③。安全感改由证据准入门 + 真自动回退 + 同类错误冷却提供，不再依赖人工拦；ENABLE_M460_SELF_VERDICT 默认 True 生效"
+  },
+  {
+   "id": 2,
+   "claim": "459 收尾记忆：HEAD 是 459 两笔、止血态 False、工作区 348 条 docs 删除",
+   "measured": "星轨并发提交 3 笔（dfa164a8 docs 归档 / ddf99c11 假设开关恢复 True / c27932e3 PII 掩码）；删除数 0；活体 2026-11-06 01:06:03 重启 pid=43796",
+   "impact": "记忆过期，本批按新 HEAD 重新取证；不再需要恢复登记册"
+  },
+  {
+   "id": 3,
+   "claim": "上一轮结论：闭环「缺少问题复查探针」",
+   "measured": "patch_active_reprobe.active_reprobe()（静态 AST 复现）、EvolutionEffectVerifier.problem_gone_from_reprobe()（375刀4 映射）、baseline_probe.probe_code_repro()（438刀2）三件都在位",
+   "impact": "更正为「缺的是审批前统一调用并回填」，本批做的是接线而非造探针，工作量与风险大幅降低"
+  },
+  {
+   "id": 4,
+   "claim": "447 批注释：失败自动回滚（由 PatchManager 负责，本层只记）",
+   "measured": "maybe_approve_scoped() 全文 0 处 rollback 调用，只写审批留痕",
+   "impact": "注释与实现不符。本批在 finalize() 里补「真执行」：字节快照 → restore_snapshot() 写回 → sha256 校验；失败再降级到 PatchManager.rollback_patch()"
+  },
+  {
+   "id": 5,
+   "claim": "需要新建「吸取错误经验」机制",
+   "measured": "SafeEvolutionExecutor.py:1553 已把 append_reminder 接进生成 prompt、:6318 已把验证失败写进 failure_experience.jsonl（452刀6）",
+   "impact": "不重建。只补两件：结构化 error_type（避免退化成 229 条同一句模板）、同类 (dedup_key,error_type) 连续失败自动冷却（硬保证）"
+  },
+  {
+   "id": 6,
+   "claim": "首轮接线可直接回填探针结果",
+   "measured": "探针如实返回 baseline_errors=0，覆盖测试构造的 2 ⇒ 八闸 baseline_positive 变红，447 三套用例被顶红",
+   "impact": "改为「只补缺失、绝不覆盖既有证据」契约；verdict 看合成后证据。复跑 447 14 passed"
+  },
+  {
+   "id": 7,
+   "claim": "批次标准动作：三笔提交（业务 / [ci-gate-change] / 报告）",
+   "measured": "本批未改任何 IW / pulse_inner_world_* ⇒ cw3-A 首检即 PASS、零漂移",
+   "impact": "本批 2 笔，不造空的 [ci-gate-change] 充数"
+  },
+  {
+   "id": 8,
+   "claim": "本轮提议：把闭环拆成独立线程/进程并行",
+   "measured": "main.py:2703 已有 daemon 后台线程（首跑延迟 1200~2400s、每 30min 一轮）；SafeEvolutionExecutor.py:7030 已有 spawn 一次性子进程 + JSON 文件 in/out + 超时终止 + exitcode 分类；实盘一轮仅 5~6s、timeout=600s 从未逼近",
+   "impact": "架构不动。并行化不是当前堵点；若将来补 A/B + 全套回归使单轮变长，才需要放宽 600s 与分级超时"
+  }
+ ],
+ "knives": [
+  {
+   "id": 1,
+   "name": "证据准入门",
+   "detail": "self_verdict.collect_evidence() 统一调三个既有探针，回填副本；approval_bridge.maybe_approve_scoped() 在八闸前接 prepare()、应用后接 finalize()。只补缺失、不改八闸、不新增写口。",
+   "switch": "ENABLE_M460_SELF_VERDICT"
+  },
+  {
+   "id": 2,
+   "name": "三态自裁决",
+   "detail": "apply / reject / inconclusive；不可判定绝不默认放行，也不丢弃，配 M460_MAX_REPRO_RETRY=3 重试上限（铁律55）。",
+   "switch": "M460_MAX_REPRO_RETRY / M460_MAX_BLAST_FILES"
+  },
+  {
+   "id": 3,
+   "name": "改前留痕与真回退",
+   "detail": "snapshot_before() 按字节快照（行尾 + sha256 + meta.json）；verify_after_apply() 默认 ast.parse（可注入真单测）；失败 restore_snapshot() 真写回并双端校验。",
+   "switch": "ENABLE_M460_AUTO_ROLLBACK"
+  },
+  {
+   "id": 4,
+   "name": "问题单准入 + 失败经验回灌",
+   "detail": "make_ticket() 用 make_dedup_key + 15min 聚合窗口（防刷单）；record_lesson() 写结构化 error_type 进 452 经验库，连续同类 2 次 ⇒ 24h 冷却，冷却期内不再派单。",
+   "switch": "M460_TICKET_AGGREGATE_SEC / M460_LESSON_COOLDOWN_N"
+  }
+ ],
+ "safety_boundaries": [
+  "八闸原有边界不动：blast<=1、single_file、not_core、risk=low、trust、confidence=high",
+  "447 安全边界不动：每日最多自动批准 1 条",
+  "自裁决额外边界：影响面 <=1 文件、证据不全不放行、快照失败不放行",
+  "改前字节快照 + 改后语法校验 + 失败真回退 + PatchManager 既有回退作二级兜底",
+  "同类错误冷却：结构化 error_type 进 prompt 提醒（软）+ 冷却期内不再生成（硬）",
+  "总闸 False ⇒ 逐字节回到 460 前行为，可 A/B 复现旧现场"
+ ],
+ "quality": {
+  "new_tests": 23,
+  "regression_passed": 167,
+  "regression_skipped": 4,
+  "total_passed": 190,
+  "existing_red": 0,
+  "gates": "cw2 / 事件字符串 / silent_exc 元数 / 废弃导入 / 断链 / 遗留装配 / cw3-B：PASS；cw3-A 语义守恒首检 PASS（零漂移，未重锚）",
+  "ruff_new": 0,
+  "eol": {
+   "config.py": "LF 8138/0",
+   "approval_bridge.py": "LF 481/0",
+   "self_verdict.py": "LF",
+   "test_m460_self_verdict.py": "LF"
+  },
+  "production_trace_pollution": 0,
+  "pollution_check": "failure_experience.jsonl 仍 1 行、approval_trace.jsonl 仍 4 行、self_verdict_ledger.jsonl 未创建、快照目录未创建"
+ },
+ "files_changed": [
+  "config.py",
+  "nucleus/evolution/approval_bridge.py",
+  "nucleus/evolution/self_verdict.py",
+  "tests/test_m460_self_verdict.py"
+ ]
+}
