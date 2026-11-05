@@ -1,0 +1,271 @@
+{
+  "batch": 454,
+  "date": "2026-11-05",
+  "nature": "P1 阶段第一批：计划 v3 + 本地三算子 + 证据补源（不开注入）",
+  "switch_default": {
+    "ENABLE_EVIDENCE_INJECTION": false,
+    "ENABLE_M454_PLAN_V3": true,
+    "ENABLE_M454_SEED_EVIDENCE": true
+  },
+  "predecessor": {
+    "batch": "453R",
+    "commits": [
+      "66629993",
+      "9eb82d42"
+    ]
+  },
+  "live_evidence": {
+    "process": {
+      "pid": 43204,
+      "started": "2026-11-05 11:27:01",
+      "453R_loaded": true,
+      "injection_switched_on": false
+    },
+    "evidence_trace_rows_with_new_schema": 69
+  },
+  "knives": [
+    {
+      "knife": 1,
+      "name": "P1-1a 计划生成 v3（只生成不执行）",
+      "before": "_generate_task_plan 只返回 {name,prompt,fallback}；「多步」每步都是检索",
+      "after": "原函数改名 _generate_task_plan_base，同签名包装加法补 step_id/op/goal/depends_on/expected_evidence；op 枚举 retrieve/compare/exclude/quantify；ENABLE_M454_PLAN_V3 可秒级回退；op!=retrieve 只记 trace 不执行算子",
+      "files": [
+        "organs/brain/PulseInnerWorld.py",
+        "config.py"
+      ],
+      "evidence": {
+        "ops_compare_question": [
+          "retrieve",
+          "retrieve",
+          "compare",
+          "exclude"
+        ],
+        "universal_all_retrieve": true,
+        "note": "通用型问题 3 步全 retrieve 是正确行为，不为验收硬贴标签（烛微 §C1）"
+      }
+    },
+    {
+      "knife": 2,
+      "name": "P1-1b 本地算子 compare",
+      "before": "无本地比较算子",
+      "after": "local_ops.compare 逐维对照，证据不足显式 insufficient_evidence",
+      "files": [
+        "nucleus/reasoning/local_ops.py"
+      ],
+      "evidence": {
+        "status": "ok",
+        "similarities": [
+          {
+            "dimension": "性能",
+            "value": [
+              90.0
+            ],
+            "evidence_ids": [
+              "E1",
+              "E2"
+            ]
+          }
+        ],
+        "differences": [
+          {
+            "dimension": "复杂度",
+            "values": [
+              [
+                3.0
+              ],
+              [
+                7.0
+              ]
+            ],
+            "evidence_ids": [
+              "E1",
+              "E2"
+            ]
+          }
+        ],
+        "unknown_dimensions": [],
+        "evidence_ids": [
+          "E1",
+          "E2"
+        ],
+        "confidence": 0.5,
+        "dimensions": [
+          "性能",
+          "复杂度"
+        ],
+        "operands": [
+          "方案A",
+          "方案B"
+        ],
+        "reason": "compared"
+      }
+    },
+    {
+      "knife": 3,
+      "name": "P1-1b 本地算子 exclude",
+      "before": "无本地排除算子",
+      "after": "local_ops.exclude 按 must/negations/min_score 筛选；全排除返回原集合 + 告警，不静默清空",
+      "files": [
+        "nucleus/reasoning/local_ops.py"
+      ],
+      "evidence": {
+        "status": "all_excluded",
+        "kept": [
+          {
+            "text": "甲"
+          },
+          {
+            "text": "乙"
+          }
+        ],
+        "dropped": [
+          {
+            "item": {
+              "text": "甲"
+            },
+            "reason": "negation_hit:甲",
+            "index": 0
+          },
+          {
+            "item": {
+              "text": "乙"
+            },
+            "reason": "negation_hit:乙",
+            "index": 1
+          }
+        ],
+        "evidence_ids": [],
+        "warning": "全部候选均被排除，已按『不静默清空』返回原集合，请人工复核 criteria",
+        "counts": {
+          "total": 2,
+          "kept": 0,
+          "dropped": 2
+        }
+      }
+    },
+    {
+      "knife": 4,
+      "name": "P1-1b 本地算子 quantify",
+      "before": "无本地量化算子",
+      "after": "local_ops.quantify 支持 sum/mean/ratio/count 与中文别名，缺数值 insufficient_numbers，零分母不编造",
+      "files": [
+        "nucleus/reasoning/local_ops.py"
+      ],
+      "evidence": {
+        "sum": {
+          "status": "ok",
+          "value": 60.0,
+          "unit": "条",
+          "formula": "sum(10.0,20.0,30.0)",
+          "evidence_ids": [],
+          "numbers": [
+            10.0,
+            20.0,
+            30.0
+          ],
+          "metric": "sum",
+          "reason": "computed"
+        },
+        "missing": {
+          "status": "insufficient_numbers",
+          "value": null,
+          "unit": "",
+          "formula": null,
+          "evidence_ids": [],
+          "numbers": [],
+          "reason": "no_numbers"
+        }
+      }
+    },
+    {
+      "knife": 5,
+      "name": "trace 落 plan + step_results（真接多步执行器）",
+      "before": "trace 的 steps=[] 恒空；452 只加了 schema 没内容",
+      "after": "dialogue_process_trace 新增 set_plan/get_plan/clear_plan（线程局部）与 _trace_rows 结构化白名单；pulse_inner_world_support.trace_entry 同步加 plan/step_results；_multi_step_execute 旁路记录摘要（sha1[:8]，不存用户原文），并如实标 op_executed=retrieve",
+      "files": [
+        "nucleus/dialogue_process_trace.py",
+        "organs/brain/pulse_inner_world_support.py",
+        "organs/brain/PulseInnerWorld.py"
+      ],
+      "evidence": "隔离路径单测：finish 后 plan 2 条、step_results 2 条且落盘文件可见；steps 仍是 452 的符号推理轨迹，本批未改（语义不混）"
+    },
+    {
+      "knife": 6,
+      "name": "人工种子证据第一批 30 条 + 接入检索",
+      "before": "注入候选只剩 2 条（453R 准入后）；白名单已含 human_seed 但无数据、无代码引用种子文件",
+      "after": "data/eval/human_seed_evidence.json 30 条（8 维度，D1/D3/D6 各 5 条）；新建 nucleus/seed_evidence.py 把种子转成经验池同形状候选，PulseLung 注入入口与检索命中合并走同一 build_injection 链路",
+      "files": [
+        "data/eval/human_seed_evidence.json",
+        "nucleus/seed_evidence.py",
+        "organs/body/PulseLung.py",
+        "nucleus/evidence_source.py",
+        "config.py"
+      ],
+      "evidence": {
+        "count": 30,
+        "dimensions": 8,
+        "pool_stats": {
+          "total_rows": 50,
+          "raw_admitted": 50,
+          "injectable": 45,
+          "by_source": {
+            "human_seed": 30,
+            "kal": 20
+          }
+        },
+        "query_stats": {
+          "raw_admitted": 0,
+          "injectable": 0
+        },
+        "note": "验收用 candidate_stats(score_mode=pool) 同一入口，不数文件条数"
+      }
+    },
+    {
+      "knife": 7,
+      "name": "KAL 节点提炼 20 条",
+      "before": "无 KAL 证据卡片；离线脚本无法访问活体 node_pool",
+      "after": "tools/extract_kal_evidence.py 读 parquet 冷索引，按 trust>=60 + quality_flag + 排除状态/情绪路径 + 可支撑推理动作打分取 20 条；value 摘要 80 字，保留 node_id 作 source，标 domain/caveat 提醒偏科；evidence_source.classify_source 改为 source_class 优先，避免 node_id 被误判成类别",
+      "files": [
+        "tools/extract_kal_evidence.py",
+        "data/eval/kal_seed_evidence.json",
+        "nucleus/evidence_source.py"
+      ],
+      "evidence": {
+        "filters": {
+          "trust_ge_60": 2503,
+          "quality_ok": 2503,
+          "after_path_filter": 2501,
+          "picked": 20
+        },
+        "source_meta": {
+          "files": [
+            "7e8276832f024a7f9517e9ee15184443-0.parquet"
+          ],
+          "total": 5536
+        },
+        "by_source_after_gate": {
+          "human_seed": 30,
+          "kal": 20
+        }
+      }
+    }
+  ],
+  "task_book_deviations": [
+    "任务书前置「453+453R 已重启加载」成立：pid 43204 @11:27:01 > 453R 提交 09:47；trace 已有 69 行带 request_id/source_class 的新字段。但开关仍 False ⇒ 未注入。",
+    "刀6「白名单加 human_seed」在 453R 已完成（ADMITTED_SOURCES 已含 human_seed/kal），本批只需落种子 + 接入检索。",
+    "★种子落盘 ≠ 可检索（烛微 455 前置 §C3）：ExperienceRetriever.candidates 只读经验池，全仓原本无代码引用种子 JSON ⇒ 新增 SeedEvidenceProvider 并在 PulseLung 注入入口合并；验收改用同一入口 candidate_stats，而非数文件条数。",
+    "★KAL 数据源与任务书口径不同：任务书说 568 节点/50 条 trust>=60，那是**活体 L1 node_pool 快照**；离线脚本读 data/knowledge/cold/*.parquet 冷化索引，实测 5536 行、trust>=60 有 2503 条。",
+    "KAL 高信任节点偏科（自我理解/代码域），已按烛微 §C4 标 domain 与 caveat，不当通用证据。",
+    "★刀7「保留 node_id 作为 source」与 453R 分类函数的「显式类别优先」冲突：node:xxx 会被判 other 导致 20 条全被挡 ⇒ 改为 source_class 优先。",
+    "刀5 需要同时改两处 trace（落盘 jsonl 的 _sanitize 显式白名单 + 内存环形缓冲），并真接上多步执行器，否则又是「有字段没内容」（烛微 §C5）。",
+    "刀1 的 op 不为验收硬标：通用型问题 3 步全 retrieve 是正确行为；「至少 1 步非 retrieve」用对比/计算/排除类问题验证（烛微 §C1/C2）。",
+    "任务书说「本批不开注入」⇒ 种子接入只在 injection_enabled() 分支内，当前线上不会生效；candidate_stats 是同一准入/净化链路的离线统计口径。",
+    "改 PulseInnerWorld.py 与 pulse_inner_world_support.py 触发 cw3-A 语义守恒门禁 8 项漂移 ⇒ 按仓库惯例 --update 重锚 + delta_reason 归因 + expected_delta 留 {} + CI 基线单独一笔提交（铁律 17）。"
+  ],
+  "quality": {
+    "unit_tests_454": 57,
+    "gates": "6 PASS + cw3-A rebaseline",
+    "ruff_new": 0
+  },
+  "pending_restart": true
+}

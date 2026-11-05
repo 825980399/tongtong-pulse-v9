@@ -1882,6 +1882,18 @@ class PulseInnerWorldSupportMixin:
                 getattr(self, "_m452_chitchat_skipped", 0) or 0) + 1
             return
 
+        # ★454刀5：与落盘 trace 共读同一份 plan 状态（只读，不改签名）
+        _m454_trace_rows = None
+        try:
+            from nucleus import dialogue_process_trace as _m454_dpt
+            from nucleus.dialogue_process_trace import _trace_rows as _m454_trace_rows
+            _m454_plan_state = _m454_dpt.get_plan()
+        except Exception as _m454_pe:
+            from nucleus._silent_except import silent_exc as _m454_se
+            _m454_se(_m454_pe, where="pulse_inner_world_support::454 get_plan",
+                    level="debug")
+            _m454_plan_state = {}
+
         trace_entry = {
             "timestamp": time.time(),
             "question": question[:100],
@@ -1906,6 +1918,13 @@ class PulseInnerWorldSupportMixin:
             "step_count": len(_steps_serialized),
             "evidence_count": 0,
             "is_chitchat": False,
+            # ★454刀5：plan / step_results 由多步执行器旁路写入，
+            #   只存摘要（sha1[:8]）、证据 id、耗时，绝不落用户原文。
+            #   `steps` 仍是 452 的符号推理轨迹，本批未改（语义不混）。
+            "plan": (_m454_trace_rows(_m454_plan_state.get("plan"))
+                     if _m454_trace_rows else []),
+            "step_results": (_m454_trace_rows(_m454_plan_state.get("step_results"))
+                            if _m454_trace_rows else []),
         }
         self._inference_trace.append(trace_entry)
         if len(self._inference_trace) > self._max_trace:

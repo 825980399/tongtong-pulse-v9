@@ -7879,3 +7879,27 @@ M453R_MIN_REWARD = 0.5
 #   ★用 nucleus.evidence_injection.measure_token_delta 以 cl100k_base 真测，
 #     绝不拿字符数冒充 token；最坏 2×80 中文实测会超门，详见交付报告 §4。
 M453R_TOKEN_LIMIT_PCT = 15.0
+
+# ==================== ★454批：P1 第一批（计划v3 + 本地算子 + 证据补源）====================
+# 性质：本批**不开注入**（ENABLE_EVIDENCE_INJECTION 仍 False），只补基础设施与证据源。
+#
+# ENABLE_M454_PLAN_V3
+#   默认值：True
+#   语义：给 `_generate_task_plan` 的每一步**加法**补 step_id/op/goal/depends_on/
+#         expected_evidence；op 枚举 retrieve/compare/exclude/quantify。
+#         False ⇒ 逐字回到 453R 的 {name,prompt,fallback}（秒级回退）。
+#   ★op 由问题语义 + 步骤名共同决定，通用型问题 3 步全是 retrieve 是**正确行为**，
+#     不为凑「至少 1 步非 retrieve」给总结步硬贴标签（烛微 455 前置 §C1）。
+ENABLE_M454_PLAN_V3 = True
+#
+# ENABLE_M454_SEED_EVIDENCE / M454_SEED_TOP_K
+#   默认值：True / 6
+#   语义：把 data/eval/human_seed_evidence.json（30 条）与
+#         kal_seed_evidence.json（20 条）经 nucleus/seed_evidence.py 转成
+#         与经验池同形状的候选，在注入入口与检索命中合并，走**同一条**
+#         build_injection 准入/净化/排序链路。
+#   ★为什么不改 ExperienceRetriever.candidates()：它返回 list 且 6 条既有单测
+#     断言 == []（421刀3 教训）；本层是「只加不改」的旁路口。
+#   ★烛微 455 前置 §C3：种子落盘 ≠ 可检索；本开关就是那个「录入图书馆」的动作。
+ENABLE_M454_SEED_EVIDENCE = True
+M454_SEED_TOP_K = 6

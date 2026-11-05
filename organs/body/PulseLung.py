@@ -2363,6 +2363,20 @@ class PulseLung(BasePulseOrgan):
                         prompt,
                         top_k=int(_ei453.param("M453_EVIDENCE_TOP_K", 2)),
                         min_score=_ei453.param("M453_EVIDENCE_MIN_SCORE", 0.65))
+                    # ★454刀6/7：种子候选与检索命中合并，走**同一条**
+                    #   build_injection 准入/净化/排序（烛微 455 前置 §C3）。
+                    #   不改 ExperienceRetriever；开关关闭时整块不进入。
+                    try:
+                        from nucleus import seed_evidence as _se454
+                        if _se454.enabled():
+                            _seed454 = _se454.candidates(
+                                prompt,
+                                limit=int(_ei453.param("M454_SEED_TOP_K", 6)))
+                            if _seed454:
+                                _block453 = list(_block453) + _seed454
+                    except Exception as _m454_se:
+                        silent_exc(_m454_se, where="PulseLung::454 种子合并",
+                                   level="debug")
                     _inj453 = _ei453.build_injection(_block453)
                     # ★★刀1：先拼 fragment，**只有 fragment 非空才创建 Budget**。
                     #   无证据时 budget 保持 None ⇒ 沿用渠道原超时，不进三段式。

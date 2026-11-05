@@ -73,7 +73,10 @@ def classify_source(hit: Any) -> str:
     if not isinstance(hit, dict):
         return "other"
     # 显式类别优先（454 若接入人工种子/KAL，会带 source / source_class）
-    explicit = str(hit.get("source") or hit.get("source_class") or "").strip().lower()
+    # ★454刀7：任务书要求 KAL 卡片「保留 node_id 作为 source」，于是 source
+    #   会变成 "node:xxx" 而不是类别名。source_class 是明确的类别标记，
+    #   必须优先读它；否则 KAL 20 条会被误判成 other 全部挡在准入之外。
+    explicit = str(hit.get("source_class") or hit.get("source") or "").strip().lower()
     if explicit:
         return explicit if explicit in (ADMITTED_SOURCES + EXCLUDED_SOURCES + ("other",)) \
             else "other"

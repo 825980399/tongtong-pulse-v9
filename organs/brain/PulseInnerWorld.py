@@ -14356,6 +14356,9 @@ class PulseInnerWorld(
 
         # 阶段2：逐步执行
         _step_results = []
+        # ★454刀5：旁路记录 plan / step_results 摘要（只加不改，不碰回答路径）
+        import hashlib as _m454_hash
+        _m454_rows = []
         # ★v25.0修复：从原始问题提取核心关键词，注入到步骤检索词中
         # 防止多步骤拆解后语义漂移（如"脉冲架构"→"基础"）
         # ★主线第31批 T2（P2-184）：关键词提取替代定长切片（见 _m31_extract_key_terms）
@@ -14399,8 +14402,39 @@ class PulseInnerWorld(
                 "success": bool(_result and len(_result) > 15),
             })
 
+            # ★454刀5：只存摘要（sha1 前 8 位），绝不落用户原文 / 检索正文。
+            #   op_executed 恒为 retrieve —— 本批只打标不执行算子，如实记录。
+            _m454_rows.append({
+                "idx": len(_m454_rows) + 1,
+                "step_id": str(_step.get("step_id") or f"S{len(_m454_rows) + 1}"),
+                "op": str(_step.get("op") or "retrieve"),
+                "status": "retrieved" if _step_results[-1]["success"] else "degraded",
+                "input_digest": _m454_hash.sha1(
+                    str(_step_prompt).encode("utf-8", "ignore")).hexdigest()[:8],
+                "output_digest": _m454_hash.sha1(
+                    str(_result or "").encode("utf-8", "ignore")).hexdigest()[:8],
+                "evidence_ids": [],
+                "confidence": 0.5 if _step_results[-1]["success"] else 0.2,
+                "source": "local_retrieve",
+                "elapsed_ms": None,
+                "fail_reason": None if _step_results[-1]["success"] else "no_valid_content",
+                "op_planned": str(_step.get("op") or "retrieve"),
+                "op_executed": "retrieve",
+            })
+
             self._log(LogLevel.DEBUG,
                      f"多步骤任务·步骤完成: [{_step_name}] {'成功' if _step_results[-1]['success'] else '降级兜底'}")
+
+        # ★454刀5：把计划与逐步结果交给 trace（落盘 + 环形缓冲共用同一份状态）
+        try:
+            from nucleus import dialogue_process_trace as _m454_tr
+            _m454_tr.set_plan(
+                [{k: s.get(k) for k in ("step_id", "op", "goal",
+                                         "depends_on", "expected_evidence")}
+                 for s in _plan if isinstance(s, dict)],
+                _m454_rows)
+        except Exception as _m454_te:
+            silent_exc(_m454_te, where="PulseInnerWorld::454 set_plan", level="debug")
 
         # 阶段3：汇总验证
         _final = self._synthesize_step_results(_step_results, question)
@@ -14411,7 +14445,7 @@ class PulseInnerWorld(
 
         return _final
 
-    def _generate_task_plan(self, question: str) -> list | None:
+    def _generate_task_plan_base(self, question: str) -> list | None:
         """
         ★v22.0新增：根据问题类型生成执行计划。
 
@@ -14474,6 +14508,63 @@ class PulseInnerWorld(
             {"name": "深入分析", "prompt": f"{_core_str} {_core_str_2} 深层 原理 机制", "fallback": f"{_core_str} 分析"},
             {"name": "总结输出", "prompt": f"{_core_str} 总结 要点 结论", "fallback": ""},
         ]
+
+    # ================= ★454刀1：计划 v3（只生成不执行）=================
+    @staticmethod
+    def _m454_annotate_plan(plan: list | None, question: str) -> list | None:
+        """★454刀1：**加法**扩展 v3 字段，旧 ``name/prompt/fallback`` 一字不动。
+
+        op 枚举 ``retrieve / compare / exclude / quantify``（hypothesize 留 455）。
+        ★op 由**问题语义 + 步骤名**共同决定，不为凑「至少 1 步非 retrieve」硬标：
+          对比类问题的「对比分析」步才是 compare、「结论建议」才是 exclude；
+          计算类的「计算验证」才是 quantify；通用型问题 3 步全是 retrieve（正确行为）。
+        """
+        if not isinstance(plan, list) or not plan:
+            return plan
+        q = str(question or "")
+        has_compare = any(k in q for k in ("对比", "比较", "区别", "差异", "优劣", "哪个好"))
+        has_calc = any(k in q for k in ("计算", "等于", "多少", "总共", "合计", "比例"))
+        has_exclude = any(k in q for k in ("排除", "哪个不是", "剔除", "不符合", "错误的是"))
+        out, prev = [], []
+        for i, s in enumerate(plan, 1):
+            if not isinstance(s, dict):
+                continue
+            sid = f"S{i}"
+            name = str(s.get("name") or "")
+            op = "retrieve"
+            if has_compare and "对比" in name:
+                op = "compare"
+            elif has_compare and ("结论" in name or "建议" in name):
+                op = "exclude"
+            elif has_calc and ("计算" in name or "验证" in name):
+                op = "quantify"
+            elif has_exclude and ("汇总" in name or "结论" in name or "整理" in name):
+                op = "exclude"
+            d = dict(s)
+            d.update({
+                "step_id": sid,
+                "op": op,
+                # ★goal 不含用户原文，只写算子目标（任务书刀5「只存摘要」）
+                "goal": f"{name}：{op} 算子产出可验证的子结论",
+                "depends_on": prev[-1:] if prev else [],
+                "expected_evidence": ("数值/单位" if op == "quantify" else
+                                      "对照维度" if op == "compare" else "候选事实"),
+            })
+            out.append(d)
+            prev.append(sid)
+        return out
+
+    def _generate_task_plan(self, question: str) -> list | None:
+        """454 包装：旧调用点签名不变，返回值只**多** v3 字段。"""
+        _base = self._generate_task_plan_base(question)
+        try:
+            import config as _m454_cfg
+            if not bool(getattr(_m454_cfg, "ENABLE_M454_PLAN_V3", True)):
+                return _base
+        except Exception as _m454_pe:
+            silent_exc(_m454_pe, where="PulseInnerWorld::454 plan_v3 开关",
+                       level="debug")
+        return self._m454_annotate_plan(_base, question)
 
     # ========== ★B-1（2026-09-08 第八批）：真多步推理 ==========
     @staticmethod

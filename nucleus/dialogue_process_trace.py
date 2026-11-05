@@ -38,6 +38,7 @@ from __future__ import annotations
 import datetime
 import json
 import os
+import threading
 import time
 from typing import Any
 
@@ -120,6 +121,49 @@ def _list_of(value: Any, limit: int = _MAX_LIST, item_limit: int = 40) -> list:
         silent_exc(_e, where="dialogue_process_trace::_list_of", level="debug")
         return [_clip(value, item_limit)]
     return [_clip(x, item_limit) for x in _it[:limit]]
+
+
+def _trace_rows(value: Any, limit: int = 12, item_limit: int = 60) -> list:
+    """★454刀5：plan / step_results 是**列表套字典**，不能走 `_list_of`
+    （那个会把整个 dict 截成一个字符串）。这里保留结构，只截字符串值。
+    """
+    if value is None:
+        return []
+    try:
+        _it = list(value)
+    except TypeError as _e:
+        silent_exc(_e, where="dialogue_process_trace::_trace_rows", level="debug")
+        return []
+    _out = []
+    for _r in _it[:limit]:
+        if isinstance(_r, dict):
+            _out.append({str(k): (_clip(v, item_limit) if isinstance(v, str) else v)
+                          for k, v in list(_r.items())[:12]})
+        else:
+            _out.append(_clip(_r, item_limit))
+    return _out
+
+
+# ★454刀5：多步执行器把 plan / step_results 暂存在线程局部，
+#   finish() 与环形缓冲两处 trace 都从同一个口读，避免「只有字段没有内容」。
+_M454_TLS = threading.local()
+_M454_LAST: dict = {"plan": [], "step_results": []}
+
+
+def set_plan(plan: list | None, step_results: list | None) -> None:
+    _st = {"plan": list(plan or []), "step_results": list(step_results or [])}
+    _M454_TLS.state = _st
+    _M454_LAST.update(_st)
+
+
+def get_plan() -> dict:
+    _st = getattr(_M454_TLS, "state", None)
+    return dict(_st or _M454_LAST)
+
+
+def clear_plan() -> None:
+    _M454_TLS.state = None
+    _M454_LAST.update({"plan": [], "step_results": []})
 
 
 def _sweep(now: float) -> None:
@@ -220,6 +264,10 @@ def _sanitize(rec: dict) -> dict:
         "step_count": rec.get("step_count"),
         "evidence_count": rec.get("evidence_count"),
         "is_chitchat": bool(rec.get("is_chitchat") or False),
+        # ★454刀5：显式白名单必须登记这两个字段，否则 finish(plan=…)
+        #   会被静默丢掉（452 批同型坑）。只存摘要，不存用户原文。
+        "plan": _trace_rows(rec.get("plan")),
+        "step_results": _trace_rows(rec.get("step_results")),
         "latency_ms": rec.get("latency_ms"),
         "error": _clip(rec.get("error"), 120) or None,
     }
@@ -234,6 +282,11 @@ def _finish_one(correlation_id: str, stage: str = "finished", **fields) -> dict 
     for _k, _v in (fields or {}).items():
         if _v is not None:
             _rec[str(_k)] = _v
+    # ★454刀5：多步执行器写的 plan/step_results 自动补进本行
+    _m454_state = get_plan()
+    if _m454_state.get("plan") or _m454_state.get("step_results"):
+        _rec.setdefault("plan", _m454_state.get("plan"))
+        _rec.setdefault("step_results", _m454_state.get("step_results"))
     # 端到端耗时：调用方没给就从开记录那一刻算（内层推理耗时只是其中一段）
     if _rec.get("latency_ms") is None and _rec.get("_t0"):
         try:
