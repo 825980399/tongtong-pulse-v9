@@ -7816,7 +7816,7 @@ M452_FAILURE_EXPERIENCE_PATH = "data/patches/failure_experience.jsonl"
 #     或经 data/config_override.json 热重载，下一次请求立即不注入，无需重启。
 #   ★烛微《453批前置风险深挖》用的名字是 `ENABLE_LUNG_EVIDENCE_INJECT`；
 #     读取层同时认这两个别名，主名优先（不新增第二个 config 键）。
-ENABLE_EVIDENCE_INJECTION = False
+ENABLE_EVIDENCE_INJECTION = True  # 星轨 2026-11-05 开注入，验证454种子效果；秒级kill switch可随时关
 #
 # M453_DISABLE_L2_FOR_INJECTION
 #   默认值：True
