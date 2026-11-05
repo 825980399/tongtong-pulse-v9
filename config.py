@@ -7931,7 +7931,7 @@ ENABLE_M455_HYPOTHESIZE_SHADOW = True
 #   语义：假设**进最终答案**的总闸。关掉 ⇒ 完全回到 455 的纯 shadow 行为
 #         （假设只写 trace，答案一个字都不变）—— 这是本批唯一需要的回滚开关。
 #         质量闸见 M456_HYPOTHESIS_* 三档（confidence 分档前缀）。
-ENABLE_M455_HYPOTHESIZE = False  # 紧急止血：456批假设进答案导致主链超时卡死，先关回455纯shadow行为
+ENABLE_M455_HYPOTHESIZE = True  # 458批修复主链卡死+委派看门狗就位后恢复实弹（456批止血态解除）
 #
 # M455_MAX_LLM_OPS
 #   默认值：1
