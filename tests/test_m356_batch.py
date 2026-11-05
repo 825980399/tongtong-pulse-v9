@@ -82,8 +82,8 @@ def test_356_d2_key_same_across_path_spellings():
         "organs/body/PulseLiver.py",
         "organs\\body\\PulseLiver.py",
         "./organs/body/PulseLiver.py",
-        "D:\\xinrenlei\\tongtong-pulse-v9\\organs\\body\\PulseLiver.py",
-        "D:/xinrenlei/tongtong-pulse-v9/organs/body/PulseLiver.py",
+        "/home/user/project/organs/body/PulseLiver.py",
+        "project/organs/body/PulseLiver.py",
     ]
     _keys = {APP.make_dedup_key(v, "_on_pulse", "dead_code") for v in _variants}
     assert len(_keys) == 1, "5 种写法没归一到同一键: %s" % _keys

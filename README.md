@@ -157,9 +157,9 @@ tongtong-pulse-v9/
 | 平台 | 地址 | 状态 |
 |---|---|---|
 | Gitee | https://gitee.com/tongtongkaiyuan/tongtong-pulse-v9 | ✅ 主仓 |
-| AtomGit | https://atomgit.com/yy825980399/tongtong-pulse-v9 | ✅ 镜像 |
-| OpenI | https://openi.pcl.ac.cn/18737489636/tongtong-pulse-v9 | ✅ 镜像 |
-| GitHub | https://github.com/825980399/tongtong-pulse-v9 | ⚠️ SSH连接中 |
+| AtomGit | https://atomgit.com/yy****/tongtong-pulse-v9 | ✅ 镜像 |
+| OpenI | https://openi.pcl.ac.cn/187****9636/tongtong-pulse-v9 | ✅ 镜像 |
+| GitHub | https://github.com/82****/tongtong-pulse-v9 | ⚠️ SSH连接中 |
 
 > 主仓在Gitee，其他三个是镜像，保持同步。
 

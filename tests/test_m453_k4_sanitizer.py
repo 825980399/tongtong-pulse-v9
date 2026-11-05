@@ -34,7 +34,7 @@ def test_2_乱码占比超30pct丢弃():
 def test_3_单处PII打码保留_多处丢弃():
     r = ES.sanitize_evidence("联系我 13812345678 咨询审批桥")
     assert r["ok"] and "13812345678" not in r["text"] and "已脱敏手机号" in r["text"]
-    r2 = ES.sanitize_evidence("电话 13812345678 邮箱 a@b.com")
+    r2 = ES.sanitize_evidence("电话 13812345678 邮箱 test@example.com")
     assert not r2["ok"] and r2["reason"] == "pii_dense"
     r3 = ES.sanitize_evidence("密钥 sk-abcdefghijklmnopqrstuvwxyz")
     assert r3["ok"] and "已脱敏密钥" in r3["text"] and "sk-" not in r3["text"]
