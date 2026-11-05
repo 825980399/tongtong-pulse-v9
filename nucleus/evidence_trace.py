@@ -31,6 +31,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import sys
 import time
 from collections.abc import Callable
@@ -143,6 +144,59 @@ def stable_request_id(query: str) -> str:
     return hashlib.sha1(str(query or "").encode("utf-8", "ignore")).hexdigest()[:16]
 
 
+#: ★453R刀5：经验正文前 100 字常是「回答用户关于…」的问题复述，
+#: 真正的结论在「回答方法 / 结论 / 结果 / 优化建议」等字段里。
+_CONCLUSION_RE = re.compile(
+    r"(?:回答方法|结论|结果|方法|优化建议|处置)\s*[:：]\s*([^，,；;。\n]+)")
+
+
+def inject_text_of(hit: Any) -> str:
+    """★453R刀5：结论优先的注入正文；``text`` 仍保留全文供 trace 抽查。
+
+    四种真实形态（经验池实测）：
+      ① JSON 语义摘要  → 取「优化建议 / 结论 / 结果」的完整值
+      ② 问答记录        → 从「回答方法：」起取到句尾（含置信度，不只取方法名）
+      ③ 普通 summary   → 去掉「用户访客提问：…」的问题复述
+      ④ 其余           → 退回全文（不臆造结论）
+    """
+    summary = str(_get(hit, ("summary", "compressed_summary", "raw_summary"), "") or "")
+    if summary:
+        # ① JSON：semantic 摘要的正文是 JSON 字符串
+        if summary.lstrip().startswith("{"):
+            try:
+                j = json.loads(summary)
+                if isinstance(j, dict):
+                    for k in ("优化建议", "结论", "结果", "建议", "处置"):
+                        if j.get(k):
+                            return str(j[k]).strip()[:_MAX_TEXT]
+            except ValueError as _e:
+                silent_exc(_e, where="evidence_trace::inject_text_of JSON 摘要", level="debug")
+        # ② 问答：从第一个结论标记取到句尾，保留「方法 + 置信度」整段
+        m = _CONCLUSION_RE.search(summary)
+        if m:
+            return summary[m.start():].strip()[:_MAX_TEXT]
+        # ③ 去问题复述
+        m2 = re.search(r"用户访客提问[:：].*?[，,；;]", summary)
+        if m2 and m2.end() < len(summary):
+            return summary[m2.end():].strip()[:_MAX_TEXT]
+        # ④ 普通 summary
+        if "提问" not in summary and "回答用户关于" not in summary:
+            return summary.strip()[:_MAX_TEXT]
+    return _text_of(hit)[:_MAX_TEXT]
+
+
+def _source_marks(hit: Any) -> tuple:
+    """★453R刀6：准入标记只在**留痕/返回项**上加，不删命中（观测完整性）。"""
+    try:
+        from nucleus.evidence_source import ADMITTED_SOURCES, classify_source
+        cls = classify_source(hit)
+        tpl = bool(_get(hit, ("is_template", "template_key"), False))
+        return cls, bool(cls in ADMITTED_SOURCES and not tpl)
+    except Exception as _e:
+        silent_exc(_e, where="evidence_trace::_source_marks", level="debug")
+        return "other", False
+
+
 def _score_of(hit: Any) -> float | None:
     v = _get(hit, _SCORE_KEYS)
     if isinstance(v, bool) or not isinstance(v, (int, float)):
@@ -181,6 +235,10 @@ def build_evidence_block(retriever: Callable[[str, int], list[Any]] | None,
             "is_template": bool(_get(h, ("is_template",), False)),
             "result_reward": _reward_of(h),
             "pollution_risk": str(_get(h, ("pollution_risk",), "") or ""),
+            # ★453R刀5/6：结论正文 + 准入类别（只加不改，453 单测不受影响）
+            "inject_text": inject_text_of(h),
+            "source_class": _source_marks(h)[0],
+            "admitted": _source_marks(h)[1],
             "timestamp": _get(h, ("timestamp", "ts"), None),
         })
     # ★453刀2：按质量权重降序（模板/低 reward 沉底），权重相同再比 score。
@@ -232,6 +290,8 @@ def note_hits(query: str, hits: list[Any], *, top_k: int = 3,
             "pollution_risk": str(_get(h, ("pollution_risk",), "") or ""),
             "activation_count": _get(h, ("activation_count",), None),
             "exp_timestamp": _get(h, ("timestamp", "ts"), None),
+            "source_class": _source_marks(h)[0],
+            "admitted": _source_marks(h)[1],
             "note": "影子 dry-run：只记录，不注入 prompt / 不改回答",
         })
     try:

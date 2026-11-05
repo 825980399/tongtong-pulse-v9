@@ -10,8 +10,8 @@ import config
 from nucleus import evidence_injection as EI
 from nucleus import evidence_trace as ET
 
-_LUNG = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                     "organs", "body", "PulseLung.py")
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_LUNG = os.path.join(ROOT, "organs", "body", "PulseLung.py")
 
 
 def _hits():
@@ -70,19 +70,27 @@ def test_不同问题不会被误合并(tmp_path, monkeypatch):
 
 
 def test_生产影子sink已把request_id透传给note_hits():
+    # ★453R刀2 规格变更：request_id 改从请求级 ContextVar 读（不再挂实例属性）
     with open(_LUNG, encoding="utf-8") as _f:
         src = _f.read()
-    assert "request_id=getattr(self, \"_m453_request_id\", None)" in src
+    assert "request_id=_st453.get(\"request_id\")" in src
+    assert "_ei453st.get_request_state()" in src
 
 
 def test_生产入口确实生成request_id():
+    # ★453R刀2 规格变更：入口改用 fresh_state（内部生成 uuid 并装入 ContextVar）
     with open(_LUNG, encoding="utf-8") as _f:
         src = _f.read()
-    assert "self._m453_request_id = _ei453.new_request_id()" in src
+    assert "_ei453.fresh_state(origin=_m40_origin)" in src
+    with open(os.path.join(ROOT, "nucleus", "evidence_injection.py"),
+             encoding="utf-8") as _f:
+        ei = _f.read()
+    assert "\"request_id\": request_id or new_request_id()" in ei
 
 
 def test_影子探针复用入口命中不重复检索():
     with open(_LUNG, encoding="utf-8") as _f:
         src = _f.read()
-    assert "_m453_cached = getattr(self, \"_m453_hits\", None)" in src
+    # ★453R刀2：命中缓存也从 ContextVar 读
+    assert "_m453_cached = _st453.get(\"hits\")" in src
     assert "lambda _q, _k: _m453_cached" in src

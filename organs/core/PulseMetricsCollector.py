@@ -2711,6 +2711,21 @@ class PulseMetricsCollector(BasePulseOrgan):
                        level="debug")
             snapshot["oa4_shadow"] = None
 
+        # ★453R刀8：重试信号量剩余进 health 采样 —— 泄漏两次后所有重试会
+        #   永久阻塞，没有这个读数就只能等用户报障。contextmanager 保证归还，
+        #   这里只**记录**剩余许可与计数，不改任何返回值。
+        try:
+            from nucleus import evidence_injection as _m453r_ei
+            snapshot["m453_retry"] = {
+                "sem_available": _m453r_ei.retry_sem_available(),
+                "stats": _m453r_ei.stats(),
+            }
+        except Exception as _m453r_he:
+            silent_exc(_m453r_he,
+                       where="PulseMetricsCollector::_build_observability_snapshot m453_retry",
+                       level="debug")
+            snapshot["m453_retry"] = None
+
         # 172刀3：内存压力双口径读数（进程 RSS MB + 系统内存占比）
         # ★401刀1：**一次采集、多块复用** —— `_collect_memory_pressure` 有副作用
         #   （记峰值 / 跑增长告警三闸 / 可能真触发 GC），绝不能为补字段调第二次。

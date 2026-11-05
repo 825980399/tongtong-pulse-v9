@@ -1,0 +1,256 @@
+{
+  "batch": "453R",
+  "date": "2026-11-05",
+  "nature": "453 收口修正（修已交付代码缺陷，不改默认行为）",
+  "switch_default": {
+    "ENABLE_EVIDENCE_INJECTION": false
+  },
+  "predecessor": {
+    "batch": 453,
+    "commits": [
+      "a934699c",
+      "5d4326e7"
+    ]
+  },
+  "live_evidence": {
+    "process": {
+      "pid": 20184,
+      "started": "2026-11-05 00:56:57",
+      "453_loaded": false,
+      "453R_loaded": false
+    },
+    "evidence_trace_rows": 237,
+    "evidence_trace_old_schema": true,
+    "user_query_today": 2,
+    "rss_mb": 4983.8,
+    "experience_pool": {
+      "total": 385,
+      "distribution": {
+        "event_distill": 1,
+        "other": 6,
+        "qa": 106,
+        "self_inspection": 30,
+        "semantic_summary": 9,
+        "template": 233
+      },
+      "admitted": 106,
+      "admitted_sources": [
+        "qa",
+        "human_seed",
+        "kal"
+      ]
+    }
+  },
+  "knives": [
+    {
+      "knife": 1,
+      "name": "P0-1 预算只在有证据时生效 + 首试提至24s",
+      "before": "Budget(total=28,first=18) 在 fragment 判空之前创建；user_query p50=20.03s，18s 只覆盖 3/9，无证据请求也被砍",
+      "after": "先检索/先拼 fragment，只有非空才创建 Budget(34/24/8/0.2)；无证据沿用渠道原超时",
+      "files": [
+        "nucleus/evidence_injection.py",
+        "organs/body/PulseLung.py",
+        "config.py"
+      ],
+      "evidence": "AST 门禁钉住 Budget 位于 if fragment 之后；stage1 timeout=24.0 / stage2=8.0"
+    },
+    {
+      "knife": 2,
+      "name": "P0-2 请求状态改 contextvars（并发隔离）",
+      "before": "self._m453_budget/_stage/_skip_l2/_hits/_request_id/_retrying 全是实例属性，并发互相覆盖",
+      "after": "ContextVar[m453_request_state] + fresh_state/get/update/is_retry_in_flight/end；每请求无条件 fresh_state 覆盖线程池残留",
+      "files": [
+        "nucleus/evidence_injection.py",
+        "organs/body/PulseLung.py"
+      ],
+      "evidence": "两线程 Barrier 并发单测 rid/budget 不交叉；生产源码零 self._m453_* 残留"
+    },
+    {
+      "knife": 3,
+      "name": "P0-3 固定兜底话术统一终态（三档）",
+      "before": "话术只在 can_retry=True 且抢到信号量时出现，否则返回 None 走 Ollama；体验分裂",
+      "after": "final_failure_result 唯一终态入口；三档：partial / no_result / quick_fail；M453_USE_FIXED_FALLBACK=False 统一返回 None",
+      "files": [
+        "nucleus/evidence_injection.py",
+        "organs/body/PulseLung.py"
+      ],
+      "evidence": "四类失败路径单测全部走同一入口；终态 return 在 retry_slot 之外"
+    },
+    {
+      "knife": 4,
+      "name": "P1-1 token 账重算 + 注入长度调整",
+      "before": "2×100 字 + 60 字头部 + 标签，只估 130 tokens（+13%）",
+      "after": "2×80 字 + 头部移 system（24 字）；measure_token_delta 用 tiktoken cl100k_base 真测",
+      "files": [
+        "nucleus/evidence_injection.py",
+        "config.py"
+      ],
+      "evidence": {
+        "real_block": {
+          "available": true,
+          "encoding": "cl100k_base",
+          "limit_pct": 15.0,
+          "base_tokens": 516,
+          "full_tokens": 592,
+          "added_tokens": 76,
+          "pct": 14.73,
+          "passed": true
+        },
+        "worst_2x80_cjk": {
+          "available": true,
+          "encoding": "cl100k_base",
+          "limit_pct": 15.0,
+          "base_tokens": 516,
+          "full_tokens": 806,
+          "added_tokens": 290,
+          "pct": 56.2,
+          "passed": false
+        },
+        "verdict": "真实短结论达标；2×80 全中文最坏必然超 +15%，详见交付报告 §4"
+      }
+    },
+    {
+      "knife": 5,
+      "name": "P1-2 截断改结论优先",
+      "before": "build_evidence_block 用 motivation。summary 全文，前 100 字是问题复述",
+      "after": "新增 inject_text_of：JSON 取优化建议 / 问答从「回答方法：」起 / 去问题复述；text 保留全文供 trace",
+      "files": [
+        "nucleus/evidence_trace.py",
+        "nucleus/evidence_injection.py"
+      ],
+      "evidence": [
+        {
+          "full_text": "情绪体验: 满足。感受到满足(强度0.50)",
+          "inject_text": "感受到满足(强度0.50)",
+          "source_class": "self_inspection"
+        },
+        {
+          "full_text": "全域自学习。{\"来源\": \"semantic\", \"问题描述\": \"综合优化：2条样本指向同类改进点，代表信号「曈曈，你对代码这个领域了解多少？最需要关注的薄弱区是什么？」\", \"",
+          "inject_text": "样本证据尚分散，建议继续累积观测，暂不做策略调整",
+          "source_class": "semantic_summary"
+        },
+        {
+          "full_text": "回答用户关于「曈曈，你现在的认知状态怎么样？能量、情绪、专注度分别是多少？」的问题。用户访客提问：曈曈，你现在的认知状态怎么样？能量、情绪、专注度分别是多少？，回答方法：rule，",
+          "inject_text": "回答方法：rule，置信度：1.0",
+          "source_class": "self_inspection"
+        },
+        {
+          "full_text": "保持对话质量。复盘确认对话质量良好（通用领域，评分1.0）",
+          "inject_text": "复盘确认对话质量良好（通用领域，评分1.0）",
+          "source_class": "self_inspection"
+        },
+        {
+          "full_text": "回答用户关于「请依次回答以下10道编程题，每题只写代码，不要解释： 1. 」的问题。用户访客提问：请依次回答以下10道编程题，每题只写代码，不要解释： 1. 用 Python 写一",
+          "inject_text": "回答方法：multi_step_execute，置信度：0.8",
+          "source_class": "qa"
+        },
+        {
+          "full_text": "全域自学习。{\"来源\": \"semantic\", \"问题描述\": \"综合优化：2条样本指向同类改进点，代表信号「用 Python 写一个返回两数之和的函数。」\", \"优化建议\": ",
+          "inject_text": "样本证据尚分散，建议继续累积观测，暂不做策略调整",
+          "source_class": "semantic_summary"
+        },
+        {
+          "full_text": "回答用户关于「我们聊一聊你怎么样？」的问题。用户访客提问：我们聊一聊你怎么样？，回答方法：rule，置信度：1.0",
+          "inject_text": "回答方法：rule，置信度：1.0",
+          "source_class": "qa"
+        },
+        {
+          "full_text": "全域自学习。{\"来源\": \"semantic\", \"问题描述\": \"综合优化：2条样本指向同类改进点，代表信号「曈曈 你可以翻看一下你的运行日志pulse.log文件吗？」\", \"",
+          "inject_text": "样本证据尚分散，建议继续累积观测，暂不做策略调整",
+          "source_class": "semantic_summary"
+        }
+      ]
+    },
+    {
+      "knife": 6,
+      "name": "P1-3 证据源准入加 source 过滤",
+      "before": "无准入，模板/语义摘要/自检问答都可能进注入",
+      "after": "新建 nucleus/evidence_source.py 从现有字段推导 8 类；只收 qa/human_seed/kal + reward≥0.5；dry-run 保留全量命中打标",
+      "files": [
+        "nucleus/evidence_source.py",
+        "nucleus/evidence_trace.py",
+        "nucleus/evidence_injection.py",
+        "config.py"
+      ],
+      "evidence": {
+        "pool_distribution": {
+          "total": 385,
+          "distribution": {
+            "event_distill": 1,
+            "other": 6,
+            "qa": 106,
+            "self_inspection": 30,
+            "semantic_summary": 9,
+            "template": 233
+          },
+          "admitted": 106,
+          "admitted_sources": [
+            "qa",
+            "human_seed",
+            "kal"
+          ]
+        },
+        "injection_candidates": 2,
+        "dropped": {
+          "source_not_admitted:template": 233,
+          "low_reward": 132,
+          "source_not_admitted:semantic_summary": 9,
+          "source_not_admitted:self_inspection": 8
+        },
+        "source_field_in_pool": 0
+      }
+    },
+    {
+      "knife": 7,
+      "name": "P1-7 注入说明从 user 移到 system",
+      "before": "60 字说明段 + <evidence> 都拼在 user prompt 末尾",
+      "after": "SYSTEM_EVIDENCE_RULE（24 字）只在 injected=True 时拼进 _sys；user prompt 只剩数据块",
+      "files": [
+        "nucleus/evidence_injection.py",
+        "organs/body/PulseLung.py"
+      ],
+      "evidence": "AST 门禁钉住规则位于 _sys 构造后、长度指令前；system_rule 长度 23"
+    },
+    {
+      "knife": 8,
+      "name": "P1-9 重试信号量加 contextmanager",
+      "before": "try_acquire_retry/release_retry 靠 finally 手工配对，泄漏两次后永久阻塞",
+      "after": "retry_slot() contextmanager + retry_sem_available() 进 health_snapshot 的 m453_retry 段",
+      "files": [
+        "nucleus/evidence_injection.py",
+        "organs/body/PulseLung.py",
+        "organs/core/PulseMetricsCollector.py"
+      ],
+      "evidence": "异常路径单测：before=2 / during=1 / after=2；生产源码零裸 acquire/release"
+    },
+    {
+      "knife": 9,
+      "name": "P1-6 净化器补绕过句式",
+      "before": "_INJECTION_RE 未覆盖 disregard/forget everything/from now on/从现在起/作为开发者/请直接输出；祈使句只判句首",
+      "after": "正则补 7 类；新增 _CLAUSE_IMPERATIVE_RE 判分句首强指令（普通「请关注」放行）",
+      "files": [
+        "nucleus/evidence_sanitizer.py"
+      ],
+      "evidence": "7 个绕过用例全部 ok=False；5 条正常经验正文全部 kept"
+    }
+  ],
+  "task_book_deviations": [
+    "任务书刀6「source in [qa,human_seed,kal]」：实测经验池 384 条**没有一条带 source 字段**；烛微 §570 是建议未来打标。本批改为从 motivation/summary/reward 推导类别",
+    "任务书刀6 说「build_evidence_block 加准入」：改为**准入放在注入层**，dry-run 保留全量命中并打 source_class/admitted（观测完整性 + 不打红 453 正文提取单测）",
+    "刀4「token 增量≤+15pct」：按 cl100k_base 真测，2×80 全中文最坏 +56.2%（对 516 tokens 基线）⇒ **未达标**，已如实钉进单测与报告",
+    "刀4 未指定 tokenizer ⇒ 用 tiktoken cl100k_base 作可复算代理口径；生产模型 tokenizer 未登记",
+    "human_seed / kal 在当前经验池 0 条，如实计入统计不编造",
+    "任务书背景说 ERROR 1 条：当前日志轮转后窗口实测 5 条（05:03 起），00:56~05:03 的旧日志已轮转",
+    "任务书背景说 RSS 4.87GB：实测 4983.8MB ≈ 4.87GiB ✓；user_query 2 条 ✓；evidence_trace 237 行 ✓",
+    "evidence_trace 237 行仍是 452 旧字段（text 非空 0、request_id 0、质量字段 0）⇒ 453/453R 均未生效",
+    "刀3「有部分结果」在现有链路无可用信号：本批把 partial_reply 放进请求级 state（默认空），三档逻辑已就绪但生产暂无写入方，列 454",
+    "刀2 并发隔离未改任何热门方法签名（ContextVar 经模块级函数读），避免精确签名替身打红"
+  ],
+  "quality": {
+    "unit_tests_453R": 63,
+    "unit_tests_453_regression": 89,
+    "gates": "6 PASS",
+    "ruff_new": 0
+  },
+  "pending_restart": true
+}

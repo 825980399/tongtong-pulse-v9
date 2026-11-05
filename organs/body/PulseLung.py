@@ -1043,6 +1043,15 @@ class PulseLung(BasePulseOrgan):
             "回答要具体、完整、有内容，给出真实有用的信息，避免过于简短敷衍。"
             "你同时是 PulseNet 框架的数字生命体，拥有约56个仿生器官。"
         )
+        # ★453R刀7：证据约束写进 **system**，user prompt 只留 <evidence> 数据块。
+        #   仅「本请求真的注入了证据」时追加 ⇒ 开关关闭 / 无证据时 _sys 逐字不变。
+        try:
+            from nucleus import evidence_injection as _ei453sys
+            _st453sys = _ei453sys.get_request_state()
+            if _st453sys and _st453sys.get("injected"):
+                _sys = _sys + "\n" + _ei453sys.SYSTEM_EVIDENCE_RULE
+        except Exception as _m453_syse:
+            silent_exc(_m453_syse, where="PulseLung::453R system 证据规则", level="debug")
         # ★主线第28批 T1/P2-171：按问题特征追加输出长度指令（关闭开关时为空串 → system 逐字不变）
         _m28_len = self._m28_system_length_suffix(prompt)
         if _m28_len:
@@ -1055,6 +1064,11 @@ class PulseLung(BasePulseOrgan):
         #   未接线（None→记 unavailable），零行为；实弹刀（推 200）注入真实 retriever。
         _v2_frag = ""
         try:
+            # ★453R刀2：request_id / hits 全部从 **请求级 ContextVar** 读，
+            #   不再挂实例属性（并发 user_query 会互相覆盖，烛微 P0-2）。
+            from nucleus import evidence_injection as _ei453st
+            _st453 = _ei453st.get_request_state() or {}
+
             # ★452刀1（P0-1a）：把同一次只读检索的命中正文/来源/score 落 dry-run 留痕。
             #   ★零行为变化：只多一个回调，不重复检索、不落 prompt、不改缓存。
             def _m452_sink(_q, _hits):
@@ -1062,11 +1076,11 @@ class PulseLung(BasePulseOrgan):
                 # ★453刀3：同一次请求（多渠道 × 多轮）共享一个 request_id；
                 #   未透传时 note_hits 按 query 稳定派生，绝不虚高计数。
                 _m452_note(_q, _hits, top_k=3,
-                           request_id=getattr(self, "_m453_request_id", None))
+                           request_id=_st453.get("request_id"))
 
             # ★453刀6：入口已检索一次并缓存，这里复用，避免 3 渠道 × 2 轮
-            #   重复检索（烛微 §1.5）。开关关闭时 _m453_hits 恒为 None。
-            _m453_cached = getattr(self, "_m453_hits", None)
+            #   重复检索（烛微 §1.5）。开关关闭时 hits 恒为 None。
+            _m453_cached = _st453.get("hits")
             _m453_retr = (lambda _q, _k: _m453_cached) if _m453_cached is not None \
                 else getattr(self, "_shadow_v2_retriever", None)
             _v2_frag = build_shadow_v2_fragment(
@@ -1195,11 +1209,19 @@ class PulseLung(BasePulseOrgan):
             _timeout = self._resolve_channel_timeout(channel, _cfg)
             # ★453刀7：把渠道自身 30s 超时夹到本阶段剩余预算内。
             #   只在外层包计时挡不住 2 轮 × N 渠道（烛微 §三.2）。
-            _m453_b = getattr(self, "_m453_budget", None)
+            # ★453R刀2：budget / stage 从请求级 ContextVar 读（不再读实例属性）。
+            _m453_b = None
+            try:
+                from nucleus import evidence_injection as _ei453cl
+                _st453cl = _ei453cl.get_request_state() or {}
+                _m453_b = _st453cl.get("budget")
+                _m453_stage453 = int(_st453cl.get("stage", 1) or 1)
+            except Exception as _m453_cle:
+                silent_exc(_m453_cle, where="PulseLung::453R clamp 读状态", level="debug")
+                _m453_stage453 = 1
             _m453_clamp = getattr(_m453_b, "channel_timeout", None)
             if callable(_m453_clamp):
-                _cand453 = _m453_clamp(
-                    _timeout, stage=int(getattr(self, "_m453_stage", 1) or 1))
+                _cand453 = _m453_clamp(_timeout, stage=_m453_stage453)
                 # ★鸭子类型结果校验：假件 / MagicMock 返回值不是数值时不采纳，
                 #   避免「测试替身的属性」被当成真预算（零回归护栏）。
                 if isinstance(_cand453, (int, float)) and not isinstance(_cand453, bool):
@@ -2305,34 +2327,23 @@ class PulseLung(BasePulseOrgan):
         # ★主线第40批 T2（P0-254）：解析调用来源标记（显式优先，其次按 caller 映射）
         _m40_origin = self._m40_resolve_origin(caller, origin)
 
-        # ===== ★453刀6/7：证据注入 MVV + 28s 三段式（默认关，零回归）=====
-        # ★状态放在实例上（因为 _call_channel 也要读 budget），但**每个新请求
-        #   入口统一重置** ⇒ 上一次成功返回留下的残留不会串到下一次。
-        #   重试递归时 _m453_retrying=True ⇒ 故意不重置。
-        _m453_retrying = bool(getattr(self, "_m453_retrying", False))
-        if not _m453_retrying:
-            self._m453_budget = None
-            self._m453_stage = 1
-            self._m453_skip_l2 = False
-            self._m453_hits = None
-            self._m453_request_id = None
+        # ===== ★453R：请求级状态（ContextVar）+ 证据注入 MVV（默认关，零回归）=====
+        # ★刀2：状态不再挂 self。ContextVar 在线程 / asyncio task 间隔离；
+        #   每个新请求入口无条件 fresh_state() ⇒ 线程池残留也被覆盖，并发不串味。
+        from nucleus import evidence_injection as _ei453
         _m453_orig_prompt = prompt
-        _m453_budget = getattr(self, "_m453_budget", None)
-        _m453_stage = int(getattr(self, "_m453_stage", 1) or 1)
-        _m453_skip_l2 = bool(getattr(self, "_m453_skip_l2", False))
-        _ei453 = None
+        _m453_retrying = bool(_ei453.is_retry_in_flight())
+        if not _m453_retrying:
+            _m453_st = _ei453.fresh_state(origin=_m40_origin)
+        else:
+            _m453_st = _ei453.get_request_state() or {}
+        _m453_budget = _m453_st.get("budget")
+        _m453_stage = int(_m453_st.get("stage", 1) or 1)
+        _m453_skip_l2 = bool(_m453_st.get("skip_l2", False))
         # ★只对 user_query；internal / evolution / system_internal 一律不注入
         if str(_m40_origin) == "user_query" and not _m453_retrying:
             try:
-                from nucleus import evidence_injection as _ei453
                 if _ei453.injection_enabled():
-                    _m453_budget = _ei453.Budget(
-                        total=_ei453.param("M453_TOTAL_BUDGET_SEC", 28.0),
-                        first=_ei453.param("M453_FIRST_TRY_SEC", 18.0),
-                        retry=_ei453.param("M453_RETRY_SEC", 8.0),
-                        fallback=_ei453.param("M453_FALLBACK_SEC", 0.2))
-                    self._m453_budget = _m453_budget
-                    self._m453_request_id = _ei453.new_request_id()
                     # ★只检索一次：取回原始 hits，后面 build_evidence_block /
                     #   影子探针都复用它（不重复调用 retriever）。
                     _m453_hits = []
@@ -2343,9 +2354,9 @@ class PulseLung(BasePulseOrgan):
                                 str(prompt or ""),
                                 int(_ei453.param("M453_EVIDENCE_TOP_K", 2)) + 1) or []
                         except Exception as _m453_re:
-                            silent_exc(_m453_re, where="PulseLung::453 入口检索",
+                            silent_exc(_m453_re, where="PulseLung::453R 入口检索",
                                        level="debug")
-                    self._m453_hits = _m453_hits
+                    _m453_st["hits"] = _m453_hits
                     from nucleus import evidence_trace as _et453
                     _block453 = _et453.build_evidence_block(
                         (lambda _q, _k: _m453_hits) if _m453_hits else None,
@@ -2353,36 +2364,40 @@ class PulseLung(BasePulseOrgan):
                         top_k=int(_ei453.param("M453_EVIDENCE_TOP_K", 2)),
                         min_score=_ei453.param("M453_EVIDENCE_MIN_SCORE", 0.65))
                     _inj453 = _ei453.build_injection(_block453)
+                    # ★★刀1：先拼 fragment，**只有 fragment 非空才创建 Budget**。
+                    #   无证据时 budget 保持 None ⇒ 沿用渠道原超时，不进三段式。
                     if _inj453["fragment"]:
                         prompt = _ei453.attach(prompt, _inj453["fragment"])
                         _ei453.note("attached")
+                        _m453_budget = _ei453.Budget(**_ei453.budget_config())
+                        _m453_st["budget"] = _m453_budget
+                        _m453_st["injected"] = True
+                        _m453_skip_l2 = _ei453.l2_disabled_for_experiment()
+                        _m453_st["skip_l2"] = _m453_skip_l2
+                        if _m453_skip_l2:
+                            _ei453.note("l2_skipped")
                     else:
                         _ei453.note("no_evidence")
                     _ei453.note("injection_on")
-                    # ★有证据才需要关 L2：无证据时 prompt 没变，命中缓存无害
-                    _m453_skip_l2 = (_ei453.l2_disabled_for_experiment()
-                                     and bool(_inj453["fragment"]))
-                    self._m453_skip_l2 = _m453_skip_l2
-                    if _m453_skip_l2:
-                        _ei453.note("l2_skipped")
                     self._log(LogLevel.INFO,
-                              f"[453刀6] 注入={bool(_inj453['fragment'])} "
+                              f"[453R刀1] 注入={bool(_inj453['fragment'])} "
                               f"证据={len(_inj453['items'])} "
+                              f"预算={_m453_budget.total if _m453_budget else 'none'} "
                               f"过滤={_inj453['dropped']} "
-                              f"request_id={self._m453_request_id}")
+                              f"request_id={_m453_st.get('request_id')}")
                 else:
                     _ei453.note("injection_off")
-                    _m453_budget = None
-                    self._m453_budget = None
             except Exception as _m453_e:
                 # ★异常绝不阻断主回答：原样收回 prompt，回到 452 路径
-                silent_exc(_m453_e, where="PulseLung::453 注入接线", level="warning")
+                silent_exc(_m453_e, where="PulseLung::453R 注入接线", level="warning")
                 prompt = _m453_orig_prompt
                 _m453_budget = None
                 _m453_skip_l2 = False
-                self._m453_budget = None
-                self._m453_skip_l2 = False
-                self._m453_hits = None
+                _ei453.update_request_state(budget=None, injected=False,
+                                            skip_l2=False, hits=None)
+        else:
+            # 非 user_query（或开关关）也要收尾状态，避免污染同 context 的下一次调用
+            _ei453.update_request_state(budget=None, injected=False)
 
         # ★主线第138批 T-138d（D138-4/步骤1-2）：语义缓存 L2 前置查表。
         #   命中且过四闸（置信/时效/幂等/质量）→ **直接返回缓存响应**，跳过渠道调用。
@@ -2619,35 +2634,31 @@ class PulseLung(BasePulseOrgan):
                           f"[渠道] {_name} 调用失败（{_latency:.2f}s），轮询下一个")
 
         self._log(LogLevel.WARNING, f"[渠道] 所有渠道均失败（来源={caller}）")
-        # ★453刀7 第二段：仅注入请求、且剩余 ≥8s 时，剔除证据段重试一次。
-        #   全局信号量=2 + 每请求标记 _m453_retrying ⇒ 不会递归放大。
-        if (_m453_budget is not None and _ei453 is not None
-                and not _m453_retrying and _m453_budget.can_retry()
-                and _ei453.try_acquire_retry()):
-            try:
-                self._m453_retrying = True
-                self._m453_stage = 2
-                self._m453_budget = _m453_budget
-                _m453_r2 = self._call_via_channels(
-                    _ei453.detach(_m453_orig_prompt), model, enable_thinking,
-                    caller=caller, origin=origin,
-                    prompt_version=prompt_version)
-                if _m453_r2:
-                    return _m453_r2
-                # 第三段：固定兜底话术（不编造内容），≤0.2s
-                _ei453.note("fallback")
-                if _ei453.fixed_fallback_enabled():
-                    return _ei453.local_fallback()
-            except Exception as _m453_r2e:
-                silent_exc(_m453_r2e, where="PulseLung::453 剔除证据重试",
-                           level="warning")
-            finally:
-                self._m453_retrying = False
-                self._m453_stage = 1
-                self._m453_budget = None
-                self._m453_skip_l2 = False
-                self._m453_hits = None
-                _ei453.release_retry()
+        # ★453R刀3：两段都失败 ⇒ **统一终态**。不再把兜底话术绑在
+        #   「can_retry=True 且抢到信号量」的分支里（那样同类失败会随机换路径）。
+        if _m453_budget is not None and not _m453_retrying:
+            _m453_partial = str(_m453_st.get("partial_reply") or "")
+            if _m453_budget.can_retry():
+                # ★刀8：contextmanager 保证异常路径也归还信号量
+                with _ei453.retry_slot() as _m453_got:
+                    if _m453_got:
+                        try:
+                            _ei453.update_request_state(retrying=True, stage=2)
+                            _m453_r2 = self._call_via_channels(
+                                _ei453.detach(_m453_orig_prompt), model, enable_thinking,
+                                caller=caller, origin=origin,
+                                prompt_version=prompt_version)
+                            if _m453_r2:
+                                return _m453_r2
+                        except Exception as _m453_r2e:
+                            silent_exc(_m453_r2e, where="PulseLung::453R 剔除证据重试",
+                                       level="warning")
+                        finally:
+                            _ei453.update_request_state(retrying=False, stage=1)
+            _ei453.note("fallback")
+            _m453_final = _ei453.final_failure_result(_m453_partial)
+            _ei453.end_request_state()
+            return _m453_final
         return None
 
     def _observe_remote_call(func):

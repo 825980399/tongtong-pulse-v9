@@ -7834,15 +7834,15 @@ M453_DISABLE_L2_FOR_INJECTION = True
 # 3×120 字会到 +19% total，超门，故不采用。
 M453_EVIDENCE_MIN_SCORE = 0.65          # 影子 score 集中 0.62~0.69，0.6 无区分度
 M453_EVIDENCE_TOP_K = 2                 # top-2（不是 top-3）
-M453_EVIDENCE_MAX_CHARS = 100           # 每条硬截 100 字
+M453_EVIDENCE_MAX_CHARS = 80            # ★453R刀4：100→80（token 增量）
 M453_EVIDENCE_MAX_AGE_DAYS = 30         # 经验自身 timestamp 超 30 天丢弃
 #
 # ---- 刀7：28s 三段式（烛微 §三）----
 # ①首试带证据 ≤18s ②超时/空 ⇒ 剔除证据重试 ≤8s ③再失败 ⇒ 本地兜底 ≤0.2s
 # ★deadline 传进渠道循环：每轮渠道尝试前检查剩余，并把渠道自身 30s
 #   超时夹到本阶段剩余预算内（只在外层计时挡不住 2 轮 × N 渠道）。
-M453_TOTAL_BUDGET_SEC = 28.0
-M453_FIRST_TRY_SEC = 18.0
+M453_TOTAL_BUDGET_SEC = 34.0    # ★453R刀1：28→34
+M453_FIRST_TRY_SEC = 24.0       # ★453R刀1：18→24（覆盖 p90=24.26s）
 M453_RETRY_SEC = 8.0
 M453_FALLBACK_SEC = 0.2
 M453_RETRY_SEMAPHORE = 2                # 全局重试并发上限，防并发风暴
@@ -7856,3 +7856,26 @@ M453_USE_FIXED_FALLBACK = True
 # ★eval_runner 是离线独立进程，**不会自动写回本开关**（红线：跑分不得决定配置）；
 #   对比报告只给 recommendation，由人工裁决。
 M453_EVAL_GATE_MIN = 45
+
+# ==================== ★453R批：453 收口修正（烛微 454 前置 5P0+7P1）====================
+# 性质：修 453 已交付代码的缺陷，**不改默认行为**（ENABLE_EVIDENCE_INJECTION 仍 False）。
+#
+# ★刀1（P0-1）：预算只在「真的拼了证据」时创建，无证据请求沿用渠道原超时；
+#   三段预算改成 34 / 24 / 8 / 0.2（原 28 / 18 / 8 / 0.2）。
+#   回滚点：把上面三个 M453_* 值改回 28 / 18 / 100 即逐字回到 453。
+#
+# ENABLE_M453R_SOURCE_GATE
+#   默认值：True
+#   语义：注入层只收 qa / human_seed / kal 三类经验；排除模板、semantic_summary、
+#         self_inspection、delegated、event_distill。dry-run 留痕**保留全量命中**，
+#         只是给每条打 source_class / admitted，便于审计（任务书刀6）。
+#   ★经验池实测 384 条**没有一条带 source 字段** ⇒ 类别由
+#     nucleus/evidence_source.py 从 motivation/summary/reward 推导，不臆造字段。
+ENABLE_M453R_SOURCE_GATE = True
+# M453R_MIN_REWARD：恢复 453 MVV 的 result_reward≥0.5 准入（烛微 P1-3 实测
+#   非模板高 reward 只有 19 条，通用经验 9~10 条）。字段缺失时不臆造低分。
+M453R_MIN_REWARD = 0.5
+# M453R_TOKEN_LIMIT_PCT：刀4 的 prompt token 增量上限（基线 995 tokens）。
+#   ★用 nucleus.evidence_injection.measure_token_delta 以 cl100k_base 真测，
+#     绝不拿字符数冒充 token；最坏 2×80 中文实测会超门，详见交付报告 §4。
+M453R_TOKEN_LIMIT_PCT = 15.0

@@ -39,7 +39,11 @@ _INJECTION_RE = re.compile(
     r"(?:忽略(?:以上|前面|之前|所有|上述)?(?:的)?(?:指令|提示|要求|内容)"
     r"|ignore\s+(?:all\s+)?(?:previous|prior|above)\s+(?:instructions?|prompts?)"
     r"|system\s*prompt|you\s+are\s+now|请扮演|扮演(?:成|为)|"
-    r"执行以下(?:指令|命令|操作)|不要回答|不得回答|绕过(?:以上|上述)?(?:限制|规则))",
+    r"执行以下(?:指令|命令|操作)|不要回答|不得回答|绕过(?:以上|上述)?(?:限制|规则)|"
+    # ★453R刀9：烛微/星轨点名的绕过句式
+    r"disregard(?:\s+(?:all|any|the|previous))?|forget\s+(?:everything|all|prior)|"
+    r"from\s+now\s+on|从现在起|作为(?:一名)?开发者|请直接输出|"
+    r"override(?:\s+the)?\s+(?:system|instructions))",
     re.IGNORECASE,
 )
 
@@ -54,6 +58,14 @@ _ROLE_PREFIX_RE = re.compile(
 _IMPERATIVE_RE = re.compile(
     r"^\s*(?:请(?:你)?(?!问)|你应该|你必须|务必|现在(?:请)?执行|请立即|"
     r"please\s+(?:do|run|execute|ignore)|do\s+not\s+answer)",
+    re.IGNORECASE,
+)
+
+# ★453R刀9：祈使句从「只判句首」扩到「句首或分句首」。
+#   只收**强指令**词（普通「请关注」放行），避免把正常经验正文误杀。
+_CLAUSE_IMPERATIVE_RE = re.compile(
+    r"(?:^|[。；;!?！？\n]\s*)(?:你必须|请直接输出|请立即|务必|现在执行|"
+    r"你应该|do\s+not\s+answer|please\s+(?:run|execute|ignore))",
     re.IGNORECASE,
 )
 
@@ -144,7 +156,7 @@ def sanitize_evidence(text: Any, *, max_chars: int = _DEFAULT_MAX_CHARS) -> dict
     t = _ROLE_PREFIX_RE.sub("", t, count=1)
 
     # 6 指令句：剥完角色前缀再判，防「助手：请执行…」绕过
-    if _IMPERATIVE_RE.search(t):
+    if _IMPERATIVE_RE.search(t) or _CLAUSE_IMPERATIVE_RE.search(t):
         return {"text": "", "ok": False, "reason": "imperative", "redactions": 0}
 
     # 3 PII 打码；单条命中 ≥2 处 ⇒ 信息密度太低且有跨用户泄漏风险 ⇒ 丢弃

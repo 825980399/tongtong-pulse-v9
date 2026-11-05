@@ -19,49 +19,50 @@ def _src():
 
 def test_预算默认三段数值():
     b = EI.Budget(now=1000.0)
-    assert b.total == 28.0 and b.first == 18.0 and b.retry == 8.0
+    # ★453R刀1 规格变更：28/18 → 34/24（覆盖 user_query p90=24.26s）
+    assert b.total == 34.0 and b.first == 24.0 and b.retry == 8.0
     assert b.fallback == 0.2
-    assert b.deadline == 1028.0 and b.stage1_deadline == 1018.0
+    assert b.deadline == 1034.0 and b.stage1_deadline == 1024.0
 
 
 def test_首试渠道超时被夹到18s():
     b = EI.Budget(now=1000.0)
-    assert b.channel_timeout(30.0, now=1000.0, stage=1) == 18.0
+    assert b.channel_timeout(30.0, now=1000.0, stage=1) == 24.0
     assert b.channel_timeout(5.0, now=1000.0, stage=1) == 5.0
 
 
 def test_重试段被夹到8s而非吃掉剩余27s():
     b = EI.Budget(now=1000.0)
     assert b.channel_timeout(30.0, now=1001.0, stage=2) == 8.0
-    assert b.channel_timeout(30.0, now=1025.0, stage=2) == 3.0
+    assert b.channel_timeout(30.0, now=1025.0, stage=2) == 8.0
 
 
 def test_should_try在阶段deadline后为False():
     b = EI.Budget(now=1000.0)
     assert b.should_try(now=1000.0, stage=1) is True
-    assert b.should_try(now=1017.8, stage=1) is False
-    assert b.should_try(now=1027.8, stage=2) is False
+    assert b.should_try(now=1023.8, stage=1) is False
+    assert b.should_try(now=1033.8, stage=2) is False
 
 
 def test_can_retry剩余不足8s不允许():
     b = EI.Budget(now=1000.0)
-    assert b.can_retry(now=1018.0) is True
-    assert b.can_retry(now=1021.0) is False
-    assert b.exhausted(now=1028.0) is True
+    assert b.can_retry(now=1024.0) is True
+    assert b.can_retry(now=1027.0) is False
+    assert b.exhausted(now=1034.0) is True
 
 
 def test_三段式端到端时间线不超28s():
     b = EI.Budget(now=1000.0)
     # ① 首试用满 18s 超时
     t1 = b.channel_timeout(30.0, now=1000.0, stage=1)
-    assert t1 == 18.0
+    assert t1 == 24.0
     # ② 还有 10s ⇒ 允许剔除证据重试
-    assert b.can_retry(now=1018.0) is True
-    t2 = b.channel_timeout(30.0, now=1018.0, stage=2)
+    assert b.can_retry(now=1024.0) is True
+    t2 = b.channel_timeout(30.0, now=1024.0, stage=2)
     assert t2 == 8.0
-    # ③ 总耗时 18+8=26s ≤ 28s
+    # ③ 总耗时 24+8=32s ≤ 34s
     assert 1000.0 + t1 + t2 <= b.deadline
-    assert b.remaining(now=1026.0) == 2.0
+    assert b.remaining(now=1032.0) == 2.0
 
 
 def test_全局重试信号量上限2():
@@ -77,15 +78,21 @@ def test_全局重试信号量上限2():
 
 
 def test_本地兜底话术固定不编造():
-    assert EI.local_fallback() == "我暂时想不起来，稍后再试"
+    # ★453R刀3 规格变更：单话术 → 三档（部分结果 / 无结果 / 快速失败）
+    assert "补充一个具体场景" in EI.local_fallback()
+    assert EI.local_fallback("quick_fail") == "稍后再试"
+    assert "能确定的说一下" in EI.local_fallback("partial", "审批桥三闸有读数")
+    assert EI.final_failure_result() == EI.local_fallback("no_result")
     assert EI.fixed_fallback_enabled() is True
     assert config.M453_USE_FIXED_FALLBACK is True
 
 
 def test_每请求最多一次重试的标记():
     src = _src()
-    assert "self._m453_retrying = True" in src
-    assert "and not _m453_retrying and _m453_budget.can_retry()" in src
+    # ★453R刀2/3：重试标记进 ContextVar，终态统一在重试块之后
+    assert "_ei453.is_retry_in_flight()" in src
+    assert "update_request_state(retrying=True, stage=2)" in src
+    assert "_ei453.final_failure_result(_m453_partial)" in src
 
 
 def test_deadline确实传进两层循环():
@@ -113,9 +120,11 @@ def test_鸭子类型守卫防测试替身误伤():
 
 def test_剔除证据重试与第三段接线齐全():
     src = _src()
-    for token in ("_ei453.try_acquire_retry()", "_ei453.detach(_m453_orig_prompt)",
-                  "_ei453.fixed_fallback_enabled()", "_ei453.local_fallback()",
-                  "_ei453.release_retry()"):
+    # ★453R刀8：contextmanager 包 acquire/release，异常路径也归还
+    for token in ("with _ei453.retry_slot() as _m453_got",
+                  "_ei453.detach(_m453_orig_prompt)",
+                  "_ei453.final_failure_result(_m453_partial)",
+                  "_ei453.end_request_state()"):
         assert token in src, token
 
 
