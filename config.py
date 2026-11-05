@@ -7903,3 +7903,58 @@ ENABLE_M454_PLAN_V3 = True
 #   ★烛微 455 前置 §C3：种子落盘 ≠ 可检索；本开关就是那个「录入图书馆」的动作。
 ENABLE_M454_SEED_EVIDENCE = True
 M454_SEED_TOP_K = 6
+
+# ==================== ★455批：hypotheses shadow + 种子分数修正 ====================
+# [M455-CFG]
+# 性质：本批**纯 shadow** —— 假设只生成、只落 trace，不拼进最终答案；
+#       种子下限修正让 454 的人工种子第一次真正进得了注入候选（454 实测全被 0.65 挡掉）。
+#
+# M454_SEED_MIN_SCORE
+#   默认值：0.55
+#   语义：``seed_override=True`` 的候选（= data/eval 下 50 条人工种子/KAL）走这个
+#         专属下限；经验池检索命中仍按 M453_EVIDENCE_MIN_SCORE=0.65 卡。
+#   ★为什么要单独一档：seed_evidence._match_score 的基础分是 0.50
+#     （0.50 + 0.30×序列相似度 + 0.20×汉字交集），实测查询命中落在 0.50~0.69，
+#     **结构上到不了 0.65**。读取点：nucleus/evidence_injection.py::seed_min_score()
+#     （唯一实现，``build_injection`` 与 ``seed_evidence.candidate_stats`` 共用）。
+M454_SEED_MIN_SCORE = 0.55
+#
+# ENABLE_M455_HYPOTHESIZE_SHADOW
+#   默认值：True
+#   语义：开启 hypothesize 影子模式 —— 计划里可有 1 个 op=hypothesize 步骤，
+#         结果只写 dialogue_process_trace 的 step_results，**不进答案合成**。
+#         False ⇒ 计划不追加该步、执行器也不调假设（秒级回退）。
+ENABLE_M455_HYPOTHESIZE_SHADOW = True
+#
+# ENABLE_M455_HYPOTHESIZE
+#   默认值：False
+#   语义：假设**进答案**的开关。★本批未实现该路径（任务书要求纯 shadow），
+#         置 True 只会在日志里留一条 WARNING 提示，不改变任何答案。
+#         进答案的实现留待 456 批（需先有 shadow 实盘的解析成功率与合理率）。
+ENABLE_M455_HYPOTHESIZE = False
+#
+# M455_MAX_LLM_OPS
+#   默认值：1
+#   语义：**请求级** LLM 算子券张数。读取点 nucleus/evidence_injection.py::
+#         reserve_llm_op()；计数挂 ContextVar（线程/task 隔离），
+#         重试不调 fresh_state ⇒ 计数不清零（任务书刀4）。
+M455_MAX_LLM_OPS = 1
+#
+# M455_TOTAL_BUDGET_SEC / M455_ANSWER_RESERVE_SEC / M455_MIN_START_SEC
+#   默认值：34.0 / 10.0 / 12.0
+#   语义：请求总预算（从推理上下文创建起算）/ 给最终回答预留的时间 /
+#         剩余不足该值就**不启动**假设。hypothesize 的实际超时 =
+#         min(M455_HYPOTHESIZE_TIMEOUT_SEC, 剩余 - M455_ANSWER_RESERVE_SEC)。
+M455_TOTAL_BUDGET_SEC = 34.0
+M455_ANSWER_RESERVE_SEC = 10.0
+M455_MIN_START_SEC = 12.0
+#
+# M455_HYPOTHESIZE_TIMEOUT_SEC / M455_HYPOTHESIZE_MAX_TOKENS / M455_HYPOTHESIZE_TEMPERATURE
+#   默认值：8.0 / 320 / 0.4
+#   语义：单次假设的 HTTP 超时 / 输出预算 / 温度（任务书刀2 固定值，此处配置化）。
+#   ★max_tokens=320 对**推理模型**可能被 reasoning_content 吃光（86/87 批教训）：
+#     解析为空时 hypothesize 会返回 parse_error 并在 reason 里带
+#     finish_reason / completion_tokens / reasoning 字数，便于 456 批据实调参。
+M455_HYPOTHESIZE_TIMEOUT_SEC = 8.0
+M455_HYPOTHESIZE_MAX_TOKENS = 320
+M455_HYPOTHESIZE_TEMPERATURE = 0.4

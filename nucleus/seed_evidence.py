@@ -85,6 +85,10 @@ def _norm(row: dict, fallback_source: str) -> dict:
         "dim": row.get("dim"),
         "domain": row.get("domain"),
         "node_id": row.get("node_id"),
+        # ★455 刀1：种子是人工精选，注入层给它单独的准入下限（0.55，见
+        #   evidence_injection.score_floor）。标在**归一化**这一处，
+        #   保证 candidates() / candidate_stats() / PulseLung 三条路都带得上。
+        "seed_override": True,
     }
 
 
@@ -154,7 +158,7 @@ def candidate_stats(query: str = "", *, min_score: float = 0.65,
                        （会额外过去重 / 过期 / 净化 / top_k）。
     """
     try:
-        from nucleus.evidence_injection import build_injection
+        from nucleus.evidence_injection import build_injection, score_floor, seed_min_score
         from nucleus.evidence_source import source_admitted
     except Exception as _e:
         silent_exc(_e, where="seed_evidence::candidate_stats import", level="debug")
@@ -165,8 +169,12 @@ def candidate_stats(query: str = "", *, min_score: float = 0.65,
     else:
         all_rows = [dict(r, score=max(0.70, float(min_score)))
                    for r in load_rows()]
+    # ★455 刀1：与线上**同一条判据**（score_floor 认 seed_override）——
+    #   否则验收用 0.65 卡、线上用 0.55 放，两边永远对不上。
+    _seed_min = seed_min_score()
     admitted = [r for r in all_rows
-                if float(r["score"]) >= float(min_score) and source_admitted(r)]
+                if float(r["score"]) >= score_floor(r, float(min_score), _seed_min)
+                and source_admitted(r)]
     inj = build_injection(admitted, now=time.time(), min_score=float(min_score),
                           top_k=max(1, len(admitted)))
     by_source: dict[str, int] = {}
@@ -178,6 +186,7 @@ def candidate_stats(query: str = "", *, min_score: float = 0.65,
             "total_rows": len(all_rows), "raw_admitted": len(admitted),
             "injectable": len(inj["items"]), "by_source": by_source,
             "dropped": inj["dropped"], "min_score": min_score,
+            "seed_min_score": _seed_min,
             "query": str(query or "")[:80]}
 
 

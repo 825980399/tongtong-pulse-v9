@@ -2373,6 +2373,11 @@ class PulseLung(BasePulseOrgan):
                                 prompt,
                                 limit=int(_ei453.param("M454_SEED_TOP_K", 6)))
                             if _seed454:
+                                # ★455 刀1：给每条种子打 seed_override 标记 ——
+                                #   注入层据此走 0.55 的专属下限（人工精选不按 0.65 卡）。
+                                for _s454 in _seed454:
+                                    if isinstance(_s454, dict):
+                                        _s454["seed_override"] = True
                                 _block453 = list(_block453) + _seed454
                     except Exception as _m454_se:
                         silent_exc(_m454_se, where="PulseLung::454 种子合并",

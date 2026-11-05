@@ -575,6 +575,14 @@ class PulseInnerWorld(
         _emotion_modulation = self._get_emotion_reasoning_modulation()
         # ★v18.0修复：补充旧代码删除后缺失的变量初始化
         _reasoning_start_time = time.time()
+        # ★455 刀5：登记本请求的 deadline（epoch 秒）。假设算子只认这个，
+        #   不认肺的 Budget —— v2 在肺之前执行，那时 453R 的 state 还没建（烛微 H1）。
+        try:
+            from nucleus.reasoning import hypothesize as _m455_hyp
+            _m455_hyp.begin_request(_reasoning_start_time)
+        except Exception as _m455_de:
+            silent_exc(_m455_de,
+                       where="PulseInnerWorld::_ir_build_context 455 deadline", level="debug")
         _meta_state = self._capture_meta_state()
         # ★v26.0新增：推理整体超时保护（45秒），避免复杂问题永久阻塞
         _REASONING_TIMEOUT = 45.0
@@ -14564,7 +14572,189 @@ class PulseInnerWorld(
         except Exception as _m454_pe:
             silent_exc(_m454_pe, where="PulseInnerWorld::454 plan_v3 开关",
                        level="debug")
-        return self._m454_annotate_plan(_base, question)
+        _m454_plan = self._m454_annotate_plan(_base, question)
+        # ★455 刀6：假设类问题在计划末尾追加**至多 1 个** op=hypothesize 步骤。
+        try:
+            return self._m455_append_hypothesize_step(_m454_plan, question)
+        except Exception as _m455_pe:
+            silent_exc(_m455_pe, where="PulseInnerWorld::455 计划追加假设步骤",
+                       level="debug")
+            return _m454_plan
+
+    # ================= ★455 刀5/刀6：hypothesize shadow（只生成不进答案）=================
+    #: 刀5/刀6 的触发关键词。★"可能/推测"容易误伤事实题 ⇒ 一律过 _M455_FACTUAL_RE。
+    _M455_HYPOTHESIZE_KEYWORDS = ("假设", "如果", "假如", "会不会", "可能",
+                                  "推测", "推演", "会怎样", "什么情况下")
+    #: 事实型问题**不做假设**（任务书刀6：是什么/多少/哪一年不触发）。
+    _M455_FACTUAL_RE = re.compile(
+        r"(是什么|是啥|多少|哪一年|哪年|几点|多大|多久|谁|什么意思|的定义)")
+
+    @staticmethod
+    def _m455_hypothesize_shadow_on() -> bool:
+        """刀5 灰度：shadow 开关（默认 True，只生成不进答案）。关闭 ⇒ 整块不进入。"""
+        try:
+            import config as _m455_cfg
+            return bool(getattr(_m455_cfg, "ENABLE_M455_HYPOTHESIZE_SHADOW", True))
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::_m455_hypothesize_shadow_on",
+                       level="debug")
+            return False
+
+    @staticmethod
+    def _m455_hypothesize_in_answer_on() -> bool:
+        """刀5 灰度：进答案开关（默认 False）。★本批**未实现**进答案路径。"""
+        try:
+            import config as _m455_cfg
+            return bool(getattr(_m455_cfg, "ENABLE_M455_HYPOTHESIZE", False))
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::_m455_hypothesize_in_answer_on",
+                       level="debug")
+            return False
+
+    @classmethod
+    def _m455_is_hypothesis_question(cls, question: str) -> bool:
+        """刀6 触发判据：含假设类关键词 **且** 不是事实型问题。
+
+        示例:
+            _m455_is_hypothesis_question("如果当初不采用微服务架博会怎样")  -> True
+            _m455_is_hypothesis_question("深度学习是什么")                -> False
+        """
+        _q = str(question or "")
+        if not _q:
+            return False
+        if cls._M455_FACTUAL_RE.search(_q):
+            return False
+        return any(_k in _q for _k in cls._M455_HYPOTHESIZE_KEYWORDS)
+
+    def _m455_hypothesize_step(self, question: str,
+                               prev_ids: list | None = None) -> dict:
+        """构造一个 op=hypothesize 的计划步骤（depends_on 指向提供证据的前序步骤）。"""
+        _core = self._m31_extract_key_terms(question, limit=2)
+        _prev = [str(x) for x in list(prev_ids or []) if str(x)]
+        return {
+            "name": "假设推演",
+            "prompt": ((" ".join(_core) + " 假设 前提 推演").strip()
+                       or "假设 前提 推演"),
+            "fallback": "",
+            "step_id": f"S{len(_prev) + 1}",
+            "op": "hypothesize",
+            "goal": "假设推演：产出带前提与验证方式的可证伪假设（本批只入 trace）",
+            "depends_on": _prev[-1:],
+            "expected_evidence": "前序步骤结论（无证据则不调用 LLM）",
+        }
+
+    def _m455_append_hypothesize_step(self, plan: list | None, question: str) -> list | None:
+        """刀6：在计划末尾追加**至多 1 个** op=hypothesize 步骤；不满足条件原样返回。"""
+        if not isinstance(plan, list) or not plan:
+            return plan
+        if not self._m455_hypothesize_shadow_on():
+            return plan
+        if not self._m455_is_hypothesis_question(question):
+            return plan
+        if any(isinstance(s, dict) and str(s.get("op") or "") == "hypothesize"
+               for s in plan):
+            return plan
+        _prev_ids = [str(s.get("step_id")) for s in plan
+                     if isinstance(s, dict) and s.get("step_id")]
+        _step = self._m455_hypothesize_step(question, _prev_ids)
+        _step["step_id"] = f"S{len(plan) + 1}"
+        return list(plan) + [_step]
+
+    def _m455_flush_trace(self, plan: list | None, rows: list | None) -> None:
+        """把 plan / step_results 交给 ``dialogue_process_trace``（454 刀5 的同一入口）。
+
+        ★为什么本批必须补这一步：``ENABLE_TRUE_MULTI_STEP=True`` ⇒ 生产走 v2，
+          而 454 的 ``set_plan`` 只写在 v1 路径里，**v2 从来没落过 plan/step_results**。
+        """
+        try:
+            from nucleus import dialogue_process_trace as _m455_tr
+            _m455_tr.set_plan(
+                [{k: s.get(k) for k in ("step_id", "op", "goal",
+                                        "depends_on", "expected_evidence")}
+                 for s in list(plan or []) if isinstance(s, dict)],
+                list(rows or []))
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::455 flush_trace", level="debug")
+
+    def _m455_run_hypothesize_shadow(self, question: str, step: dict,
+                                     prev_results: list | None) -> dict | None:
+        """刀5：跑一次假设（shadow）并返回 trace 行。**绝不**把结果交给答案合成。
+
+        证据来源 = 前序步骤的**成功**结论（每条截 200 字，最多 4 条）；
+        没有证据时 ``hypothesize`` 内部直接 ``insufficient_evidence``，不花 LLM。
+        """
+        _t0 = time.time()
+        if self._m455_hypothesize_in_answer_on():
+            self._log(LogLevel.WARNING,
+                      "[455刀5] ENABLE_M455_HYPOTHESIZE=True 但本批只实现 shadow，"
+                      "假设仍不进答案（进答案路径留待 456）")
+        _ev: list[dict] = []
+        for _r in list(prev_results or []):
+            if not isinstance(_r, dict) or not _r.get("success"):
+                continue
+            _txt = str(_r.get("result") or "").strip()
+            if not _txt:
+                continue
+            _ev.append({"id": f"E{len(_ev) + 1}", "text": _txt[:200],
+                        "source": str(_r.get("source") or "")[:40]})
+            if len(_ev) >= 4:
+                break
+        _row = {
+            "idx": 0,
+            "step_id": str(step.get("step_id") or ""),
+            "op": "hypothesize",
+            "status": "not_run",
+            "hypothesis_count": 0,
+            "avg_confidence": None,
+            "elapsed_ms": None,
+            "source": "llm_hypothesize",
+            "fail_reason": "",
+        }
+        try:
+            from nucleus.reasoning import hypothesize as _m455_hyp
+            _res = _m455_hyp.hypothesize(
+                question, _ev,
+                deadline=_m455_hyp.request_deadline(),
+                origin="user_query",
+                max_hypotheses=2,
+                endpoint_resolver=self._m31_branch_endpoint,
+            )
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::_m455_run_hypothesize_shadow",
+                       level="warning")
+            _row["status"] = "error"
+            _row["fail_reason"] = f"{type(_e).__name__}: {_e}"[:80]
+            _row["elapsed_ms"] = round((time.time() - _t0) * 1000, 1)
+            return _row
+        _row["status"] = str(_res.get("status") or "")
+        _row["hypothesis_count"] = int(_res.get("hypothesis_count") or 0)
+        _row["avg_confidence"] = _res.get("avg_confidence")
+        _row["elapsed_ms"] = _res.get("elapsed_ms")
+        _row["fail_reason"] = str(_res.get("reason") or "")[:60]
+        self._log(LogLevel.INFO,
+                  f"[455刀5] 假设影子: status={_row['status']} "
+                  f"n={_row['hypothesis_count']} avg={_row['avg_confidence']} "
+                  f"耗时={_row['elapsed_ms']}ms 证据={len(_ev)} "
+                  f"原因={_row['fail_reason'] or '-'}")
+        return _row
+
+    def _m455_shadow_only(self, question: str) -> None:
+        """刀5：问题进不了 v2 主流程时，单独跑一次假设影子（答案路径零变化）。
+
+        ★实测（T0）：准入只认疑问/分析类关键词，而「如果…会怎样」一个都不含；
+          ``ENABLE_MULTI_STEP_OPERATIONAL_ADMISSION=False`` ⇒ 这类问题根本到不了
+          v2 主流程。若为了跑假设而放宽准入，就会**改变答案路径**（v2 会自己合成答案），
+          与「纯 shadow、对线上回答零影响」冲突 ⇒ 单独出口，跑完仍 ``return None``。
+        """
+        if not self._m455_hypothesize_shadow_on():
+            return
+        if not self._m455_is_hypothesis_question(question):
+            return
+        _step = self._m455_hypothesize_step(question, [])
+        _row = self._m455_run_hypothesize_shadow(question, _step, [])
+        if _row:
+            _row["idx"] = 1
+        self._m455_flush_trace([_step], [_row] if _row else [])
 
     # ========== ★B-1（2026-09-08 第八批）：真多步推理 ==========
     @staticmethod
@@ -14758,6 +14948,8 @@ class PulseInnerWorld(
         if not _m31_admit and self._m31_operational_admission_on():
             _m31_admit = bool(self._m29_has_multi_step_signal(_q))
         if not _m31_admit:
+            # ★455 刀5：假设类问题只跑「影子」，然后照旧返回 None（答案路径不变）
+            self._m455_shadow_only(question)
             return None
         _plan = self._generate_task_plan(question)
         if not _plan or len(_plan) < 2:
@@ -14779,9 +14971,20 @@ class PulseInnerWorld(
             return None
 
         _step_results: list[dict] = []
+        # ★455 刀5：trace 行（含假设行）与答案合成用的 _step_results **严格分开** ——
+        #   假设只进 trace，绝不进 _synthesize_step_results（shadow 的结构性保证）。
+        _m455_rows: list[dict] = []
         for _i, _step in enumerate(_plan):
             _t_step = time.time()
             _name = _step["name"]
+            # ★455 刀5：op=hypothesize 的步骤不检索、不进 _step_results
+            if str(_step.get("op") or "") == "hypothesize":
+                _m455_hop = self._m455_run_hypothesize_shadow(
+                    question, _step, _step_results)
+                if _m455_hop:
+                    _m455_hop["idx"] = len(_m455_rows) + 1
+                    _m455_rows.append(_m455_hop)
+                continue
             _prompt = _step["prompt"]
             if _core_str and _core_str not in _prompt:
                 _prompt = f"{_core_str} {_prompt}"
@@ -14844,6 +15047,17 @@ class PulseInnerWorld(
                       f"来源={_source} {'成功' if _ok else '失败: ' + _fail_reason} "
                       f"耗时{time.time() - _t_step:.1f}s "
                       f"输入=\"{_prompt[:36]}\" 输出=\"{str(_result)[:36]}\"")
+            _m455_rows.append({
+                "idx": len(_m455_rows) + 1,
+                "step_id": str(_step.get("step_id") or f"S{_i + 1}"),
+                "op": "retrieve",
+                "status": "retrieved" if _ok else "degraded",
+                "hypothesis_count": 0,
+                "avg_confidence": None,
+                "elapsed_ms": round((time.time() - _t_step) * 1000, 1),
+                "source": "local_retrieve",
+                "fail_reason": "" if _ok else str(_fail_reason)[:60],
+            })
             # ★176批段4 A1 部分结果补写：真多步推理每步写 _last_deep_think_partial
             #   （复用 _m27_cache_partial :15795 同构），供看门狗超时复用，
             #   消除「硬兜底先行 + 完整答案后到」双响应。灰度键默认 False → 零回归。
@@ -14858,6 +15072,8 @@ class PulseInnerWorld(
         #   让检测器链继续（→ 其它推理路径 → 最终单次大模型兜底）。
         #   ★这条 INFO 日志同时是**探针**：一旦出现即说明多步检索确实走不通。
         #   开关关闭 → 复现修复前的降级叙述（零回归）。
+        # ★455 刀5：无论后面走「全败返回 None」还是正常合成，都先把 trace 落好
+        self._m455_flush_trace(_plan, _m455_rows)
         _ok_n = sum(1 for _s in _step_results if _s.get("success"))
         if _ok_n == 0 and self._m34_fail_return_none_on():
             self._log(LogLevel.INFO,

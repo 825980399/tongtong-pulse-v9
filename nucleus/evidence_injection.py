@@ -91,6 +91,41 @@ def request_id_for(query: str) -> str:
 #   asyncio task 间天然隔离；入口无条件 fresh_state() 覆盖线程池残留。
 _REQUEST: contextvars.ContextVar = contextvars.ContextVar("m453_request_state", default=None)
 
+# ================================================================ 刀4：请求级 LLM 算子券
+# ★为什么用 ContextVar 而不是挂 self：与 _REQUEST 同源 —— 线程 / async task 隔离，
+#   两个并发请求各领各的券；且**重试不调 fresh_state** ⇒ 计数天然不清零（任务书刀4）。
+# ★为什么要 reset：线程池会复用线程，上一请求的计数残留会让下一请求「一张券都领不到」。
+_LLM_OPS: contextvars.ContextVar = contextvars.ContextVar("m455_llm_ops", default=0)
+
+
+def reset_llm_ops() -> None:
+    """新请求起点：清零（``fresh_state`` 内调用；重试路径不调 ⇒ 不清零）。"""
+    _LLM_OPS.set(0)
+
+
+def llm_ops_used() -> int:
+    return int(_LLM_OPS.get() or 0)
+
+
+def reserve_llm_op(limit: int | None = None) -> dict:
+    """领一张「假设券」。返回 ``{"ok", "used", "limit"}``；``ok=False`` ⇒ 调用方必须跳过。
+
+    ★调用**开始时**就 +1（任务书刀4）：失败/超时也照样消耗，避免失败重试无限领券。
+    """
+    _lim = int(_cfg_num("M455_MAX_LLM_OPS", 1.0) if limit is None else limit)
+    _lim = max(0, _lim)
+    _used = llm_ops_used()
+    if _used >= _lim:
+        return {"ok": False, "used": _used, "limit": _lim}
+    _LLM_OPS.set(_used + 1)
+    try:
+        _st = _REQUEST.get()
+        if isinstance(_st, dict):
+            _st["llm_ops"] = _used + 1
+    except Exception as _e:
+        silent_exc(_e, where="evidence_injection::reserve_llm_op state", level="debug")
+    return {"ok": True, "used": _used + 1, "limit": _lim}
+
 
 def fresh_state(*, request_id: str | None = None, origin: str = "") -> dict:
     """为一个新请求造一份**独立**的状态字典并装入当前 context。"""
@@ -105,7 +140,10 @@ def fresh_state(*, request_id: str | None = None, origin: str = "") -> dict:
         "retrying": False,
         "in_flight": True,
         "partial_reply": "",
+        # ★455 刀4：请求级 LLM 算子计数（与 _LLM_OPS ContextVar 同源）
+        "llm_ops": 0,
     }
+    reset_llm_ops()
     _REQUEST.set(st)
     return st
 
@@ -164,6 +202,28 @@ def _score_of(item: dict) -> float:
     return float(v)
 
 
+def seed_min_score() -> float:
+    """★455 刀1：种子候选的专属下限（默认 0.55，防「完全不相关」硬进）。
+
+    ★为什么种子要单独一档：``seed_evidence._match_score`` 的基础分是 0.50
+      （0.50 + 0.30×序列相似度 + 0.20×汉字交集），实测查询命中落在 0.50~0.69，
+      **结构上到不了经验池的 0.65**（454 交付后线上实测：种子 6 条全被 low_score 挡掉）。
+      种子里 50 条是人工精选（30 human_seed + 20 kal），值得比自动生成的模板宽一档。
+    """
+    return _cfg_num("M454_SEED_MIN_SCORE", 0.55)
+
+
+def score_floor(item: dict, base: float, seed_min: float | None = None) -> float:
+    """单条候选的准入下限：``seed_override=True`` 用种子下限，其余用请求级 min_score。
+
+    ★这是**同一条判据**的唯一实现 —— ``build_injection`` 与 ``seed_evidence.candidate_stats``
+      都调它，避免"验收口径"和"线上口径"两套阈值（烛微 §C3 的教训）。
+    """
+    if isinstance(item, dict) and item.get("seed_override") is True:
+        return float(seed_min if seed_min is not None else seed_min_score())
+    return float(base)
+
+
 def build_injection(items: list[dict] | None, *, now: float | None = None,
                     min_score: float | None = None,
                     top_k: int | None = None,
@@ -181,7 +241,9 @@ def build_injection(items: list[dict] | None, *, now: float | None = None,
     _age = float(param("M453_EVIDENCE_MAX_AGE_DAYS", 30) if max_age_days is None else max_age_days)
 
     raw = [x for x in list(items or []) if isinstance(x, dict)]
-    pool = [dict(x) for x in raw if _score_of(x) >= _min]
+    # ★455 刀1：种子走 0.55 的专属下限；其余候选仍按 _min（口径不变）。
+    _seed_min = seed_min_score()
+    pool = [dict(x) for x in raw if _score_of(x) >= score_floor(x, _min, _seed_min)]
     dropped: dict[str, int] = {}
     if len(raw) - len(pool):
         dropped["low_score"] = len(raw) - len(pool)
@@ -219,7 +281,10 @@ def build_injection(items: list[dict] | None, *, now: float | None = None,
         return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) \
             else _score_of(x)
 
-    pool.sort(key=_qw, reverse=True)
+    # ★455 刀1：种子是「补源」不是「抢位」—— 排序沉到检索命中之后。
+    #   否则种子的 quality_weight（= 人工 confidence≈0.8）会把真正命中的
+    #   经验（reward 缺失时 qw≈0.5）挤出 top_k，注入段反而更不相关。
+    pool.sort(key=lambda _x: (1 if _x.get("seed_override") is True else 0, -_qw(_x)))
     f = filter_evidence(pool, now=now, max_age_days=_age,
                         max_chars=_chars, max_items=_k)
     kept = f["kept"]
