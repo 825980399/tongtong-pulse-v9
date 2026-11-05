@@ -1,0 +1,186 @@
+{
+ "batch": 457,
+ "date": "2026-11-05",
+ "head_before": "a23787fb",
+ "executor": "路灯",
+ "title": "意图闸 + 假设超时硬上限 + 当前时间注入 + shadow 调用点前移 + 样本落盘",
+ "switches": {
+  "ENABLE_M455_HYPOTHESIZE": "False（★保持星轨手工止血，本批未改）",
+  "ENABLE_INJECT_CURRENT_TIME": "True（新增）",
+  "ENABLE_M456_INTENT_SHADOW": "True（不变）",
+  "ENABLE_M457_INTENT_WHITELIST": "True（新增）",
+  "M457_HYPOTHESIZE_HARD_TIMEOUT_SEC": "8.0（新增，物理天花板不可上调）",
+  "M457_HYPOTHESIZE_CHAIN_BUDGET_SEC": "10.0（新增）",
+  "ENABLE_M457_INTENT_SAMPLE": "True（新增）"
+ },
+ "t0_deviations": [
+  {
+   "id": 1,
+   "claim": "事故根因=假设生成连续 3 次 8s 超时（Timeout 8000ms exceeded）",
+   "measured": "全量 logs/ 中 `[455刀5] 假设影子`/`[456刀1] 答案后置假设` 计数为 0 ⇒ hypothesize 在生产从未跑过；`Timeout 8000ms exceeded` 是 Playwright page_load=8000ms（config.py TIMEOUT_CONFIG）来自 PulseController 浏览器线程，16:27 起整天在报（pid 26328/28740/32180 均有）",
+   "impact": "刀1/刀2 定位为**预防性**加固，不是本次卡死的解药；真凶另立清单"
+  },
+  {
+   "id": 2,
+   "claim": "事故请求被假设链路堵死",
+   "measured": "该请求 trace：stage=finished、latency_ms=57.3、method=inference_fallback_to_lung、answer_preview 空；卡死发生在「内层 57ms 返回空答案之后 → 输出之前」",
+   "impact": "疑点在「空答案没有出口」而非 LLM 超时；列入 457 交接项"
+  },
+  {
+   "id": 3,
+   "claim": "456 的 handler shadow 已上线，只是没触发",
+   "measured": "20:20 重启后的 pid 32180（已加载 456）六条 trace 里 qica_intent_type/would_handler/handled_by **全为 null**，method 一律 inference_fallback_to_lung ⇒ `_ir_dispatch_qica_method` 未被走到",
+   "impact": "刀4 把 shadow 调用点从 dispatch 前移到 `_m456_request_core` 首行"
+  },
+  {
+   "id": 4,
+   "claim": "刀1 可直接按白名单拒绝非白名单意图",
+   "measured": "实盘 qica_intent_type 恒空 ⇒ 严格白名单会把假设功能静默全灭",
+   "impact": "改为「黑名单硬拦 + 白名单直通 + 未知降级关键词判据」，降级原因留痕"
+  },
+  {
+   "id": 5,
+   "claim": "刀2「总超时硬上限 8s」可直接读配置",
+   "measured": "首轮单测 test_hard_cap_never_exceeds_8s 实测：两个配置键同时调大 ⇒ timeout=20s",
+   "impact": "补 `_ABS_HARD_TIMEOUT_SEC=8.0` 物理常量，配置只能调低"
+  },
+  {
+   "id": 6,
+   "claim": "456 报告 §4-7「每个假设类问题最多 +1 次 LLM、8s 上限」",
+   "measured": "该结论**偏乐观**：调用点有两处（v2 步骤 + 收口补生成），`M455_MAX_LLM_OPS=1` 只保证「不重复」，不保证「总时长」；一旦票被其它路径先消耗/或重试，观测到的仍是叠加耗时",
+   "impact": "已在报告 §0 更正，并补链级 10s 预算"
+  }
+ ],
+ "knives": [
+  {
+   "no": 1,
+   "level": "P0",
+   "name": "假设生成意图白名单",
+   "files": [
+    "nucleus/reasoning/hypothesize.py",
+    "organs/brain/PulseInnerWorld.py"
+   ],
+   "points": [
+    "hypothesize.intent_gate() 纯函数：ALLOW/DENY/未知 三态",
+    "DENY = code_reasoning/fact_query/time_query + 技术推理/知识查询/概念解释/规则查阅/状态查询",
+    "ALLOW = hypothesis/speculative/what_if/self_report + 假设推演/假设/推测/元认知报告",
+    "未知（含空串、「一般对话」）⇒ 降级到既有关键词判据，避免功能全灭",
+    "IW 三个调用点前置 `_m457_intent_pass()`：命中黑名单不写 trace、不发 HTTP",
+    "日志 `[457刀1] 意图白名单拦截: intent=…, 跳过假设生成`"
+   ],
+   "switch": "ENABLE_M457_INTENT_WHITELIST"
+  },
+  {
+   "no": 2,
+   "level": "P0",
+   "name": "假设调用超时硬上限 + 链级预算",
+   "files": [
+    "nucleus/reasoning/hypothesize.py",
+    "organs/brain/PulseInnerWorld.py"
+   ],
+   "points": [
+    "单次硬上限 = min(8.0 物理常量, 457 配置, 455 配置) —— 配置只能调低",
+    "链级预算 10s：同一请求内 N 次调用之和，超出即 skipped_no_budget，绝不发第二次 HTTP",
+    "attempts=1 显式契约；超时只降级不重试",
+    "日志 `[457刀2] 假设生成超时降级: elapsed=…s, 答案不受影响` / `[457刀2] 假设链预算用尽`"
+   ],
+   "switch": "M457_HYPOTHESIZE_HARD_TIMEOUT_SEC / M457_HYPOTHESIZE_CHAIN_BUDGET_SEC"
+  },
+  {
+   "no": 3,
+   "level": "P1",
+   "name": "当前时间注入 system prompt",
+   "files": [
+    "organs/body/PulseLung.py"
+   ],
+   "points": [
+    "`_m457_time_prefix()` 返回 `当前时间：YYYY-MM-DD HH:MM:SS（星期X）`",
+    "_build_channel_messages 把该行放 system **开头**",
+    "单端点兜底路径同样注入（源码接线已钉）",
+    "后台学习（_current_call_is_background=True）不注入"
+   ],
+   "switch": "ENABLE_INJECT_CURRENT_TIME"
+  },
+  {
+   "no": 4,
+   "level": "P1",
+   "name": "handler shadow 未触发排查",
+   "files": [
+    "organs/brain/PulseInnerWorld.py"
+   ],
+   "points": [
+    "根因：shadow 挂在 `_ir_dispatch_qica_method` 首行，但真实请求多在 `_ir_run_detectors` → `_detect_experience_route` → `_fallback_to_lung_model` 早退",
+    "修法：调用点前移到 `_m456_request_core` 首行；dispatch 处保留但用 payload 标记去重",
+    "新增日志 `[457刀4] intent_shadow: qica_intent_type=…, would_handler=…, handled_by=…`",
+    "`qica_intent_type` 透传链本身正确（Cortex 写 strategy_context），问题只在调用点"
+   ],
+   "switch": "ENABLE_M456_INTENT_SHADOW"
+  },
+  {
+   "no": 5,
+   "level": "P2",
+   "name": "shadow 样本落盘",
+   "files": [
+    "organs/brain/PulseInnerWorld.py"
+   ],
+   "points": [
+    "data/eval/intent_samples.jsonl，字段 query/qica_intent_type/would_handler/expected_intent(空)",
+    "每 10 条打 `[457刀5] shadow样本累计: N/100`",
+    "★pytest 护栏：sys.modules 含 pytest 且路径为默认生产路径 ⇒ 不写"
+   ],
+   "switch": "ENABLE_M457_INTENT_SAMPLE / M457_INTENT_SAMPLE_EVERY / M457_INTENT_SAMPLE_TARGET"
+  }
+ ],
+ "readings": {
+  "tests_new": {
+   "test_m457_intent_gate.py": 29,
+   "test_m457_time_inject.py": 9,
+   "test_m457_shadow_sample.py": 10
+  },
+  "tests_regression": {
+   "test_m455_hypothesize.py": "29 passed",
+   "test_m456_hypothesis_answer.py": "30 passed",
+   "test_m456_intent_shadow.py": "22 passed",
+   "test_multi_step_retrieval_m31.py": "24 passed",
+   "test_m454_k1_plan_v3.py": "10 passed",
+   "test_m454_k5_trace.py": "8 passed",
+   "test_m426_d5_dialogue_trace.py": "6 passed",
+   "test_m453r_k2_contextvars.py": "8 passed",
+   "test_ir_golden_t146.py": "4 failed / 5 passed（存量红，与 456 一致）"
+  },
+  "gates": {
+   "cw2": "PASS",
+   "event_string": "PASS",
+   "silent_exc_arity": "PASS",
+   "deprecated_imports": "PASS",
+   "broken_chain": "PASS",
+   "legacy_assembly": "PASS",
+   "cw3-B": "PASS",
+   "cw3-A": "PASS（逐函数归因后重锚）"
+  },
+  "cw3a_delta": {
+   "try": "+12",
+   "except": "+12",
+   "if": "+14",
+   "return": "+17",
+   "methods": "+7",
+   "emit_calls": "0",
+   "priority_hist": "不变",
+   "event_hist": "不变"
+  },
+  "ruff": "新增 0（逐文件 vs HEAD，按规则码多重集比对）",
+  "eol": {
+   "PulseLung.py": "CRLF 3720 / bareLF 0",
+   "PulseInnerWorld.py": "LF 19015 / CRLF 0",
+   "hypothesize.py": "LF 559 / CRLF 0",
+   "config.py": "LF 8034 / CRLF 0"
+  }
+ },
+ "handoff": [
+  "①先重启：455/456/457 全部只在磁盘上（活体 pid 32180 @20:20:08 < 本批提交）",
+  "②事故真凶未定位：空答案为何没有出口、主链为何不释放 —— 建议 458 第一批处理",
+  "③ENABLE_M455_HYPOTHESIZE 仍为 False：刀1/刀2 生效后需单独决策是否恢复",
+  "④t146 4 条存量红的形状与本批刀4 根因同源（detector 早退），可在 458 一并裁决",
+  "⑤shadow 样本需人工标 expected_intent，满 100 条才谈 457-b 实弹"
+ ]
+}
