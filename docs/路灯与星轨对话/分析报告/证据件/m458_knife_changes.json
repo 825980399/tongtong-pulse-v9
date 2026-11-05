@@ -1,0 +1,175 @@
+{
+ "batch": 458,
+ "date": "2026-11-05",
+ "head_before": "527a568d",
+ "executor": "路灯",
+ "title": "主链终态（委派账本+看门狗）+ experience 退出委派 + t146 回绿 + handler 实弹脚手架",
+ "switches": {
+  "ENABLE_M455_HYPOTHESIZE": "False（★保持止血，本批未动）",
+  "ENABLE_INJECT_CURRENT_TIME": "True（不变）",
+  "DIALOG_DELEGATE_TIMEOUT_SEC": "90.0（新增）",
+  "ENABLE_M458_DELEGATE_WATCHDOG": "True（新增）",
+  "ENABLE_M458_EXPERIENCE_NO_DELEGATE": "True（新增，刀2b 已灰度打开）",
+  "ENABLE_M458_HANDLER_LIVE": "False（新增，铁律：本批不实弹）",
+  "M458_HANDLER_LIVE_PCT": "0（新增，铁律）"
+ },
+ "t0_deviations": [
+  {
+   "id": 1,
+   "claim": "烛微 §0.1 引用任务书说「457-a（shadow 扩样）已经做完了」",
+   "measured": "不成立：457 三笔提交在 21:33~21:43，活体 pid=32180 创建于 20:20:08 ⇒ 457 未加载；`data/eval/intent_samples.jsonl` **不存在**，生产 shadow 样本仍为 0 条",
+   "impact": "刀4 只搭脚手架、不实弹（与任务书一致）；G1~G6 全未达标"
+  },
+  {
+   "id": 2,
+   "claim": "刀3：t146 四条存量红需要「重跑 → 逐条归因 → 重锚期望」",
+   "measured": "刀2 打开后四条**自然回绿**（10 passed，含新增护栏）；A/B：把 ENABLE_M458_EXPERIENCE_NO_DELEGATE 置 False ⇒ 立刻回到同样 4 红（同 case 同报错）",
+   "impact": "**没有改任何金标期望**（改预期等于给现状背书、丢掉 no_match 契约）；只新增 1 条护栏 test_detector_never_delegates"
+  },
+  {
+   "id": 3,
+   "claim": "刀1 B「肺侧返回失败时必须发一条 SPEAK，不许静默 return」",
+   "measured": "肺已有 4 处失败兜底 SPEAK（PulseLung 505/677/762/791）；真正静默的是 `query_only`（prompt 为空）与 `duplicate_skipped`（同轮重复）",
+   "impact": "只给 `query_only` 补一条对话 SPEAK（窄口）；duplicate_skipped 不发（那说明另一条同轮请求正在跑，多发一条就是重复输出）。其余交由看门狗统一兜底"
+  },
+  {
+   "id": 4,
+   "claim": "施工纪律 3：`extend_remediation_lock` 是死代码，要么接上要么删除并登记",
+   "measured": "确认全仓只有定义、0 调用点",
+   "impact": "**接上**：放宽其 cid 前置条件，对委派账本同样生效（看门狗读取宽限）——现在是委派续期的公开钩子，不再是「看起来有保护」"
+  },
+  {
+   "id": 5,
+   "claim": "既有测试基线（456 报告）：「522 passed + 4 skipped + 4 存量红」",
+   "measured": "本批实测新增 2 条**存量红**：①`test_m406_k4_patch_risk_gate::test_06`（judge 已改调 `narrow_kinds()`，断言仍找 `DIFF_NARROW_KINDS`，430 批引入）②`test_dialog_guard_m15::test_head_no_e402_pattern`（`_module_logger` 在第 69 行，断言只看前 60 行）。A/B：两者在 HEAD 上同样失败",
+   "impact": "非本批引入，不改别批断言；列入交接 459"
+  },
+  {
+   "id": 6,
+   "claim": "刀2 可一次性打开",
+   "measured": "打开后 `test_m408_k1` 的 B 组 3 条（408 刀1 的规格断言）立刻变红——因为它们钉的是「unknown ⇒ 委派肺」这条旧契约",
+   "impact": "按铁律 68 处理：这三条是**规格断言**，改钉新值（return None）**并保留开关关时的旧行为断言**作为回滚点；没有删除或放宽"
+  }
+ ],
+ "knives": [
+  {
+   "no": 1,
+   "level": "P0",
+   "name": "主链终态：委派账本 + 看门狗 + 超时兜底",
+   "files": [
+    "organs/brain/PulseCortex.py",
+    "organs/body/PulseLung.py",
+    "config.py"
+   ],
+   "points": [
+    "新增 `_delegate_pending`（deadline/prompt_len/method/question/user_name/ts）",
+    "三个对话委派点（主路径 / ctx 缺失回退 / 补救）在 **emit 之前**登记",
+    "日志 `[458刀1] delegate: cid=… prompt_len=… claim=ok method=…`（事故里缺失的那一帧）",
+    "REPLY ⇒ `_m458_settle_delegate` 出账；心跳 BEAT ⇒ `_m458_sweep_delegates` 扫超期",
+    "超时 ⇒ SPEAK(source=cortex_watchdog，文案说明「已失败」，不写「请稍候」)+ mark_output_done 放行队列",
+    "肺 `query_only`（对话 + 空 prompt）不再静默 return",
+    "`extend_remediation_lock` 接上：对委派账本续期生效"
+   ],
+   "switch": "ENABLE_M458_DELEGATE_WATCHDOG / DIALOG_DELEGATE_TIMEOUT_SEC"
+  },
+  {
+   "no": 2,
+   "level": "P1",
+   "name": "experience 退出检测器链",
+   "files": [
+    "organs/brain/PulseInnerWorld.py",
+    "config.py"
+   ],
+   "points": [
+    "刀2a：`_m458_experience_no_delegate()` 开关（默认关时行为逐字不变）",
+    "刀2b：打开后，经验命中但无答案 ⇒ `return None`，把机会交回检测器链",
+    "委派收敛到 `_ir_finalize` **唯一出口**（看门狗只需守一处）",
+    "日志 `[458刀2] 经验无答案不委派: type=… conf=… ⇒ 交回检测器链`"
+   ],
+   "switch": "ENABLE_M458_EXPERIENCE_NO_DELEGATE"
+  },
+  {
+   "no": 3,
+   "level": "P1",
+   "name": "t146 四条存量红",
+   "files": [
+    "tests/test_ir_golden_t146.py"
+   ],
+   "points": [
+    "刀2 打开后四条自然回绿（**未改任何期望值**）",
+    "A/B 取证：开关关 ⇒ 同 case 同报错 4 red；开关开 ⇒ 10 passed",
+    "新增护栏 `test_detector_never_delegates`：行为（8 case 无 fallback_to_lung）+ 结构（AST）"
+   ],
+   "switch": "无（跟随刀2）"
+  },
+  {
+   "no": 4,
+   "level": "P2",
+   "name": "handler 实弹脚手架（不实弹）",
+   "files": [
+    "organs/brain/PulseInnerWorld.py",
+    "config.py"
+   ],
+   "points": [
+    "三开关：ENABLE_M458_HANDLER_LIVE / M458_HANDLER_LIVE_SCOPE / M458_HANDLER_LIVE_PCT",
+    "哈希分桶 `md5(f'{salt}|{cid}')[:8] % 100 < PCT`（不用 random）",
+    "熔断：窗口内失败 ≥ N ⇒ PCT 归零 + 留痕（`_M458_LIVE_TRIPPED`）",
+    "`[458刀4] handler实弹闸: live=… would=… scope=… pct=… bucket=…`",
+    "★本批 PCT=0，单测钉死「PCT 必须为 0」"
+   ],
+   "switch": "ENABLE_M458_HANDLER_LIVE / M458_HANDLER_LIVE_PCT"
+  }
+ ],
+ "readings": {
+  "tests_new": {
+   "test_m458_main_chain_terminal.py": 9,
+   "test_m458_experience_no_delegate.py": 4,
+   "test_m458_handler_live_gate.py": 12
+  },
+  "tests_regression": {
+   "test_ir_golden_t146.py": "10 passed（原 5 passed + 4 存量红）",
+   "test_m406_k1/k2/k3": "18 / 31 / 43 passed",
+   "test_m406_k4": "60 passed + 1 存量红（judge 常量名，430 批引入）",
+   "test_m407_k1/k2/k3": "23 / 24 / 32 passed",
+   "test_m408_k1": "13 passed（三条规格断言按刀2 改钉，保留开关关的旧断言）",
+   "test_m408_k2/k3": "25 / 12 passed",
+   "test_m455_hypothesize.py": "29 passed",
+   "test_m456_hypothesis_answer / intent_shadow": "30 / 22 passed",
+   "test_m457_intent_gate / time_inject / shadow_sample": "29 / 9 / 10 passed",
+   "test_multi_step_retrieval_m31.py": "见报告（源码切片风险点）",
+   "test_dialog_guard_m15.py": "15 passed + 1 存量红（_module_logger 行号）"
+  },
+  "gates": {
+   "cw2": "PASS",
+   "event_string": "PASS",
+   "silent_exc_arity": "PASS",
+   "deprecated_imports": "PASS",
+   "broken_chain": "PASS",
+   "legacy_assembly": "PASS",
+   "cw3-B": "PASS",
+   "cw3-A": "PASS（逐函数归因后重锚）"
+  },
+  "cw3a_delta": {
+   "try": "+4",
+   "except": "+4",
+   "if": "+8",
+   "return": "+15",
+   "methods": "+5",
+   "emit_calls": "0"
+  },
+  "ruff": "新增 0（逐文件 vs HEAD，按规则码多重集比对）",
+  "eol": {
+   "PulseCortex.py": "CRLF（0 bareLF）",
+   "PulseInnerWorld.py": "LF",
+   "PulseLung.py": "CRLF 3733 / bareLF 0",
+   "test_ir_golden_t146.py": "CRLF 280 / bareLF 0"
+  }
+ },
+ "handoff": [
+  "①先重启：455/456/457/458 全部只在磁盘上（活体 pid 32180 @20:20:08）",
+  "②重启后先看 `[458刀1] delegate` 是否每轮一条；再看 `[458刀2]` 是否把代码类问题交回检测器链",
+  "③90s 内没等到 REPLY 的委派，必须出现 `[458刀1] 委派超时兜底` + 队列放行 —— 这是事故的解药",
+  "④两条存量红（406k4 / dialog_guard m15）非本批引入，交 459 裁决",
+  "⑤handler 实弹仍锁死：G1 样本=0，PCT=0；样本满 100 且 G2~G6 达标才谈"
+ ]
+}
