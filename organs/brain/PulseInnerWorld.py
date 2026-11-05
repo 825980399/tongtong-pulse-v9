@@ -1347,6 +1347,168 @@ class PulseInnerWorld(
                                       f" 代码证据={int(code_evidence_count)}")
         return "", f"intent={_it or '(空)'} 不在本批两个 handler 的触发面内"
 
+    # ===== ★457 刀1/刀4/刀5：请求级意图 · 影子前移 · 样本落盘 =====
+    #: 请求级意图（QICA 原始 intent_type）。★用 ContextVar 而非实例属性：
+    #: IW 是单例，并发请求会串味（与 `_M456_HYPS` 同一类坑）。
+    _M457_INTENT: contextvars.ContextVar = contextvars.ContextVar(
+        "m457_intent", default="")
+
+    #: 刀5 样本文件（单测可改成 tmp 路径；空 ⇒ 生产默认路径）
+    _M457_SAMPLE_FILE = ""
+    #: 已累计条数缓存（-1 = 未知，首次落盘时数一遍文件）
+    _M457_SAMPLE_N = -1
+
+    @classmethod
+    def _m457_set_intent(cls, intent_type: str) -> None:
+        try:
+            cls._M457_INTENT.set(str(intent_type or ""))
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::_m457_set_intent", level="debug")
+
+    @classmethod
+    def _m457_intent(cls) -> str:
+        try:
+            return str(cls._M457_INTENT.get() or "")
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::_m457_intent", level="debug")
+            return ""
+
+    def _m457_begin_request(self, ctx) -> None:
+        """★457 刀1/刀4：每个请求在**外壳**登记一次（意图 + 假设链起点）。
+
+        ★为什么登记点必须在外壳：457 T0 实测 `_ir_dispatch_qica_method` 在多数真实
+          请求里根本走不到（`_ir_run_detectors` 先命中 `_detect_experience_route`
+          → `_fallback_to_lung_model` 直接返回）⇒ 挂在 dispatch 里的 456 shadow
+          从上线到现在**一次都没跑过**。意图不能再挂在会被绕过的分支上。
+        """
+        _it = ""
+        try:
+            _sc = ctx.payload.get("strategy_context", {}) or {}
+            _it = str(_sc.get("qica_intent_type") or "")
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::_m457_begin_request intent",
+                       level="debug")
+            _it = ""
+        self._m457_set_intent(_it)
+        try:
+            from nucleus.reasoning import hypothesize as _hyp
+            _hyp.begin_chain()
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::_m457_begin_request chain",
+                       level="debug")
+
+    def _m457_intent_pass(self) -> bool:
+        """刀1 前置闸：命中黑名单 ⇒ False（调用方**不得**再调 LLM / 写 trace）。"""
+        try:
+            from nucleus.reasoning import hypothesize as _hyp
+            _allow, _why = _hyp.intent_gate(self._m457_intent())
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::_m457_intent_pass", level="debug")
+            return True
+        if _allow is False:
+            self._log(LogLevel.INFO,
+                      f"[457刀1] 意图白名单拦截: intent={self._m457_intent() or '-'}"
+                      f", 跳过假设生成（{_why}）")
+            return False
+        return True
+
+    def _m457_note_hypothesize(self, res: dict) -> None:
+        """刀1/刀2 统一留痕（超时降级与意图拦截都必须能一眼看出来）。"""
+        try:
+            _st = str((res or {}).get("status") or "")
+            _it = str((res or {}).get("intent_type") or "") or self._m457_intent()
+            if _st == "skipped_intent":
+                self._log(LogLevel.INFO,
+                          f"[457刀1] 意图白名单拦截: intent={_it or '-'}, 跳过假设生成")
+                return
+            if _st == "timeout":
+                _sec = float((res or {}).get("elapsed_ms") or 0.0) / 1000.0
+                self._log(LogLevel.WARNING,
+                          f"[457刀2] 假设生成超时降级: elapsed={_sec:.1f}s, 答案不受影响")
+                return
+            _rs = str((res or {}).get("reason") or "")
+            if _st == "skipped_no_budget" and "chain_budget" in _rs:
+                _sec2 = float((res or {}).get("chain_elapsed_ms") or 0.0) / 1000.0
+                self._log(LogLevel.INFO,
+                          f"[457刀2] 假设链预算用尽: elapsed={_sec2:.1f}s, 答案不受影响")
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::_m457_note_hypothesize",
+                       level="debug")
+
+    @classmethod
+    def _m457_sample_path(cls) -> str:
+        if cls._M457_SAMPLE_FILE:
+            return str(cls._M457_SAMPLE_FILE)
+        return os.path.join("data", "eval", "intent_samples.jsonl")
+
+    @classmethod
+    def _m457_sample_write(cls, question: str, intent_type: str,
+                           would_handler: str) -> None:
+        """刀5：把一次影子判定落成一行 jsonl（`expected_intent` 留空给人工标）。
+
+        ★两条纪律：
+          1. `data/` 被 `.gitignore:160` 整目录排除 ⇒ 样本不入库，留档走 `证据件/`；
+          2. **单测不得写生产留痕**（446 批实测：一次回归会灌进 8 行假数据）⇒
+             `"pytest" in sys.modules` 且路径就是默认生产路径 ⇒ 直接不写。
+        """
+        try:
+            import config as _c457
+            if not bool(getattr(_c457, "ENABLE_M457_INTENT_SAMPLE", True)):
+                return
+            _every = max(1, int(getattr(_c457, "M457_INTENT_SAMPLE_EVERY", 10) or 10))
+            _target = max(1, int(getattr(_c457, "M457_INTENT_SAMPLE_TARGET", 100) or 100))
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::_m457_sample_write cfg",
+                       level="debug")
+            return
+        _p = cls._m457_sample_path()
+        _default = os.path.join("data", "eval", "intent_samples.jsonl")
+        try:
+            if "pytest" in sys.modules and os.path.abspath(_p) == os.path.abspath(_default):
+                return
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::_m457_sample_write guard",
+                       level="debug")
+            return
+        try:
+            import json as _json457
+            _dir = os.path.dirname(_p)
+            if _dir:
+                os.makedirs(_dir, exist_ok=True)
+            _row = {
+                "ts": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "query": str(question or "")[:200],
+                "qica_intent_type": str(intent_type or ""),
+                "would_handler": str(would_handler or ""),
+                "expected_intent": "",
+            }
+            with open(_p, "a", encoding="utf-8", newline="\n") as _f:
+                _f.write(_json457.dumps(_row, ensure_ascii=False) + "\n")
+            if cls._M457_SAMPLE_N < 0:
+                _n0 = 0
+                try:
+                    with open(_p, "r", encoding="utf-8") as _f2:
+                        _n0 = sum(1 for _ln in _f2 if _ln.strip())
+                except Exception as _e2:
+                    silent_exc(_e2, where="PulseInnerWorld::_m457_sample_write count",
+                               level="debug")
+                    _n0 = 0
+                cls._M457_SAMPLE_N = _n0
+            else:
+                cls._M457_SAMPLE_N += 1
+            if cls._M457_SAMPLE_N % _every == 0:
+                _done_pct = min(100, int(cls._M457_SAMPLE_N * 100 / _target))
+                # ★classmethod 里没有 self._log ⇒ 走模块 logger（同一条 INFO，可 grep）
+                try:
+                    logging.getLogger(__name__).info(
+                        f"[457刀5] shadow样本累计: {cls._M457_SAMPLE_N}/{_target}"
+                        f"（{_done_pct}%）")
+                except Exception as _e3:
+                    silent_exc(_e3, where="PulseInnerWorld::_m457_sample_write log",
+                               level="debug")
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::_m457_sample_write", level="debug")
+
     def _m456_intent_shadow(self, ctx: "PulseInnerWorld.InferenceContext") -> dict:
         """刀3/刀4：在 QICA 方法派发**之前**预演一次意图分流，只写 trace。
 
@@ -1355,6 +1517,14 @@ class PulseInnerWorld(
         """
         if not self._m456_intent_shadow_on():
             return {}
+        # ★457 刀4：一个请求只预演一次 —— 调用点前移到外壳之后，原 dispatch 处
+        #   的调用会再进来一次；用 payload 标记去重，避免同一请求写两行 trace。
+        try:
+            if ctx.payload.get("_m457_shadow_done"):
+                return {}
+            ctx.payload["_m457_shadow_done"] = True
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::_m457 shadow once", level="debug")
         try:
             _sc = ctx.payload.get("strategy_context", {}) or {}
             _it = str(_sc.get("qica_intent_type") or "")
@@ -1385,6 +1555,12 @@ class PulseInnerWorld(
             else:
                 self._log(LogLevel.DEBUG,
                           f"[456刀3/4] 意图影子未触发: {_why}")
+            # ★457 刀4：完整判断链一行留痕（任务书验收：三个值都要能看到）
+            self._log(LogLevel.INFO,
+                      f"[457刀4] intent_shadow: qica_intent_type={_it or '-'}, "
+                      f"would_handler={_would or '-'}, handled_by={_handled or '-'}")
+            # ★457 刀5：落一条可标注样本（expected_intent 留空，人工填）
+            self._m457_sample_write(_q, _it, _would)
             return {"would_handler": _would, "code_evidence_count": _cn,
                     "reason": _why}
         except Exception as _e:
@@ -2088,11 +2264,17 @@ class PulseInnerWorld(
         if _ctx is None:
             return {"status": "skipped", "reason": "空问题"}
         self._m456_reset_pending()
+        # ★457：登记请求级意图 + 假设链起点（必须在跑主体之前）
+        self._m457_begin_request(_ctx)
         _result = self._m456_request_core(_ctx, payload)
         return self._m456_attach_hypotheses(_result, _ctx)
 
     def _m456_request_core(self, _ctx, payload: dict) -> dict[str, Any]:
         """★456刀1：``_on_inference_request`` 的**原样**主体（拆分只为统一收口）。"""
+        # ★457 刀4：影子必须跑在**所有**早退分支之前 —— 实测它挂在
+        #   `_ir_dispatch_qica_method` 里时，被 `_detect_experience_route`
+        #   → `_fallback_to_lung_model` 短路掉，上线至今 0 条记录。
+        self._m456_intent_shadow(_ctx)
         _explicit = self._ir_try_explicit_search(_ctx)
         if _explicit is not None:
             return _explicit
@@ -14877,6 +15059,7 @@ class PulseInnerWorld(
                 deadline=_m455_hyp.request_deadline(),
                 origin="user_query",
                 max_hypotheses=2,
+                intent_type=self._m457_intent(),
                 endpoint_resolver=self._m31_branch_endpoint,
             )
         except Exception as _e:
@@ -14886,6 +15069,10 @@ class PulseInnerWorld(
             _row["fail_reason"] = f"{type(_e).__name__}: {_e}"[:80]
             _row["elapsed_ms"] = round((time.time() - _t0) * 1000, 1)
             return _row
+        # ★457 刀1：意图闸拦截 ⇒ 本步**不落 trace**（任务书："没命中直接跳过，不写trace"）
+        self._m457_note_hypothesize(_res)
+        if str(_res.get("status") or "") == "skipped_intent":
+            return None
         _row["status"] = str(_res.get("status") or "")
         _row["hypothesis_count"] = int(_res.get("hypothesis_count") or 0)
         _row["avg_confidence"] = _res.get("avg_confidence")
@@ -14915,6 +15102,9 @@ class PulseInnerWorld(
         if not self._m455_hypothesize_shadow_on():
             return
         if not self._m455_is_hypothesis_question(question):
+            return
+        # ★457 刀1：意图闸前置 —— 命中黑名单时**连 trace 都不写、不调 LLM**
+        if not self._m457_intent_pass():
             return
         _step = self._m455_hypothesize_step(question, [])
         _row = self._m455_run_hypothesize_shadow(question, _step, [])
@@ -15153,6 +15343,9 @@ class PulseInnerWorld(
         _ans = str((result or {}).get("answer") or "").strip()
         if not _ans:
             return []
+        # ★457 刀1：意图闸前置（代码/事实/时间类不生成，连一次 HTTP 都不发）
+        if not self._m457_intent_pass():
+            return []
         _ev = [{"id": "E1", "text": _ans[:400], "source": "this_turn_answer"}]
         try:
             from nucleus.reasoning import hypothesize as _hyp
@@ -15161,6 +15354,7 @@ class PulseInnerWorld(
                 deadline=_hyp.request_deadline(),
                 origin="user_query",
                 max_hypotheses=2,
+                intent_type=self._m457_intent(),
                 endpoint_resolver=self._m31_branch_endpoint,
             )
         except Exception as _e:
@@ -15168,6 +15362,7 @@ class PulseInnerWorld(
                        level="warning")
             return []
         _hyps = list(_res.get("hypotheses") or [])
+        self._m457_note_hypothesize(_res)
         self._log(LogLevel.INFO,
                   f"[456刀1] 答案后置假设: status={_res.get('status')} "
                   f"n={len(_hyps)} 原因={str(_res.get('reason') or '')[:40]}")

@@ -7931,7 +7931,7 @@ ENABLE_M455_HYPOTHESIZE_SHADOW = True
 #   语义：假设**进最终答案**的总闸。关掉 ⇒ 完全回到 455 的纯 shadow 行为
 #         （假设只写 trace，答案一个字都不变）—— 这是本批唯一需要的回滚开关。
 #         质量闸见 M456_HYPOTHESIS_* 三档（confidence 分档前缀）。
-ENABLE_M455_HYPOTHESIZE = True
+ENABLE_M455_HYPOTHESIZE = False  # 紧急止血：456批假设进答案导致主链超时卡死，先关回455纯shadow行为
 #
 # M455_MAX_LLM_OPS
 #   默认值：1
@@ -7983,3 +7983,52 @@ M456_HYPOTHESIS_MIN_CONF_IN_ANSWER = 0.35
 #   默认值：4
 #   语义：compare/exclude 真执行时，从前序步骤收集的证据条数上限（刀6）。
 M456_OP_MAX_EVIDENCE = 4
+# ==================== [M457-CFG] 第457批（意图闸 + 假设超时硬上限 + 时间注入 + shadow 扩样）====================
+# 性质：本段**全部是新增键**，不覆盖任何既有键；每个键都有独立回滚语义。
+#
+# ENABLE_M457_INTENT_WHITELIST
+#   默认值：True
+#   语义：假设生成的**意图闸**（457 刀1）。读取点 nucleus/reasoning/hypothesize.py::
+#         intent_gate()。三档语义：
+#           · 意图 ∈ 白名单（假设类/自我报告）        ⇒ 生成
+#           · 意图 ∈ 黑名单（code_reasoning/fact_query/time_query 及其中文同义）
+#                                                      ⇒ **绝不生成**（不调 LLM、不写 trace）
+#           · 意图为空 / 未登记（如「一般对话」）      ⇒ 交回既有关键词判据
+#             第 3 档为什么存在：实测（457 T0）实盘 `qica_intent_type` 目前**恒为空**
+#             （shadow 从未跑到），严格白名单会把假设功能静默全灭。故退化为
+#             「黑名单硬拦 + 关键词兜底」，并把降级原因写进日志。
+#   False ⇒ 完全回到 456 行为（只靠关键词判据）。
+ENABLE_M457_INTENT_WHITELIST = True
+#
+# M457_HYPOTHESIZE_HARD_TIMEOUT_SEC
+#   默认值：8.0
+#   语义：**单次**假设 LLM 调用的墙钟硬上限（457 刀2）。此前 455 的实现是
+#         min(8.0, 剩余-10.0)，本身没重试；但调用方可能在同一请求里再调一次
+#         （v2 一次 + 收口一次）⇒ 叠加成 2×8s。本批用「链级预算」把这段封死。
+M457_HYPOTHESIZE_HARD_TIMEOUT_SEC = 8.0
+#
+# M457_HYPOTHESIZE_CHAIN_BUDGET_SEC
+#   默认值：10.0
+#   语义：**整条假设链路**（同一请求内第 1 次到第 N 次调用）的总墙钟预算。
+#         超出后任何再调用都直接 `skipped_no_budget`，**绝不发起第二次 HTTP**。
+#         取值依据：任务书刀2「请求级总计时 ≤10s」。
+M457_HYPOTHESIZE_CHAIN_BUDGET_SEC = 10.0
+#
+# ENABLE_INJECT_CURRENT_TIME
+#   默认值：True
+#   语义：肺（LLM 调用层）组装 system prompt 时，在**开头**注入一行
+#         `当前时间：YYYY-MM-DD HH:MM:SS（星期X）`（457 刀3）。
+#         ★只对**用户对话**注入：`_current_call_is_background=True`（后台学习/
+#           演化/双腿）一律不注入，避免污染知识沉淀。
+#   False ⇒ system prompt 逐字回到改前（秒级回滚）。
+ENABLE_INJECT_CURRENT_TIME = True
+#
+# ENABLE_M457_INTENT_SAMPLE / M457_INTENT_SAMPLE_TARGET / M457_INTENT_SAMPLE_EVERY
+#   默认值：True / 100 / 10
+#   语义：457 刀5 —— 把每次意图影子的判定落成一行 jsonl（`data/eval/intent_samples.jsonl`），
+#         字段 `query / qica_intent_type / would_handler / expected_intent`（后两项由人标注，
+#         机器只留空串）。每攒 `EVERY` 条打一次累计日志。
+#   ★`data/` 被 `.gitignore:160` 整目录排除 ⇒ 留档副本随报告进 `证据件/`。
+ENABLE_M457_INTENT_SAMPLE = True
+M457_INTENT_SAMPLE_TARGET = 100
+M457_INTENT_SAMPLE_EVERY = 10

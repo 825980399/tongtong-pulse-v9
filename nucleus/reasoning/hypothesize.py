@@ -43,12 +43,18 @@ STATUS_PARSE_ERROR = "parse_error"
 STATUS_NO_BUDGET = "skipped_no_budget"
 STATUS_SKIPPED_ORIGIN = "skipped_origin"
 STATUS_NO_ENDPOINT = "no_endpoint"
+#: ★457 刀1：意图闸拦截（没调 LLM、没写 trace，属「主动不生成」而非失败）
+STATUS_SKIPPED_INTENT = "skipped_intent"
 
 #: 默认参数（全部可被 config 覆盖，见 config.py 的 [M455-CFG] 段）
 _DEF_MAX_SEC = 8.0
 _DEF_RESERVE_SEC = 10.0
 _DEF_MIN_START_SEC = 12.0
 _DEF_TOTAL_SEC = 34.0
+#: ★457 刀2：整条假设链路的墙钟预算（同请求内 N 次调用之和）
+_DEF_CHAIN_SEC = 10.0
+#: ★457 刀2：单次假设调用的**物理**墙钟天花板（配置只能调低，不能调高）
+_ABS_HARD_TIMEOUT_SEC = 8.0
 _DEF_MAX_TOKENS = 320
 _DEF_TEMPERATURE = 0.4
 
@@ -93,6 +99,58 @@ def max_llm_ops() -> int:
     return max(0, int(v))
 
 
+# ---------------------------------------------------------------- 457 刀1：意图闸
+#: 白名单：**只有**这几类意图允许生成假设（英文契约 + QICA 中文同义）
+_INTENT_ALLOW = frozenset({
+    "hypothesis", "speculative", "what_if", "what-if", "self_report",
+    "假设推演", "假设", "推测", "元认知报告",
+})
+
+#: 黑名单：这三类**绝不触发**（任务书刀1 点名）+ 它们在 QICA 里的中文落名。
+#: ★为什么中文也要写：实测 QICA 的 intent_type 是中文（`IntentChannels.INTENT_TYPES`），
+#:   只认英文等于永远不命中黑名单 —— 那是「看起来加了闸、其实没加」。
+_INTENT_DENY = frozenset({
+    "code_reasoning", "fact_query", "time_query",
+    "技术推理", "知识查询", "概念解释", "规则查阅", "状态查询",
+})
+
+
+def intent_whitelist_enabled() -> bool:
+    """刀1 灰度开关（默认 True）；关掉 ⇒ 完全回到 456 的「只看关键词」行为。"""
+    return bool(_cfg("ENABLE_M457_INTENT_WHITELIST", True))
+
+
+def intent_gate(intent_type: str) -> tuple:
+    """意图闸（**纯函数**）：返回 ``(allow, reason)``。
+
+    ``allow`` 三态：
+      * ``True``  —— 命中白名单 ⇒ 生成；
+      * ``False`` —— 命中黑名单 ⇒ **绝不生成**（调用方不得再调 LLM、不得写 trace）；
+      * ``None``  —— 意图为空/未登记（实盘多数是「一般对话」或空串）⇒ **交回关键词判据**。
+
+    ★为什么第三态不是 ``False``：457 T0 实测实盘 ``qica_intent_type`` **恒为空**
+      （意图影子的调用点在上游就被检测器短路了，见交付报告 §0-2）。若把「未知」
+      当「拒绝」，假设功能会被静默全灭，而任务书要的是「挡住代码/事实/时间三类」。
+      故：**黑名单硬拦 + 白名单直通 + 未知降级到既有关键词判据**，并把降级原因留痕。
+
+    示例:
+        intent_gate("技术推理")      # (False, 'deny:intent=技术推理 属 code_reasoning')
+        intent_gate("元认知报告")    # (True, 'allow:intent=元认知报告 属 self_report')
+        intent_gate("一般对话")      # (None, 'unknown:intent=一般对话 未登记，降级关键词判据')
+        intent_gate("")              # (None, 'unknown:intent=(空) 降级关键词判据')
+    """
+    if not intent_whitelist_enabled():
+        return True, "whitelist_off"
+    _it = str(intent_type or "").strip()
+    if not _it:
+        return None, "unknown:intent=(空) 降级关键词判据"
+    if _it in _INTENT_DENY:
+        return False, f"deny:intent={_it} 属代码/事实/时间类，不生成假设"
+    if _it in _INTENT_ALLOW:
+        return True, f"allow:intent={_it}"
+    return None, f"unknown:intent={_it} 未登记，降级关键词判据"
+
+
 # ---------------------------------------------------------------- 请求级 deadline
 #: ★为什么单独放一个 ContextVar：刀5 的执行点在 ``_multi_step_execute_v2``，
 #:  它发生在「肺」之前，拿不到 453R 的 Budget（烛微 H1）。计时起点由
@@ -119,6 +177,35 @@ def request_deadline() -> float:
 
 def end_request() -> None:
     _DEADLINE.set(None)
+
+
+# ---------------------------------------------------------------- 457 刀2：链级预算
+#: ★为什么还要一个「链」计时器：455 的 ``_DEADLINE`` 管的是「还剩多少总预算」，
+#:   管不住「同一请求里被调了几次」。实测调用方有两处（v2 步骤 + 收口补生成），
+#:   各 8s ⇒ 最坏 16s，而任务书刀2 要求**整条链 ≤10s**。
+#: ★只在调用方显式 ``begin_chain()`` 后生效（生产在 ``_on_inference_request`` 外壳调用），
+#:   这样 455 的 29 条既有单测（不登记链起点）行为逐字节不变。
+_CHAIN_START: contextvars.ContextVar = contextvars.ContextVar(
+    "m457_chain_start", default=None)
+
+
+def begin_chain(start_ts: float | None = None) -> float:
+    """登记本请求假设链的起点（epoch 秒）；返回登记值。"""
+    _s = float(start_ts if start_ts is not None else time.time())
+    _CHAIN_START.set(_s)
+    return _s
+
+
+def chain_elapsed() -> float | None:
+    """本请求假设链已耗时（秒）；未登记链起点 ⇒ ``None``（= 不启用链预算）。"""
+    _s = _CHAIN_START.get()
+    if not isinstance(_s, (int, float)):
+        return None
+    return max(0.0, time.time() - float(_s))
+
+
+def end_chain() -> None:
+    _CHAIN_START.set(None)
 
 
 # ---------------------------------------------------------------- 刀3：JSON 契约
@@ -299,6 +386,7 @@ def build_prompt(question: str, evidence: list[dict]) -> str:
 
 def hypothesize(question: str, evidence: Any, *, deadline: float,
                 origin: str = "", max_hypotheses: int = 2,
+                intent_type: str = "",
                 endpoint_resolver: Callable[[], Any] | None = None,
                 http_json: Callable[..., Any] | None = None) -> dict:
     """生成假设（shadow）。
@@ -308,6 +396,8 @@ def hypothesize(question: str, evidence: Any, *, deadline: float,
         evidence: 证据列表（``[{id,text,source}]`` 或注入层 item）；空 ⇒ 不调用 LLM。
         deadline: **epoch 秒**的请求截止时刻（见 :func:`begin_request`）。
         origin: 来源标记；非用户来源直接跳过（烛微 H5）。
+        intent_type: ★457 刀1 —— 本请求的 QICA 意图类型。命中黑名单（代码/事实/时间）
+            **绝不生成**；为空/未登记则降级到调用方的关键词判据。
         max_hypotheses: 最多几条（默认 2，硬上限 2）。
         endpoint_resolver: 端点解析器（生产传 ``PulseInnerWorld._m31_branch_endpoint``）。
         http_json: 可变注入的 HTTP 出口（单测用；默认 ``nucleus.ssrf_guard.safe_http_json``）。
@@ -318,7 +408,10 @@ def hypothesize(question: str, evidence: Any, *, deadline: float,
     """
     _t0 = time.time()
     _out = {"status": STATUS_INSUFFICIENT, "hypotheses": [], "elapsed_ms": 0.0,
-            "reason": "", "dropped": {}, "endpoint": "", "origin": str(origin or "")}
+            "reason": "", "dropped": {}, "endpoint": "", "origin": str(origin or ""),
+            # ★457 刀1/刀2：契约字段（调用方据此留痕，不必再猜）
+            "intent_type": str(intent_type or ""), "intent_gate": None,
+            "attempts": 0, "chain_elapsed_ms": 0.0}
 
     def _done(_st: str, _reason: str = "", **_extra) -> dict:
         _out.update({"status": _st, "reason": _reason,
@@ -331,10 +424,29 @@ def hypothesize(question: str, evidence: Any, *, deadline: float,
     if str(origin or "") in _NON_USER_ORIGINS:
         return _done(STATUS_SKIPPED_ORIGIN, "origin=" + str(origin))
 
+    # ---- ★457 刀1：意图闸（不通过 ⇒ 不调 LLM，由调用方决定要不要写 trace）----
+    _allow, _gate_reason = intent_gate(intent_type)
+    _out["intent_gate"] = ("allow" if _allow is True
+                           else "deny" if _allow is False else "unknown")
+    if _allow is False:
+        return _done(STATUS_SKIPPED_INTENT, _gate_reason)
+
     _ev = _norm_evidence(evidence)
     if not str(question or "").strip() or not _ev:
         # ★刀2 验收：无证据时**不调用 LLM**（凭空假设没有价值）
         return _done(STATUS_INSUFFICIENT, "no_evidence" if _ev == [] else "empty_question")
+
+    # ---- ★457 刀2：链级预算（同一请求内多次调用之和 ≤ M457_HYPOTHESIZE_CHAIN_BUDGET_SEC）----
+    _chain_used = chain_elapsed()
+    _chain_left = None
+    if _chain_used is not None:
+        _chain_cap = max(1.0, _cfg_num("M457_HYPOTHESIZE_CHAIN_BUDGET_SEC", _DEF_CHAIN_SEC))
+        _chain_left = _chain_cap - _chain_used
+        _out["chain_elapsed_ms"] = round(_chain_used * 1000, 1)
+        if _chain_left < 1.0:
+            # ★绝不发起第二次 HTTP：预算用尽就返回空假设，答案一字不变
+            return _done(STATUS_NO_BUDGET,
+                         f"chain_budget={_chain_used:.1f}s>={_chain_cap:.0f}s")
 
     # ---- 预算（刀2/刀4）----
     _now = time.time()
@@ -356,8 +468,16 @@ def hypothesize(question: str, evidence: Any, *, deadline: float,
         return _done(STATUS_NO_BUDGET,
                      f"llm_ops={_ticket.get('used')}>={_ticket.get('limit')}")
 
-    _timeout = min(_cfg_num("M455_HYPOTHESIZE_TIMEOUT_SEC", _DEF_MAX_SEC),
-                   _remain - _reserve)
+    # ★457 刀2：单次硬上限 —— **物理 8s 天花板**，配置只能把它调低、不能调高。
+    #   （★为什么写死：任务书要求「总超时硬上限 8 秒」；若只取配置值，
+    #     两个配置键被同时调大就会退化成 20s —— 单测 test_hard_cap_never_exceeds_8s
+    #     在首轮实测就抓到了这个洞，故加 _ABS_HARD_TIMEOUT_SEC 常量兜底。）
+    _hard_cap = min(_ABS_HARD_TIMEOUT_SEC,
+                    _cfg_num("M457_HYPOTHESIZE_HARD_TIMEOUT_SEC", _DEF_MAX_SEC),
+                    _cfg_num("M455_HYPOTHESIZE_TIMEOUT_SEC", _DEF_MAX_SEC))
+    _timeout = min(_hard_cap, _remain - _reserve)
+    if _chain_left is not None:
+        _timeout = min(_timeout, _chain_left)
     if _timeout < 1.0:
         return _done(STATUS_NO_BUDGET, f"timeout_budget={_timeout:.1f}s")
 
@@ -394,6 +514,8 @@ def hypothesize(question: str, evidence: Any, *, deadline: float,
     # ---- 调用（超时是**自己的**，不看 inner_world_chat=45s）----
     if http_json is None:
         from nucleus.ssrf_guard import safe_http_json as http_json  # 函数内导入便于打桩
+    # ★457 刀2：**只调用一次，绝不重试**（超时即降级；重试会把主链时间叠成 N 倍）
+    _out["attempts"] = 1
     try:
         _ok, _resp = http_json(_url, method="POST", data=_data, headers=_headers,
                                timeout=max(1, round(_timeout)))

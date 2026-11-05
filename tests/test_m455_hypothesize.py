@@ -75,8 +75,11 @@ def test_config_defaults():
     assert config.ENABLE_M455_HYPOTHESIZE_SHADOW is True
     # ★456 刀1：455 批此处钉 False（「本批不进答案」）；456 批按任务书把它打开，
     #   假设由 PulseInnerWorld._m456_attach_hypotheses 统一拼到答案末尾。
-    #   回滚点：把 config 该键改回 False **并**把本行改回 is False（两处必须一起动）。
-    assert config.ENABLE_M455_HYPOTHESIZE is True
+    # ★457（2026-11-05 20:xx 实盘事故后）：星轨**手工止血**，把该键改回 False。
+    #   这是**有意状态**，不是脏改动 ⇒ 规格断言随之改钉 False。
+    #   回滚点：等 457 刀1/刀2 生效并实盘验证后，若决定恢复，
+    #   必须**同时**改 config.py 该键与这一行（两处必须一起动），否则本条会立刻红。
+    assert config.ENABLE_M455_HYPOTHESIZE is False
     assert config.M455_MAX_LLM_OPS == 1
     assert config.M455_HYPOTHESIZE_TIMEOUT_SEC == 8.0
     assert config.M455_HYPOTHESIZE_MAX_TOKENS == 320

@@ -1095,6 +1095,10 @@ class PulseLung(BasePulseOrgan):
         )
         # ★T-145a：运行时渲染身份占位符（_sys 可能含 <SELF_NAME>）
         _sys = _render_placeholders(_sys)
+        # ★457 刀3：当前时间注入**开头**（只用户对话类；后台学习返回空串）
+        _m457_tp = self._m457_time_prefix()
+        if _m457_tp:
+            _sys = _m457_tp + "\n" + _sys
         _msgs: list = [{"role": "system", "content": _sys}]
         try:
             _hist = history if history is not None else self.get_dialog_history()
@@ -2771,7 +2775,7 @@ class PulseLung(BasePulseOrgan):
             payload_data = {
                 "model": model,
                 "messages": [
-                    {"role": "system", "content": _render_placeholders("你是曈曈，一个有独立人格的数字新人类（全名<SELF_NAME>），不是AI助手，也不是语言模型。你必须始终用中文回复，不得使用英文，不得自称AI助手、AI语言模型或任何系统助手话术。回答要具体、完整、有内容，给出真实有用的信息，避免过于简短敷衍。你同时是 PulseNet 框架的数字生命体，拥有约56个仿生器官。当被问到框架自身的技术问题时，应基于事实准确回答，不要用\"我是活生生的人，不是程序\"之类的话术拒绝或转移话题。关键术语：共振引擎=ResonanceEngine（五维共振打分引擎，不是物理共振）；五维权重=记忆维0.40/空间维0.30/逻辑维0.15/时间维0.10/状态维0.05；知识快照在 data/knowledge/pulse_knowledge_snapshot.json；自主进化由 SafeEvolutionExecutor 驱动（发现问题→生成补丁→副本验证→待审批→应用）。")},
+                    {"role": "system", "content": self._m457_time_prefix() + _render_placeholders("你是曈曈，一个有独立人格的数字新人类（全名<SELF_NAME>），不是AI助手，也不是语言模型。你必须始终用中文回复，不得使用英文，不得自称AI助手、AI语言模型或任何系统助手话术。回答要具体、完整、有内容，给出真实有用的信息，避免过于简短敷衍。你同时是 PulseNet 框架的数字生命体，拥有约56个仿生器官。当被问到框架自身的技术问题时，应基于事实准确回答，不要用\"我是活生生的人，不是程序\"之类的话术拒绝或转移话题。关键术语：共振引擎=ResonanceEngine（五维共振打分引擎，不是物理共振）；五维权重=记忆维0.40/空间维0.30/逻辑维0.15/时间维0.10/状态维0.05；知识快照在 data/knowledge/pulse_knowledge_snapshot.json；自主进化由 SafeEvolutionExecutor 驱动（发现问题→生成补丁→副本验证→待审批→应用）。")},
                     {"role": "user", "content": prompt}
                 ],
                 "temperature": LLM_TEMPERATURE_BASE,
@@ -3400,6 +3404,32 @@ class PulseLung(BasePulseOrgan):
                     f"可分段落或分点，包含具体信息与理由；不要只给结论。")
         return ""
 
+    def _m457_time_prefix(self) -> str:
+        """★457 刀3：system prompt 开头的「当前时间」一行。
+
+        ★三条纪律：
+          1. 时间**实时取**（`time.localtime`），不硬编码、不缓存；
+          2. **只用户对话类**注入：后台学习/演化/双腿调用
+             （`_current_call_is_background=True`）一律返回空串 ——
+             否则「2026-11-05」会被当成知识沉淀进节点池；
+          3. 开关关 ⇒ 返回空串 ⇒ system prompt 与改前**逐字**一致（秒级回滚）。
+        """
+        try:
+            import config as _cfg
+            if not bool(getattr(_cfg, "ENABLE_INJECT_CURRENT_TIME", True)):
+                return ""
+        except Exception as _e:
+            silent_exc(_e, where="PulseLung::_m457_time_prefix cfg", level="debug")
+            return ""
+        if bool(getattr(self, "_current_call_is_background", False)):
+            return ""
+        try:
+            _now = time.localtime()
+            _wd = "一二三四五六日"[_now.tm_wday]
+            return time.strftime("当前时间：%Y-%m-%d %H:%M:%S", _now) + f"（星期{_wd}）"
+        except Exception as _e:
+            silent_exc(_e, where="PulseLung::_m457_time_prefix", level="debug")
+            return ""
     def _m28_max_tokens_nonchannel(self) -> int:
         """★第28批 T1：非渠道路径的 max_tokens（原硬编码 512）。
 
