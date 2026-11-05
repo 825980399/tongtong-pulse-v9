@@ -8032,3 +8032,52 @@ ENABLE_INJECT_CURRENT_TIME = True
 ENABLE_M457_INTENT_SAMPLE = True
 M457_INTENT_SAMPLE_TARGET = 100
 M457_INTENT_SAMPLE_EVERY = 10
+
+
+# ==================== [M458-CFG] 第458批（主链终态 + experience 退出委派 + handler 实弹脚手架）====================
+# 性质：全部**新增键**，不覆盖 457 的任何键。457 的四个开关保持原值
+#       （ENABLE_M455_HYPOTHESIZE 仍为 False 止血态，本批不动）。
+#
+# DIALOG_DELEGATE_TIMEOUT_SEC
+#   默认值：90.0
+#   语义：**委派账本**的超时期限（458 刀1）。空答案把问题外包给肺之后，超过该秒数
+#         仍未收到 REPLY，皮层看门狗必须主动出兜底回复并放行对话闸。
+#   ★为什么单独一个键、不复用补救锁的 90s：两者语义不同（补救锁保护"已有答案"，
+#     委派账本是"还没有答案"），调一个不该牵动另一个。
+DIALOG_DELEGATE_TIMEOUT_SEC = 90.0
+#
+# ENABLE_M458_DELEGATE_WATCHDOG
+#   默认值：True
+#   语义：委派看门狗总闸（458 刀1）。False ⇒ 不登记、不扫描，逐字节回到 458 前行为
+#         （即"委派丢失就永久锁死"的旧状态，只在需要 A/B 复现事故时关闭）。
+ENABLE_M458_DELEGATE_WATCHDOG = True
+#
+# ENABLE_M458_EXPERIENCE_NO_DELEGATE
+#   默认值：True（458 刀2b 已灰度打开；刀2a 时该键为 False）
+#   语义：`_detect_experience_route` 在「经验命中但算子无答案」时**不再自己委派肺**，
+#         改为 `return None` 交回检测器链（让文件/代码/逻辑/符号等后续检测器有机会），
+#         最终由 `_ir_finalize` 这**唯一一个**出口决定要不要委派。
+#   ★为什么必须默认可控：它同时影响 406/407/408 三套测试与 t146 四条金标；
+#     一次性打开会让"哪条红是新的"无法判断 ⇒ 回滚点就是把它置 False。
+ENABLE_M458_EXPERIENCE_NO_DELEGATE = True
+#
+# ENABLE_M458_HANDLER_LIVE / M458_HANDLER_LIVE_SCOPE / M458_HANDLER_LIVE_PCT / SALT
+#   默认值：False / "self_report" / 0 / "m458"
+#   语义：handler **实弹**脚手架（458 刀4，只搭架子不实弹）。
+#         `ENABLE_M458_HANDLER_LIVE` 总闸；`SCOPE` 限定哪一类 handler 可实弹
+#         （off / self_report / code_reasoning / all）；`PCT` 是按 cid 哈希分桶的
+#         灰度百分比（0~100）。三个条件全满足才实弹，`PCT=0` ⇒ **永不实弹**。
+#   ★分桶 = int(md5(f"{SALT}|{cid}")[:8], 16) % 100 < PCT：同一 cid 稳定可复现，
+#     绝不用 random()（会把同一会话切成两种行为，指标不可比）。
+#   ★铁律：458 里 PCT 必须为 0 —— shadow 样本今天仍是 0 条（457 刀5 未加载）。
+ENABLE_M458_HANDLER_LIVE = False
+M458_HANDLER_LIVE_SCOPE = "self_report"
+M458_HANDLER_LIVE_PCT = 0
+M458_HANDLER_LIVE_SALT = "m458"
+#
+# M458_HANDLER_BREAKER_WINDOW / M458_HANDLER_BREAKER_FAILS
+#   默认值：20 / 2
+#   语义：实弹熔断（458 刀4）。最近 WINDOW 次实弹里出现 >= FAILS 次空答案/委派超时，
+#         自动把 PCT 归零并 WARNING 留痕（内存级，重启复位；不写 config 文件）。
+M458_HANDLER_BREAKER_WINDOW = 20
+M458_HANDLER_BREAKER_FAILS = 2

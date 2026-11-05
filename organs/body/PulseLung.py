@@ -469,6 +469,19 @@ class PulseLung(BasePulseOrgan):
 
         # 如果没有prompt，只是查询模型信息，返回可用模型列表
         if not prompt:
+            # ★458 刀1 B：对话请求却拿到空 prompt ⇒ **不许静默 return**。
+            #   皮层那边只会看到"委派出去没回来"，用户永远等（事故形状之一）。
+            #   后台/查询类保持原行为（没有用户在等，别多发一条 SPEAK）。
+            if _is_dialogue and payload.get("correlation_id"):
+                self._log(LogLevel.WARNING,
+                          f"[458刀1] 对话请求空 prompt，发兜底提示 cid="
+                          f"{str(payload.get('correlation_id'))[:16]}")
+                self._emit(MouthEvent.SPEAK, {
+                    "content": "我这边没拿到你的问题内容，所以没能开始回答。请你再发一次。",
+                    "source": "lung",
+                    "user_name": user_name,
+                    "correlation_id": payload.get("correlation_id"),
+                }, priority=7, layer="L1")
             available = self._get_local_models()
             return {
                 "status": "query_only",

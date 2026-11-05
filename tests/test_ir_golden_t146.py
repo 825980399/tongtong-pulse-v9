@@ -229,3 +229,52 @@ def test_identity_answer_has_no_placeholder():
     assert "我叫曈曈" in answer, f"身份锚点缺失：{answer[:60]}"
     # 同义反复自检：不应再出现「我叫X，小名X」
     assert "小名曈曈" not in answer, "仍存在「小名曈曈」同义反复"
+
+def test_detector_never_delegates():
+    """★458 刀3 护栏：检测器**不得**把空答案委派给肺（唯一出口是 `_ir_finalize`）。
+
+    为什么加这条：t146 这四条红（multi_step / knowledge_boundary / deep_search / pipeline）
+    的根因不是测试写错，而是「降级契约被一个新的早退面改写」—— 第 12 位
+    `_detect_experience_route` 命中后直接 `_fallback_to_lung_model`，把本该落到
+    `no_match` 的问题变成了 `experience_failed_to_lung`。458 刀2 把它收回到
+    `_ir_finalize` 单一出口后，四条自然回绿；本用例负责**不让它再退化**。
+
+    两道判据：
+      ① 行为：8 条金标 case 的返回 status 里不许出现 `fallback_to_lung`；
+      ② 结构：`_fallback_to_lung_model` 只能出现在被
+         `_m458_experience_no_delegate` 闸挡在前面的位置（开关打开即不可达）。
+    """
+    import ast
+    import os as _os
+
+    # ---- ① 行为 ----
+    for _cid, _spec in KEY_ROUTES.items():
+        _iw, _events = _make_inner_world()
+        _payload = {"question": _spec["question"], "user_name": "小林",
+                    "correlation_id": _cid}
+        if _cid == "qica":
+            _payload["strategy_context"] = {"qica_suggested_method": "",
+                                            "qica_knowledge_paths": []}
+        _res = _iw._on_inference_request(_payload)
+        _st = str(_res.get("status", ""))
+        assert "fallback_to_lung" not in _st, (
+            f"[{_cid}] 检测器出口又出现委派：{_st}")
+
+    # ---- ② 结构 ----
+    _iw_path = _os.path.join(_os.path.dirname(_os.path.dirname(
+        _os.path.abspath(__file__))), "organs", "brain", "PulseInnerWorld.py")
+    with open(_iw_path, encoding="utf-8") as _f:
+        _tree = ast.parse(_f.read())
+    _bad = []
+    for _fn in ast.walk(_tree):
+        if not isinstance(_fn, ast.FunctionDef) or not _fn.name.startswith("_detect_"):
+            continue
+        _gate = [n.lineno for n in ast.walk(_fn)
+                 if isinstance(n, ast.Call)
+                 and getattr(n.func, "attr", "") == "_m458_experience_no_delegate"]
+        _dele = [n.lineno for n in ast.walk(_fn)
+                 if isinstance(n, ast.Call)
+                 and getattr(n.func, "attr", "") == "_fallback_to_lung_model"]
+        if _dele and (not _gate or min(_gate) > min(_dele)):
+            _bad.append(_fn.name)
+    assert not _bad, f"这些检测器仍在偷偷委派肺：{_bad}"

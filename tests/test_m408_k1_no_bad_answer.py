@@ -124,24 +124,38 @@ class TestB_RouteFallsBack(unittest.TestCase):
         return res, logs, calls
 
     def test_10_unknown_type_returns_no_answer(self):
+        # ★458 刀2（契约变更）：默认开 ⇒ 检测器**不再自己委派肺**，直接 return None，
+        #   把机会交回检测器链（委派收敛到 `_ir_finalize` 唯一出口）。
         res, logs, calls = self._run(dict(self.MATCH))
-        self.assertIsInstance(res, dict)
-        self.assertIsNone(res.get("answer"), "命中 unknown 经验后仍产出了答案")
-        self.assertEqual(1, len(calls), "未走 _fallback_to_lung_model")
-        self.assertTrue(any("408刀1" in str(m) for _, m in logs),
+        self.assertIsNone(res, "458 刀2 打开后，检测器不得再委派肺")
+        self.assertEqual([], calls, "检测器内不许调 _fallback_to_lung_model")
+        self.assertTrue(any("[458刀2]" in str(m) for _, m in logs),
+                        "缺少「经验无答案不委派」留痕")
+        # ★回滚点：开关关 ⇒ 逐字回到 408 行为（dict + answer None + 一次委派 + 408刀1 留痕）
+        with patch("config.ENABLE_M458_EXPERIENCE_NO_DELEGATE", False):
+            res2, logs2, calls2 = self._run(dict(self.MATCH))
+        self.assertIsInstance(res2, dict)
+        self.assertIsNone(res2.get("answer"), "命中 unknown 经验后仍产出了答案")
+        self.assertEqual(1, len(calls2), "开关关时必须仍然走 _fallback_to_lung_model")
+        self.assertTrue(any("408刀1" in str(m) for _, m in logs2),
                         "缺少「仅作参考、不当答案」留痕")
 
     def test_11_status_never_experience_default(self):
         res, _logs, _calls = self._run(dict(self.MATCH))
-        self.assertNotEqual("experience_default", res.get("status"))
-        self.assertEqual("experience_failed_to_lung", res.get("status"))
+        # ★458 刀2：开关开 ⇒ 检测器返回 None（没有 status，更没有 experience_default）
+        self.assertIsNone(res)
+        with patch("config.ENABLE_M458_EXPERIENCE_NO_DELEGATE", False):
+            res2, _l2, _c2 = self._run(dict(self.MATCH))
+        self.assertNotEqual("experience_default", res2.get("status"))
+        self.assertEqual("experience_failed_to_lung", res2.get("status"))
 
     def test_12_hit_is_still_traced(self):
         """命中仍要留痕（谁被命中），否则"经验路由还活着吗"没法观测。"""
         res, logs, _calls = self._run(dict(self.MATCH))
-        self.assertIsInstance(res, dict)
+        self.assertIsNone(res)
         _all = " ".join(str(m) for _l, m in logs)
-        self.assertIn("经验匹配类型", _all)
+        self.assertIn("经验匹配路由", _all, "命中留痕不能因为改了出口就丢")
+        self.assertIn("[458刀2]", _all)
 
 
 # ------------------------------------------------------------------ C 正控

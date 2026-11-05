@@ -17,7 +17,7 @@ import re
 import sys
 import threading
 import time
-from typing import Any
+from typing import Any, ClassVar
 
 from nucleus.LLMDependencyMetrics import KIND_SIMPLE, KIND_RULE, record_local_inference
 
@@ -1509,6 +1509,95 @@ class PulseInnerWorld(
         except Exception as _e:
             silent_exc(_e, where="PulseInnerWorld::_m457_sample_write", level="debug")
 
+    # ===== ★458 刀2：经验路由「无答案不委派」开关 =====
+    @staticmethod
+    def _m458_experience_no_delegate() -> bool:
+        """458 刀2 灰度开关（默认 True）。False ⇒ 逐字节回到 458 前行为。"""
+        try:
+            import config as _c
+            return bool(getattr(_c, "ENABLE_M458_EXPERIENCE_NO_DELEGATE", True))
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::_m458_experience_no_delegate",
+                       level="debug")
+            return False
+
+    # ===== ★458 刀4：handler 实弹脚手架（只搭架子，PCT=0 永不实弹）=====
+    #: 最近若干次实弹的结果（True=正常，False=空答案/委派超时），用于熔断
+    #: ★ClassVar 注解是必须的（RUF012）：类级可变默认值不加注解会被判为共享可变状态。
+    _M458_LIVE_WINDOW: ClassVar[list] = []
+    #: 熔断标记：True ⇒ 本进程内已自动把 PCT 归零
+    _M458_LIVE_TRIPPED = False
+    _M458_LIVE_TRIP_REASON = ""
+
+    @staticmethod
+    def _m458_live_cfg() -> dict:
+        try:
+            import config as _c
+            return {
+                "enabled": bool(getattr(_c, "ENABLE_M458_HANDLER_LIVE", False)),
+                "scope": str(getattr(_c, "M458_HANDLER_LIVE_SCOPE", "self_report") or "off"),
+                "pct": max(0, min(100, int(getattr(_c, "M458_HANDLER_LIVE_PCT", 0) or 0))),
+                "salt": str(getattr(_c, "M458_HANDLER_LIVE_SALT", "m458") or "m458"),
+                "window": max(1, int(getattr(_c, "M458_HANDLER_BREAKER_WINDOW", 20) or 20)),
+                "fails": max(1, int(getattr(_c, "M458_HANDLER_BREAKER_FAILS", 2) or 2)),
+            }
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::_m458_live_cfg", level="debug")
+            return {"enabled": False, "scope": "off", "pct": 0, "salt": "m458",
+                    "window": 20, "fails": 2}
+
+    @staticmethod
+    def _m458_live_bucket(correlation_id: str, salt: str = "m458") -> int:
+        """★458 刀4：稳定分桶。同一 cid 永远落同一桶（**不用 random()**）。
+
+        示例:
+            _m458_live_bucket("dlg:4:1793880475719", "m458")  # 固定值，可复现
+        """
+        try:
+            import hashlib as _h
+            _raw = f"{salt}|{correlation_id}".encode()
+            return int(_h.md5(_raw).hexdigest()[:8], 16) % 100
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::_m458_live_bucket", level="debug")
+            return 100          # 出错一律不实弹（保守）
+
+    @classmethod
+    def _m458_live_allowed(cls, correlation_id: str, would_handler: str) -> bool:
+        """★458 刀4：三个条件全满足才返回 True（本批 PCT=0 ⇒ 恒 False）。
+
+        条件：①总闸开；②scope 命中该类 handler；③哈希桶 < PCT 且未熔断。
+        """
+        _c = cls._m458_live_cfg()
+        if not _c["enabled"] or not correlation_id or not would_handler:
+            return False
+        if _c["scope"] not in ("all", str(would_handler)):
+            return False
+        if cls._M458_LIVE_TRIPPED:
+            return False
+        if _c["pct"] <= 0:
+            return False
+        return cls._m458_live_bucket(correlation_id, _c["salt"]) < _c["pct"]
+
+    @classmethod
+    def _m458_live_note(cls, ok: bool) -> bool:
+        """★458 刀4：熔断埋点。最近 WINDOW 次里失败 ≥ FAILS ⇒ 自动归零并留痕。"""
+        try:
+            _c = cls._m458_live_cfg()
+            cls._M458_LIVE_WINDOW.append(bool(ok))
+            if len(cls._M458_LIVE_WINDOW) > _c["window"]:
+                del cls._M458_LIVE_WINDOW[:-_c["window"]]
+            _fails = sum(1 for x in cls._M458_LIVE_WINDOW if not x)
+            if (not cls._M458_LIVE_TRIPPED) and _fails >= _c["fails"]:
+                cls._M458_LIVE_TRIPPED = True
+                cls._M458_LIVE_TRIP_REASON = (
+                    f"最近{len(cls._M458_LIVE_WINDOW)}次实弹失败{_fails}次"
+                    f">={_c['fails']} ⇒ PCT 自动归零")
+                return True
+            return False
+        except Exception as _e:
+            silent_exc(_e, where="PulseInnerWorld::_m458_live_note", level="debug")
+            return False
+
     def _m456_intent_shadow(self, ctx: "PulseInnerWorld.InferenceContext") -> dict:
         """刀3/刀4：在 QICA 方法派发**之前**预演一次意图分流，只写 trace。
 
@@ -1559,6 +1648,15 @@ class PulseInnerWorld(
             self._log(LogLevel.INFO,
                       f"[457刀4] intent_shadow: qica_intent_type={_it or '-'}, "
                       f"would_handler={_would or '-'}, handled_by={_handled or '-'}")
+            # ★458 刀4：实弹闸的判定结果（PCT=0 ⇒ 恒 False；有 would_handler 才打）
+            if _would:
+                _live = self._m458_live_allowed(str(getattr(ctx, "correlation_id", "") or ""),
+                                                _would)
+                self._log(LogLevel.INFO,
+                          f"[458刀4] handler实弹闸: live={_live} would={_would} "
+                          f"scope={self._m458_live_cfg()['scope']} "
+                          f"pct={self._m458_live_cfg()['pct']} "
+                          f"bucket={self._m458_live_bucket(str(getattr(ctx, 'correlation_id', '') or ''))}")
             # ★457 刀5：落一条可标注样本（expected_intent 留空，人工填）
             self._m457_sample_write(_q, _it, _would)
             return {"would_handler": _would, "code_evidence_count": _cn,
@@ -4806,6 +4904,17 @@ class PulseInnerWorld(
             # → 走大模型兜底或诚实回答
             self._log(LogLevel.INFO,
                       f"经验匹配类型={_exp_type or '空'}但推理算子未产出答案，走兜底")
+            # ★458 刀2（P1）：检测器**不做委派**。
+            #   背景：第 12 位 experience 只要打分 ≥0.5 就吃掉后面 7 个检测器，
+            #   代码类问题被一个语义不相关的 0.95 分提前掐死，从"本地代码链"退化为
+            #   "外脑问答"；且这条路是**唯一没有终态兜底**的出口（20:07 事故）。
+            #   开关打开 ⇒ 直接 return None，把机会交回检测器链，最终由
+            #   `_ir_finalize`（唯一委派出口）决定要不要交给肺。
+            if self._m458_experience_no_delegate():
+                self._log(LogLevel.INFO,
+                          f"[458刀2] 经验无答案不委派: type={_exp_type or '空'} "
+                          f"conf={_exp_match.get('confidence', 0):.2f} ⇒ 交回检测器链")
+                return None
             _fallback_result = self._fallback_to_lung_model(ctx, ctx.guidance)
             if _fallback_result:
                 # 替换返回状态为 experience_failed 系列

@@ -161,6 +161,18 @@ class PulseCortex(BasePulseOrgan):
             "checked": 0, "dropped_cancelled": 0,
             "dropped_stale": 0, "queued": 0, "hint_sent": 0,
         }
+        # ===== ★458 刀1（P0）：委派账本 =====
+        # 背景（2026-11-05 20:07 实盘事故）：`_detect_experience_route` 把代码类问题
+        #   委派给肺，肺那一跳丢失；而 `_pending_inner_world` 已在 _on_inference_result
+        #   的第一段被 pop ⇒ 唯一带超时监控的账本随之消失 ⇒ _dialog_mark_output_done
+        #   的四个出口全部关死 ⇒ 对话闸永久 inflight ⇒ 后续问题全排队、只能重启。
+        # 本账本就是那本「外包台账」：有账、有期限、有出口。
+        #   key = correlation_id
+        #   value = {deadline, prompt_len, method, question, user_name, ts}
+        self._delegate_pending: dict[str, dict[str, Any]] = {}
+        self._delegate_stats: dict[str, int] = {
+            "registered": 0, "settled_reply": 0, "timeout": 0, "suppressed": 0,
+        }
         # ★第237批 刀3：待发回执账本（B3 肺应答回传布线·账本+回执两钩方案）
         #   key = correlation_id；value = (question, ts)；补救分发成功时入账，
         #   肺应答回传(_maybe_append_self_state 命中)即调 indexer 记成功并出账。
@@ -746,6 +758,8 @@ class PulseCortex(BasePulseOrgan):
             _source = payload.get("source", "")
             # 只有对话回复（source为lung/cortex且cid非空）才标记完成，主动交互不标记
             if _cid and _source in ("lung", "cortex"):
+                # ★458 刀1：委派结算（肺正常输出 ⇒ 出账，看门狗不再管它）
+                self._m458_settle_delegate(_cid, reason="reply")
                 self._dialog_mark_output_done(_cid)
             return {"status": "output_done_acked", "correlation_id": _cid}
 
@@ -788,6 +802,9 @@ class PulseCortex(BasePulseOrgan):
         elif event_type == HeartEvent.BEAT:
             # ★v24.0新增：心跳驱动清理过期的待处理推理条目
             self._cleanup_pending_inner_world()
+            # ★458 刀1：委派看门狗（**独立一本账** —— 委派超时发生在内在世界已回
+            #   空答案之后，条目早被 pop，上面那条清理永远扫不到，这正是事故成因）
+            self._m458_sweep_delegates()
             # ★FIX(全局并行调度): 低频触发三通道并行审查（硬件自适应并行度）
             _beat_count = getattr(self, '_parallel_audit_beat_counter', 0) + 1
             self._parallel_audit_beat_counter = _beat_count
@@ -1023,7 +1040,11 @@ class PulseCortex(BasePulseOrgan):
         if not correlation_id:
             return False
         try:
-            if correlation_id not in self._remediation_lock_time:
+            # ★458 刀1：本方法此前是**死代码**（全仓 0 调用点）。
+            #   现在它同时是「委派账本」的续期口：cid 在委派账里也允许续期，
+            #   看门狗会读取该宽限（_m458_sweep_delegates），不再是"看起来有保护"。
+            if (correlation_id not in self._remediation_lock_time
+                    and correlation_id not in getattr(self, "_delegate_pending", {})):
                 return False
             _cur = float(self._remediation_lock_extra.get(correlation_id, 0.0) or 0.0)
             self._remediation_lock_extra[correlation_id] = max(_cur, float(extra_seconds or 0.0))
@@ -1208,6 +1229,118 @@ class PulseCortex(BasePulseOrgan):
             return False
         return True
 
+    # ===== ★458 刀1（P0）：委派账本 + 看门狗 =====
+    @staticmethod
+    def _m458_delegate_timeout_sec() -> float:
+        """委派超时（秒）。★单独配置：语义与补救锁的 90s 不同，不复用。"""
+        try:
+            import config as _cfg
+            return max(5.0, float(getattr(_cfg, "DIALOG_DELEGATE_TIMEOUT_SEC", 90.0) or 90.0))
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseCortex::_m458_delegate_timeout_sec",
+                       level="debug")
+            return 90.0
+
+    def _m458_note_delegate(self, correlation_id, prompt, method,
+                            is_dialogue: bool = True, user_name: str = "用户") -> None:
+        """★458 刀1 A：把「外包给肺」变成有账可查。
+
+        ★必须写在发射 SELECT_MODEL **之前**：事件一旦发出，肺可能先返回，
+          后登记就会漏掉最快的那条路径（正是这次事故的形状）。
+        ★只登记**对话**委派：后台学习没有用户在等，不该占看门狗与队列闸。
+        """
+        try:
+            if not correlation_id or not is_dialogue:
+                return
+            import config as _cfg
+            if not bool(getattr(_cfg, "ENABLE_M458_DELEGATE_WATCHDOG", True)):
+                return
+            _now = time.time()
+            _plen = len(str(prompt or ""))
+            self._delegate_pending[str(correlation_id)] = {
+                "deadline": _now + self._m458_delegate_timeout_sec(),
+                "prompt_len": _plen,
+                "method": str(method or ""),
+                "question": str(prompt or "")[:80],
+                "user_name": str(user_name or "用户"),
+                "ts": _now,
+            }
+            self._delegate_stats["registered"] += 1
+            self._log(LogLevel.INFO,
+                      f"[458刀1] delegate: cid={str(correlation_id)[:16]} "
+                      f"prompt_len={_plen} claim=ok method={str(method or '')[:24]}")
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseCortex::_m458_note_delegate",
+                       level="debug")
+
+    def _m458_settle_delegate(self, correlation_id, reason: str = "reply") -> bool:
+        """★458 刀1 B：委派结算（幂等）。REPLY / 失败 SPEAK 都要走这里。"""
+        try:
+            if not correlation_id:
+                return False
+            _rec = self._delegate_pending.pop(str(correlation_id), None)
+            if _rec is None:
+                return False
+            if reason == "reply":
+                self._delegate_stats["settled_reply"] += 1
+            return True
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseCortex::_m458_settle_delegate",
+                       level="debug")
+            return False
+
+    def _m458_sweep_delegates(self, now: float | None = None) -> int:
+        """★458 刀1 C：委派看门狗 —— 委派超时的**唯一**兜底出口。
+
+        ★为什么不复用 `_cleanup_pending_inner_world`：那条扫的是「内在世界还没回」；
+          而委派超时发生在内在世界**已经回了空答案**之后，`_pending_inner_world`
+          早被 pop（PulseCortex.py:1318）⇒ 它永远扫不到。事故里四个
+          `_dialog_mark_output_done` 出口全关，根因就在这里。
+        """
+        _n = 0
+        try:
+            if not self._delegate_pending:
+                return 0
+            import config as _cfg
+            if not bool(getattr(_cfg, "ENABLE_M458_DELEGATE_WATCHDOG", True)):
+                return 0
+            _now = float(now if now is not None else time.time())
+            for _cid, _rec in list(self._delegate_pending.items()):
+                _dl = float(_rec.get("deadline") or 0.0)
+                # ★extend_remediation_lock 的宽限对委派账本同样生效（见该方法）
+                _dl += float(getattr(self, "_remediation_lock_extra", {}).get(_cid, 0.0) or 0.0)
+                if _now <= _dl:
+                    continue
+                self._delegate_pending.pop(_cid, None)
+                self._delegate_stats["timeout"] += 1
+                _waited = max(0.0, _now - float(_rec.get("ts") or _now))
+                # ★D：文案必须说「已经失败」，绝不写"请稍候"（否则用户继续等、
+                #   继续追问，队列越堆越长 —— 本次事故的 4 条追问就是这么来的）。
+                _content = (
+                    f"这个问题我没能拿到结果——委派出去的那一步等了 {_waited:.0f} 秒"
+                    f"没有回应。不是你的问题，你可以换个问法，或者过一会儿再问我一次。"
+                )
+                if self._dialog_should_output(_cid):
+                    self._emit(MouthEvent.SPEAK, {
+                        "content": _content,
+                        "source": "cortex_watchdog",
+                        "user_name": str(_rec.get("user_name") or "用户"),
+                        "reasoning_path": "delegate_timeout",
+                        "correlation_id": _cid,
+                    }, priority=7, layer="L1")
+                    # ★关键：必须放行队列，否则下一条继续排队（事故形状）
+                    self._dialog_mark_output_done(_cid)
+                self._log(LogLevel.WARNING,
+                          f"[458刀1] 委派超时兜底: cid={_cid[:16]} "
+                          f"method={str(_rec.get('method') or '')[:24]} "
+                          f"等了{_waited:.1f}s prompt_len={_rec.get('prompt_len')} "
+                          f"问题='{str(_rec.get('question') or '')[:40]}...'")
+                _n += 1
+            return _n
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseCortex::_m458_sweep_delegates",
+                       level="warning")
+            return _n
     def _dialog_mark_output_done(self, correlation_id: str) -> None:
         """标记某会话已输出完毕，并尝试派发队列中的下一条。"""
         if correlation_id:
@@ -1471,6 +1604,10 @@ class PulseCortex(BasePulseOrgan):
                                       f"cid={str(correlation_id)[:16]}")
                             return {"status": "suppressed_duplicate_select_model",
                                     "correlation_id": correlation_id}
+                        # ★458 刀1 A：对话回退同样要登记委派（这条也是 user_query 路径）
+                        self._m458_note_delegate(correlation_id, fallback_prompt, method,
+                                                 is_dialogue=not _is_inner_autonomous,
+                                                 user_name=fallback_user)
                         self._emit(LungEvent.SELECT_MODEL, {
                             "task_type": "chat",
                             "prompt": fallback_prompt,
@@ -1762,6 +1899,11 @@ class PulseCortex(BasePulseOrgan):
                             "correlation_id": correlation_id}
                 # ★第237批 刀1：补救分发成功（未被去重抑制）→ 记入待发回执账本
                 self._receipt_ledger_record(correlation_id, ctx.get("content", ""))
+                # ★458 刀1 A：补救委派同样登记（补救是最容易超时的一条路）
+                self._m458_note_delegate(correlation_id, ctx.get("content", ""),
+                                         "remediation",
+                                         is_dialogue=not _is_inner_autonomous,
+                                         user_name=user_name)
                 self._emit(LungEvent.SELECT_MODEL, {
                     "task_type": "chat",
                     "prompt": ctx.get("content", ""),
@@ -2019,6 +2161,10 @@ class PulseCortex(BasePulseOrgan):
                           f"cid={str(correlation_id)[:16]}")
                 return {"status": "suppressed_duplicate_select_model",
                         "correlation_id": correlation_id}
+            # ★458 刀1 A：委派登记必须在发射**之前**（肺可能先于本函数返回）
+            self._m458_note_delegate(correlation_id, ctx.get("content", ""), method,
+                                     is_dialogue=not _is_inner_autonomous,
+                                     user_name=user_name)
             self._emit(LungEvent.SELECT_MODEL, {
                 "task_type": "chat",
                 "prompt": ctx["content"],
