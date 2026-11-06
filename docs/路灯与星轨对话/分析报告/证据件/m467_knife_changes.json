@@ -1,0 +1,142 @@
+{
+  "batch": 467,
+  "title": "补丁生成侧「喂料」修复：含 def 的完整方法 + 上限放宽 + AST 结构门 + 跨轮失败经验 + 不可修退出",
+  "date": "2026-11-06",
+  "root_cause": {
+    "one_line": "喂给 LLM 的是「方法体」（12514 字符、无 def），prompt 再截到 2000/3000 字符；模型照着输入形状回方法体，入队侧判 no_def 作废。",
+    "measured_facts": [
+      {
+        "item": "get_method_body('PulseLiver','_compress_group')['body']",
+        "reading": "长度 12514，首行 '        if len(nodes) > 40:'，不含 def 行",
+        "source": "生产函数实跑，2026-11-06"
+      },
+      {
+        "item": "同次调用的 args 字段",
+        "reading": "prefix: str, nodes: list[PulseNode]（无 self、无 -> bool）",
+        "why_matters": "所以**不能凭 args 拼 def 行**：拼出的文本在源文件里定位不到，full_content.replace() 会静默不替换"
+      },
+      {
+        "item": "源文件真实 def 行",
+        "reading": "    def _compress_group(self, prefix: str, nodes: list[PulseNode]) -> bool:",
+        "source": "organs/body/PulseLiver.py 第 1610 行（line_number=1609 是 0-based）"
+      },
+      {
+        "item": "converge_voided.jsonl 的 no_def 分布",
+        "reading": "PulseLiver._compress_group 连续 63 次作废，100% 来自 patch_multi_*",
+        "why_matters": "445 的 require_full_def 只接在单文件路径 _call_llm_for_repair 上 —— 开关罩错了路径"
+      },
+      {
+        "item": "prompt 截断上限",
+        "reading": "单文件 code_snippet[:2000]（16%，硬切）；多文件 _M428_PROMPT_ORIG_LIMIT=3000（23%，自洽截断）",
+        "source": "AdaptiveQueryStrategyGenerator.py:205 / LLMEvolutionEngine.py:326"
+      }
+    ],
+    "live_evidence_20261106": {
+      "at": "14:55:26",
+      "log": "跨文件补丁验证失败: patch_multi_1793948125_2623 → ['语法错误(IndentationError): unexpected indent (<llm-patch>, line 1624)']",
+      "why": "line 1624 落在 _compress_group 方法体内部（def 行是 1610）—— 3000 字符硬边界把方法从中间切断，缩进不完整。这是本批病灶的**实盘实证**，不是推测。"
+    }
+  },
+  "knives": [
+    {
+      "id": "刀1",
+      "what": "喂料补全：original_code 从「方法体」升级为「含 def 行的完整方法原文」",
+      "impl": "nucleus/evolution/feed_code.py::method_block() 用 AST 按名定位 + end_lineno 取原文，保留缩进与行尾；SafeEvolutionExecutor._generate_llm_patch 调用它",
+      "sw": "ENABLE_M467_FEED_WITH_DEF",
+      "why_not_args": "args 实测丢了 self 与 -> bool（见 root_cause.measured_facts[1]）"
+    },
+    {
+      "id": "刀2",
+      "what": "代码段上限 2000/3000 → 16000（可配置），单文件路径改为「语法自洽截断 + 如实告知」",
+      "impl": "feed_code.prompt_code_limit()；AdaptiveQueryStrategyGenerator._m467_clip_code() 复用 428 的 _m428_self_contained_prefix；LLMEvolutionEngine 调用点改传新上限；prompt 新增「要求 7：modified_code 必须含 def」",
+      "sw": "M467_PROMPT_CODE_LIMIT"
+    },
+    {
+      "id": "刀3",
+      "what": "生成后纯 AST 结构自检 + 有界回灌重生成（上限 2 次）；结构不过的补丁**不回队列**",
+      "impl": "LLMEvolutionEngine._m467_struct_gate / _m467_split / _m467_hint；feed_code.struct_defects",
+      "sw": "ENABLE_M467_STRUCT_GATE / M467_STRUCT_REGEN_MAX",
+      "why": "no_def / def 名错配 / 语法错都能毫秒级判定；跑副本验证要几十秒。便宜判据前置才可能重试 2 次",
+      "why_not_return": "注定被 284刀5 作废的补丁回队列会白占一次入池名额，还把 no_def 计数再推高一次"
+    },
+    {
+      "id": "刀4",
+      "what": "prior_error 跨轮回填 + 445 硬要求接进**多文件**路径",
+      "impl": "SafeEvolutionExecutor 从 criteria_window.no_def_streak 取 streak，填 _issue['prior_error'] 与 _issue['m445_require_full_def']；LLMEvolutionEngine._m467_prior_notice 消费",
+      "why": "prior_error 此前只在同一轮多步规划内部由 plan['llm_prior_error'] 填充，跨轮恒为空 ⇒ 每轮从零开始，模型永远不知道上一版为何被拒"
+    },
+    {
+      "id": "刀5",
+      "what": "同一 (file,method) 连续 N 次结构缺陷未修好 ⇒ 判「不可修」并停止生成",
+      "impl": "nucleus/evolution/struct_streak.py（append-only 台账 data/evolution/struct_defect_ledger.jsonl）；SafeEvolutionExecutor 预检读 should_stop；结构门写 defect / ok 事件",
+      "sw": "M467_UNFIXABLE_STREAK",
+      "why_new_ledger": "复用 criteria_window 的 no_def 台账会在上线第一天就把 _compress_group 永久关掉（那里已有 51+ 次历史）",
+      "recovery": "结构门每次成功写一条 ok 作为恢复点，连续计数从此断开；人工确认问题不存在后可删台账重试"
+    }
+  ],
+  "verification": {
+    "feed_comparison": {
+      "old_body": {"len": 12514, "struct_defects": ["no_def"]},
+      "new_block": {"len": 12903, "struct_defects": [], "byte_identical_to_source": true, "first_line": "    def _compress_group(self, prefix: str, nodes: list[PulseNode]) -> bool:"},
+      "fits_prompt_limit": {"limit": 16000, "block": 12903, "ok": true}
+    },
+    "def_name_parity": {
+      "baseline": "PatchManager._m280_extract_def_name（入队侧真函数）",
+      "samples": 10,
+      "result": "ALL OK"
+    },
+    "discriminating_power": {
+      "rename_def": "def_name_mismatch:_compress_groupx",
+      "drop_colon": "syntax_error",
+      "empty": "empty"
+    },
+    "crlf_dedent_trap": {
+      "found_in_t0": true,
+      "detail": "textwrap.dedent 用 ^[ \\t]+$ 认纯空白行；CRLF 文件的空行是 \\r，匹配不上 ⇒ 公共前缀算成 0 ⇒ 完整方法被判 unexpected indent@1（PulseLiver.py 4079 CRLF / 0 裸 LF）",
+      "fix": "struct_defects 先归一化行尾，再按 dedent → 原样 → class 包裹三种形态依次试",
+      "regression_test": "test_05_crlf_blank_lines_do_not_break_syntax_check"
+    },
+    "struct_gate_e2e": {
+      "scenario": "首发坏补丁 → 回灌第 1 次仍坏 → 回灌第 2 次修好",
+      "llm_calls": 2,
+      "kept_patches": 1,
+      "kept_has_def": true,
+      "note": "第 2 次才修好 ⇒「上限 2 次」不是摆设；若设 1 次这条就废了"
+    },
+    "gate_bounded": {"limit": 2, "llm_calls_when_always_bad": 2, "returned": 0},
+    "unfixable_exit": {
+      "after_5_defects": {"stop": true, "streak": 5, "limit": 5},
+      "after_ok_event": {"stop": false, "streak": 0},
+      "targets_isolated": true,
+      "basename_normalized": true
+    },
+    "caller_migration_not_killed": {"good": 1, "bad": 0},
+    "gate_off_returns_input": true
+  },
+  "live_round_evidence": {
+    "note": "活体 pid=20100 启动于 14:14:20，**未含 466/467**；下面两条是 465 生效与本批病灶的实证，用于 468 对照。",
+    "channel_failover_worked_at": "14:53:30",
+    "failover_chain": [
+      "zhipu-47-flash（glm-4.7-flash）→ HTTP 429 code=1305 rate_limited",
+      "bailian-qwen-plus（qwen-plus）→ HTTP 403 AllocationQuota.FreeTierOnly quota",
+      "siliconflow-qwen2-7b（zai-org/GLM-5.3-Flash）→ HTTP 402 balance insufficient quota",
+      "zhipu（glm-4-flash）→ 成功 tokens=877（第 4 个渠道）"
+    ],
+    "first_llm_patch_verified": {
+      "id": "patch_llm_1793948040_7ea6",
+      "method": "_schedule_next_beat",
+      "status": "verified",
+      "modified_first_line": "def _schedule_next_beat(self):",
+      "significance": "LLM 补丁第一次走到 verified；此前 submitted 长期为 0"
+    },
+    "funnel": {"at": "14:54:14", "candidate": 5, "admitted": 2, "processed": 2, "repaired": 2, "pass_rate": "100.0%"},
+    "funnel_field_caveat": "repair_funnel 的 submitted 字段实为 _repaired（= _local_submitted + _submitted，见 SafeEvolutionExecutor L3035/L3093）⇒ 命名误导，468 应补 repaired 字段（只加不改）",
+    "open_defect_for_468": {
+      "what": "465 的同轮熔断计数在 14:54:15 已到「连续第 4/5/6 次」，超过阈值 3 仍未拦下",
+      "possible_cause": "_m465_fail_streak 是实例属性，换道重试在同一逻辑调用内连打多次会一次 +3；跨轮若复用实例则阈值判断点不在换道入口",
+      "status": "未修，记入 468"
+    }
+  },
+  "gates": {"count": 13, "result": "见交付报告"},
+  "tests": {"new": 22, "regression": "见交付报告"}
+}
