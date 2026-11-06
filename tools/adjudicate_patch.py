@@ -171,15 +171,50 @@ def _cmd_approve(args, pm, pending, history, obsolete, _op):
     if _name != "pending":
         print("approve 仅对 pending 补丁有效", file=sys.stderr)
         return 2
-    _p["status"] = "approved"
-    _p["adjudicated"] = True
-    _p["adjudicated_at"] = time.time()
-    _p["adjudicated_by"] = "adjudicate_patch.cli"
-    _p["adjudicated_verdict"] = "approved"
-    if not _save_ledger(pm, _name, _lst):
-        print("写盘失败", file=sys.stderr)
+
+    # ★473刀8：人工批准必须走**唯一 approved 写入口** `_approve_via`。
+    #   根因（实测 2026-11-07）：原实现只改 status/adjudicated_* 四个字段，
+    #   **从不写 approved_source** ⇒ 核心闸门 `_m471_core_human_exempt`
+    #   （判据 approved_source == "human"）认不出这是人工批准
+    #   ⇒ 人在 CLI 上批了，补丁照样落不了地，自主进化闭环在这里断掉。
+    #   `approve_patch_by_id(by="human:...")` 会把 source 置 "human"，
+    #   并跑完治理门禁（_govern_fields_ok / _boundary_check / _truth_ok）
+    #   与 O3 四审；本 CLI 不再自行改状态字段（改了也过不了闸，只是假批准）。
+    _by = "human:adjudicate_patch.cli"
+    try:
+        _res = pm.approve_patch_by_id(
+            args.patch_id, by=_by, reason=str(getattr(args, "reason", "") or ""))
+    except Exception as _e:
+        silent_exc(_e, where="adjudicate_patch::_cmd_approve 调 approve_patch_by_id",
+                   level="warning")
+        print(f"批准调用异常: {type(_e).__name__}: {_e}", file=sys.stderr)
         return 1
-    print(f"✅ 已裁决 approved: {args.patch_id}")
+    if not isinstance(_res, dict) or not _res.get("ok"):
+        _why = (_res or {}).get("reason") if isinstance(_res, dict) else str(_res)
+        print(f"❌ 批准未通过治理门禁: {_why}", file=sys.stderr)
+        return 2
+
+    # 裁决留痕：状态字段已由写入口落好，这里只叠加「人工裁决」标记。
+    # 必须**重读** pending —— 写入口已经改过盘，手里这份 `pending` 是旧的。
+    try:
+        _pend2 = pm._load_patch_list(pm.get_pending_file())
+    except Exception as _e:
+        silent_exc(_e, where="adjudicate_patch::_cmd_approve 重读 pending", level="warning")
+        print(f"✅ 已裁决 approved（approved_source=human）: {args.patch_id}"
+              f"（裁决标记未落，重读失败）")
+        return 0
+    if isinstance(_pend2, list):
+        for _q in _pend2:
+            if isinstance(_q, dict) and str(_q.get("id") or "") == str(args.patch_id):
+                _q["adjudicated"] = True
+                _q["adjudicated_at"] = time.time()
+                _q["adjudicated_by"] = "adjudicate_patch.cli"
+                _q["adjudicated_verdict"] = "approved"
+                break
+        if not _save_ledger(pm, "pending", _pend2):
+            print("裁决标记写盘失败（批准本身已生效）", file=sys.stderr)
+            return 1
+    print(f"✅ 已裁决 approved（approved_source=human）: {args.patch_id}")
     return 0
 
 
