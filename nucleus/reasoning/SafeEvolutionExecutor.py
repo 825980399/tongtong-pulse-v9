@@ -926,6 +926,106 @@ _M468_APPROVAL_RETRY_MAX = 3
 
 
 
+def _m468_approval_refund_on() -> bool:
+    """`ENABLE_M468_APPROVAL_REFUND`（缺省 True）：落地失败退还当日审批额度。"""
+    try:
+        import config as _c468rf
+        return bool(getattr(_c468rf, "ENABLE_M468_APPROVAL_REFUND", True))
+    except Exception as _e468rf:
+        silent_exc(_e468rf,
+                   where="SafeEvolutionExecutor::_m468_approval_refund_on",
+                   level="debug")
+        return True
+
+
+#: ★468刀6：单轮最多退几条（防一次把留痕刷满；也避免误判连带退还）
+_M468_REFUND_MAX_PER_ROUND = 5
+
+
+def _m468_settle_approval_refund(pending, history=None, *, root=None,
+                                 now=None) -> dict:
+    """★468刀6：审批额度结算 —— 放行了却没落地的补丁，把额度退回去。
+
+    病因（T0 实测 2026-11-06）：`approved_today()` 只数「留痕里 approved=True
+    的行」，**不看后续是否真的落地**。14:11:21 `patch_llm_1793945467_7587`
+    被放行，随后 apply 失败（`副本验证失败: ['基础缩进不一致（未替换）:
+    original=8 modified=0']`，`applied=False` / `problem_fixed=False`）——
+    可额度已经计费了。`M447_APPROVE_DAILY_CAP` 缺省 1，当日额度就此用尽：
+    14:13→16:15 共 12 次审批全部 `blocked=daily_cap`，pending 堆到 9 条、
+    `approved` 恒 0 ⇒ `[422刀3]` 永不触发 apply ⇒ 进化闭环两小时零落地。
+
+    结算口径（四条全中才退）：
+        1) `patch_id` 今天确实被放行过（留痕 `approved=True`）
+        2) 今天还没退过（幂等：同件多次 apply 失败只退一次）
+        3) `applied is not True`（真落地了，额度用得其所，不退）
+        4) `apply_error` 非空（**还没尝试过落地的件不退**，给它机会）
+
+    Args:
+        pending: `pending_patches.json` 的行（在队列里就能结算）
+        history: `patch_history.json` 的行（已出队但今天放行过的也算）
+
+    Returns:
+        ``{"scanned": n, "refunded": n, "skipped": n}``
+    """
+    _out = {"scanned": 0, "refunded": 0, "skipped": 0}
+    if not _m468_approval_refund_on():
+        return _out
+    try:
+        from nucleus.evolution import approval_bridge as _ab468rf
+    except Exception as _e468imp:
+        silent_exc(_e468imp,
+                   where="SafeEvolutionExecutor::468 退款导入", level="debug")
+        return _out
+    _now = float(now if now is not None else time.time())
+    try:
+        _appr = _ab468rf.approved_today_ids(root, now=_now)
+        _refd = _ab468rf.refunded_today_ids(root, now=_now)
+    except Exception as _e468rd:
+        silent_exc(_e468rd,
+                   where="SafeEvolutionExecutor::468 退款读留痕", level="warning")
+        return _out
+    if not _appr:
+        return _out
+    _rows: list = []
+    for _src in (pending, history):
+        if isinstance(_src, list):
+            _rows.extend(_src)
+    for _p in _rows:
+        if not isinstance(_p, dict):
+            continue
+        _out["scanned"] += 1
+        _pid = str(_p.get("id") or "").strip()
+        if not _pid or _pid not in _appr:
+            continue
+        if _pid in _refd:
+            continue
+        if _p.get("applied") is True:
+            continue
+        _err = str(_p.get("apply_error") or "").strip()
+        if not _err:
+            continue
+        if _out["refunded"] >= _M468_REFUND_MAX_PER_ROUND:
+            break
+        try:
+            _ok468 = _ab468rf.note_approval_refund(
+                _p, reason=f"apply_failed:{_err[:120]}", root=root, now=_now)
+        except Exception as _e468wr:
+            silent_exc(_e468wr,
+                       where="SafeEvolutionExecutor::468 写退款", level="warning")
+            _ok468 = False
+        if _ok468:
+            _out["refunded"] += 1
+            _refd.add(_pid)
+        else:
+            _out["skipped"] += 1
+    if _out["refunded"]:
+        _module_logger.info(
+            "[468刀6] 审批额度退款: 退=%d 跳过=%d"
+            "（当日额度被未落地补丁占用 ⇒ 退还给后续审批）",
+            _out["refunded"], _out["skipped"])
+    return _out
+
+
 def _m468_file_fallback_on() -> bool:
     """`ENABLE_M468_ORGAN_FILE_FALLBACK`（缺省 True）。
 
@@ -3506,6 +3606,19 @@ class SafeEvolutionExecutor:
             _reverify_undecidable = 0   # ★438刀3：基线不可判定单列，不混进 failed
             _needs_reverify = 0
             _reverify_delay = 3600  # 延迟复验窗口（秒）：到点后重采基线
+
+            # ★468刀6：**先结算退款**（把「放行但没落地」占用的额度退回来），
+            #   必须排在刀2 重投之前 —— 否则重投照旧撞 daily_cap，白跑一轮。
+            try:
+                _m468_settle_approval_refund(
+                    _pending,
+                    self._patch_manager.load_json(
+                        self._patch_manager.get_history_file(), []),
+                    root=None)
+            except Exception as _e468s:
+                silent_exc(_e468s,
+                           where="SafeEvolutionExecutor::468 退款结算",
+                           level="warning")
 
             # ★468刀2：审批重投 —— 被日限额挡下的补丁不能永久滞留
             #   病因（T0 实测 2026-11-06）：`_m447_try_approve` 只在「补丁刚生成」

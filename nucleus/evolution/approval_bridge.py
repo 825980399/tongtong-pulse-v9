@@ -293,19 +293,20 @@ def scope_ok(patch: dict) -> tuple[bool, str]:
     return (not _why), ("; ".join(_why) if _why else "边界通过")
 
 
-def approved_today(root: str | None = None, *, now: float | None = None) -> int:
-    """今天（本地日）已经自动批准了多少条 —— 数**留痕**，不数别的账本。
+def _read_today_rows(root: str | None = None, *,
+                     now: float | None = None) -> list:
+    """★468刀6：读出**当天**的全部审批留痕行（坏行跳过；读失败返空表）。
 
-    为什么数留痕而不是 `auto_approved.json`：那份账本只记决策，
-    而本层要数的是"本层放行了几条"，两者在人工批准混入后会分叉。
+    只读、不写。`approved_today` / `approved_today_ids` / `refunded_today_ids`
+    共用本口，避免三处各写一遍解析逻辑而慢慢分叉。
     """
     _p = approval_trace_path(root)
     _now = float(now if now is not None else time.time())
     _day = time.strftime("%Y-%m-%d", time.localtime(_now))
-    _n = 0
+    _rows: list = []
     try:
         if not os.path.isfile(_p):
-            return 0
+            return _rows
         with open(_p, "r", encoding="utf-8") as _f:
             for _line in _f:
                 _line = _line.strip()
@@ -316,12 +317,116 @@ def approved_today(root: str | None = None, *, now: float | None = None) -> int:
                 except ValueError as _e:
                     _log_debug("审批留痕坏行（跳过，不影响计数）: %s", _e)
                     continue
-                if str(_row.get("day") or "") == _day and _row.get("approved") is True:
-                    _n += 1
+                if not isinstance(_row, dict):
+                    continue
+                if str(_row.get("day") or "") != _day:
+                    continue
+                _rows.append(_row)
     except OSError as _e:
         _log_debug("读审批留痕失败（按 0 计，不阻断）: %s", _e)
-        return 0
-    return _n
+        return []
+    return _rows
+
+
+def _pid_of(row: dict) -> str:
+    """取 id：留痕行用 `patch_id`，补丁对象用 `id`（两者都要认）。
+
+    只认 `patch_id` 会踩坑：`note_approval_refund` 收到的是**补丁对象**
+    （键是 `id`），取空串后一句 "缺 patch_id，跳过" 就静默不退，
+    表现为"结算跑了但 refunded=0"（468刀6 首轮探针实测）。
+    """
+    _r = row or {}
+    return str(_r.get("patch_id") or _r.get("id") or "").strip()
+
+
+def approved_today(root: str | None = None, *, now: float | None = None) -> int:
+    """今天（本地日）已经自动批准了多少条 —— 数**留痕**，不数别的账本。
+
+    为什么数留痕而不是 `auto_approved.json`：那份账本只记决策，
+    而本层要数的是"本层放行了几条"，两者在人工批准混入后会分叉。
+
+    ★468刀6：**退款结算**（`refund: true` 的留痕行从额度里扣回）。
+    病因（T0 实测 2026-11-06）：14:11:21 `patch_llm_1793945467_7587` 被放行，
+    随后 apply 失败（`副本验证失败: ['基础缩进不一致（未替换）: original=8 modified=0']`，
+    `applied=False` / `problem_fixed=False`）——可额度已经计费了。
+    `M447_APPROVE_DAILY_CAP` 缺省 1，当日额度就此用尽：14:13→16:15 共 **12 次**
+    审批全部 `blocked=daily_cap`，pending 堆到 9 条、`approved` 恒 0，
+    `[422刀3]` 永不触发 apply ⇒ 进化闭环两小时零落地。
+    语义修正：额度应绑定「实际落地的改动」，落地失败必须退还。
+
+    去重：同一 `patch_id` 的退款只扣一次（同一件可能失败多次、或被重投重批），
+    否则一件失败能把额度扣成负数（虽有 `max(0, ...)` 兜底，语义仍错）。
+    """
+    _refunded: set = set()
+    _n = 0
+    for _row in _read_today_rows(root, now=now):
+        if _row.get("refund") is True:
+            _pid = _pid_of(_row)
+            if _pid:
+                _refunded.add(_pid)
+            continue
+        if _row.get("approved") is True:
+            _n += 1
+    return max(0, _n - len(_refunded))
+
+
+def approved_today_ids(root: str | None = None, *,
+                       now: float | None = None) -> set:
+    """★468刀6：当天被放行过**且尚未退款**的 patch_id 集合（退款结算的输入）。"""
+    _rows = _read_today_rows(root, now=now)
+    _refunded = {_pid_of(_r) for _r in _rows if _r.get("refund") is True}
+    return {_pid_of(_r) for _r in _rows
+            if _r.get("approved") is True and _pid_of(_r) not in _refunded
+            and _pid_of(_r)}
+
+
+def refunded_today_ids(root: str | None = None, *,
+                       now: float | None = None) -> set:
+    """★468刀6：当天已退过款的 patch_id 集合（退款幂等判据）。"""
+    return {_pid_of(_r) for _r in _read_today_rows(root, now=now)
+            if _r.get("refund") is True and _pid_of(_r)}
+
+
+def note_approval_refund(patch: dict, *, reason: str = "",
+                         root: str | None = None,
+                         now: float | None = None) -> bool:
+    """★468刀6：把**一次额度退还**追加到 `approval_trace.jsonl`。
+
+    与 `note_approval_trace` 分开写：那条要求八闸逐项判定与前后完整内容，
+    是「放行决策」的凭证；这里是「事后结算」，手上只有补丁与失败原因。
+    两者用同一份留痕文件，靠 `refund: true` 区分——本函数的 `approved`
+    恒为 False，绝不会被 `approved_today` 误计为一次放行。
+
+    幂等由调用方保证（先查 `refunded_today_ids`），本函数只负责追加。
+    写失败不影响主流程（退不回来最多是少放行一条，不能反过来搞挂循环）。
+    """
+    _pid = _pid_of(patch or {})
+    if not _pid:
+        _log_debug("退款留痕缺 patch_id，跳过")
+        return False
+    _now = float(now if now is not None else time.time())
+    _row = {
+        "day": time.strftime("%Y-%m-%d", time.localtime(_now)),
+        "at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(_now)),
+        "ts": round(_now, 3),
+        "patch_id": _pid,
+        "approved": False,
+        "refund": True,
+        "blocked": "refund",
+        "reason": str(reason or "apply_failed")[:200],
+        "source": "bridge_447_refund",
+    }
+    _p = approval_trace_path(root)
+    try:
+        _d = os.path.dirname(_p)
+        if _d:
+            os.makedirs(_d, exist_ok=True)
+        with open(_p, "a", encoding="utf-8") as _f:
+            _f.write(json.dumps(_row, ensure_ascii=False) + "\n")
+        return True
+    except OSError as _e:
+        _log_debug("写退款留痕失败（不影响主流程）: %s", _e)
+        return False
 
 
 def note_approval_trace(patch: dict, decision_result: dict, *, approved: bool,

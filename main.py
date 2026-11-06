@@ -4127,9 +4127,30 @@ def _m422_dead_patch_ids(path: str | None = None) -> set:
             if isinstance(v, dict) and v.get("dead")}
 
 
+#: ★468刀5：判定「这条已无望」的状态集（不再计入 pending 告警口径）。
+#: 只影响**日志口径与告警分级**，不影响 approved/dead/live 的既有语义。
+_M422_DONE_STATUS = frozenset({
+    "applied", "runtime_verified", "runtime_failed", "runtime_undecidable",
+    "expired_pending", "expired", "wont_fix", "rolled_back", "rejected",
+    "superseded", "verification_failed", "replaced", "give_up",
+})
+
+
 def _m422_count_approved_pending() -> dict:
-    """待落地 approved 件统计（**只读**：走 PatchManager 的读口，不写任何文件）。"""
-    _out = {"approved": 0, "dead": 0, "live": 0}
+    """待落地 approved 件统计（**只读**：走 PatchManager 的读口，不写任何文件）。
+
+    ★468刀5：补上 `pending` 键。此前这里只返回 approved/dead/live，
+    而调用方读的是 `_cnt.get("pending", 0)` ⇒ **恒为 0**，
+    于是同一处的 `warning if _pend_n > 0 else debug` 永久走 debug：
+    440刀3 想解决的「apply=0 静默不说话」被这个缺键又变回了静默。
+    T0 实测 2026-11-06 16:19:17：队列实有 9 条，日志仍打 `pending=0`，
+    且分级永远落在 DEBUG（真卡住也不告警）。
+
+    `pending` 口径 = 队列中**尚未 applied 且状态不属于 `_M422_DONE_STATUS`**
+    的条数，即「理论上还有机会被审批/落地」的件数——这才是「真卡住」的判据。
+    已终态的历史残留不算，避免 442 批「夜间 106 条告警」的老问题复发。
+    """
+    _out = {"approved": 0, "dead": 0, "live": 0, "pending": 0}
     try:
         from nucleus.reasoning.PatchManager import PatchManager
         _pm = PatchManager(os.path.dirname(os.path.abspath(__file__)))
@@ -4143,7 +4164,11 @@ def _m422_count_approved_pending() -> dict:
     for _p in _rows:
         if not isinstance(_p, dict):
             continue
-        if str(_p.get("status") or "") != "approved" or _p.get("applied") is True:
+        if _p.get("applied") is True:
+            continue
+        if str(_p.get("status") or "") not in _M422_DONE_STATUS:
+            _out["pending"] += 1
+        if str(_p.get("status") or "") != "approved":
             continue
         _out["approved"] += 1
         if str(_p.get("id") or "") in _dead:

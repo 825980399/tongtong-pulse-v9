@@ -8407,3 +8407,12 @@ ENABLE_M468_SANDBOX_FLAG_RECHECK = True
 #   读取点：SafeEvolutionExecutor.py::_m468_file_fallback_on
 #   关掉 ⇒ 不兜底（复现 468 前行为）。
 ENABLE_M468_ORGAN_FILE_FALLBACK = True
+
+# 刀5 周期apply 真读数（**无开关**，纯读数修复，不改任何行为）：
+#   `_m422_count_approved_pending` 补 `pending` 键 —— 此前只返回 approved/dead/live，
+#   调用方 `_cnt.get("pending", 0)` 恒为 0，连带 `warning if _pend_n > 0 else debug`
+#   永久走 debug（真卡住也不告警）。详见 468 批次账。
+# 刀6 审批额度结算：apply 失败退还当日额度（`refund: true` 留痕行扣减）。
+#   读取点：SafeEvolutionExecutor.py::_m468_approval_refund_on
+#   关掉 ⇒ 回到 468 前行为（额度一旦放行即计费，不看落地成败）。
+ENABLE_M468_APPROVAL_REFUND = True
