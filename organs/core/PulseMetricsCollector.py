@@ -476,7 +476,20 @@ def _m421_patch_chain_read(root: str | None = None) -> dict:
         if os.path.exists(_pp):
             _pend = safe_read_json(_pp, default=None)
             if isinstance(_pend, list):
-                _out["queue"] = len(_pend)
+                # ★473刀7：队列深度只算**可推进**状态。
+                #   根因（实测 2026-11-07）：原实现无差别 `len(_pend)`，把
+                #   `status=wont_fix`（已判不修）这类终态补丁也算进队列 ⇒
+                #   degraded 判据「apply=0 且 queue>0」**永远成立** ⇒
+                #   补丁链一旦 degraded 就再也回不到 ok（自锁死）。
+                #   现场证据：pending_patches.json 共 2 条 = 1 条 wont_fix
+                #   + 1 条 verified，真实可推进只有 1 条，却被报成 pending=2。
+                #   口径：终态（wont_fix/rejected/voided/abandoned/invalid）不计；
+                #   非 dict 的坏行**计入**（fail-closed，宁可多报不漏报）。
+                _M473_TERMINAL_STATUS = ("wont_fix", "rejected", "voided", "abandoned", "invalid")
+                _out["queue"] = sum(
+                    1 for _x in _pend
+                    if not isinstance(_x, dict)
+                    or str(_x.get("status") or "").strip().lower() not in _M473_TERMINAL_STATUS)
                 # ★429刀2：待审批队列里的「最后生成」——补丁入队即在这里落时间戳，
                 #   不依赖它是否走完审批（这正是原口径看不到的那段）。
                 #   三个候选键按落盘先后取：generated_at > created_at > saved_at。
