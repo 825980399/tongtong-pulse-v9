@@ -36,15 +36,25 @@ def test_20_config_kept_verbatim_so_it_can_be_re_enabled():
 
 
 def test_30_other_six_channels_order_untouched():
-    """其他渠道优先级不受影响：1/2/3/4/5/8 六条顺序原样。"""
+    """★466 改口径：渠道池 6→11 条（百炼 2→7），原「六条顺序原样」已不成立。
+
+    现钉「466 裁决后的完整体序」：priority 必须 1..11 连续、与声明一致。
+    466 的诉求仍是「modelscope 降级不影响他人」，只是他人从 6 条变 11 条。
+    回滚点：466 渠道扩容回退时，本断言需退回 6 条旧表。
+    """
     _order = [(c["name"], c["priority"]) for c in config.get_active_channels()]
     assert _order == [
         ("zhipu-47-flash", 1),
-        ("bailian-qwen-plus", 2),
-        ("siliconflow-qwen2-7b", 3),
-        ("zhipu", 4),
-        ("bailian-qwen-max", 5),
-        ("deepseek", 8),
+        ("bailian-qwen38-flash", 2),
+        ("bailian-deepseek-v41-flash", 3),
+        ("bailian-glm53", 4),
+        ("siliconflow-qwen2-7b", 5),
+        ("bailian-qwen37-plus", 6),
+        ("bailian-kimi-k3", 7),
+        ("zhipu", 8),
+        ("bailian-deepseek-v4-pro", 9),
+        ("bailian-qwen38-max", 10),
+        ("deepseek", 11),
     ], _order
 
 
@@ -55,7 +65,12 @@ def test_40_load_balance_never_returns_it():
     _ordered, _info = order_by_load(list(config.get_active_channels()))
     _names = [c["name"] for c in _ordered]
     assert "modelscope" not in _names
-    assert len(_names) == 6
+    # ★466：6 条 ⇒ 11 条（百炼 2→7）。集合仍逐名钉死，不用被测函数自身输出当基准。
+    assert len(_names) == 11
     assert set(_names) == {n for n, _ in [
-        ("zhipu-47-flash", 1), ("bailian-qwen-plus", 2), ("siliconflow-qwen2-7b", 3),
-        ("zhipu", 4), ("bailian-qwen-max", 5), ("deepseek", 8)]}
+        ("zhipu-47-flash", 1), ("bailian-qwen38-flash", 2),
+        ("bailian-deepseek-v41-flash", 3), ("bailian-glm53", 4),
+        ("siliconflow-qwen2-7b", 5), ("bailian-qwen37-plus", 6),
+        ("bailian-kimi-k3", 7), ("zhipu", 8),
+        ("bailian-deepseek-v4-pro", 9), ("bailian-qwen38-max", 10),
+        ("deepseek", 11)]}

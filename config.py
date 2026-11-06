@@ -1600,11 +1600,11 @@ REMOTE_API_CHANNELS = {
             "max_concurrent": 1,   # 免费渠道实测并发约 1
         },
         {
-            # ★352刀9②(2026-10-23 21:01 星轨实测改口径)：qwen-turbo 实测 429 限流弃用，
-            #   改用 qwen-plus（同端点同 Key，实测调通）。渠道名随之改名，避免"名不符实"。
-            "name": "bailian-qwen-plus",
-            "model": "qwen-plus",
-            "quota_type": "monthly_free",  # 阿里云百炼：每月 100 万 Token **持续**免费（每月滚动）
+            # ★466批（2026-11-06 小林裁决）：百炼渠道从2个扩到7个，全用独立免费额度
+            #   原qwen-plus额度耗尽403，替换为最新qwen3.8-flash（同档位升级版）
+            "name": "bailian-qwen38-flash",
+            "model": "qwen3.8-flash",
+            "quota_type": "monthly_free",
             "quota_limit": 1000000,
             "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
             "api_key": os.environ.get("DASHSCOPE_API_KEY", ""),
@@ -1614,18 +1614,82 @@ REMOTE_API_CHANNELS = {
             "max_concurrent": 4,
         },
         {
-            # ★352刀9②备选档：qwen-max（quality 档，同 Key 同端点）。
-            #   任务书 ② 写 priority 4、④ 写 priority 5 —— 4 已被 zhipu 占用，取 5（详见报告偏差节）。
-            "name": "bailian-qwen-max",
-            "model": "qwen-max",
+            # ★466批新增：DeepSeek V4.1 Flash（百炼上的deepseek flash版）
+            "name": "bailian-deepseek-v41-flash",
+            "model": "deepseek-v4.1-flash",
             "quota_type": "monthly_free",
             "quota_limit": 1000000,
             "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
             "api_key": os.environ.get("DASHSCOPE_API_KEY", ""),
-            "priority": 5,
+            "priority": 3,
+            "enabled": True,
+            "adapter": "openai_compatible",
+            "max_concurrent": 4,
+        },
+        {
+            # ★466批新增：GLM-5.3（百炼上的智谱最新模型）
+            "name": "bailian-glm53",
+            "model": "glm-5.3",
+            "quota_type": "monthly_free",
+            "quota_limit": 1000000,
+            "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+            "api_key": os.environ.get("DASHSCOPE_API_KEY", ""),
+            "priority": 4,
             "enabled": True,
             "adapter": "openai_compatible",
             "max_concurrent": 2,
+        },
+        {
+            # ★466批：原bailian-qwen-max剩880K，替换为qwen3.7-plus（中等能力主力档）
+            "name": "bailian-qwen37-plus",
+            "model": "qwen3.7-plus",
+            "quota_type": "monthly_free",
+            "quota_limit": 1000000,
+            "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+            "api_key": os.environ.get("DASHSCOPE_API_KEY", ""),
+            "priority": 6,
+            "enabled": True,
+            "adapter": "openai_compatible",
+            "max_concurrent": 2,
+        },
+        {
+            # ★466批新增：Kimi K3（长文本理解强）
+            "name": "bailian-kimi-k3",
+            "model": "kimi-k3",
+            "quota_type": "monthly_free",
+            "quota_limit": 1000000,
+            "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+            "api_key": os.environ.get("DASHSCOPE_API_KEY", ""),
+            "priority": 7,
+            "enabled": True,
+            "adapter": "openai_compatible",
+            "max_concurrent": 2,
+        },
+        {
+            # ★466批新增：DeepSeek V4 Pro（推理能力最强档）
+            "name": "bailian-deepseek-v4-pro",
+            "model": "deepseek-v4-pro",
+            "quota_type": "monthly_free",
+            "quota_limit": 1000000,
+            "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+            "api_key": os.environ.get("DASHSCOPE_API_KEY", ""),
+            "priority": 9,
+            "enabled": True,
+            "adapter": "openai_compatible",
+            "max_concurrent": 1,
+        },
+        {
+            # ★466批新增：Qwen3.8 Max（综合能力最强档）
+            "name": "bailian-qwen38-max",
+            "model": "qwen3.8-max",
+            "quota_type": "monthly_free",
+            "quota_limit": 1000000,
+            "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+            "api_key": os.environ.get("DASHSCOPE_API_KEY", ""),
+            "priority": 10,
+            "enabled": True,
+            "adapter": "openai_compatible",
+            "max_concurrent": 1,
         },
         {
             # ★352追补项1（2026-10-23 小林裁决）：Qwen2-7B 已下架禁用（403），
@@ -1638,7 +1702,7 @@ REMOTE_API_CHANNELS = {
             "quota_limit": -1,  # 硅基流动：积分抵扣期视为免费（平台限速内）
             "api_url": "https://api.siliconflow.cn/v1/chat/completions",
             "api_key": os.environ.get("SILICONFLOW_API_KEY", ""),
-            "priority": 3,
+            "priority": 5,  # ★466批：3→5，百炼渠道插进来后往后挪
             "enabled": True,
             "adapter": "openai_compatible",
             "max_concurrent": 2,   # 免费模型有平台限速，不适合高并发
@@ -1651,7 +1715,8 @@ REMOTE_API_CHANNELS = {
             "api_key": os.environ.get("ZHIPU_API_KEY", ""),
             # ★352刀9：1→4。不是降级处理，是让位——新的 glm-4.7-flash 同样永久免费且能力更强，
             #   两条都在池里、都会被轮询到；排前的先吃配额，后的做分流与降级兜底。
-            "priority": 4,
+            # ★466批：4→8，百炼渠道插进来后往后挪
+            "priority": 8,
             "enabled": True,
             "adapter": "openai_compatible",
             "max_concurrent": 1,   # 智谱免费渠道，实测并发能力约 1
@@ -1699,7 +1764,8 @@ REMOTE_API_CHANNELS = {
             "api_url": "https://api.deepseek.com/v1/chat/completions",
             "api_key": os.environ.get("DEEPSEEK_API_KEY", ""),
             # ★352刀9：7→8（收费兜底继续垫底；免费渠道从 1 条变 4 条，它更应该靠后）
-            "priority": 8,
+            # ★466批：8→11，百炼7渠道插进来后继续垫底
+            "priority": 11,
             "enabled": True,
             "adapter": "openai_compatible",
             "max_concurrent": 10,  # DeepSeek 付费渠道，给更大初始并发

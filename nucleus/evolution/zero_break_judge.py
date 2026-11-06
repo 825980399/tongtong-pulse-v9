@@ -843,6 +843,13 @@ def collect_death_samples(project_root: str | None = None,
             silent_exc(_e, where="zero_break_judge.collect_death_samples pool", level="debug")
             _rows = []
     _cands = []
+    # ★存量红修复（2026-11-06 路灯）：与 _cands **同序**的锚字段。
+    #   354刀6 给 precheck_batch 加了 o3 早退（无 m323_truth.method_before 且无
+    #   original_code ⇒ excluded_o3 跳过），但本函数构造 _cands 时只留 5 个键、
+    #   把这两个字段丢了 ⇒ 该判据在此路径上**恒真** ⇒ 352刀1② 的「漂移候选
+    #   不进判死池」生产上变成空转（实测 excluded 恒 0）。
+    #   这里不动输出行键集（避免污染既有调用方），只把锚字段另存一份、喂预检时拼回。
+    _anchor_list = []
     for _e in _rows:
         _tier = str(_e.get("evidence_tier") or _e.get("gate_verdict") or "")
         # ★350：判死候选面 = issue_type 族 ∨ gate_verdict=OPEN ∨ 判死档
@@ -858,6 +865,8 @@ def collect_death_samples(project_root: str | None = None,
                        "file": str(_e.get("file") or ""),
                        "method": str(_e.get("method") or ""),
                        "judged": DEATH_JUDGED_DEAD, "tier": _tier})
+        _anchor_list.append({"original_code": str(_e.get("original_code") or ""),
+                             "m323_truth": _e.get("m323_truth") or {}})
     # ★352刀1②：漂移候选不进判死池。**必须在抽样之前过滤**——
     #   先抽 20 再剔漂移会让分母随机变小（铁律163：“只取N条”筛选器必须
     #   先遍历全池再截断）。
@@ -871,7 +880,10 @@ def collect_death_samples(project_root: str | None = None,
                 precheck_batch as _pcb,
             )
 
-            _bf = _pcb(project_root or _zbj_root(), _cands)
+            # ★存量红修复：把与 _cands 同序的锚字段拼回去再预检，
+            #   否则 o3 早退会把这些候选全判成「观察位」⇒ 漂移过滤空转。
+            _pc_in = [dict(_c, **_anchor_list[_i]) for _i, _c in enumerate(_cands)]
+            _bf = _pcb(project_root or _zbj_root(), _pc_in)
             _bad = {}
             for _r in _bf["rows"]:
                 if _r["verdict"] in _DV and str(_r["id"] or ""):

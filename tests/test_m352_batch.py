@@ -95,11 +95,21 @@ def test_刀1_判死池排除漂移候选(tmp_path):
     """漂移候选不进判死池：分母里不该有它。"""
     from nucleus.evolution import zero_break_judge as zbj
     _write(tmp_path, "d.py", "def alive():\n    return 1\n")
+    # ★存量红修复（2026-11-06 路灯）：354刀6 把「无 m323_truth.method_before 且无
+    #   original_code」的条目当 O3 观察位**早退**（excluded_o3），压根到不了漂移判定
+    #   ⇒ 本条原用两个裸条目，实测被跳过 2 条、filt["excluded"] 恒 0。
+    #   A/B 已证：退回 HEAD 版 config.py 仍红 ⇒ 与 466 渠道扩容、469 四刀均无关。
+    #   修法 = 补齐真实补丁必带的 original_code（不是放宽判据）：
+    #     k1 片段与现场逐字一致 ⇒ in_place；k2 片段现场不存在 ⇒ drifted
+    #   ⇒ 原判据「漂移候选不进分母」照旧成立。回滚点：删掉两处 original_code 即回旧形态。
+    _alive = "def alive():\n    return 1\n"
     entries = [
         {"dedup_key": "k1", "file": "d.py", "method": "alive",
-         "issue_type": "dead_code", "evidence_tier": "hard_loose"},
+         "issue_type": "dead_code", "evidence_tier": "hard_loose",
+         "original_code": _alive},
         {"dedup_key": "k2", "file": "d.py", "method": "vanished",
-         "issue_type": "dead_code", "evidence_tier": "hard_loose"},
+         "issue_type": "dead_code", "evidence_tier": "hard_loose",
+         "original_code": "def vanished():\n    return 2\n"},
     ]
     filt = {}
     rows = zbj.collect_death_samples(str(tmp_path), entries, universe=10, limit=10,
@@ -367,14 +377,27 @@ def test_刀9_三新增渠道齐备():
     os.environ.setdefault("PULSE_FRAMEWORK", "1")
     import config
     ch = {c["name"]: c for c in config.REMOTE_API_CHANNELS["default_channels"]}
-    # ★2026-10-23 21:01 星轨实测改口径：qwen-turbo 429 限流弃用 ⇒ 改 qwen-plus，
-    #   并加 qwen-max 备选档（同 Key 同端点）。
+    # ★466 改口径（2026-11-06 小林裁决）：百炼渠道 2→7 条，原 qwen-plus/qwen-max
+    #   额度耗尽 403 ⇒ 换成 qwen3.8-flash / qwen3.7-plus 等新档，priority 整表重排。
+    #   回滚点：466 回退时本块需退回 bailian-qwen-plus(2, qwen-plus) /
+    #   bailian-qwen-max(5, qwen-max) 旧表。
     for n, pri, model in (("zhipu-47-flash", 1, "glm-4.7-flash"),
-                          ("bailian-qwen-plus", 2, "qwen-plus"),
+                          ("bailian-qwen38-flash", 2, "qwen3.8-flash"),
                           # ★352追补项1：Qwen2-7B 已下架（403）⇒ 改 zai-org/GLM-5.3-Flash
-                          ("siliconflow-qwen2-7b", 3, "zai-org/GLM-5.3-Flash"),
-                          ("bailian-qwen-max", 5, "qwen-max")):
+                          #   ★466：priority 3→5（百炼插队后往后挪）
+                          ("siliconflow-qwen2-7b", 5, "zai-org/GLM-5.3-Flash"),
+                          ("bailian-qwen37-plus", 6, "qwen3.7-plus")):
         assert n in ch, "缺渠道 %s" % n
+        assert ch[n]["priority"] == pri
+        assert ch[n]["model"] == model
+        assert ch[n]["enabled"] is True
+    # ★466 新增的 5 条同样必须齐备（名字/优先级/模型/启用四判）
+    for n, pri, model in (("bailian-deepseek-v41-flash", 3, "deepseek-v4.1-flash"),
+                          ("bailian-glm53", 4, "glm-5.3"),
+                          ("bailian-kimi-k3", 7, "kimi-k3"),
+                          ("bailian-deepseek-v4-pro", 9, "deepseek-v4-pro"),
+                          ("bailian-qwen38-max", 10, "qwen3.8-max")):
+        assert n in ch, f"缺 466 新增渠道 {n}"
         assert ch[n]["priority"] == pri
         assert ch[n]["model"] == model
         assert ch[n]["enabled"] is True
@@ -383,16 +406,24 @@ def test_刀9_三新增渠道齐备():
 def test_刀9_优先级与ark已移除():
     import config
     ch = {c["name"]: c for c in config.REMOTE_API_CHANNELS["default_channels"]}
-    assert ch["zhipu"]["priority"] == 4
-    assert ch["deepseek"]["priority"] == 8
+    # ★466 改口径：百炼 2→7 条插入后，zhipu 4→8、deepseek 8→11（收费兜底继续垫底）。
+    #   回滚点：466 回退时这两行需退回 4 / 8。
+    assert ch["zhipu"]["priority"] == 8
+    assert ch["deepseek"]["priority"] == 11
     # ★任务书 277d465 改口径：ark-* 从 default_channels **移除**，不再留 enabled=False 的挂起条目。
     #   实测现场是 10 条（任务书写 8，方案表漏列 ark-seed-21-turbo），10 条全删。
     ark = [c for c in ch.values() if str(c["name"]).startswith("ark-")]
     assert ark == [], "ark-* 应已从渠道池移除，实际残留 %d 条" % len(ark)
     # 移除 10 条 ark 后为 5 条；追加 bailian-qwen-max 备选后为 6 条；
     # ★352追补项4 再加 modelscope(p7) ⇒ 7 条
-    assert len(ch) == 7, "池内应为 7 条，实际 %d 条" % len(ch)
-    assert ch["modelscope"]["priority"] == 7
+    # ★466：百炼 2→7 条（净 +5）⇒ 12 条；modelscope 保留配置但不入池
+    assert len(ch) == 12, "池内应为 12 条，实际 %d 条" % len(ch)
+    # ★存量红修复（2026-11-06 路灯）：426刀4 已把 modelscope 降级为
+    #   priority=99 / enabled=False（模型下架 HTTP 400），352 此处 `== 7` 自 426 起即红。
+    #   A/B 已证与 466 无关（退回 HEAD 版 config 仍红）⇒ 按 426 的新规格改钉。
+    #   回滚点：若 426刀4 回退，此两行需退回 priority == 7（且无 enabled 断言）。
+    assert ch["modelscope"]["priority"] == 99
+    assert ch["modelscope"]["enabled"] is False
     assert ch["modelscope"]["model"] == "Qwen/Qwen2.5-7B-Instruct"
 
 
