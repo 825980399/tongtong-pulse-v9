@@ -63,7 +63,12 @@ def _mk_patch(**kw):
         "status": "needs_reverify",
         "reverify_after": 0,                   # 已到点
         "needs_runtime_verify": True,
-        "applied": False,
+        # ★468刀1 前置闸门：没落地的补丁不复验（verify_submitted_patches 先过
+        #   _m468_reverify_gate，applied=False ⇒ needs_runtime_verify 被置 False
+        #   ⇒ 本文件后续全部判据都到不了，补丁停在 needs_reverify 原状）。
+        #   438 批写此夹具时还没有该闸门，468 批加入后未同步 ⇒ 5 条长期红。
+        #   此处只让夹具通过前置闸门，断言与判据一字未改。
+        "applied": True,
         "baseline_errors": 3,
     }
     _b.update(kw)
