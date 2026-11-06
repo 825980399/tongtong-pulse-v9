@@ -1896,6 +1896,16 @@ class SafeEvolutionExecutor:
             #   只在末尾追加约束）——换模板可以，但不动生成器内部策略字段，
             #   避免把 114 批的指纹台账/追问逻辑一起改坏。
             _prompt = _m445_append_full_def_requirement(_prompt, issue)
+            # ★462 刀3：按根因类型分派 —— 消费 459 voided_feature 的结构化
+            #   error_type（此前只有一个写入点、零消费点）。只追加提示、幂等、
+            #   不换生成器策略结构（沿用 445 的边界，避免改坏 114 批指纹台账）。
+            try:
+                from nucleus.evolution import root_cause_router as _m462_rcr
+                _prompt = _m462_rcr.append_hints(_prompt, issue)
+            except Exception as _e:
+                silent_exc(_e, where="SafeEvolutionExecutor::462根因分派",
+                           level="debug")
+
 
             # ★第114批 T-114a（断5）：指纹咨询台账硬闸。
             #   同指纹问题若已 ≥3 次咨询且无任何成功记录，跳过本轮 LLM 问询，

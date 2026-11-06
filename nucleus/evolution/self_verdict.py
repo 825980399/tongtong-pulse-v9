@@ -352,6 +352,25 @@ def collect_evidence(patch: dict) -> dict:
     #   ★不是放宽判据：只有**三证齐备**（静态复现 true_pass + problem_gone 显式真
     #     + baseline>0）才按依据提权，并写 confidence_source 供事后复核；
     #     已有 "high" 不动，证据不足绝不提权。
+    # ★462 刀2：A/B 开关回退 —— 片段归一化生效与否，必须由「同一 case 关/开
+    #   各跑一次同一探针」证明，而不是只看开关后那一次的结果（铁律35）。
+    _out["ab_discriminative"] = None
+    _out["ab_restored"] = None
+    _ab_ok = True
+    if _wrapped and bool(_cfg("ENABLE_M462_BEHAVIOR_AB", True)):
+        try:
+            from nucleus.evolution import behavior_ab as _m462_ab
+            _ab = _m462_ab.probe_snippet_switch(patch)
+            _out["ab_discriminative"] = bool(_ab.get("discriminative"))
+            _out["ab_restored"] = bool(_ab.get("restored"))
+            _out["ab_why"] = str(_ab.get("why") or "")
+            if _m462_ab.require_discriminative():
+                _ab_ok = _out["ab_discriminative"]
+        except Exception as _e:
+            silent_exc(_e, where="self_verdict::collect_evidence 462 A/B",
+                       level="debug")
+            _ab_ok = False
+
     _out["confidence_promoted"] = False
     if bool(_cfg("ENABLE_M461_EVIDENCE_CONFIDENCE", True)):
         _three = (_out["reprobe_verdict"] == _EVIDENCE_TRUE_PASS
@@ -359,7 +378,7 @@ def collect_evidence(patch: dict) -> dict:
                   and isinstance(_out["baseline_errors"], int)
                   and _out["baseline_errors"] > 0)
         _old_conf = str(_p.get("confidence") or "").strip().lower()
-        if _three and _old_conf != "high":
+        if _three and _old_conf != "high" and _ab_ok:
             _p["confidence"] = "high"
             _p["confidence_source"] = "m461_reprobe_true_pass"
             _out["confidence_promoted"] = True

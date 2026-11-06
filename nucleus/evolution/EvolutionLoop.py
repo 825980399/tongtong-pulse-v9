@@ -427,6 +427,19 @@ class EvolutionLoop(SilentLogMixin):
         _growth_intake = self._m316_collect_growth_intake(
             _defect_taken=len(_intake), _existing=unique)
         _final = unique[:max_issues] + _intake + _growth_intake
+        # ★462 刀1：生成前 T0 前提核实 —— 剔除「前提已失效」的问题。
+        #   457/459 两次靠这一步推翻任务书根因；闭环内此前没有这个角色。
+        #   只剔 stale，unknown（测不了）保留但不冒充通过（无法判定 ≠ 失败）。
+        try:
+            from nucleus.evolution import premise_guard as _m462_pg
+            _final, _m462_stale, _m462_rows = _m462_pg.filter_issues(_final)
+            if _m462_stale:
+                _module_logger.info(
+                    "[462刀1] 前提核实剔除 %d 条: %s",
+                    _m462_stale, [str(r.get("why"))[:60] for r in _m462_rows[:3]])
+        except Exception as _e:
+            silent_exc(_e, where="EvolutionLoop.discover_all_issues[462刀1]",
+                       level="debug")
         # ★316批刀3：给所有入池条目补可观测 trigger 字段（defect / growth_need），
         #   不新开第三字段；需求驱动补丁占比 := count(growth_need)/count(all) 可算。
         for _i in _final:

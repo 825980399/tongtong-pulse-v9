@@ -8190,3 +8190,39 @@ ENABLE_M461_SNIPPET_NORMALIZE = True
 ENABLE_M461_RUNTIME_DISPATCH = True
 M461_RUNTIME_ISSUE_REL = "data/reports/evolution/runtime_issues.jsonl"
 M461_RUNTIME_AGGREGATE_SEC = 900.0
+
+
+# ==================== [M462-CFG] 第462批（闭环剩余三项：前提核实 / A/B / 根因分派）====================
+# 触发：2026-11-06 10:19 星轨再次重启（pid=45176），要求「分析以后继续剩余任务」。
+#   461 已加载，但闭环首跑延迟 20~40min 且审批桥要等新补丁出现 ⇒ 重启后 1 分钟
+#   四个交接判据都还没有实盘产出（正常等待，不是故障）。本批把 461 §6 剩下的
+#   三项研究性改造接进闭环，全部新增键、带灰度开关、不覆盖 457~461 任何键。
+#
+# ENABLE_M462_PREMISE_GUARD
+#   默认值：True
+#   语义：生成补丁前先证伪「这个问题现在还成立吗」——目标文件/方法是否还在、
+#         原始代码片段是否仍存在、问题类型是否与当前代码状态一致。
+#   三态：confirmed（可生成）/ stale（前提失效，跳过）/ unknown（证据不足，不猜）。
+#   ★457 把「假设超时是根因」推翻（完成日志计数 0）、459 把台账路径与条数全推翻，
+#     靠的都是这一步；闭环内此前没有这个角色。
+ENABLE_M462_PREMISE_GUARD = True
+M462_PREMISE_TRACE_REL = "data/reports/evolution/premise_trace.jsonl"
+#
+# ENABLE_M462_BEHAVIOR_AB / M462_AB_REQUIRE_DISCRIMINATIVE
+#   默认值：True / True
+#   语义：同一 case 在灰度开关关/开各跑一次**同一探针**，比对输出锁定唯一变量。
+#   ★不是性能 A/B（perf_delta_probe 是导入耗时/P95），是行为 A/B。
+#   ★判别力要求：两侧输出相同 ⇒ 开关对该 case 无判别力 ⇒ 不许据此提权，
+#     防「开关没生效却以为生效」的自欺（铁律35）。try/finally 必须恢复原值。
+ENABLE_M462_BEHAVIOR_AB = True
+M462_AB_REQUIRE_DISCRIMINATIVE = True
+#
+# ENABLE_M462_ROOT_CAUSE_ROUTER / M462_ROUTER_TRACE_REL / M462_ROUTER_MAX_HINTS
+#   默认值：True / data/reports/evolution/root_cause_route.jsonl / 2
+#   语义：消费 459 voided_feature 的结构化 error_type + issue_type，映射到修复动作
+#         / prompt 提示 / 策略偏好 / trust 偏置；未知类型走 generic（零行为变化）。
+#   ★此前 voided_feature 只有一个写入点、零消费点；生成侧仅有 445 一个
+#     no_def→require_full_def 的硬编码例子。
+ENABLE_M462_ROOT_CAUSE_ROUTER = True
+M462_ROUTER_TRACE_REL = "data/reports/evolution/root_cause_route.jsonl"
+M462_ROUTER_MAX_HINTS = 2
