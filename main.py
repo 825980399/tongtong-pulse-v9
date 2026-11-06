@@ -4275,24 +4275,38 @@ def _m422_periodic_apply_tick(framework, now: float | None = None) -> dict:
         _cnt.get("approved"), _cnt.get("live"), _cnt.get("dead"),
         _st["ticks"], _st["fired"])
     _st["fired"] = int(_st.get("fired") or 0) + 1
-    try:
-        if framework is not None and hasattr(framework, "stop"):
-            framework.stop()
-    except Exception as _se:
-        silent_exc(_se, "main.py:_m422_periodic_apply_tick stop", level="debug")
     _st["last_result"] = None
     _restarting = False
     try:
-        _restarting = bool(_apply_pending_patches_and_restart(framework))
+        # ★472刀1：**先 apply，后停机**。旧顺序是「先 framework.stop() 再 apply」，
+        #   一旦 apply 一条都没落地（applied=0），既不重启也不退出 ⇒ 系统被拆成僵尸态。
+        #   2026-11-06 20:37 活体事故：心脏停在 171 拍、心跳链断裂、皮层停摆，
+        #   之后 45 分钟主循环还在打点但 [time.tick] 再不发布，对话永远没有回复。
+        #   停机不可逆，只能排在「已确认要重启」之后。
+        _restarting = bool(_apply_pending_patches_and_restart(framework, defer_spawn=True))
     except Exception as _ae:
         silent_exc(_ae, "main.py:_m422_periodic_apply_tick apply", level="warning")
         _logger.warning("[422刀3][周期apply] 应用入口异常（忽略，下拍再试）: %s: %s",
                         type(_ae).__name__, _ae)
     # 无论是否重启都要落账：否则"应用失败但没触发重启"这条路径永远进不了重试队列
     _note = _m422_note_apply_result(_st.get("last_result"), now=_now)
-    if _restarting:
-        return {"status": "applied_restarting", "count": _cnt, "note": _note}
-    return {"status": "applied_no_restart", "count": _cnt, "note": _note}
+    if not _restarting:
+        # ★472刀1：没落地 ⇒ 系统一根毫毛都没动，继续正常跑；补丁留在队列等下拍/次日。
+        return {"status": "applied_no_restart", "count": _cnt, "note": _note}
+    # ★472刀1：补丁已落地 ⇒ 此刻才停机，然后拉起接班进程（顺序不可换）。
+    #   stop 抛异常也必须继续 spawn：补丁已在磁盘上，不重启就永远不生效。
+    try:
+        if framework is not None and hasattr(framework, "stop"):
+            framework.stop()
+    except Exception as _se:
+        silent_exc(_se, "main.py:_m422_periodic_apply_tick stop", level="warning")
+        _logger.warning("[472刀1][周期apply] 停机异常（补丁已落地，继续拉起接班进程）: %s: %s",
+                        type(_se).__name__, _se)
+    if not _spawn_self_restart(reason="m422_periodic_apply"):
+        # 接班进程起不来是致命的：系统已停、补丁已落地 ⇒ 只能靠调用方 sys.exit 收尾，
+        #   finally 里的清理段会保存快照，不至于丢状态。
+        _logger.error("[472刀1][周期apply] 接班进程启动失败 ⇒ 交由主循环退出收尾")
+    return {"status": "applied_restarting", "count": _cnt, "note": _note}
 
 
 def get_m422_apply_tick_state() -> dict:
@@ -4310,7 +4324,7 @@ def get_m422_apply_tick_state() -> dict:
 
 
 
-def _apply_pending_patches_and_restart(framework) -> bool:
+def _apply_pending_patches_and_restart(framework, defer_spawn: bool = False) -> bool:
     """
     ★进化闭环升级(完美级): 应用待批准的补丁并重启验证。
 
@@ -4362,6 +4376,12 @@ def _apply_pending_patches_and_restart(framework) -> bool:
                 # ★v24.0修复：重启防循环由PatchManager内部持久化计数管理
                 _logger.info("[补丁] 补丁已应用，3秒后自动重启框架验证...")
                 time.sleep(3)
+                # ★472刀1：defer_spawn=True ⇒ 把「拉起接班进程」交给调用方。
+                #   只有这样调用方才能做到「先 apply，成功才 stop，再 spawn」：
+                #   停机不可逆，绝不能排在 apply 之前（2026-11-06 20:37 僵尸态根因）。
+                if defer_spawn:
+                    _logger.info("[472刀1] 补丁已落地，接班进程由调用方在停机后拉起")
+                    return True
                 # ★P0-3: 改用统一自重启入口（独立会话 + PID 登记），
                 #   避免被 main() 的 finally 退出清理段 psutil terminate 误杀
                 _spawn_self_restart()
@@ -5267,14 +5287,18 @@ def main():
                     if _evo_driver.has_apply_request():
                         _evo_driver.consume_apply_request()
                         print("[进化] 检测到「立即应用补丁」请求，准备应用并重启验证...")
-                        # 停止框架（复用退出时的清理流程，保证快照保存）
-                        try:
-                            if framework and hasattr(framework, 'stop'):
-                                framework.stop()
-                        except Exception as _se:
-                            silent_exc(_se, "main.py:3639", level="debug")
-                        # 应用补丁并重启
-                        if _apply_pending_patches_and_restart(framework):
+                        # ★472刀1：与「周期 apply」同一条纪律 —— **先 apply，成功才停机**。
+                        #   旧顺序先 stop 再 apply，apply 未落地就把系统留在半死态。
+                        if _apply_pending_patches_and_restart(framework, defer_spawn=True):
+                            try:
+                                if framework and hasattr(framework, 'stop'):
+                                    framework.stop()
+                            except Exception as _se:
+                                silent_exc(_se, "main.py:472刀1 apply请求 stop", level="warning")
+                                logging.getLogger("pulse").warning(
+                                    "[472刀1][立即请求] 停机异常（补丁已落地，继续拉起接班进程）: %s: %s",
+                                    type(_se).__name__, _se)
+                            _spawn_self_restart(reason="apply_request")
                             sys.exit(0)
                 except Exception as _apply_check_e:
                     logging.getLogger("pulse").warning(f"[进化] 应用请求检测异常(忽略): {_apply_check_e}")

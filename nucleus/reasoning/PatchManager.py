@@ -756,6 +756,55 @@ _M377_FAILED_PATCH_MAX = 400               # 目录内 .json 条目上限（含�
 _M377_FAILED_PATCH_FIELD_MAX = 200_000     # 单个正文字段的截断上限（字符），防单件过大
 
 
+# ===== ★472刀2（台账 S6 / F1）：补丁验证子进程的环境白名单 =====
+# 背景：`_verify_import_in_subprocess` 调 `execute_code_in_subprocess(...)` 时**没传**
+#   `child_env`，而 `subprocess.Popen(env=None)` 的语义是「完整继承父进程环境」。
+#   父进程环境里有 `PULSE_FRAMEWORK=1`，而 `nucleus/data/write_guard.py` 正是靠这个变量
+#   判定「我是框架进程，允许写 data/」——于是「被验证的补丁代码」在验证期拿到了可信
+#   写入者身份，可以往生产数据目录写东西。
+#   同一份白名单 `nucleus/review/ScriptExecutor.py` 早就有了（S7 修的），补丁验证这条路
+#   漏了 —— 典型的「修一半」（F1）。这里对齐，并加一条 PULSE_* 兜底剥离。
+_M472_CHILD_ENV_ALLOWLIST = (
+    # 跨平台通用
+    "PATH", "PYTHONHOME", "PYTHONPATH", "PYTHONIOENCODING",
+    "PYTHONUTF8", "PYTHONHASHSEED", "PYTHONNOUSERSITE",
+    "HOME", "USER", "USERPROFILE", "LANG", "LC_ALL", "TZ",
+    # Linux/macOS
+    "TMPDIR", "LD_LIBRARY_PATH", "SHELL",
+    # Windows（缺失会导致 Python 无法定位系统 DLL）
+    "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "TEMP", "TMP",
+    "PATHEXT", "COMSPEC", "APPDATA", "LOCALAPPDATA",
+    "PROGRAMFILES", "PROGRAMFILES(X86)", "NUMBER_OF_PROCESSORS",
+    "PROCESSOR_ARCHITECTURE", "USERDOMAIN", "COMPUTERNAME",
+)
+
+
+def _m472_build_child_env() -> dict[str, str]:
+    """补丁验证子进程的最小环境变量集（白名单制 · 默认 deny）。
+
+    清单与 `nucleus/review/ScriptExecutor.py::ScriptExecutor.ENV_ALLOWLIST` 同源，
+    由单测断言两者逐项一致 —— 防止下一次「修一半」再次漂移。
+
+    最后一段是**兜底**：即便将来有人把某个 `PULSE_*` 加进白名单，
+    这里也会把它剥掉。`PULSE_FRAMEWORK` 是 write_guard 的身份凭据，绝不能透传给
+    「正在被验证的陌生代码」。
+    """
+    _env: dict[str, str] = {}
+    _allow = {k.upper() for k in _M472_CHILD_ENV_ALLOWLIST}
+    for _key, _val in os.environ.items():
+        if _key.upper() in _allow:
+            _env[_key] = _val
+    # 兜底：连 PATH 都没有时子进程几乎无法启动，补一个最小 PATH
+    if not _env.get("PATH"):
+        _env["PATH"] = os.environ.get("PATH", "/usr/bin:/bin")
+    # 强制 UTF-8 输出，避免 Windows(GBK) 下补丁代码 print 非 ASCII 字符崩溃
+    _env.setdefault("PYTHONIOENCODING", "utf-8")
+    # ★兜底剥离：PULSE_* 一律不带（write_guard 身份凭据 / 测试标记 / 框架开关）
+    for _k in [k for k in _env if k.upper().startswith("PULSE_")]:
+        _env.pop(_k, None)
+    return _env
+
+
 def _m377_failed_patch_dir(root: str | None = None) -> str:
     """失败补丁留档目录。`root` 缺省取本仓库根（`nucleus/reasoning/` 上溯三层）。"""
     _base = root or os.path.dirname(os.path.dirname(os.path.dirname(
@@ -5177,6 +5226,10 @@ class PatchManager:
             _res = execute_code_in_subprocess(
                 _code,
                 timeout_seconds=30,          # 墙上时钟 30s（CPU 硬上限另设 30s）
+                # ★472刀2：白名单环境。不传时 subprocess 会继承父进程全部环境，
+                #   其中 PULSE_FRAMEWORK=1 会让 write_guard 把这批「被验证的陌生代码」
+                #   当可信写入者（可写 data/）。对齐 ScriptExecutor.py 的做法。
+                child_env=_m472_build_child_env(),
                 allow_full_builtins=True,    # import 需要完整 builtins + import 能力
                 source_label=f"patch_import_check:{_module_name}",
             )

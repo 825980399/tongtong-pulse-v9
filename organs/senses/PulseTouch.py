@@ -685,6 +685,15 @@ class PulseTouch(BasePulseOrgan):
                 self._last_alarm_time = now
                 self._emit(SystemEvent.ALARM, {
                     "type": "hardware_critical",
+                    # ★472刀4（台账 C2）：**必须带 level**。
+                    #   消费者 PulseEmergencyHandler._on_alarm 第一行是
+                    #       level = payload.get("level", "L1")
+                    #   缺字段 ⇒ 默认 L1 ⇒ 紧接着 `if level not in ("L3","L4"): return`
+                    #   直接早退：磁盘 96%、CPU 打满这种 priority=10 的告警
+                    #   永远进不了恢复链，只剩一行日志。
+                    #   该文件末尾的自测用的正是 `{"level": "L3", "type": "hardware_critical"}`，
+                    #   说明设计意图就是 L3 —— 实现漏了这个字段。
+                    "level": "L3",
                     "cpu_usage": cpu_usage,
                     "memory_usage": mem_usage,
                     "gpu_usage": gpu_usage,

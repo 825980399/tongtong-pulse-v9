@@ -81,7 +81,13 @@ class PulseHealthMonitor(BasePulseOrgan):
 
         # 检查能量水平
         el = self._latest_energy.get("energy_level", 1.0)
-        if el < self._thresholds["energy_critical"]:
+        # ★472刀4（台账 C1）：判定必须用 `<=`。
+        #   能量的唯一写入方是 PulseEnergyMetabolism._update_energy：
+        #       self._energy_level = max(0.1, 1.0 - load_factor)
+        #   下限把值钉死在 0.1，于是 `el < 0.1` 在数学上恒 False ——
+        #   CPU 与内存同时打满也只能得到 0.1，L3「危急」分支永远不会走。
+        #   改 `<=` 后「能量触底」恰能命中危急（触底即危急，语义也正确）。
+        if el <= self._thresholds["energy_critical"]:
             alarms.append({"level": "L3", "type": "energy_critical", "value": el, "message": f"能量危急: {el:.2f}"})
         elif el < self._thresholds["energy_low"]:
             alarms.append({"level": "L2", "type": "energy_low", "value": el, "message": f"能量偏低: {el:.2f}"})

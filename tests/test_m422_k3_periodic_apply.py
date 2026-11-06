@@ -44,12 +44,18 @@ class _Base(unittest.TestCase):
             "skipped": {}, "last_reason": "", "last_count": {}, "last_result": None,
         })
         self._orig = (M._m422_count_approved_pending,
-                      M._apply_pending_patches_and_restart)
+                      M._apply_pending_patches_and_restart,
+                      M._spawn_self_restart)
         M._m422_count_approved_pending = lambda: {"approved": 0, "dead": 0, "live": 0}
-        M._apply_pending_patches_and_restart = lambda fw: False
+        # ★472刀1：新契约带 defer_spawn 关键字；桩必须吃得下，否则 TypeError 被外层吞掉。
+        M._apply_pending_patches_and_restart = lambda fw, **kw: False
+        # ★472刀1：成功路径由 tick 自己拉起接班进程——真身会 Popen 一个新 python，
+        #   测试里绝不能让真身跑（否则每次都多一个进程）。
+        M._spawn_self_restart = lambda reason="self_restart": True
 
     def tearDown(self):
-        M._m422_count_approved_pending, M._apply_pending_patches_and_restart = self._orig
+        (M._m422_count_approved_pending, M._apply_pending_patches_and_restart,
+         M._spawn_self_restart) = self._orig
         M._M422_APPLY_TICK.clear()
         M._M422_APPLY_TICK.update(self._saved[0])
         M._M422_APPLY_TICK["skipped"] = self._saved[1]
@@ -154,10 +160,11 @@ class TestC_FirePath(_Base):
 
     def test_10_fire_when_live(self):
         _fw = self._pass_guard()
-        _calls = {"n": 0}
+        _calls = {"n": 0, "defer": "unset"}
 
-        def _fake_apply(fw):
+        def _fake_apply(fw, **kw):
             _calls["n"] += 1
+            _calls["defer"] = kw.get("defer_spawn", "missing")
             return True
 
         M._m422_count_approved_pending = lambda: {"approved": 2, "dead": 1, "live": 1}
@@ -165,8 +172,96 @@ class TestC_FirePath(_Base):
         _r = M._m422_periodic_apply_tick(_fw, now=_DAY0 + 3600)
         self.assertEqual(_r["status"], "applied_restarting")
         self.assertEqual(_calls["n"], 1)
-        self.assertEqual(_fw.stopped, 1, "应用前必须先 stop 框架（保存快照）")
+        self.assertIs(_calls["defer"], True,
+                      "★472刀1：必须 defer_spawn=True，否则接班进程会在停机前被拉起")
+        self.assertEqual(_fw.stopped, 1, "落地成功后由调用方停框架（保存快照）")
         self.assertEqual(M._M422_APPLY_TICK["fired"], 1)
+
+
+class TestF_StopAfterApply(_Base):
+    """★472刀1：停机必须排在 apply 之后 —— apply 未落地时系统一根毫毛都不许动。
+
+    事故背景（2026-11-06 20:37 活体）：旧顺序「先 stop 再 apply」，
+    apply 被核心文件闸门拦下（applied=0）后既不重启也不退出，
+    心脏停跳、心跳链断裂、[time.tick] 再不发布，对话此后永久无回复。
+    """
+
+    def _boot_then_fire(self, _fw, _apply_ret=True, _apply_hook=None):
+        def _fake_apply(fw, **kw):
+            if _apply_hook is not None:
+                _apply_hook()
+            return _apply_ret
+
+        M._m422_count_approved_pending = lambda: {"approved": 1, "dead": 0, "live": 1}
+        M._apply_pending_patches_and_restart = _fake_apply
+        M._m422_periodic_apply_tick(_fw, now=_DAY0)              # boot 起算
+        return M._m422_periodic_apply_tick(_fw, now=_DAY0 + 3600)
+
+    def test_17_apply_fail_does_not_stop_system(self):
+        """核心判据：一条都没落地 ⇒ 绝不停机（这正是僵尸态的直接成因）。"""
+        _fw = _FakeFramework()
+        _r = self._boot_then_fire(_fw, _apply_ret=False)
+        self.assertEqual(_r["status"], "applied_no_restart")
+        self.assertEqual(_fw.stopped, 0,
+                         "apply 未落地就 stop = 系统被拆且不重启（僵尸态），绝不允许")
+
+    def test_18_apply_fail_does_not_spawn(self):
+        _n = {"spawn": 0}
+        M._spawn_self_restart = lambda reason="self_restart": (
+            _n.__setitem__("spawn", _n["spawn"] + 1), True)[1]
+        _fw = _FakeFramework()
+        self._boot_then_fire(_fw, _apply_ret=False)
+        self.assertEqual(_n["spawn"], 0, "没落地就不该拉起接班进程")
+
+    def test_19_order_is_apply_then_stop_then_spawn(self):
+        _seq = []
+        _fw = _FakeFramework()
+        _fw.stop = lambda: _seq.append("stop")
+        M._spawn_self_restart = lambda reason="self_restart": (
+            _seq.append("spawn"), True)[1]
+        _r = self._boot_then_fire(_fw, _apply_ret=True,
+                                  _apply_hook=lambda: _seq.append("apply"))
+        self.assertEqual(_seq, ["apply", "stop", "spawn"],
+                         "顺序必须是 先apply → 再stop → 最后spawn")
+        self.assertEqual(_r["status"], "applied_restarting")
+
+    def test_20_stop_exception_still_spawns(self):
+        """stop 抛异常也必须继续拉起接班进程：补丁已落地，不重启就永不生效。"""
+        _seq = []
+
+        def _boom():
+            _seq.append("stop")
+            raise RuntimeError("stop boom")
+
+        _fw = _FakeFramework()
+        _fw.stop = _boom
+        M._spawn_self_restart = lambda reason="self_restart": (
+            _seq.append("spawn"), True)[1]
+        _r = self._boot_then_fire(_fw, _apply_ret=True,
+                                  _apply_hook=lambda: _seq.append("apply"))
+        self.assertEqual(_seq, ["apply", "stop", "spawn"])
+        self.assertEqual(_r["status"], "applied_restarting")
+
+    def test_21_spawn_failure_still_signals_restart(self):
+        """接班进程起不来也要返回 applied_restarting：主循环退出后 finally 还能存快照。"""
+        M._spawn_self_restart = lambda reason="self_restart": False
+        _fw = _FakeFramework()
+        _r = self._boot_then_fire(_fw, _apply_ret=True)
+        self.assertEqual(_r["status"], "applied_restarting")
+        self.assertEqual(_fw.stopped, 1)
+
+    def test_22_apply_defer_kwarg_is_true(self):
+        """源码级：tick 必须显式传 defer_spawn=True（防后人手滑改回默认值）。"""
+        _p = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                          "main.py")
+        with open(_p, encoding="utf-8") as _fh:
+            _src = _fh.read()
+        self.assertIn(
+            "_restarting = bool(_apply_pending_patches_and_restart(framework, defer_spawn=True))",
+            _src, "周期 tick 必须 defer_spawn=True")
+        self.assertIn(
+            "if _apply_pending_patches_and_restart(framework, defer_spawn=True):",
+            _src, "立即请求路径必须 defer_spawn=True")
 
 
 class TestD_RetryQueue(_Base):

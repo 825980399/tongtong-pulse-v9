@@ -1803,8 +1803,10 @@ class PulseSnapshot:
             with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
                 json.dump(snapshot, f, ensure_ascii=False, indent=2)
 
-            if os.path.exists(self.l1_snapshot_path):
-                os.remove(self.l1_snapshot_path)
+            # ★472刀3（台账 D3/F2）：纯 os.replace 原子覆盖。
+            #   前置 os.remove 制造了「已删旧档、新档未就位」的崩溃窗口（此刻进程死 ⇒ 快照没了），
+            #   且目标被占用时会先删成功再替换失败。主路径第 80 批 T4 已改，这三处漏改。
+            #   同一模式必须一次修完（F 类「修一半」的直接来源）。
             os.replace(tmp_path, self.l1_snapshot_path)
 
             self._log(LogLevel.DEBUG, f"L1快照保存完成: {len(l1_nodes)} 个L1节点")
@@ -2796,8 +2798,10 @@ class PulseSnapshot:
                     with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
                         json.dump(l1_data, f, ensure_ascii=False, indent=2)
 
-                    if os.path.exists(self.l1_snapshot_path):
-                        os.remove(self.l1_snapshot_path)
+                    # ★472刀3（台账 D3/F2）：纯 os.replace 原子覆盖。
+                    #   前置 os.remove 制造了「已删旧档、新档未就位」的崩溃窗口（此刻进程死 ⇒ 快照没了），
+                    #   且目标被占用时会先删成功再替换失败。主路径第 80 批 T4 已改，这三处漏改。
+                    #   同一模式必须一次修完（F 类「修一半」的直接来源）。
                     os.replace(tmp_path, self.l1_snapshot_path)
 
                     self._log(LogLevel.INFO,
@@ -2839,8 +2843,10 @@ class PulseSnapshot:
 
                     # ★338刀1：compaction/精简后布局全变，索引必须先废再换档。
                     snapshot_index.invalidate(self.snapshot_path, "精简compaction前失效")
-                    if os.path.exists(self.snapshot_path):
-                        os.remove(self.snapshot_path)
+                    # ★472刀3（台账 D3/F2）：纯 os.replace 原子覆盖。
+                    #   前置 os.remove 制造了「已删旧档、新档未就位」的崩溃窗口（此刻进程死 ⇒ 快照没了），
+                    #   且目标被占用时会先删成功再替换失败。主路径第 80 批 T4 已改，这三处漏改。
+                    #   同一模式必须一次修完（F 类「修一半」的直接来源）。
                     os.replace(tmp_path, self.snapshot_path)
 
                     self._log(LogLevel.INFO,
