@@ -1199,6 +1199,34 @@ def _m473_align_should_warn(how: str, patch: dict) -> tuple:
         return True, 1
 
 
+def _m473_format_skipped_om(detail: list) -> tuple:
+    """★473刀12：把「organ/method 空且无法推断」的跳过明细聚合成一行文本。
+
+    现场（2026-11-06 20:22:39，同一秒同一 pid）：`tests/test_m470_align_window.py`
+    的 10 处 SIM115 各打一条 WARNING ⇒ 一次扫描刷 10 行日志，而真正的信息量
+    只有「这个文件有 10 处 SIM115，演化系统定位不到方法，永远修不了」这一句。
+    同类另一批：19:55:19 同秒 10 条。
+
+    排序按「次数降序、名字升序」—— 刷得最多的先看到；只展示前 6 组，
+    其余折成「共 N 组」，避免一个大文件把日志行撑爆。
+
+    Returns: ``(文本, 组数)``。文本形如
+        ``tests/x.py(code_review.SIM115)x10, config.py(SIM115)x3``
+    """
+    _agg: dict = {}
+    for _item in (detail or []):
+        if not isinstance(_item, (tuple, list)) or len(_item) < 2:
+            continue
+        _k = (str(_item[0] or "?"), str(_item[1] or "?"))
+        _agg[_k] = int(_agg.get(_k, 0)) + 1
+    _items = sorted(_agg.items(), key=lambda kv: (-kv[1], kv[0]))
+    _show = 6
+    _txt = ", ".join(f"{_k[0]}({_k[1]})x{_v}" for _k, _v in _items[:_show])
+    if len(_items) > _show:
+        _txt += f" …共{len(_items)}组"
+    return _txt, len(_items)
+
+
 def _m470_body_span(lines: list, method: str):
     """★470刀1：按 ``self_inspector._read_method_body`` 的**同一规则**定位方法体区间。
 
@@ -2787,6 +2815,11 @@ class SafeEvolutionExecutor:
         _filtered_backup = 0
         _filtered_external = 0
         _skipped_empty_om = 0
+        # ★473刀12：逐条被跳过的问题先攒起来，循环结束后按 (file, type) 聚合打一条。
+        #   实测（2026-11-06 20:22:39 同一秒、同一 pid）同一文件的 10 处 SIM115
+        #   各打一条 WARNING ⇒ 一次扫描刷 10 行，而信息量只有「这个文件有 10 处
+        #   SIM115 且演化系统定位不到方法」这一句。
+        _skipped_om_detail: list = []
         if issues:
             _kept = []
             for _i in issues:
@@ -2813,8 +2846,8 @@ class SafeEvolutionExecutor:
                     _inf = _infer_organ_from_path(_fp)
                     if not _inf:
                         _skipped_empty_om += 1
-                        _module_logger.warning(
-                            f"[问题过滤] organ和method均为空且无法推断，跳过: {_fp} ({_i.get('type', '')})")
+                        _skipped_om_detail.append(
+                            (_fp, str(_i.get("type", "") or "?")))
                         continue
                     # 能推断 organ → 回填便于下游定位/日志（不写 _file，避免统计失真）
                     _i["organ"] = _inf
@@ -2824,6 +2857,15 @@ class SafeEvolutionExecutor:
                     f"[问题过滤] 本轮过滤{_filtered_out}个"
                     f"（标准库{_filtered_stdlib}个 / 备份目录{_filtered_backup}个 / 项目外{_filtered_external}个），"
                     f"organ/method空跳过{_skipped_empty_om}个，保留{len(_kept)}个")
+            if _skipped_om_detail:
+                # ★473刀12：按 (file, type) 聚合 —— 同一文件的同类问题算一条。
+                #   级别仍为 WARNING：这是**能力边界**（演化系统对这些 lint
+                #   问题定位不到 organ/method，永远不会自动修），需要可见；
+                #   但要一次说清，而不是一条问题一行。
+                _om_txt, _om_groups = _m473_format_skipped_om(_skipped_om_detail)
+                _module_logger.warning(
+                    "[问题过滤] organ/method 空且无法推断，跳过 %d 个问题（%d 组）：%s",
+                    len(_skipped_om_detail), _om_groups, _om_txt)
             issues = _kept
         from nucleus.mnemosyne.verification_learning_hub import (
             get_verification_learning_hub,
