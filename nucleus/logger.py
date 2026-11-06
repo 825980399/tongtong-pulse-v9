@@ -63,6 +63,52 @@ _FILE_HANDLER = None       # SafeRotatingFileHandler（唯一落盘者）
 _QUEUE_LISTENER = None     # QueueListener（后台落盘线程）
 _QUEUE_HANDLER = None      # QueueHandler（挂在 root / 树外 logger 的入队口）
 
+# ========== ★473刀1 日志队列有界化 ==========
+
+_M473_QUEUE_DROPPED = 0          # 因队列满而丢弃的记录数（进程级累计）
+_M473_QUEUE_DROP_WARN_AT = 0.0   # 上次丢弃告警的时刻（限流用）
+_M473_DROP_WARN_INTERVAL = 60.0  # 丢弃告警最小间隔（秒）
+
+
+class _M473NonBlockingQueueHandler(logging.handlers.QueueHandler):
+    """★473刀1：入队永不阻塞、队列满即丢的 QueueHandler。
+
+    为什么不能直接用标准 QueueHandler + 有界 Queue：
+      标准 `QueueHandler.enqueue` 只捕 `ValueError`，`queue.Full` 会冒到
+      `emit()` 的 `except Exception` ⇒ `handleError` ⇒ 默认 `raiseExceptions=True`
+      时往 stderr 打整段 traceback。队列一满就刷屏，反而放大故障。
+    本类口径：
+      * 入队一律 `put_nowait`，**绝不阻塞业务线程**（阻塞式入队会让所有打日志的
+        线程排队等磁盘，正是 434 刀2 之前那条死路）；
+      * 满则丢弃 + 累加计数，最多每 60s 往 stderr 写一行提示
+        （**不经过 logging**，否则会在已满的队列上递归）。
+    """
+
+    def enqueue(self, record):
+        try:
+            self.queue.put_nowait(record)
+            return
+        except queue.Full:
+            global _M473_QUEUE_DROPPED, _M473_QUEUE_DROP_WARN_AT
+            _M473_QUEUE_DROPPED += 1
+            _now = time.time()
+            if _now - _M473_QUEUE_DROP_WARN_AT >= _M473_DROP_WARN_INTERVAL:
+                _M473_QUEUE_DROP_WARN_AT = _now
+                try:
+                    _cap = getattr(self.queue, "maxsize", -1)
+                    sys.stderr.write(
+                        f"[473刀1] 日志队列已满（容量 {_cap}），累计丢弃 "
+                        f"{_M473_QUEUE_DROPPED} 条；消费端可能被磁盘/轮转卡住。\n")
+                    sys.stderr.flush()
+                except Exception as _e:
+                    silent_exc(_e, where="nucleus.logger::_M473NonBlockingQueueHandler.stderr",
+                               level="debug")
+            return
+        except Exception as _e:
+            silent_exc(_e, where="nucleus.logger::_M473NonBlockingQueueHandler.enqueue",
+                       level="warning")
+
+
 
 # ========== ★F3 重复日志聚合降噪 ==========
 
@@ -1108,8 +1154,12 @@ def _init_root_logger():
     #   SafeRotatingFileHandler 只由 QueueListener 单线程持有，业务线程只往
     #   queue.Queue 入队（无锁竞争），消除全进程最大串行点（历史上 L0 看门狗
     #   卡死就是等日志写盘）。console 仍直挂 root（写 stdout 非写盘，不动）。
-    _log_queue = queue.Queue(-1)
-    _queue_handler = logging.handlers.QueueHandler(_log_queue)
+    # ★473刀1：队列**有界**。原实现 `queue.Queue(-1)` 无上限 —— 消费端一旦变慢
+    #   （磁盘慢 / 轮转卡住 / 全进程被换出），生产速度 > 消费速度就会无限涨内存。
+    #   有界 + 满则丢新日志，保证"日志永不拖死业务"这条第一原则。
+    _m473_qmax = int(getattr(config, "LOG_QUEUE_MAXSIZE", 20000) or 20000)
+    _log_queue = queue.Queue(maxsize=_m473_qmax)
+    _queue_handler = _M473NonBlockingQueueHandler(_log_queue)
     root.addHandler(_queue_handler)
     _queue_listener = logging.handlers.QueueListener(_log_queue, file_handler)
     _queue_listener.start()
@@ -1180,6 +1230,35 @@ def flush_queue_logs() -> bool:
         return False
     _QUEUE_LISTENER = None
     return True
+
+def get_log_queue_stats() -> dict:
+    """★473刀1：上报日志队列的容量 / 积压 / 丢弃计数。
+
+    供 health_snapshot、状态查询与巡检使用。**只读**，不改任何状态。
+    `dropped` 是累计值（进程级），非零就说明消费端曾经跟不上，
+    此时应该去看是不是磁盘慢 / 日志轮转卡住 / 全进程被换出。
+    """
+    _q = None
+    _h = _QUEUE_HANDLER
+    if _h is not None:
+        _q = getattr(_h, "queue", None)
+    if _q is None:
+        return {"enabled": False, "size": 0, "maxsize": 0, "dropped": _M473_QUEUE_DROPPED,
+                "fill_ratio": 0.0}
+    _size = -1
+    try:
+        _size = int(_q.qsize())
+    except Exception as _e:
+        silent_exc(_e, where="nucleus.logger::get_log_queue_stats", level="debug")
+    _max = int(getattr(_q, "maxsize", 0) or 0)
+    return {
+        "enabled": True,
+        "size": _size,
+        "maxsize": _max,
+        "dropped": _M473_QUEUE_DROPPED,
+        "fill_ratio": (round(_size / _max, 4) if _max > 0 and _size >= 0 else 0.0),
+    }
+
 
 
 def get_organ_logger(organ_name: str) -> logging.Logger:

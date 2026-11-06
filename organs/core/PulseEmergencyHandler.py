@@ -21,6 +21,7 @@ import time
 from typing import Any
 
 from base.BasePulseOrgan import BasePulseOrgan
+from nucleus._silent_except import silent_exc
 from nucleus.const import DeviceEvent, Event, HeartEvent, LogLevel, SystemEvent, VascularEvent
 
 
@@ -160,6 +161,21 @@ class PulseEmergencyHandler(BasePulseOrgan):
         return {"status": "recovery_attempted", "success": success}
 
     def _attempt_recovery(self, alarm_type: str) -> bool:
+        """尝试恢复（★473刀1：返回值改为**真实执行结果**）。
+
+        根因：原实现只打一行「尝试恢复: xxx」然后 `return True`，四个策略
+        一条对应的动作都没有 ⇒ `_successful_recoveries` 恒等于
+        `_recovery_attempts`、RECOVERY_ATTEMPT.success 永远 true，
+        台账上「恢复成功率 100%」是彻底的假账，同时掩盖了
+        「organ_failure 这条策略从来没被真正实现过」。
+
+        新口径：
+          - 动作真的跑通（无异常抛栈）        ⇒ True
+          - 没有对应动作 / 缺依赖 / 结果不可证 ⇒ False（宁记失败，不记假成功）
+
+        灰度：`config.RECOVERY_TRUTHFUL_RESULT = False` 回到旧的恒 True。
+        注意本开关**只影响返回值与统计口径**，不改变动作的有无。
+        """
         recovery_strategies = {
             "energy_critical": "触发知识淘汰释放内存",
             "cpu_high": "降低心跳频率和抓取频率",
@@ -168,7 +184,72 @@ class PulseEmergencyHandler(BasePulseOrgan):
         }
         strategy = recovery_strategies.get(alarm_type, "通用恢复策略")
         self._log(LogLevel.INFO, f"尝试恢复: {strategy}")
-        return True
+
+        try:
+            import config as _cfg473
+
+            if not bool(getattr(_cfg473, "RECOVERY_TRUTHFUL_RESULT", True)):
+                # 灰度关闸：保持历史行为（恒 True）。应急回滚用，指标会重新失真。
+                return True
+        except Exception as _e473cfg:
+            silent_exc(_e473cfg, "PulseEmergencyHandler::_attempt_recovery 读灰度开关", level="debug")
+            return True  # 读不到开关时保持旧行为，不引入新风险
+
+        return self._m473_execute_recovery(alarm_type)
+
+    def _m473_execute_recovery(self, alarm_type: str) -> bool:
+        """★473刀1：真正执行恢复动作，并按可观测结果返回成败。
+
+        能力边界（**必须如实**，不许为好看编动作）：
+          * energy_critical / memory_high：本器官能做的只有「强制 GC 一轮 + 降并行度」。
+            做完即算动作完成，**不保证压力解除** —— 真实效果由后续指标判定，
+            此处不虚报「已恢复」。
+          * cpu_high：只能降并行度。心跳频率归 PulseHeart 管，本器官不越权改。
+          * organ_failure：重启器官需要 orchestrator 句柄，本器官**从未注入过**
+            ⇒ 这条策略从来就没有实现，一律 False 并明说需要人工介入。
+        """
+        if alarm_type in ("energy_critical", "memory_high"):
+            _gc_ok = self._m473_force_gc()
+            _down = self._m473_downgrade("critical" if alarm_type == "energy_critical" else "heavy")
+            return bool(_gc_ok and _down)
+        if alarm_type == "cpu_high":
+            return self._m473_downgrade("heavy")
+        if alarm_type == "organ_failure":
+            self._log(LogLevel.WARNING,
+                      "[473刀1] organ_failure 无可用恢复动作（缺 orchestrator 句柄，"
+                      "重启器官从未实现）⇒ 记账为失败，需人工介入")
+            return False
+        self._log(LogLevel.WARNING,
+                  f"[473刀1] 未知告警类型 {alarm_type} 无对应恢复动作 ⇒ 记账为失败")
+        return False
+
+    def _m473_force_gc(self) -> bool:
+        """强制一轮 GC，返回是否真的执行成功。"""
+        try:
+            import gc
+
+            _n = gc.collect()
+            self._log(LogLevel.INFO, f"[473刀1] gc.collect() 完成，回收 {_n} 个不可达对象")
+            return True
+        except Exception as _e:
+            silent_exc(_e, "PulseEmergencyHandler::_m473_force_gc", level="warning")
+            return False
+
+    def _m473_downgrade(self, level: str) -> bool:
+        """让信息场降并行度，返回是否真的下达成功。"""
+        if self.info_field is None:
+            self._log(LogLevel.WARNING, "[473刀1] info_field 未注入，无法降级并行度")
+            return False
+        _setter = getattr(self.info_field, "set_load_level", None)
+        if not callable(_setter):
+            self._log(LogLevel.WARNING, "[473刀1] info_field 无 set_load_level，无法降级")
+            return False
+        try:
+            _setter(level)
+            return True
+        except Exception as _e:
+            silent_exc(_e, "PulseEmergencyHandler::_m473_downgrade", level="warning")
+            return False
 
     def set_info_field(self, info_field):
         """注入信息场（用于自动降级并行度）"""

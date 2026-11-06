@@ -2425,6 +2425,19 @@ POOL_HEALTH_CHECK_INTERVAL = 60
 #   用最小配置(1 worker)尝试恢复一次；失败仅 DEBUG，不重复 ERROR。
 ENABLE_POOL_DEGRADED_RECOVERY = True
 POOL_DEGRADED_RECOVER_INTERVAL_SEC = 300.0   # 降级后恢复尝试间隔（秒）
+
+# ★473刀1：恢复尝试结果真实性 ==========
+# 根因：PulseEmergencyHandler._attempt_recovery 原实现只打一行「尝试恢复: xxx」
+#   然后**恒 return True**，四个策略一条对应的动作都没有 ⇒ _successful_recoveries
+#   恒等于 _recovery_attempts，RECOVERY_ATTEMPT 事件的 success 永远是 true
+#   ⇒ 台账上「恢复成功率 100%」是彻底的假账，同时掩盖了
+#   「organ_failure 这条策略从来没被真正实现过」。
+# True（默认）：返回值按**真实执行结果**给 —— 动作跑通记 True；
+#   没有对应动作 / 缺依赖 / 结果不可证明，一律记 False（宁记失败，不记假成功）。
+# False：回到旧的恒 True 行为（回滚开关；注意关掉后指标仍会失真，仅应急用）。
+# 判据提示：本开关**只影响返回值与统计口径**，不改变任何恢复动作的有无。
+RECOVERY_TRUTHFUL_RESULT = True
+
 # ★主线第15批 T3/P1-93：进化子进程崩溃自动重试 ==========
 # 背景（12h 实测 109 次崩溃：review 80 / repair 22 / execute 7，每小时 11~14 次）：
 #   子进程崩溃后只有 exitcode、没有原因，且不重试、不降级 → 该模式功能持续失效。
@@ -4134,6 +4147,17 @@ LOG_LEVEL_CONSOLE = LogLevel.WARNING  # ★v9.5控制台降噪：仅告警/错�
 LOG_LEVEL_FILE = LogLevel.DEBUG
 LOG_MAX_BYTES = 10 * 1024 * 1024
 LOG_BACKUP_COUNT = 5
+
+# ★473刀1：日志队列容量上限（防无界队列吃内存）
+# 根因：nucleus/logger.py 用 `queue.Queue(-1)` 建日志队列，容量无上限。
+#   消费方是 QueueListener 单线程写盘；一旦磁盘慢 / 轮转卡住 / 全进程被换出，
+#   生产速度 > 消费速度 ⇒ 队列无限增长。每条 LogRecord 含 args 约 1~3KB，
+#   一小时几万条就是几十 MB，长时间挂死会直接把进程内存吃掉。
+# 口径：队列满时**丢弃新日志**并计数限流告警，**绝不阻塞业务线程**——
+#   日志不能反过来拖死业务（这是本项修复的第一原则）。
+# 取值：20000 × ~2KB ≈ 40MB 最坏占用；正常消费速度远高于生产，不会触发。
+LOG_QUEUE_MAXSIZE = 20000
+
 # ★主线第42批 T1（P0-272）：日志留存治理
 #   背景（实测证据链）：logs/pulse.log 的 ctime 未变（09-03）却只含当日 11:30 起的内容，
 #   实验证明「truncate 不改 ctime、delete+重建会改」→ 属**原地截断**；框架代码全库
