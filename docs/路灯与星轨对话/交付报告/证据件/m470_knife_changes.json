@@ -1,0 +1,214 @@
+{
+  "batch": "M470",
+  "date": "2026-11-06",
+  "switches": {
+    "ENABLE_M470_ALIGN_STRICT": true,
+    "ENABLE_M470_WINDOW_REVERIFY": true,
+    "M470_MAX_REVERIFY": 3
+  },
+  "knife1_align_strict": {
+    "problem": "469 刀2 只校验「整段方法唯一」就把 original 无条件换成整方法，从不核对 original 到底是不是该方法的方法体",
+    "old_rule_released": 14,
+    "old_rule_released_wrong": 14,
+    "wrong_breakdown": {
+      "orig_OVERLAP（跨出方法边界）": 1,
+      "orig_IN_body（只是方法内一段）": 2,
+      "orig_mismatch（与当前方法体不等）": 6,
+      "modified_other_method（改名成别的函数）": 5
+    },
+    "new_rule_released": 0,
+    "new_rule_breakdown": {
+      "as_is": 6,
+      "orig_mismatch": 9,
+      "modified_other_method": 5,
+      "span_not_found": 2
+    },
+    "how_rule_works": "用与 self_inspector._read_method_body 同一规则（跳过 docstring）计算 body，只有 original == body 才允许扩成整方法；且 modified 的 def 行方法名必须与补丁 method 一致",
+    "why_old_rule_missed_docstring": "旧口径拿「def 之后全部行」当基准，而 original 来自 get_method_body（跳过 docstring），两边差一个 docstring ⇒ 该拒的放行、该放的漏判"
+  },
+  "knife2_window_reverify": {
+    "problem": "verify_fix_from_logs 的 _elapsed < 300 早退分支返回的 dict 没有 undecidable 键，调用方 if _result.get(\"undecidable\") 拿到 None ⇒ 落 else ⇒ runtime_failed + needs_repair + 自动回滚已落地补丁",
+    "field_evidence": "实测 3 条补丁「仅运行 289 秒，需至少 300 秒」，只差 11 秒被回滚",
+    "fix": "返回 undecidable=True + window_not_reached=True，走既有 needs_reverify 延迟复验",
+    "max_reverify": 3,
+    "why_no_spin": "reverify_after 每次 +3600s，第二次复验时 _elapsed 必然 > 300s"
+  },
+  "patch_samples": [
+    {
+      "id": "patch_multi_1788455899_ca56",
+      "file": "organs/brain/PulseCodeLearner.py",
+      "method": "_generate_organ_handbook",
+      "orig_len": 423,
+      "how_after_m470": "as_is",
+      "detail": ""
+    },
+    {
+      "id": "patch_multi_1788459695_c56e",
+      "file": "organs/brain/PulseCodeLearner.py",
+      "method": "_extract_code_risks",
+      "orig_len": 647,
+      "how_after_m470": "as_is",
+      "detail": ""
+    },
+    {
+      "id": "patch_llm_1789462016_8789",
+      "file": "organs/body/PulseLung.py",
+      "method": "_m49_take_call_source",
+      "orig_len": 371,
+      "how_after_m470": "as_is",
+      "detail": ""
+    },
+    {
+      "id": "patch_llm_1789867925_1c57",
+      "file": "tests/test_lazy_snapshot_m9.py",
+      "method": "test_full_load_regression_unchanged",
+      "orig_len": 738,
+      "how_after_m470": "orig_mismatch",
+      "detail": "original 与目标方法体内容不等（orig 738 字 / body 1848 字）：源码已变或素材取错，拒绝按整方法替换"
+    },
+    {
+      "id": "patch_llm_1789886168_789a",
+      "file": "organs/brain/PulseInnerWorld.py",
+      "method": "_safe_eval_arithmetic",
+      "orig_len": 1410,
+      "how_after_m470": "as_is",
+      "detail": ""
+    },
+    {
+      "id": "patch_llm_1789890006_e8ba",
+      "file": "organs/body/PulseLung.py",
+      "method": "_get_channel_semaphore",
+      "orig_len": 236,
+      "how_after_m470": "as_is",
+      "detail": ""
+    },
+    {
+      "id": "patch_llm_1789886195_fb44",
+      "file": "organs/brain/PulseInterestModel.py",
+      "method": "_on_reflection_insight",
+      "orig_len": 1726,
+      "how_after_m470": "as_is",
+      "detail": ""
+    },
+    {
+      "id": "patch_llm_1789907327_f801",
+      "file": "organs/body/PulseKidney.py",
+      "method": "_m70_kal_get_node",
+      "orig_len": 407,
+      "how_after_m470": "modified_other_method",
+      "detail": "modified 定义的是另一个方法 _m70_get_node（补丁目标是 _m70_kal_get_node），按整方法替换会让目标方法消失"
+    },
+    {
+      "id": "patch_llm_1790002139_e37a",
+      "file": "organs/body/PulseKidney.py",
+      "method": "_m70_kal_search_by_level",
+      "orig_len": 359,
+      "how_after_m470": "modified_other_method",
+      "detail": "modified 定义的是另一个方法 _m70_kal_search_by_evol_level（补丁目标是 _m70_kal_search_by_level），按整方法替换会让目标方法消失"
+    },
+    {
+      "id": "patch_llm_1790159966_c11f",
+      "file": "nucleus/data/DataAccessLayer.py",
+      "method": "safe_write_json",
+      "orig_len": 1382,
+      "how_after_m470": "orig_mismatch",
+      "detail": "original 与目标方法体内容不等（orig 1378 字 / body 910 字）：源码已变或素材取错，拒绝按整方法替换"
+    },
+    {
+      "id": "patch_llm_1790248313_d881",
+      "file": "organs/brain/PulseSubconscious.py",
+      "method": "_schedule_dream_timer",
+      "orig_len": 1601,
+      "how_after_m470": "orig_mismatch",
+      "detail": "original 与目标方法体内容不等（orig 1601 字 / body 616 字）：源码已变或素材取错，拒绝按整方法替换"
+    },
+    {
+      "id": "patch_llm_1790406573_34af",
+      "file": "nucleus/data/DataAccessLayer.py",
+      "method": "safe_write_json",
+      "orig_len": 1382,
+      "how_after_m470": "orig_mismatch",
+      "detail": "original 与目标方法体内容不等（orig 1378 字 / body 910 字）：源码已变或素材取错，拒绝按整方法替换"
+    },
+    {
+      "id": "patch_llm_1789842716_c862",
+      "file": "organs/body/PulseLiver.py",
+      "method": "_m70_kal_node_count",
+      "orig_len": 694,
+      "how_after_m470": "modified_other_method",
+      "detail": "modified 定义的是另一个方法 _get_node_count（补丁目标是 _m70_kal_node_count），按整方法替换会让目标方法消失"
+    },
+    {
+      "id": "patch_llm_1790750134_3174",
+      "file": "tests/test_lazy_snapshot_m9.py",
+      "method": "test_full_load_regression_unchanged",
+      "orig_len": 943,
+      "how_after_m470": "orig_mismatch",
+      "detail": "original 与目标方法体内容不等（orig 943 字 / body 1848 字）：源码已变或素材取错，拒绝按整方法替换"
+    },
+    {
+      "id": "patch_llm_1790780348_b782",
+      "file": "organs/body/PulseLiver.py",
+      "method": "_m70_kal_node_count",
+      "orig_len": 694,
+      "how_after_m470": "modified_other_method",
+      "detail": "modified 定义的是另一个方法 get_node_count（补丁目标是 _m70_kal_node_count），按整方法替换会让目标方法消失"
+    },
+    {
+      "id": "patch_llm_1790868685_941e",
+      "file": "tests/test_lazy_snapshot_m9.py",
+      "method": "test_full_load_regression_unchanged",
+      "orig_len": 705,
+      "how_after_m470": "orig_mismatch",
+      "detail": "original 与目标方法体内容不等（orig 705 字 / body 1848 字）：源码已变或素材取错，拒绝按整方法替换"
+    },
+    {
+      "id": "patch_llm_1790939169_d138",
+      "file": "tests/test_lazy_snapshot_m9.py",
+      "method": "test_full_load_regression_unchanged",
+      "orig_len": 1526,
+      "how_after_m470": "orig_mismatch",
+      "detail": "original 与目标方法体内容不等（orig 1526 字 / body 1848 字）：源码已变或素材取错，拒绝按整方法替换"
+    },
+    {
+      "id": "patch_llm_1790935432_a2cf",
+      "file": "organs/body/PulseLiver.py",
+      "method": "_m70_kal_get_node",
+      "orig_len": 454,
+      "how_after_m470": "modified_other_method",
+      "detail": "modified 定义的是另一个方法 _m70_get_node（补丁目标是 _m70_kal_get_node），按整方法替换会让目标方法消失"
+    },
+    {
+      "id": "patch_llm_1791967240_fcef",
+      "file": "nucleus/logger.py",
+      "method": "doRollover",
+      "orig_len": 1636,
+      "how_after_m470": "orig_mismatch",
+      "detail": "original 与目标方法体内容不等（orig 1636 字 / body 2883 字）：源码已变或素材取错，拒绝按整方法替换"
+    },
+    {
+      "id": "patch_llm_1792659239_6fa4",
+      "file": "tmp/p342_root/d1_iso.py",
+      "method": "main",
+      "orig_len": 1730,
+      "how_after_m470": "orig_mismatch",
+      "detail": "original 与目标方法体内容不等（orig 1730 字 / body 6234 字）：源码已变或素材取错，拒绝按整方法替换"
+    },
+    {
+      "id": "patch_multi_1793659423_682b",
+      "file": "organs/body/PulseLiver.py",
+      "method": "_compress_group_chunk",
+      "orig_len": 233,
+      "how_after_m470": "span_not_found",
+      "detail": "目标文件里找不到唯一的方法 _compress_group_chunk（0 个或多个同名），无法把 original 扩成整段"
+    },
+    {
+      "id": "patch_llm_1793945467_7587",
+      "file": "organs/body/PulseHeart.py",
+      "method": "_schedule_next_heartbeat",
+      "orig_len": 850,
+      "how_after_m470": "span_not_found",
+      "detail": "目标文件里找不到唯一的方法 _schedule_next_heartbeat（0 个或多个同名），无法把 original 扩成整段"
+    }
+  ]
+}
