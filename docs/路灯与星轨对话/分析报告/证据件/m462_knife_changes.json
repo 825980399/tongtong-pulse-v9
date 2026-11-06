@@ -1,0 +1,119 @@
+{
+ "batch": 462,
+ "date": "2026-11-06",
+ "authorization": "星轨 10:20「已重启，分析以后继续剩余任务」+ 10:56「继续完成未完成的任务」；本批无编号任务书，按对话授权施工。",
+ "head_at_start": "c53966e7",
+ "live_process": "pid=45176 @2026-11-06 10:19:56（晚于 461 两笔 09:55/10:01 ⇒ 461 已加载；462 改动仍需再次重启）",
+ "restart_findings": {
+  "loop_start": "10:20:19 [自主进化] 循环已启动（首跑延迟 2034 秒，每 30 分钟一轮）",
+  "round_1": "10:54:12 第 1 轮问题发现开始 → 10:54:29 完成：发现 15 个问题，累计 1 轮 / 空转 0 轮 / **已尝试修复 0 轮**",
+  "subproc": "10:29:25 / 10:40:03 / 10:50:59 三轮均为 mode=review，各审查 1 个异常、报告 1 条、耗时 7.0~7.4s；**无 repair 轮次**",
+  "ledgers": "lesson_cooldown / runtime_issues / premise_trace / root_cause_route 均不存在；self_verdict_ledger 仍 3 行@mtime 05:14、approval_trace 仍 6 行@07:45、failure_experience 仍 10 行@09:22、快照目录未创建",
+  "conclusion": "四个交接判据为空**不是故障**：这一轮只有 review、没有生成待审批补丁，故审批桥/冷却/派单/快照都没被触发。堵点已从「证据与闸」前移到「生成侧不产出补丁」——这是下一批最该查的点。"
+ },
+ "t0_findings": [
+  {
+   "id": 1,
+   "finding": "三项剩余任务在闭环内均无实现",
+   "evidence": "T0 前提核实：issue 从日志/静态扫描/审查/派单进来直接进生成，无人证伪前提；A/B：perf_delta_probe 是性能沙箱（导入耗时/P95），get_strategy_effectiveness 是按 issue_type 调 trust 门槛，都不是行为 A/B；根因分派：voided_feature（459）只有一个写入点、零消费点，生成侧仅 445 一个 no_def→require_full_def 硬编码"
+  },
+  {
+   "id": 2,
+   "finding": "前提核实的检测器判据会误杀",
+   "evidence": "首轮实测 detector_hits 对 non_atomic_write 整文件命中 0 但问题真实存在（07:45 样本）；改为「命中≥1 ⇒ confirmed，命中 0 ⇒ unknown」，只有结构层面明确失效才判 stale"
+  },
+  {
+   "id": 3,
+   "finding": "片段必须保留原始缩进",
+   "evidence": "二轮单测：original_code 被 .strip() 后包装 ⇒ IndentationError ⇒ 命中 0；判空用 strip，送探针用原始串（与 self_verdict 同口径）后 27 例全绿"
+  },
+  {
+   "id": 4,
+   "finding": "★★461 回放里 8/8 apply 的样本其实修错对象",
+   "evidence": "05:14 留痕 method=periodic_task、modified_code 里 def periodic_task，但 PulseSystemManager.py 全文**没有** def periodic_task（真实为 _schedule_health_check / _auto_health_check 543-546 行）；代码片段真实存在、方法名是生成侧虚构的。作废台账里 m1(97)/some_method(25)/m0(18)/foo(13) 多为占位名。462 前提核实判 stale 把它拦下 ⇒ 这正是 T0 的价值，也解释了实盘 0 次 apply"
+  },
+  {
+   "id": 5,
+   "finding": "本批零 cw3-A 漂移",
+   "evidence": "未改任何 IW / pulse_inner_world_* ⇒ 首检即 PASS、基线零漂移 ⇒ 2 笔提交"
+  }
+ ],
+ "knives": [
+  {
+   "id": 1,
+   "name": "T0 前提核实（premise_guard.py）",
+   "detail": "三态 confirmed/stale/unknown；结构检查（文件/方法/original_code）+ 复用 446 检测器对片段语义反查；只剔 stale，unknown 保留但不冒充通过；append-only 留痕 + pytest 护栏。接 EvolutionLoop.discover_all_issues 的 _final 出口。",
+   "switch": "ENABLE_M462_PREMISE_GUARD"
+  },
+  {
+   "id": 2,
+   "name": "A/B 开关回退（behavior_ab.py）",
+   "detail": "同一 case 关/开各跑一次同一探针，比对输出求 discriminative；try/finally 恢复开关原值（新属性用 delattr 清理）；接 collect_evidence，M462_AB_REQUIRE_DISCRIMINATIVE=True 时只有有判别力才允许 confidence 提权，防「开关没生效却以为生效」的自欺。",
+   "switch": "ENABLE_M462_BEHAVIOR_AB / M462_AB_REQUIRE_DISCRIMINATIVE"
+  },
+  {
+   "id": 3,
+   "name": "按根因类型分派（root_cause_router.py）",
+   "detail": "消费 failure_experience.jsonl 的结构化 error_type（459/460/461 都在写），优先级 结构化失败特征 > issue_type > generic；映射修复动作 / prompt 提示 / 策略偏好 / trust 偏置（偏置只留痕不改判据）；prompt 只追加、幂等；接 SafeEvolutionExecutor 的 445 prompt 拼接点之后。",
+   "switch": "ENABLE_M462_ROOT_CAUSE_ROUTER / M462_ROUTER_MAX_HINTS"
+  }
+ ],
+ "real_sample_replay": {
+  "source": "data/patches/approval_trace.jsonl 的 05:14 真实审批留痕",
+  "premise_guard": "stale —— 方法 periodic_task 已不在源码中（生成侧虚构名）⇒ 补丁无处可打",
+  "behavior_ab": "discriminative=True, off=false_pass → on=true_pass, restored=True",
+  "root_cause_router": "matched=voided_no_def, prefer=llm_full_def, prompt 幂等追加且保留原文",
+  "evidence_chain": "true_pass / baseline=1 / problem_gone=True / ab=True / confidence high → 八闸 8/8 全部通过 → 自裁决 apply",
+  "note": "两者不矛盾：前提核实发生在**生成前**（问题源出口），证据链在**审批时**。462 的价值是把「修错对象」的单子在进生成前就剔除。"
+ },
+ "quality": {
+  "new_tests": 27,
+  "regression_passed": 208,
+  "total_passed": 235,
+  "existing_red": 0,
+  "warnings": "m31 1 + m459voided 2（均既有）",
+  "regression_files": [
+   "447 14",
+   "460 23",
+   "461 22",
+   "459voided 14",
+   "344 28",
+   "345 24",
+   "375c9 24",
+   "m15 16",
+   "m31 24",
+   "m458主链 9",
+   "t146 10"
+  ],
+  "gates": "cw2（5 子项）/ 事件字符串 / silent_exc 元数 / 废弃导入 / 断链 / 遗留装配 / cw3-B：PASS；cw3-A 首检 PASS（零漂移，未重锚 ⇒ 2 笔）",
+  "ruff_new": 0,
+  "eol": {
+   "config.py": "LF 8228/0",
+   "nucleus/evolution/self_verdict.py": "LF 814/0",
+   "nucleus/evolution/EvolutionLoop.py": "CRLF 1094/0",
+   "nucleus/reasoning/SafeEvolutionExecutor.py": "CRLF 7430/0",
+   "nucleus/evolution/premise_guard.py": "LF 234/0",
+   "nucleus/evolution/behavior_ab.py": "LF 124/0",
+   "nucleus/evolution/root_cause_router.py": "LF 189/0",
+   "tests/test_m462_closed_loop_residual.py": "LF 294/0"
+  },
+  "production_trace_pollution": 0,
+  "pollution_check": "premise_trace / root_cause_route 生产路径均不存在；回放与单测全部写隔离 root；460/461 台账行数未变"
+ },
+ "files_changed": [
+  "config.py",
+  "nucleus/evolution/self_verdict.py",
+  "nucleus/evolution/EvolutionLoop.py",
+  "nucleus/reasoning/SafeEvolutionExecutor.py",
+  "nucleus/evolution/premise_guard.py",
+  "nucleus/evolution/behavior_ab.py",
+  "nucleus/evolution/root_cause_router.py",
+  "tests/test_m462_closed_loop_residual.py"
+ ],
+ "open_items": [
+  "462 改动在磁盘上，活体 pid=45176 早于提交 ⇒ **需再次重启**才能生效",
+  "★堵点已前移到生成侧：10:54 第 1 轮发现 15 个问题却「已尝试修复 0 轮」，三轮子进程全是 review 无 repair ⇒ 下一批应先查为什么不进修复流程",
+  "常驻独立进程循环：判据上**不建议做**（后台线程 + 一次性 spawn 子进程 + JSON 回传已够，实盘一轮 5~7s、timeout=600s 从未逼近）；补 A/B 全套回归后才需放宽超时",
+  "真实 apply/rollback 样本仍需重启后等一轮有 repair 产出的闭环"
+ ]
+}
