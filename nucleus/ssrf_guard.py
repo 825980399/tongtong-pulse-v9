@@ -181,6 +181,35 @@ def is_safe_http_url(url: str) -> tuple[bool, str]:
     return True, ""
 
 
+def _m473_timeout_as_result_on() -> bool:
+    """★473刀10 灰度开关：读超时是否按「失败结果」返回（True=新行为）。
+
+    False ⇒ `except TimeoutError` 分支直接 `raise`，恢复旧的冒泡行为。
+    """
+    try:
+        import config as _c473t
+        return bool(getattr(_c473t, "ENABLE_M473_HTTP_TIMEOUT_AS_RESULT", True))
+    except Exception as _e473t:
+        silent_exc(_e473t, where="ssrf_guard::_m473_timeout_as_result_on", level="debug")
+        return True
+
+
+def _m360_finish_safe(rid: str, ok: bool, usage=None, error: str = "") -> None:
+    """★473刀10：付费埋点收尾的**共用安全包装**（rid 为空直接跳过）。
+
+    抽出来的原因：读超时分支要新建一个 handler，而 cw2 门禁按 handler 指纹
+    判「静默异常回潮」—— 在该处再内联一层 try/except 会新增一组同形嵌套 handler。
+    集中到本函数后，新分支只需一行调用，零新增嵌套。
+    """
+    if not rid:
+        return
+    try:
+        from nucleus.llm.paid_api_trace import finish as _m360_finish
+        _m360_finish(rid, bool(ok), usage, error)
+    except Exception as _m360fe:
+        silent_exc(_m360fe, where="ssrf_guard::_m360_finish_safe", level="debug")
+
+
 def safe_http_json(
     url: str,
     *,
@@ -282,6 +311,26 @@ def safe_http_json(
             except Exception as _m360e:
                 silent_exc(_m360e, where="nucleus.ssrf_guard::safe_http_json 埋点 finish", level="debug")
         return False, f"响应解析失败: {_e}"
+    except TimeoutError as _e:
+        # ★473刀10：读超时（socket 级）此前**没有任何分支接**。
+        #   `TimeoutError`（3.10+ 是 `socket.timeout` 的别名）是 OSError 的子类，
+        #   但**不是** `urllib.error.URLError` 的子类 ⇒ 上面那条 `except URLError`
+        #   接不住，异常直接冒泡出本函数，打破「一律返回 (bool, data)」的契约。
+        #   实测（2026-10-02 ~ 11-07 三份轮转日志）：SafeEvolutionExecutor 那 51 条
+        #   `[LLM修复] 修复建议生成异常，本轮 LLM 通道降级返回 None` ——
+        #   **100% 都是** `TimeoutError: The read operation timed out`。
+        #   冒泡让它们绕过 465 的失败记账三件套（`_m465_last_fail` 归类 /
+        #   `_m465_fail_streak` 连击熔断 / `_m451` 连续 3 次才 WARNING），于是：
+        #   每轮刷一条 WARNING、熔断永不因超时开启、渠道健康度看不到超时。
+        #   全仓 grep 确认**没有一处**调用点 `except TimeoutError`（tcp_client /
+        #   PulseCodeSandbox 那三处与 HTTP 无关）⇒ 补分支不改任何既有语义。
+        #   归类仍记 `error`（`_m465_fail_kind` 的既有规格：超时**不换道** ——
+        #   换到另一个慢渠道只会把本轮耗时成倍拉长）。
+        if not _m473_timeout_as_result_on():
+            raise  # 灰度关闭 ⇒ 恢复旧的冒泡行为（逐字回滚）
+        silent_exc(_e, where="ssrf_guard::safe_http_json 读超时", level="debug")
+        _m360_finish_safe(_m360_rid, False, error="TimeoutError")
+        return False, f"请求失败: 读超时: {_e}"
 
 
 # ========== ★E6（T-SSRF分类留痕-1）：拒收分六类计数 ==========

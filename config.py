@@ -4158,6 +4158,20 @@ LOG_BACKUP_COUNT = 5
 # 取值：20000 × ~2KB ≈ 40MB 最坏占用；正常消费速度远高于生产，不会触发。
 LOG_QUEUE_MAXSIZE = 20000
 
+# ★473刀10：`safe_http_json` 的读超时是否按「失败结果」返回（而不是抛异常）
+# 根因：该函数只有 HTTPError / URLError / (ValueError, JSONDecodeError) 三个 except，
+#   而读超时抛的 `TimeoutError` 不是 URLError 的子类（是 OSError 的另一个子类）
+#   ⇒ 异常直接冒泡，打破「一律返回 (bool, data)」的契约。
+# 现场（2026-10-02 ~ 11-07 三份轮转日志实测）：`[LLM修复] 修复建议生成异常，
+#   本轮 LLM 通道降级返回 None` 共 51 条，**100% 都是** `TimeoutError: The read
+#   operation timed out` ⇒ 全部绕过了 465 的失败记账（归类 / 连击熔断 / 连续 3 次
+#   才 WARNING）⇒ 每轮一条 WARNING、熔断永不因超时开启、渠道健康度看不到超时。
+# True（默认）：超时按 `(False, "请求失败: 读超时: …")` 返回，走既有的
+#   「调用未返回可用结果」通道 —— 自动获得归类、连击、限流日志与健康度回写。
+# False：恢复旧的冒泡行为（回滚开关）。
+# 判据提示：本开关**只影响超时的返回形态**，不改任何 URL 安全判定。
+ENABLE_M473_HTTP_TIMEOUT_AS_RESULT = True
+
 # ★主线第42批 T1（P0-272）：日志留存治理
 #   背景（实测证据链）：logs/pulse.log 的 ctime 未变（09-03）却只含当日 11:30 起的内容，
 #   实验证明「truncate 不改 ctime、delete+重建会改」→ 属**原地截断**；框架代码全库
