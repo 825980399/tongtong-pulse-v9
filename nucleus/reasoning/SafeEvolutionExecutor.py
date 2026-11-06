@@ -1050,6 +1050,189 @@ def _m468_file_fallback_on() -> bool:
 
 
 
+def _m469_granularity_align_on() -> bool:
+    """★469刀2 开关：补丁构造时的「粒度对齐」。
+
+    关掉 ⇒ 不改 original/modified，回到 469 前行为（LLM 重写整方法时
+    补丁会以「基础缩进不一致 original=8 modified=0」被缩进关拒绝）。
+    """
+    try:
+        import config as _c469b
+        return bool(getattr(_c469b, "ENABLE_M469_GRANULARITY_ALIGN", True))
+    except Exception as _e469b:
+        silent_exc(_e469b,
+                   where="SafeEvolutionExecutor::_m469_granularity_align_on",
+                   level="debug")
+        return True
+
+
+def _m469_find_method_span(lines: list, method: str):
+    """用 AST 在源码行列表里定位 `def <method>` 的 [start, end) 区间（0-based，end 不含）。
+
+    返回 (start, end, indent)；同名方法不是恰好 1 个 / 解析失败 ⇒ None（不猜）。
+    ★为什么用 AST 而不是文本匹配：文本匹配会命中注释、字符串和同名调用，
+      且无法判断缩进层级；AST 的 lineno/end_lineno 是唯一真源。
+    """
+    if not method or not lines:
+        return None
+    try:
+        import ast as _ast469
+        _tree = _ast469.parse("\n".join(lines))
+    except Exception as _e469p:
+        silent_exc(_e469p,
+                   where="SafeEvolutionExecutor::_m469_find_method_span",
+                   level="debug")
+        return None
+    _hit = [n for n in _ast469.walk(_tree)
+            if isinstance(n, (_ast469.FunctionDef, _ast469.AsyncFunctionDef))
+            and n.name == method]
+    if len(_hit) != 1:
+        return None
+    _n = _hit[0]
+    _start = int(getattr(_n, "lineno", 0) or 0) - 1
+    _end = int(getattr(_n, "end_lineno", 0) or 0)
+    if _start < 0 or _end <= _start:
+        return None
+    return (_start, _end, int(getattr(_n, "col_offset", 0) or 0))
+
+
+def _m469_method_exists(patch: dict) -> str:
+    """★469刀2b：核对补丁的 `method` 是否真实存在于目标文件的 AST 里。
+
+    返回 "present" / "absent" / "unknown"（unknown ⇒ 缺字段或解析失败，不判）。
+
+    为什么必须查：2026-11-06 实测 12 条 LLM 补丁里 **5 条**的方法名在文件里根本
+    不存在 —— 例如 `periodic_task_no_reentry`（把 issue_type 当方法名）、
+    `_process_l2_nodes`（文件里叫 `_compress_l1_to_l2`）、`collect_value_data`
+    （方法还没被创建）。这类补丁无论缩进对不对都应用不了，构造出来只会污染队列。
+    """
+    if not isinstance(patch, dict):
+        return "unknown"
+    _method = str(patch.get("method") or "").strip()
+    _fp = str(patch.get("file") or "").strip()
+    if not _method or not _fp:
+        return "unknown"
+    try:
+        with open(_fp, "r", encoding="utf-8", errors="replace") as _f469m:
+            _raw = _f469m.read()
+        import ast as _ast469m
+        _tree = _ast469m.parse(_raw.replace("\r\n", "\n"))
+    except Exception as _e469m:
+        silent_exc(_e469m, where="SafeEvolutionExecutor::_m469_method_exists",
+                   level="debug")
+        return "unknown"
+    for _n in _ast469m.walk(_tree):
+        if isinstance(_n, (_ast469m.FunctionDef, _ast469m.AsyncFunctionDef)) \
+                and _n.name == _method:
+            return "present"
+    return "absent"
+
+
+def _m469_align_method_patch(patch: dict) -> dict:
+    """★469刀2：把补丁的 original/modified **粒度对齐**，并记录源码指纹。
+
+    返回 {"ok": bool, "how": str, "detail": str, "indent": int,
+          "orig_before_len": int}
+
+    how 取值：
+      as_is                 modified 本来就不是整方法 ⇒ 不动（零行为变化）
+      whole_method_aligned  已把 original 换成整段方法、modified 回填缩进
+      guard_off             开关关闭
+      span_not_found / span_ambiguous / read_fail / no_target / bad_patch
+                            ⇒ ok=False，调用方应**不构造**该补丁
+    """
+    _out = {"ok": True, "how": "as_is", "detail": "", "indent": 0,
+            "orig_before_len": 0}
+    if not _m469_granularity_align_on():
+        _out["how"] = "guard_off"
+        return _out
+    if not isinstance(patch, dict):
+        return {"ok": False, "how": "bad_patch", "detail": "补丁不是字典",
+                "indent": 0, "orig_before_len": 0}
+    _orig = str(patch.get("original_code") or "")
+    _mod = str(patch.get("modified_code") or "")
+    _out["orig_before_len"] = len(_orig)
+
+    _first = ""
+    for _ln in _mod.replace("\r\n", "\n").split("\n"):
+        if _ln.strip():
+            _first = _ln.strip()
+            break
+    if not _first.startswith(("def ", "async def ")):
+        # ★469刀2b：即使不需要对齐，也必须核对「方法名在目标文件里真实存在」——
+        #   实测 5/12 补丁瞄准的方法名在文件里根本不存在（规划侧幻觉，或把
+        #   issue_type 当方法名）。这类补丁无论缩进对不对都应用不了。
+        _exist = _m469_method_exists(patch)
+        if _exist == "absent":
+            return {"ok": False, "how": "method_not_found",
+                    "detail": (f"目标文件里没有名为 "
+                               f"{patch.get('method') or ''} 的方法"
+                               "（AST 全量比对），补丁无法定位修复单元"),
+                    "indent": 0, "orig_before_len": len(_orig)}
+        return _out
+
+
+    _fp = str(patch.get("file") or "").strip()
+    _method = str(patch.get("method") or "").strip()
+    if not _fp or not _method:
+        return {"ok": False, "how": "no_target",
+                "detail": "缺 file/method，无法取整段方法",
+                "indent": 0, "orig_before_len": len(_orig)}
+    try:
+        with open(_fp, "r", encoding="utf-8", errors="replace") as _f469a:
+            _raw = _f469a.read()
+    except Exception as _e469r:
+        silent_exc(_e469r,
+                   where="SafeEvolutionExecutor::_m469_align_method_patch 读目标文件",
+                   level="debug")
+        return {"ok": False, "how": "read_fail",
+                "detail": f"目标文件读取失败: {type(_e469r).__name__}: {_e469r}",
+                "indent": 0, "orig_before_len": len(_orig)}
+
+    _norm = _raw.replace("\r\n", "\n")
+    _flines = _norm.split("\n")
+    _span = _m469_find_method_span(_flines, _method)
+    if not _span:
+        return {"ok": False, "how": "span_not_found",
+                "detail": (f"目标文件里找不到唯一的方法 {_method}"
+                           "（0 个或多个同名），无法把 original 扩成整段"),
+                "indent": 0, "orig_before_len": len(_orig)}
+    _s, _e, _ind = _span
+    _whole = "\n".join(_flines[_s:_e])
+    if _norm.count(_whole) != 1:
+        return {"ok": False, "how": "span_ambiguous",
+                "detail": "整段方法在源文件中不是唯一出现，拒绝替换",
+                "indent": 0, "orig_before_len": len(_orig)}
+
+    import textwrap as _tw469
+    _ded = _tw469.dedent(_mod.replace("\r\n", "\n")).strip("\n")
+    _pad = " " * _ind
+    _remod = "\n".join((_pad + _l) if _l.strip() else _l
+                       for _l in _ded.split("\n"))
+
+    patch["m469_original_code_before"] = _orig
+    patch["original_code"] = _whole
+    patch["modified_code"] = _remod
+    patch["m469_granularity_aligned"] = True
+    patch["m469_granularity"] = {"method": _method, "indent": _ind,
+                                 "lines": _e - _s,
+                                 "orig_before_len": len(_orig),
+                                 "orig_after_len": len(_whole)}
+    try:
+        from nucleus.reasoning.PatchManager import _m469_file_sha256 as _h469
+        patch["source_file_sha256"] = _h469(_fp)
+        patch["source_snapshot_at"] = patch.get("generated_at")
+    except Exception as _e469h:
+        silent_exc(_e469h,
+                   where="SafeEvolutionExecutor::_m469_align_method_patch 记指纹",
+                   level="debug")
+
+    _out.update({"how": "whole_method_aligned", "indent": _ind,
+                 "detail": (f"original {len(_orig)}→{len(_whole)} 字；"
+                            f"modified 回填到 {_ind} 缩进")})
+    return _out
+
+
 class SafeEvolutionExecutor:
     """
     安全进化执行器。
@@ -2996,7 +3179,40 @@ class SafeEvolutionExecutor:
                             "applied": False,
                             "source": "llm",
                         }
-                        _llm_verify = self._patch_manager.verify_in_copy(_llm_patch)
+                        # ★469刀2：粒度对齐 —— LLM 常把「方法体片段」当素材、
+                        #   却返回「整个方法」。两者粒度不同时原位替换会在别的
+                        #   方法体里插入嵌套 def，缩进关必然拒绝（实测 12 条里 11 条）。
+                        #   这里把 original 换成整段方法、modified 回填到方法真实缩进；
+                        #   取不到唯一整段 ⇒ 不构造，避免产出注定失败的补丁。
+                        _m469_al = _m469_align_method_patch(_llm_patch)
+                        if not _m469_al.get("ok"):
+                            _module_logger.warning(
+                                "[469刀2] 跳过补丁构造：粒度无法对齐（%s）—— "
+                                "file=%s, organ=%s, method=%s, type=%s",
+                                _m469_al.get("how"), _loc_label, _organ, _method, _type)
+                            _llm_patch["m469_align_failed"] = str(
+                                _m469_al.get("detail") or _m469_al.get("how"))
+                            _llm_verify = {
+                                "passed": False,
+                                "stage": "m469_granularity_align_failed",
+                                "errors": [str(_m469_al.get("detail") or "")],
+                                "logs": "",
+                            }
+                        else:
+                            if _m469_al.get("how") == "whole_method_aligned":
+                                _module_logger.info(
+                                    "[469刀2] 粒度对齐：%s.%s original %d→%d 字，"
+                                    "modified 回填 %d 缩进（%s）",
+                                    _organ, _method,
+                                    _m469_al.get("orig_before_len", 0),
+                                    len(_llm_patch.get("original_code", "")),
+                                    _m469_al.get("indent", 0),
+                                    _m469_al.get("detail"))
+                                _llm_patch["diff_summary"] = (
+                                    self._generate_diff_summary(
+                                        _llm_patch.get("original_code", ""),
+                                        _llm_patch.get("modified_code", "")))
+                            _llm_verify = self._patch_manager.verify_in_copy(_llm_patch)
                         _llm_patch["verification"] = _llm_verify
                         if _llm_verify.get("passed"):
                             _llm_verify_passed = True

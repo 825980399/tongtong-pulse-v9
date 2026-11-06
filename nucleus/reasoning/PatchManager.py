@@ -1098,6 +1098,123 @@ def _m412_perf_delta_ms(patch, project_root=None):
         return None
     return float(_d)
 
+def _m469_source_precheck_on() -> bool:
+    """★469刀1 开关：补丁应用/副本验证之前的「源码一致性核对」。
+
+    关闭 ⇒ `_m469_source_precheck` 返回 kind="guard_off"，调用方按 469 之前
+    的老逻辑继续（不做提前止损，行为与改造前完全一致）。
+    """
+    try:
+        import config as _c469
+        return bool(getattr(_c469, "ENABLE_M469_SOURCE_PRECHECK", True))
+    except Exception as _e469:
+        silent_exc(_e469, where="PatchManager::_m469_source_precheck_on", level="debug")
+        return True
+
+
+def _m469_file_sha256(path: str) -> str:
+    """目标文件内容指纹（先把 CRLF 归一成 LF，避免行尾差异被误判成源码漂移）。
+
+    读不到 ⇒ 返回空串。调用方据此**不判漂移** —— 绝不拿空串当"一致"，
+    也绝不拿空串当"不一致"（都是编造结论）。
+    """
+    try:
+        import hashlib
+        with open(path, "rb") as _f469:
+            _raw = _f469.read()
+        return hashlib.sha256(_raw.replace(b"\r\n", b"\n")).hexdigest()
+    except Exception as _e469:
+        silent_exc(_e469, where="PatchManager::_m469_file_sha256", level="debug")
+        return ""
+
+
+def _m469_source_precheck(patch: dict, project_root: str = "") -> dict:
+    """★469刀1：**补丁应用之前**的源码一致性核对（只读，不改任何文件）。
+
+    病因（2026-11-06 实测）：补丁的 `original_code` 钉的是生成那一刻的源码片段。
+    之后任何一方（主线批次 / 用户 / 星轨）改过同一个文件，apply 时
+    `full_content.count(original_code)` 就是 0。改造前这条只会落到
+    `apply_error="原始代码未找到，可能已被修改"` 并被计成 `failed`：
+      · 分不清「补丁本身写错」和「源码已经漂移」；
+      · 白写一次整文件备份（备份在读数之前就做了）；
+      · 白跑一次副本验证（建临时目录 + 整文件 copy2 + 语法 + 导入）；
+      · 在 468 刀6 之前还会白吃一次审批日限额。
+
+    本函数把这一步提到最前，并且**只判性质**：
+      kind="ok"            original_code 在当前文件中恰好出现 1 次
+      kind="stale"         出现 0 次 ⇒ 源码已漂移，补丁需要重新生成
+      kind="ambiguous"     出现 >1 次 ⇒ 无法唯一替换（与写盘点 rejected_ambiguous 同判据）
+      kind="no_code"       补丁缺 original_code 字段（字段契约不完整）
+      kind="file_missing"  目标文件不存在 / 读不到 / 缺 file 字段
+      kind="guard_off"     开关关闭，调用方按老逻辑继续
+
+    `snapshot_drift` 只在补丁带 `source_file_sha256`（469刀2 写入）且与当前文件
+    不符时为 True。它**不单独拒绝**补丁 —— 别人改的是同一文件里的另一个方法时，
+    original_code 仍在，补丁照样能应用；此字段只用于归因留痕。
+    """
+    _out = {"kind": "ok", "ok": True, "occurrences": 0, "detail": "",
+            "snapshot_drift": False, "source_file_sha256_now": ""}
+    if not _m469_source_precheck_on():
+        _out["kind"] = "guard_off"
+        return _out
+    if not isinstance(patch, dict):
+        _out["kind"] = "no_code"
+        _out["ok"] = False
+        _out["detail"] = "补丁不是字典，无法核对源码"
+        return _out
+    _orig = patch.get("original_code")
+    if not isinstance(_orig, str) or not _orig.strip():
+        _out["kind"] = "no_code"
+        _out["ok"] = False
+        _out["detail"] = "补丁缺少 original_code 字段（字段契约不完整），无法定位待替换片段"
+        return _out
+    _fp = str(patch.get("file") or "").strip()
+    if not _fp:
+        _out["kind"] = "file_missing"
+        _out["ok"] = False
+        _out["detail"] = "补丁缺少 file 字段，无法核对源码"
+        return _out
+    if not os.path.isabs(_fp) and project_root:
+        _fp = os.path.join(project_root, _fp)
+    if not os.path.isfile(_fp):
+        _out["kind"] = "file_missing"
+        _out["ok"] = False
+        _out["detail"] = f"目标文件不存在: {_fp}"
+        return _out
+    try:
+        with open(_fp, "r", encoding="utf-8", errors="replace") as _f469r:
+            _now = _f469r.read()
+    except Exception as _e469r:
+        silent_exc(_e469r, where="PatchManager::_m469_source_precheck 读目标文件", level="debug")
+        _out["kind"] = "file_missing"
+        _out["ok"] = False
+        _out["detail"] = f"目标文件读取失败: {type(_e469r).__name__}: {_e469r}"
+        return _out
+    # 行尾归一后再比对：补丁里存的是 \n，磁盘上可能是 \r\n
+    _cnt = _now.replace("\r\n", "\n").count(_orig.replace("\r\n", "\n"))
+    _out["occurrences"] = int(_cnt)
+    _out["source_file_sha256_now"] = _m469_file_sha256(_fp)
+    _want = str(patch.get("source_file_sha256") or "").strip()
+    if _want and _out["source_file_sha256_now"] and _want != _out["source_file_sha256_now"]:
+        _out["snapshot_drift"] = True
+    _base = os.path.basename(_fp)
+    if _cnt == 1:
+        return _out
+    if _cnt == 0:
+        _drift_note = "；文件指纹与生成时不同" if _out["snapshot_drift"] else ""
+        _out["kind"] = "stale"
+        _out["ok"] = False
+        _out["detail"] = (
+            f"源码已漂移：original_code 在 {_base} 中已找不到"
+            f"（该文件在补丁生成后被改动过） ⇒ 补丁需重新生成{_drift_note}")
+        return _out
+    _out["kind"] = "ambiguous"
+    _out["ok"] = False
+    _out["detail"] = (f"原始代码在 {_base} 中出现 {_cnt} 次，"
+                       "无法唯一定位（请提供更长上下文）")
+    return _out
+
+
 class PatchManager:
     # ★第298批刀2：入队哨兵计数器（类属性，内存态跨实例共享，供日报四数读取）
     _shape_rejected_count = 0   # 入队形态拒绝数（片段→完整）
@@ -4661,6 +4778,22 @@ class PatchManager:
                 f"keys={sorted(str(_k) for _k in patch)}）")
             return result
 
+        # ★469刀1：验证侧的同一道核对（与 apply_all_pending 同判据）。
+        #   本方法还有第二个入口 `verify_in_copy`（公开封装，供 SafeEvolutionExecutor /
+        #   代码学习 在**生成侧**调用）⇒ 在生成侧就能把「补丁对不上现源码」拦下来，
+        #   不消耗一次「建临时目录 + 整文件 copy2 + 语法 + 导入」的完整验证。
+        _m469_vpre = _m469_source_precheck(patch, self._project_root)
+        if _m469_vpre.get("kind") not in ("ok", "guard_off"):
+            result["errors"].append(
+                _m469_vpre.get("detail") or "源码一致性核对不通过")
+            result["stage"] = "source_precheck_failed"
+            result["failed_check"] = _m469_vpre.get("kind")
+            result["source_precheck"] = _m469_vpre
+            print(f"[469刀1] 副本验证前源码核对不通过({_m469_vpre.get('kind')}): "
+                  f"{os.path.basename(str(patch.get('file', '')))}."
+                  f"{patch.get('method', '')}")
+            return result
+
         # ★策略自进化扩展(长期深化): 验证深度按历史策略效果 + 风险分级动态标记。
         #   - 历史规则策略失败率高（rule_bad）或核心文件 → verify_depth="deep"（深验证）；
         #   - 其余 → "standard"（标准验证）。
@@ -5971,7 +6104,8 @@ class PatchManager:
         if not pending:
             # ★FIX(问题12): 无待应用补丁时重置重启计数器，避免无意义累计导致永久锁死
             self.reset_restart_counter()
-            return {"applied": 0, "failed": 0, "details": []}
+            return {"applied": 0, "failed": 0, "details": [],
+                    "stale": 0, "safety_blocked": 0}
 
         # ★主线第94批 T-94a（P0）：待审批队列老化策略——在审批过滤**之前**执行，
         #   使老化放行的补丁（status→approved）能被下面的 only_approved 过滤捞到。
@@ -6048,7 +6182,8 @@ class PatchManager:
                 self._m113e_emit_restart_telemetry(_cooldown_h, _remain)
                 return {"applied": 0, "failed": 0, "details": [], "loop_protection": True}
 
-        results = {"applied": 0, "failed": 0, "details": []}
+        results = {"applied": 0, "failed": 0, "details": [],
+                   "stale": 0, "safety_blocked": 0}
         history = self._load_patch_list(self._history_file)
 
         # ★v23.0新增：按文件分组，从后往前应用（避免多补丁行号偏移影响）
@@ -6126,7 +6261,13 @@ class PatchManager:
                 if not _safety_check["safe"]:
                     patch["applied"] = False
                     patch["apply_error"] = _safety_check["reason"]
-                    results["failed"] += 1
+                    # ★469刀3：被安全门槛（信任分/风险等级/冷却）永久拒绝的补丁
+                    #   不再只是"一次 failed" —— 留下结构化标记与计数，供下游
+                    #   一眼分清「补丁烂」「等额度」「安全口径不允许」三类。
+                    #   绝不改判据本身：本处只记不改，安全口径零变化。
+                    patch["safety_blocked"] = True
+                    patch["safety_blocked_reason"] = str(_safety_check["reason"])[:120]
+                    results["safety_blocked"] += 1
                     results["details"].append({
                         "id": patch["id"], "file": patch["file"],
                         "status": "rejected_safety",
@@ -6134,6 +6275,41 @@ class PatchManager:
                     })
                     history.append(patch)
                     continue
+                # ★469刀1：应用前「源码一致性核对」。
+                #   必须排在 _verify_in_copy 与 create_backup **之前**：
+                #   过期的补丁（生成后源码被改过）连验证和备份都不该做。
+                #   判定不看字符串，看 original_code 在当前文件中的**实际出现次数**，
+                #   因此不受错误文案改版影响（_OBSOLETE_MARKERS 那套是事后按字面匹配）。
+                _m469_pre = _m469_source_precheck(patch, self._project_root)
+                if _m469_pre.get("kind") not in ("ok", "guard_off"):
+                    patch["applied"] = False
+                    patch["apply_error"] = _m469_pre.get("detail") or "源码一致性核对不通过"
+                    patch["stale_source"] = (_m469_pre.get("kind") == "stale")
+                    patch["source_precheck"] = _m469_pre
+                    results["stale"] += 1
+                    results["details"].append({
+                        "id": patch["id"], "file": patch["file"],
+                        "status": f"rejected_{_m469_pre.get('kind')}",
+                        "reason": patch["apply_error"],
+                    })
+                    _module_logger.warning(
+                        "[469刀1] 应用前源码核对不通过(%s): id=%s file=%s method=%s "
+                        "occurrences=%d drift=%s",
+                        _m469_pre.get("kind"), str(patch.get("id"))[:16],
+                        os.path.basename(str(patch.get("file", ""))),
+                        patch.get("method", ""), _m469_pre.get("occurrences", 0),
+                        _m469_pre.get("snapshot_drift"))
+                    history.append(patch)
+                    continue
+                if _m469_pre.get("snapshot_drift"):
+                    # 文件有其他改动但 original_code 仍在 ⇒ 照常应用，只留痕归因
+                    patch["source_drift"] = True
+                    _module_logger.info(
+                        "[469刀1] 源码指纹已变但目标片段仍在，照常应用: "
+                        "id=%s file=%s method=%s",
+                        str(patch.get("id"))[:16],
+                        os.path.basename(str(patch.get("file", ""))),
+                        patch.get("method", ""))
                 # ★v24.0新增：应用前强制在副本中验证补丁
                 _verify_result = self._verify_in_copy(patch)
                 if not _verify_result.get("passed", False):
@@ -6629,6 +6805,15 @@ class PatchManager:
         #   即 196刀2 补的这半根刀实际从未通电。按「逻辑未闭环 ⇒ 补完而非删除」原则前移到
         #   return 之前；开关 ENABLE_PATCH_FAILURE_REFLECTION 默认未设置(=False) ⇒ 移动后仍零行为变化。
         _reflect_on_failed_patches(results.get("details", []), project_root=self._project_root)
+        # ★469刀1/刀3：一行看清本轮去向 —— 以前只有 applied/failed 两个数，
+        #   「过期」与「安全门槛拒绝」都混进 failed，看不出到底是哪一类卡住。
+        _m469_sum = (int(results.get("applied", 0)), int(results.get("failed", 0)),
+                     int(results.get("stale", 0)), int(results.get("safety_blocked", 0)))
+        if any(_m469_sum):
+            _module_logger.info(
+                "[469汇总] 落地=%d 失败=%d 源码过期=%d 安全门槛拒绝=%d（共处理 %d 条）",
+                _m469_sum[0], _m469_sum[1], _m469_sum[2], _m469_sum[3],
+                len(results.get("details", [])))
         return results
 
     # 结构性失效（重试一万次也不会成功）的失败原因特征串
@@ -6646,6 +6831,10 @@ class PatchManager:
             return False
         if patch.get("obsolete"):
             return False  # 已归档过，避免重复搬运
+        # ★469刀1：结构化判据优先 —— `stale_source` 由应用前源码核对直接置位，
+        #   不依赖错误文案（文案改一个字就会让字符串匹配失效，铁律 9 同型）。
+        if patch.get("stale_source") is True:
+            return True
         _err = f"{patch.get('apply_error') or ''}{patch.get('reason') or ''}"
         return any(_m in _err for _m in self._OBSOLETE_MARKERS)
 

@@ -562,6 +562,10 @@ EVOLUTION_EFFECT_VERIFY_CONFIG = {
     "storage_path": "data/evolution/effect_verify.json",
     "low_risk_min_trust": 40,     # 低风险补丁（加日志/改注释/参数微调）门槛
     "high_risk_min_trust": 60,    # 高风险补丁（改核心逻辑/数据结构）门槛
+    "mid_risk_min_trust": 60,     # 中风险补丁门槛（★469刀3 新增）
+    #   ★缺省值刻意等于 high_risk_min_trust ⇒ **零行为变化**。
+    #   要给中风险单开一档（例如 40）只改本行，不必动 high 去连累高风险。
+    #   实测依据（2026-11-06）：LLM 中风险补丁 trust 恒为 40，被 60 永拒 5/5。
     "verify_window_sec": 3600,    # 效果观察窗口（秒）
     "max_regression_ms": 1500,    # 允许的性能退化上限（毫秒）
 }
@@ -8416,3 +8420,14 @@ ENABLE_M468_ORGAN_FILE_FALLBACK = True
 #   读取点：SafeEvolutionExecutor.py::_m468_approval_refund_on
 #   关掉 ⇒ 回到 468 前行为（额度一旦放行即计费，不看落地成败）。
 ENABLE_M468_APPROVAL_REFUND = True
+
+# ===== [M469-CFG] 469 批开关（2026-11-06）=====
+# 刀1 补丁应用/副本验证前的「源码一致性核对」。
+#   读取点：nucleus/reasoning/PatchManager.py::_m469_source_precheck_on
+#   关掉 ⇒ 回到 469 前行为（过期补丁仍会先写备份、再跑副本验证，最后按 failed 记）。
+ENABLE_M469_SOURCE_PRECHECK = True
+# 刀2 补丁构造时的「粒度对齐」+ 方法名存在性核对。
+#   读取点：nucleus/reasoning/SafeEvolutionExecutor.py::_m469_granularity_align_on
+#   关掉 ⇒ 不改 original/modified；LLM 重写整方法时会以
+#   「基础缩进不一致 original=8 modified=0」被缩进关拒绝（实测 12 条里 11 条）。
+ENABLE_M469_GRANULARITY_ALIGN = True

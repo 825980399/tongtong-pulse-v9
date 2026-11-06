@@ -248,15 +248,37 @@ class EvolutionEffectVerifier:
     @classmethod
     def trust_threshold_for(cls, patch: dict[str, Any],
                             low: float = 40.0, high: float = 60.0) -> float:
-        """按补丁风险给出信任分门槛：低风险 40，其余 60（阈值可由 config 覆盖）。"""
+        """按补丁风险给出信任分门槛（**三级**，阈值可由 config 覆盖）。
+
+        低风险 → low（缺省 40）
+        中风险 → mid（缺省 = high ⇒ **与改造前完全一致**，零行为变化）
+        高风险 → high（缺省 60）
+
+        ★469刀3 为什么加 mid 这一档：改造前只有「低 / 其余」两档，中风险被并进
+        high(60)，而 LLM 中风险补丁的 trust 恒为 40 ⇒ 结构性永远不通过
+        （2026-11-06 实测 5/5 条全被 `信任分数不足(40.0<60.0)` 拒绝，不论内容好坏）。
+        这里给中风险一个**独立旋钮** `EVOLUTION_EFFECT_VERIFY_CONFIG["mid_risk_min_trust"]`：
+        默认值刻意等于 high，因此**不放松任何现有门槛**；将来要放开中风险，
+        只需调这一个数，不必再动 high 去连累高风险补丁。
+        """
+        _mid = high
         try:
             import config as _cfg
             _c = getattr(_cfg, "EVOLUTION_EFFECT_VERIFY_CONFIG", {}) or {}
             low = float(_c.get("low_risk_min_trust", low) or low)
             high = float(_c.get("high_risk_min_trust", high) or high)
+            _mid = float(_c.get("mid_risk_min_trust", _mid) or _mid)
         except Exception as e:
-            silent_exc(e, where="nucleus.evolution.EvolutionEffectVerifier::trust_threshold_for L135", level="debug")
-        return low if cls.is_low_risk_patch(patch) else high
+            silent_exc(
+                e,
+                where="nucleus.evolution.EvolutionEffectVerifier::trust_threshold_for",
+                level="debug")
+            _mid = high
+        if cls.is_low_risk_patch(patch):
+            return low
+        if str((patch or {}).get("risk_level") or "").strip() == "中":
+            return _mid
+        return high
 
     # ==================== 效果验证 ====================
 
