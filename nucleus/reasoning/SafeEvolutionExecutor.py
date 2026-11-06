@@ -926,6 +926,30 @@ _M468_APPROVAL_RETRY_MAX = 3
 
 
 
+def _m468_file_fallback_on() -> bool:
+    """`ENABLE_M468_ORGAN_FILE_FALLBACK`（缺省 True）。
+
+    `scan_all_organs()` 接了 T3 自适应降频（`organ_scan` 间隔 300s），
+    **第二次起直接返回 `{}`**（不是 None、也不是上次的缓存）。而 467 刀1
+    每次生成都调它取 `file_path` ⇒ 第二轮之后 `file_path` 恒空 ⇒
+    `if _fc467.feed_with_def_on() and file_path and method_name:` 全程短路。
+
+    实测（2026-11-06 16:20，同一 SelfInspector 实例连调 4 次）：
+    条目数 66 → 0 → 0 → 0；全量 pulse.log 里 `[467刀1]` 标记 **0 次**。
+
+    关掉 ⇒ 不兜底（复现 468 前行为）。
+    """
+    try:
+        import config as _c468f
+        return bool(getattr(_c468f, "ENABLE_M468_ORGAN_FILE_FALLBACK", True))
+    except Exception as _e468f:
+        silent_exc(_e468f,
+                   where="SafeEvolutionExecutor::_m468_file_fallback_on",
+                   level="debug")
+        return True
+
+
+
 class SafeEvolutionExecutor:
     """
     安全进化执行器。
@@ -6162,6 +6186,18 @@ class SafeEvolutionExecutor:
                     all_organs = self_inspector.scan_all_organs()
                     organ_info = all_organs.get(organ_name, {})
                     file_path = organ_info.get("file_path", "")
+                    # ★468刀4：`scan_all_organs()` 有 300s 自适应降频，第二次起
+                    #   返回 `{}` ⇒ 本函数每次生成都调它，于是 file_path 恒空 ⇒
+                    #   467刀1 的 `file_path and` 全程短路（实测 [467刀1] 0 次）。
+                    #   兜底用 resolve_organ_file（精确到器官，不受降频影响）。
+                    if not file_path and _m468_file_fallback_on():
+                        try:
+                            file_path = self_inspector.resolve_organ_file(
+                                str(organ_name)) or ""
+                        except Exception as _e468fb:
+                            silent_exc(_e468fb,
+                                       where="SafeEvolutionExecutor::468 器官文件兜底",
+                                       level="debug")
             except Exception as e:
                 _module_logger.warning(f"异常已忽略（需关注）: {type(e).__name__}: {e}")
 

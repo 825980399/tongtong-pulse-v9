@@ -8401,3 +8401,9 @@ ENABLE_M468_APPROVAL_RETRY = True
 #   读取点：nucleus/evolution/patch_execution_dispatch.py::_m468_recheck_flagged_on
 #   依赖 ENABLE_SANDBOX_PREFILTER_TWO_CHANNEL（两者同时为真才生效）。
 ENABLE_M468_SANDBOX_FLAG_RECHECK = True
+
+# 刀4 器官文件兜底：scan_all_organs 有 300s 降频（第二次起返回 {}），
+#   导致 467 刀1 的 file_path 恒空、喂料补全全程不触发。
+#   读取点：SafeEvolutionExecutor.py::_m468_file_fallback_on
+#   关掉 ⇒ 不兜底（复现 468 前行为）。
+ENABLE_M468_ORGAN_FILE_FALLBACK = True

@@ -237,5 +237,77 @@ class TestE_ConfigRegistration(unittest.TestCase):
         self.assertGreater(_i, len(_s) - 1200, "本批配置块应在文件末尾（只追加）")
 
 
+class TestF_OrganFileFallback(unittest.TestCase):
+    """刀4：scan_all_organs 有 300s 降频（第二次起返回 {}），467 刀1 因此全程短路。
+
+    实测（2026-11-06 16:20）：同一 SelfInspector 实例连调 4 次，条目数
+    66 → 0 → 0 → 0；全量 pulse.log 里 `[467刀1]` 标记 0 次。
+    """
+
+    def setUp(self):
+        self._old = getattr(config, "ENABLE_M468_ORGAN_FILE_FALLBACK", None)
+
+    def tearDown(self):
+        if self._old is None:
+            config.__dict__.pop("ENABLE_M468_ORGAN_FILE_FALLBACK", None)
+        else:
+            config.ENABLE_M468_ORGAN_FILE_FALLBACK = self._old
+
+    def test_51_switch_default_true(self):
+        self.assertTrue(SEE._m468_file_fallback_on())
+
+    def test_52_switch_off(self):
+        config.ENABLE_M468_ORGAN_FILE_FALLBACK = False
+        self.assertFalse(SEE._m468_file_fallback_on())
+
+    def test_53_fallback_wired_inside_467_block(self):
+        _code = _code_only(_src(_SEE_PATH))
+        _i = _code.find("all_organs = self_inspector.scan_all_organs()")
+        self.assertGreater(_i, 0, "467 刀1 前的 scan_all_organs 调用点应在")
+        _seg = _code[_i:_i + 1400]
+        self.assertIn("resolve_organ_file", _seg,
+                      "兜底必须紧跟在 scan_all_organs 之后（同一块内）")
+        self.assertIn("_m468_file_fallback_on()", _seg)
+
+    def test_54_throttled_scan_returns_empty(self):
+        """先证伪：降频态确实返回 {}（否则兜底没有存在理由）。"""
+        _si = importlib.import_module("nucleus.self_inspector").SelfInspector()
+        _a = _si.scan_all_organs()
+        _b = _si.scan_all_organs()
+        self.assertGreater(len(_a), 0, "首次扫描应有条目")
+        self.assertEqual(len(_b), 0, "第二次应被 T3 降频打空（若不为 0 则本刀前提失效）")
+
+    def test_55_fallback_recovers_path_under_throttle(self):
+        """降频态下 resolve_organ_file 仍能给出真实路径。"""
+        _si = importlib.import_module("nucleus.self_inspector").SelfInspector()
+        _si.scan_all_organs()
+        _throttled = _si.scan_all_organs()
+        self.assertEqual(_throttled, {})
+        _fp = _si.resolve_organ_file("PulseLiver") or ""
+        self.assertTrue(_fp.endswith("PulseLiver.py"), _fp)
+        self.assertTrue(os.path.isfile(_fp))
+
+    def test_56_compress_group_full_feed_with_def(self):
+        """端到端：467 刀1 对 _compress_group（converge_voided 里 63 次作废的那个）。"""
+        _si = importlib.import_module("nucleus.self_inspector").SelfInspector()
+        _fc = importlib.import_module("nucleus.evolution.feed_code")
+        _d = _si.get_method_body("PulseLiver", "_compress_group") or {}
+        _body = _d.get("body", "")
+        self.assertGreater(len(_body), 1000, "方法体应取到")
+        _fp = _si.resolve_organ_file("PulseLiver") or ""
+        _blk = _fc.method_block(_fp, "_compress_group", int(_d.get("line_number") or 0))
+        self.assertTrue(_blk, "method_block 不应为空")
+        self.assertEqual(_fc.extract_def_name(_blk), "_compress_group")
+        self.assertGreater(len(_blk), len(_body),
+                           "含 def 的完整方法必须比纯方法体长")
+        # 467 的判据：喂料前有 no_def 缺陷，喂料后没有
+        self.assertIn("no_def", _fc.struct_defects(_body, "_compress_group"))
+        self.assertEqual(_fc.struct_defects(_blk, "_compress_group"), [])
+
+    def test_57_config_registered(self):
+        self.assertIn("ENABLE_M468_ORGAN_FILE_FALLBACK = True", _src(_CFG_PATH))
+
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
