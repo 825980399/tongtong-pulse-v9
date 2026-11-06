@@ -73,6 +73,45 @@ def _m428_strip_fence_lines(text) -> str:
     return _joined
 
 
+# ★467刀2：multi 路径的原文上限（原 `_M428_PROMPT_ORIG_LIMIT`=3000）。
+#   实测 `PulseLiver._compress_group` 完整方法（含 def）= 12903 字符，3000 只给了 23%，
+#   而且是从中间截断的 —— 模型看不到 3/4 的方法，却要交出「完整方法定义」。
+def _m467_prompt_code_limit():
+    """取 467 配置的代码段上限；失败回落到 428 的 3000（零回归）。"""
+    try:
+        from nucleus.evolution import feed_code as _fc
+        return _fc.prompt_code_limit()
+    except Exception as _e:
+        silent_exc(_e, where="LLMEvolutionEngine::_m467_prompt_code_limit",
+                   level="debug")
+        return _M428_PROMPT_ORIG_LIMIT
+
+
+def _m467_prior_notice(issue):
+    """把「上一版为什么被拒」与 445 硬要求带进 **多文件** 路径的 prompt。
+
+    此前 `m445_require_full_def` 只在 `_call_llm_for_repair`（单文件）里被消费，
+    而 `converge_voided.jsonl` 里 63/63 的 no_def 作废全部来自 `patch_multi_*`
+    —— 开关装在了根本不产生这些补丁的那条路径上。
+    """
+    if not isinstance(issue, dict):
+        return ""
+    _parts = []
+    _prior = str(issue.get("prior_error") or "").strip()
+    if _prior:
+        _parts.append("【上一版为什么被拒】%s\n" % _prior)
+    if issue.get("m445_require_full_def"):
+        try:
+            from nucleus.evolution import feed_code as _fc
+            _parts.append(_fc.FULL_DEF_REQUIREMENT + "\n")
+        except Exception as _e:
+            silent_exc(_e, where="LLMEvolutionEngine::_m467_prior_notice 445",
+                       level="debug")
+    if not _parts:
+        return ""
+    return "\n".join(_parts) + "\n"
+
+
 def _m428_self_contained_prefix(text, limit=_M428_PROMPT_ORIG_LIMIT):
     """在 `limit` 内取**语法自洽**的前缀，返回 `(片段, 是否被截断)`。
 
@@ -323,7 +362,7 @@ class LLMEvolutionEngine(SilentLogMixin):
         #   半截字面量 `...["trust_penalty"`。模型看到半个 `try` 就写半个
         #   `try`，于是在关2a 报「try 块不平衡」；把账记在模型头上是错的。
         _orig_capped, _orig_cut = _m428_self_contained_prefix(
-            original_code, _M428_PROMPT_ORIG_LIMIT)
+            original_code, _m467_prompt_code_limit())
         _cut_notice = ""
         if _orig_cut:
             _cut_notice = (
@@ -341,6 +380,7 @@ class LLMEvolutionEngine(SilentLogMixin):
             f"目标方法: {method_name}（位于 {file_path}）\n\n"
             f"目标方法原始代码:\n```python\n{_orig_capped}\n```\n\n"
             f"{_cut_notice}"
+            f"{_m467_prior_notice(issue)}"
             f"{_call_ctx}"
             f"{_callers_code}"
             f"要求：\n"
@@ -359,6 +399,10 @@ class LLMEvolutionEngine(SilentLogMixin):
             f"try 必须连同它的 except/finally 一起给出，if/for/while/def/with "
             f"必须连同完整块体一起给出；**严禁**把一个复合语句从中间切开。"
             f"两个字段的值内**不得**出现 ``` 围栏或任何 markdown 标记。\n"
+            f"7. ★`modified_code` 必须是**完整方法定义**：第一行就是 "
+            f"`def {method_name}(self, ...):`（含 self 与完整参数表），"
+            f"不要只给方法体 —— 入队侧的判据是「首个 def 名必须等于目标方法名」，"
+            f"只给方法体会被判「结构缺陷」直接作废（该判据已累计作废同一方法 63 次）。\n"
             f"\n{self._aesthetic_guidance()}"
         )
         _sys = "你是曈曈的架构级代码重构引擎，输出严格 JSON 结构。"
@@ -402,7 +446,129 @@ class LLMEvolutionEngine(SilentLogMixin):
                     f"共尝试 {self._m428_continuations} 次）")
                 break
             _response = _response + _more
-        return self._parse_multi_file_patch(_response, issue)
+        _patches467 = self._parse_multi_file_patch(_response, issue)
+        return self._m467_struct_gate(
+            _patches467, issue, _prompt, _sys, method_name, file_path)
+
+    # ===== ★467刀3：生成后的「结构自检 + 有界回灌重生成」 =====
+    #   为什么值得做：「no_def / def 名错配 / 语法错」三类都能纯 AST 判定（毫秒级），
+    #   而跑副本验证要几十秒。把便宜判据前置，才有可能在一次生成里重试 2 次
+    #   而不显著拖慢一轮进化（实测单轮只有 5~6 秒）。
+    #   为什么必须配上限：铁律「重试必须配上限」—— 无上限重生成会把一次生成
+    #   放大成 N 次计费调用，而渠道本身还在 429。
+    @staticmethod
+    def _m467_split(patches, method_name, _fc):
+        """把补丁分成（结构合格, 结构有缺陷）两组，缺陷写进 `m467_struct_defects`。
+
+        只对「主补丁」查 def 名：模型若明确标了别的方法名（跨文件迁移的调用方），
+        它的 def 名当然不等于目标方法名，此时只查语法、不查名字，避免误杀。
+        """
+        _good, _bad = [], []
+        for _p in patches or []:
+            if not isinstance(_p, dict):
+                continue
+            _pm = str(_p.get("method") or "")
+            _check = str(method_name or "") if (not _pm or _pm == str(method_name or "")) else ""
+            _d = _fc.struct_defects(_p.get("modified_code") or "", _check)
+            if _d:
+                _p["m467_struct_defects"] = _d
+                _bad.append(_p)
+            else:
+                _p.pop("m467_struct_defects", None)
+                _good.append(_p)
+        return _good, _bad
+
+    @staticmethod
+    def _m467_hint(bad, method_name, _fc):
+        """把多条补丁的缺陷合并成一段**可执行**的回灌说明。"""
+        _parts = []
+        for _p in bad or []:
+            _m = str(_p.get("method") or method_name or "")
+            _head = "目标 %s" % (_p.get("file") or "?")
+            if _m:
+                _head += " :: %s" % _m
+            _parts.append(_head + "\n" + _fc.defect_hint(
+                _p.get("m467_struct_defects") or [], _m))
+        return ("【结构自检未通过 · 请只输出修正后的完整 JSON】\n"
+                + "\n\n".join(_parts))
+
+    def _m467_struct_gate(self, patches, issue, base_prompt, sys_prompt,
+                          method_name, file_path):
+        """结构门：不合格的补丁**不返回**；能救的用缺陷清单回灌重生成（有界）。
+
+        返回只含结构合格补丁的列表（可能为空）—— 宁可这轮零产出，
+        也不要把注定被 `_m280_converge_pending` 作废的补丁塞进队列：
+        那会白白消耗一次入池名额，还会把 no_def 计数再推高一次。
+        """
+        try:
+            from nucleus.evolution import feed_code as _fc
+        except Exception as _e:
+            silent_exc(_e, where="LLMEvolutionEngine::467 结构门导入", level="debug")
+            return patches
+        if not _fc.struct_gate_on() or not patches:
+            return patches
+        _good, _bad = self._m467_split(patches, method_name, _fc)
+        _rounds = 0
+        _limit = _fc.max_regen()
+        while _bad and _rounds < _limit:
+            _rounds += 1
+            self._log(
+                LogLevel.WARNING,
+                "[467刀3] 结构自检不过 → 回灌重生成 第 %d/%d 次: %s"
+                % (_rounds, _limit,
+                   " / ".join("%s:%s" % (_p.get("file", "?"),
+                                        ",".join(_p.get("m467_struct_defects") or []))
+                              for _p in _bad)))
+            try:
+                _resp = self._call_llm(
+                    system=sys_prompt,
+                    prompt=base_prompt + "\n\n" + self._m467_hint(_bad, method_name, _fc),
+                    model=None,
+                    max_tokens=_M428_MULTI_PATCH_MAX_TOKENS,
+                )
+            except Exception as _e:
+                silent_exc(_e, where="LLMEvolutionEngine::467 回灌重生成", level="warning")
+                break
+            if not _resp:
+                break
+            _retry = self._parse_multi_file_patch(_resp, issue)
+            if not _retry:
+                break
+            _g2, _bad = self._m467_split(_retry, method_name, _fc)
+            _good.extend(_g2)
+        if _bad:
+            # ★467刀5：把「结构缺陷没修好」记进**独立**台账（append-only）。
+            #   不复用 criteria_window 的 no_def 台账：那里已有 51+ 次历史，
+            #   直接拿来判「连续 5 次即不可修」会在 467 上线第一天就把目标关掉。
+            try:
+                from nucleus.evolution import struct_streak as _ss467
+                for _p in _bad:
+                    _ss467.note(
+                        _p.get("file") or file_path,
+                        _p.get("method") or method_name,
+                        defects=_p.get("m467_struct_defects") or [],
+                        patch_id=str(_p.get("id") or ""))
+            except Exception as _e:
+                silent_exc(_e, where="LLMEvolutionEngine::467 结构台账", level="debug")
+            self._log(
+                LogLevel.WARNING,
+                "[467刀3] 结构缺陷未能修正，丢弃 %d 条（不回队列，避免再被 284刀5 作废）: %s"
+                % (len(_bad), " / ".join("%s:%s" % (_p.get("file", "?"),
+                                                 ",".join(_p.get("m467_struct_defects") or []))
+                                       for _p in _bad)))
+        elif _rounds:
+            self._log(LogLevel.INFO,
+                      "[467刀3] 回灌重生成成功: 第 %d 次后全部结构合格" % _rounds)
+        if _good:
+            # ★467刀5：写一条 `ok` 作为**恢复点** —— 连续计数从这里断开。
+            #   没有这个口，只要历史上攒够 5 次缺陷，即使后来修好了也永远停在那里。
+            try:
+                from nucleus.evolution import struct_streak as _ss467ok
+                _ss467ok.note(file_path, method_name, event=_ss467ok.EV_OK)
+            except Exception as _e:
+                silent_exc(_e, where="LLMEvolutionEngine::467 结构恢复点",
+                           level="debug")
+        return _good
 
     def _aesthetic_guidance(self) -> str:
         """获取框架审美偏好指引（生成回流），异常降级为空串（不阻断生成）。"""

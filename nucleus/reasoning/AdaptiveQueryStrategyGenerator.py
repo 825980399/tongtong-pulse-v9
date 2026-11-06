@@ -18,6 +18,30 @@ import time
 from typing import Any
 
 from config import DEFAULT_BENEFIT_SCORE as _DEF_BENEFIT_SCORE  # ★第55批 T1
+from nucleus._silent_except import silent_exc
+
+
+def _m467_clip_code(code):
+    """★467刀2：代码段上限 2000 → 可配置 16000，且**语法自洽**。
+
+    病因（T0 实测 2026-11-06）：`PulseLiver._compress_group` 的方法体 12514 字符，
+    原实现 `code_snippet[:2000]` 只给了 16%，而且是从语句中间硬切。
+    第 428 批已在多文件路径证明「硬切 ⇒ 模型看到半个 try 就照着写半个 try」。
+    这里复用 428 的「语法自洽前缀」实现，不另写一份同等算法。
+
+    Returns: `(片段, 是否被截断)`
+    """
+    _s = str(code or "")
+    if not _s:
+        return "", False
+    try:
+        from nucleus.evolution import feed_code as _fc
+        from nucleus.evolution.LLMEvolutionEngine import _m428_self_contained_prefix
+        return _m428_self_contained_prefix(_s, _fc.prompt_code_limit())
+    except Exception as _e:
+        silent_exc(_e, where="AdaptiveQueryStrategyGenerator::467 代码段截断",
+                   level="debug")
+        return _s[:2000], len(_s) > 2000
 
 
 class AdaptiveQueryStrategyGenerator:
@@ -202,7 +226,17 @@ class AdaptiveQueryStrategyGenerator:
             if _info_type == "logs_first" and related_logs:
                 _parts.append(f"\n相关运行日志:\n```\n{related_logs[:1500]}\n```")
             elif _info_type == "code" and code_snippet:
-                _parts.append(f"\n相关代码:\n```python\n{code_snippet[:2000]}\n```")
+                _clip467, _cut467 = _m467_clip_code(code_snippet)
+                _parts.append(f"\n相关代码:\n```python\n{_clip467}\n```")
+                if _cut467:
+                    # ★467刀2：截断必须**如实告知**，否则模型会以为看到了全部方法，
+                    #   交出一份「只覆盖前 16%」的完整方法定义 —— 那比语法错更难发现。
+                    _parts.append(
+                        "\n（注意：上面这段代码因长度限制**只给出了前一部分**，"
+                        "已在完整的语句块边界处截断，后面的部分**未提供**。"
+                        "不要声称自己看到了完整方法；若必须改动截断点之后的内容，"
+                        "请把 original_code / modified_code 收敛到"
+                        "**你确实看到的**那个完整语句块内。）")
             elif _info_type == "my_analysis" and local_analysis:
                 _parts.append(f"\n我的初步分析:\n{local_analysis}")
             elif _info_type == "description":

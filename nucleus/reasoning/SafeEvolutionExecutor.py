@@ -6011,6 +6011,9 @@ class SafeEvolutionExecutor:
         # 读取原始代码
         original_code = ""
         file_path = ""
+        # ★467刀1：显式初始化 —— get_method_body 抛异常时，下面取 line_number
+        #   不能依赖「except 分支是否已经赋过值」。
+        method_detail = {}
         if self_inspector and organ_name and method_name:
             try:
                 method_detail = self_inspector.get_method_body(organ_name, method_name)
@@ -6024,6 +6027,32 @@ class SafeEvolutionExecutor:
 
         if not file_path or not original_code:
             return None
+
+        # ★467刀1：喂料补全 —— 把 original_code 从「方法体」升级为「含 def 行的完整方法」。
+        #   病因（T0 实测 2026-11-06）：`get_method_body()["body"]` 对
+        #   `PulseLiver._compress_group` 是 12514 字符、首行 `if len(nodes) > 40:`、
+        #   **不含 def 行**。模型照着输入的形状回一段方法体，
+        #   `PatchManager._m280_converge_pending` 的 `_m280_extract_def_name` 抽不到 def
+        #   ⇒ 判 no_def 作废。`converge_voided.jsonl` 里同一方法连续 63 次，
+        #   100% 来自 `patch_multi_*` —— 正是本次要改的这条生成路径。
+        #   为什么不能凭 `args` 拼 def 行：实测 args = `prefix: str, nodes: list[PulseNode]`
+        #   （**丢了 self 与 -> bool**），拼出来的文本在源文件里定位不到，
+        #   `full_content.replace(original_code, modified_code)` 会静默不替换。
+        try:
+            from nucleus.evolution import feed_code as _fc467
+            if _fc467.feed_with_def_on() and file_path and method_name:
+                _blk467 = _fc467.method_block(
+                    str(file_path), str(method_name),
+                    int(method_detail.get("line_number") or 0))
+                if _blk467 and _fc467.extract_def_name(_blk467) == str(method_name):
+                    _module_logger.info(
+                        "[467刀1] 喂料补全: %s::%s 方法体 %d 字 → 完整方法 %d 字（含 def）",
+                        os.path.basename(str(file_path)), method_name,
+                        len(original_code), len(_blk467))
+                    original_code = _blk467
+        except Exception as _e467a:
+            silent_exc(_e467a, where="SafeEvolutionExecutor::467 喂料含def",
+                       level="debug")
 
         # ★P1-1修复（第十批）：生成前预检——同文件同方法已有待审批补丁时，
         #   直接跳过生成，避免「同一处改动反复生成 + LLM 反复调用」。
@@ -6937,11 +6966,34 @@ class SafeEvolutionExecutor:
                 "history_experience": self._patch_manager._load_history_experience(
                     plan.get("type", "")),
             }
+            # ★467刀5：结构缺陷的「不可修」退出 —— 同一目标连续 N 次在结构门
+            #   被判缺陷且回灌也没修好，就停止继续为它生成补丁。
+            #   为什么需要：`PulseLiver._compress_group` 已试 63 次仍未收敛；
+            #   若「优化这个问题」本身就是误报，再好的喂料也收敛不了，
+            #   继续重试只是把 LLM 配额烧在同一种确定性失败上。
+            #   台账是 append-only 的：人工确认问题不存在后，删掉
+            #   `data/evolution/struct_defect_ledger.jsonl` 即可重试。
+            try:
+                from nucleus.evolution import struct_streak as _ss467
+                _stop467 = _ss467.should_stop(file_path, method_name)
+                if _stop467.get("stop"):
+                    _module_logger.warning(
+                        "[467刀5] 判不可修，跳过生成: %s::%s 连续结构缺陷 %d 次"
+                        "（阈值 %d）；确认问题不存在后可删除 %s 重试",
+                        os.path.basename(str(file_path)), method_name,
+                        _stop467.get("streak"), _stop467.get("limit"),
+                        _ss467.LEDGER_REL)
+                    return None
+            except Exception as _e467c:
+                silent_exc(_e467c, where="SafeEvolutionExecutor::467 不可修退出",
+                           level="debug")
             # ★445刀2：读生成侧反馈 —— 同一 (file, method) 连续 2 次因缺 def 被作废，
             #   本轮改用「完整方法」硬要求（见 _call_llm_for_repair 的 tail 追加）。
             #   7 天窗口（`M445_FEEDBACK_WINDOW_DAYS`），过期不记，避免永久记忆。
             _m445_strategy = "unchanged"
             _m445_streak = 0
+            # ★467刀4：显式初始化 —— except 分支之后仍要读 window_days
+            _m445_st = {}
             try:
                 from nucleus.evolution import criteria_window as _cw445
                 _m445_st = _cw445.no_def_streak(str(file_path or ""), str(method_name or ""))
@@ -6957,6 +7009,28 @@ class SafeEvolutionExecutor:
                     _m445_need, file_path, method_name)
             except Exception as _fb_e:
                 silent_exc(_fb_e, where="SafeEvolutionExecutor::_generate_llm_patch 445反馈",
+                           level="debug")
+            # ★467刀4：`prior_error` 此前只在**同一轮多步规划内部**由
+            #   `plan["llm_prior_error"]` 填充，跨轮恒为空 —— 于是每轮都从零开始，
+            #   模型永远不知道上一版为什么被作废，只会重复同一种错误。
+            #   这里用 `criteria_window` 的跨轮台账（7 天窗口）补上：
+            #   这是「失败经验能跨轮传递」的唯一入口。
+            try:
+                if int(_m445_streak) > 0:
+                    _m467_days = int(_m445_st.get("window_days") or 0) or 7
+                    _issue["prior_error"] = (
+                        "同一 (file, method) 近 %d 天已有 %d 次因「缺 def 签名」"
+                        "被判结构缺陷作废：上一版只给了方法体，没有 def 行，"
+                        "因此入队侧根本认不出它改的是哪个方法。"
+                        "本次必须输出含 def 行的完整方法定义。"
+                        % (_m467_days, int(_m445_streak)))
+                    _issue["m445_require_full_def"] = True
+                    _module_logger.info(
+                        "[467刀4] prior_error 跨轮回填: %s::%s streak=%d",
+                        os.path.basename(str(file_path)), method_name,
+                        int(_m445_streak))
+            except Exception as _e467b:
+                silent_exc(_e467b, where="SafeEvolutionExecutor::467 prior_error 跨轮",
                            level="debug")
             # 关联日志（若有）
             _related_logs = self._find_related_logs(file_path, method_name)

@@ -8359,3 +8359,33 @@ ENABLE_M465_LLM_CHANNEL_FAILOVER = True
 #   ★只在「限流 / 额度耗尽」上继续换；超时 / 解析失败立刻停。
 M465_LLM_FAILOVER_MAX_ATTEMPTS = 4
 
+# ===== ★467批：补丁生成侧「喂料」修复 =====
+# 病因（T0 实测 2026-11-06，全部为真实读数）：
+#   `_generate_llm_patch` 把 `get_method_body()["body"]` 当 original_code 喂给 LLM。
+#   对 `PulseLiver._compress_group`：body **12514 字符**、首行 `if len(nodes) > 40:`、
+#   **不含 def 行**；下游 prompt 再截到 2000（单文件，16%）/ 3000（多文件，23%）。
+#   模型照着输入的形状回一段方法体 ⇒ `PatchManager._m280_converge_pending` 判
+#   `no_def` 作废 ⇒ 同一方法连续 **63 次**，100% 来自 `patch_multi_*`。
+#   详见 `nucleus/evolution/feed_code.py` 的模块 docstring。
+# ★回退：本块四个开关任一置 False/调小，即逐条回到 466 末行为。
+ENABLE_M467_FEED_WITH_DEF = True
+#   ★刀1｜默认 True｜语义：original_code 升级为「含 def 行的完整方法原文」。
+#   为什么必须回源文件取原文：`args` 字段实测是 `prefix: str, nodes: list[PulseNode]`
+#     —— **丢了 self 与 -> bool**，凭它拼出来的 def 行在源文件里定位不到，
+#     `full_content.replace(original_code, modified_code)` 会静默不替换。
+ENABLE_M467_STRUCT_GATE = True
+#   ★刀3｜默认 True｜语义：生成后先做纯 AST 结构自检（no_def / def 名错配 / 语法错），
+#     不合格的补丁**不回队列**（否则注定被 284刀5 作废，还白占一个入池名额）。
+#   为什么值得：这三类判定是毫秒级，而跑副本验证要几十秒。
+M467_STRUCT_REGEN_MAX = 2
+#   ★刀3｜默认 2｜语义：结构不过时把**具体缺陷**回灌重生成的次数上限。
+#   为什么必须有上限：渠道本身还在 429，无上限重生成会把一次生成放大成 N 次计费调用。
+M467_PROMPT_CODE_LIMIT = 16000
+#   ★刀2｜默认 16000｜语义：prompt 里代码段的字符上限（原 2000 / 3000）。
+#   标定依据：`_compress_group` 完整方法实测 12903 字符，16000 能一次装下。
+M467_UNFIXABLE_STREAK = 5
+#   ★刀5｜默认 5｜语义：同一 (file,method) 连续几次「结构缺陷未修好」即判
+#     **不可修**并停止为该目标生成补丁（台账 data/evolution/struct_defect_ledger.jsonl）。
+#   为什么需要：`_compress_group` 已试 63 次仍未收敛 —— 继续烧不会变好，
+#     只会把 LLM 配额耗在同一种确定性失败上。人工确认问题不存在后可删除该台账重试。
+
