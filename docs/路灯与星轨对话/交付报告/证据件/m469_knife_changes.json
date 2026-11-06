@@ -1,0 +1,221 @@
+{
+  "batch": "469",
+  "date": "2026-11-06",
+  "repo": "D:/xinrenlei/tongtong-pulse-v9",
+  "branch": "master",
+  "pushed": false,
+  "commits": [
+    {"hash": "9550771c", "scope": "刀1-刀4 + 单测", "files": 5, "insertions": 874, "deletions": 7}
+  ],
+  "live_process": {
+    "state": "stopped",
+    "note": "用户于 2026-11-06 17:44 前后主动停机（核验：Get-CimInstance 无 python.exe）。468 六刀与 469 四刀均未在活体跑过。"
+  },
+  "knives": [
+    {
+      "id": "刀1",
+      "name": "补丁应用前源码一致性核对",
+      "file": "nucleus/reasoning/PatchManager.py",
+      "switch": "ENABLE_M469_SOURCE_PRECHECK",
+      "default": true,
+      "entry": "_m469_source_precheck(patch, project_root) -> dict",
+      "helpers": ["_m469_source_precheck_on()", "_m469_file_sha256(path)"],
+      "kinds": ["ok", "stale", "ambiguous", "no_code", "file_missing", "guard_off"],
+      "wiring": [
+        "apply_all_pending：排在 _check_patch_safety 之后、_verify_in_copy 与 create_backup 之前",
+        "_verify_in_copy：路径沙箱之后、建临时副本之前"
+      ],
+      "evidence": {
+        "pre_existing_branch": "apply_all_pending L6530 else 只写 apply_error='原始代码未找到，可能已被修改' 并计入 failed",
+        "waste": "create_backup 在 L6152、count(original_code) 在 L6171 ⇒ 备份早于判定；副本验证也白跑",
+        "string_matching_fragile": "_OBSOLETE_MARKERS 按错误文案匹配，文案改字即失效"
+      },
+      "effect": {
+        "real_queue_14": {"ok": 12, "no_code": 2},
+        "conclusion": "当前 12 条 LLM 补丁 original_code 全部仍能找到 ⇒ 无一条属于源码漂移；本刀为预防性机制，不是 23 天零落地的直接修复"
+      },
+      "log_marker": "[469刀1] 应用前源码核对不通过"
+    },
+    {
+      "id": "刀2",
+      "name": "补丁构造时粒度对齐 + 方法名存在性核对",
+      "file": "nucleus/reasoning/SafeEvolutionExecutor.py",
+      "switch": "ENABLE_M469_GRANULARITY_ALIGN",
+      "default": true,
+      "entry": "_m469_align_method_patch(patch) -> dict",
+      "helpers": ["_m469_granularity_align_on()", "_m469_find_method_span(lines, method)", "_m469_method_exists(patch)"],
+      "root_cause": {
+        "original_source": "self_inspector.get_method_body(...)['body'] —— 天生是方法体片段",
+        "measured": "12 条里 11 条 original 首行缩进=8 且不含 def；modified 首行缩进=0 且含 def",
+        "hit_rate": "11/12 = 92%",
+        "proof_patch": "patch_llm_1793945467_7587",
+        "proof_detail": "original 462 字/9 行 首行 '        try:'；modified 532 字/12 行 首行 'def _schedule_next_beat(self):'；apply_error='基础缩进不一致（未替换）: original=8 modified=0'",
+        "consequence": "该补丁吃掉 2026-11-06 唯一审批额度 → 14:11→17:00 近三小时零落地"
+      },
+      "method_name_absent": {
+        "count": "5/12",
+        "samples": [
+          {"id": "patch_llm_1793956750_f7ed", "method": "_process_l2_nodes", "real": "_compress_l1_to_l2"},
+          {"id": "patch_llm_1793956894_c6a7", "method": "filter_keywords", "real": "_liver_extract_keywords"},
+          {"id": "patch_llm_1793957238_55f9", "method": "periodic_task_no_reentry", "real": "issue_type 被当成方法名"},
+          {"id": "patch_llm_1793957566_a8dd", "method": "collect_value_data", "real": "方法尚未创建"},
+          {"id": "patch_llm_1793957710_1481", "method": "preprocess_topic", "real": "_preprocess_search_topic"}
+        ]
+      },
+      "effect": {
+        "aligned": 7,
+        "refused": 5,
+        "criteria": ["base indent 相等", "整段方法唯一出现", "replace 后 ast.parse 通过", "类方法总数不缩水"],
+        "detail": [
+          {"id": "patch_llm_1793842504_0cf6", "indent": 4, "methods": "114->114"},
+          {"id": "patch_llm_1793922304_7f17", "indent": 4, "methods": "111->111"},
+          {"id": "patch_llm_1793948040_7ea6", "indent": 4, "methods": "46->46"},
+          {"id": "patch_llm_1793952901_1ea7", "indent": 4, "methods": "63->63"},
+          {"id": "patch_llm_1793952931_fd46", "indent": 4, "methods": "63->63"},
+          {"id": "patch_llm_1793954803_9e07", "indent": 4, "methods": "22->22"},
+          {"id": "patch_llm_1793957749_31b9", "indent": 0, "methods": "63->70"}
+        ]
+      },
+      "log_marker": "[469刀2] 粒度对齐 / [469刀2] 跳过补丁构造：粒度无法对齐"
+    },
+    {
+      "id": "刀3",
+      "name": "中风险门槛独立旋钮 + 安全拒绝留痕",
+      "file": "nucleus/evolution/EvolutionEffectVerifier.py",
+      "switch": "EVOLUTION_EFFECT_VERIFY_CONFIG['mid_risk_min_trust']",
+      "default": 60,
+      "entry": "EvolutionEffectVerifier.trust_threshold_for(patch)",
+      "zero_behavior_change": "mid 缺省 == high ⇒ 真实 14 条队列本批前后逐条判定完全一致（6 True / 8 False，理由逐字相同）",
+      "dual_gate_measured": {
+        "gate1": "trust 40 < 60 ⇒ 信任分数不足(40.0<60.0) ×5",
+        "gate2": "把 trust 临时抬到 65 后，同一 5 条全部变成 风险等级过高(中)（auto_apply_max_risk=2）"
+      },
+      "decision": "不放开中风险自动落地：5 条 = 4×long_method(344/280/231/304 行) + 1×dead_code 删除；测试覆盖率 0.268%",
+      "safety_blocked_fields": ["safety_blocked", "safety_blocked_reason"],
+      "log_marker": "[469汇总] … 安全门槛拒绝=N"
+    },
+    {
+      "id": "刀4",
+      "name": "缓存归档（问题缓存 + 补丁缓存）",
+      "file": "data/ (非 git 内容)",
+      "method": "移走不删除；保留相对路径可整目录搬回",
+      "archive_dir": ".bak_batch469_cache/20261106_180658",
+      "files": 16,
+      "bytes": 1824544,
+      "archived": [
+        "data/patches/pending_patches.json",
+        "data/patches/pending_patches_resolved.json",
+        "data/patches/pending_patches_archive.json",
+        "data/patches/approval_trace.jsonl",
+        "data/patches/auto_approved.json",
+        "data/patches/detector_trace.jsonl",
+        "data/patches/generation_feedback.jsonl",
+        "data/patches/lesson_cooldown.jsonl",
+        "data/patches/failure_tracker.json",
+        "data/patches/apply_retry_422.json",
+        "data/patches/problem_gone_trace.jsonl",
+        "data/patches/effect_verify_trace.jsonl",
+        "data/patches/local_learning_attempts.jsonl",
+        "data/evolution/cooldown.json",
+        "data/evolution/effect_verify.json",
+        "data/evolution/verify_feedback_ledger.json"
+      ],
+      "kept_audit": [
+        "data/patches/patch_history.json",
+        "data/patches/patch_history_obsolete.json",
+        "data/patches/change_log.md",
+        "data/patches/apply_trace.jsonl",
+        "data/patches/applied_355.json",
+        "data/code_backups/"
+      ],
+      "side_effect": "approval_trace.jsonl 归档 ⇒ 当日审批额度复位（今日唯一额度曾被 patch_llm_1793945467_7587 吃掉）"
+    }
+  ],
+  "gates": {
+    "pre_commit_13": "PASS（L5/L6 因框架停机 SKIP，口径见 criteria=404.layer_health.v1）",
+    "cw3a_semantic_conservation": "PASS",
+    "cw3b_stale_read": "PASS（陈旧读风险 0 项）",
+    "new_tests": "tests/test_m469_source_precheck.py 34 passed",
+    "ruff_delta": 0,
+    "ruff_full_F": "All checks passed",
+    "line_endings": {
+      "nucleus/reasoning/PatchManager.py": "7628 CRLF / 0 bare LF",
+      "nucleus/reasoning/SafeEvolutionExecutor.py": "8331 CRLF / 0 bare LF",
+      "config.py": "pure LF"
+    }
+  },
+  "regressions": [
+    {"file": "tests/test_m93_apply_guard.py", "result": "16 passed / 3 skipped / 6 xfail"},
+    {"file": "tests/test_m92_patch_guards.py", "result": "28 passed / 1 failed(存量)"},
+    {"file": "tests/test_m468_evolution_loop_fixes.py", "result": "52 passed / 2 skipped"},
+    {"file": "tests/test_m447_k1_approval_wiring.py + tests/test_m439_k1_approval_bridge.py", "result": "35 passed"},
+    {"file": "tests/test_m422_k3_periodic_apply.py + tests/test_m444_k45_guards.py", "result": "23 passed"},
+    {"file": "tests/test_llm_indent_contract_m91.py + tests/test_llm_patch_material_m88.py", "result": "49 passed / 3 skipped / 1 failed(存量)"},
+    {"file": "tests/test_patch_field_contract_m90.py + tests/test_llm_patch_similarity_m89.py", "result": "30 passed / 1 failed(存量)"}
+  ],
+  "pre_existing_red": [
+    {
+      "test": "tests/test_m92_patch_guards.py::TestT92gEndToEnd::test_G5_corpus_zero_false_block_by_judgement",
+      "reason": "断言 all(source=='llm') 绑在活体语料上，含非 llm 的 patch_multi_1793659423_682b",
+      "proof": "468 批已 A/B：回退到 .bak_batch468 跑同一用例，失败 id 完全一致"
+    },
+    {
+      "test": "tests/test_llm_patch_material_m88.py::TestT88aSwitchContract::test_40_switch_read_via_getattr_default_true",
+      "reason": "断言 ENABLE_M88_MATERIAL_FROM_RESOLVED_FILE 不得写进 config.py，而它已在 config.py",
+      "proof": "git log -S 定位：325 批 b18f0b62 写入"
+    },
+    {
+      "test": "tests/test_patch_field_contract_m90.py::TestT90aFieldContractSweep::test_40_no_production_patch_dict_lacks_original_code",
+      "reason": "offender 为 tools/m411_effect_verify_state.py:98/121/128",
+      "proof": "git log -1 -- tools/m411_effect_verify_state.py = d025836e (2026-10-31 411批)，本批未触碰"
+    }
+  ],
+  "workspace_isolation": {
+    "item": "config.py 466 渠道扩容（bailian 2→7，+79/-13）",
+    "owner": "用户 + 星轨",
+    "handling": "未纳入本笔；提交版本 = HEAD + 469 的 12 行；提交后已原样恢复工作区",
+    "backup": ".bak_batch469/config_worktree_with_466.py",
+    "verify": "git diff config.py 现为 +79/-13，只含渠道扩容，不含 469",
+    "note": "重启读文件系统而非 git ⇒ 渠道扩容未提交也照样生效"
+  },
+  "restart_judges": [
+    "[469刀2] 粒度对齐：… original N→M 字，modified 回填 4 缩进（首次出现即生效）",
+    "[469刀2] 跳过补丁构造：粒度无法对齐（method_not_found / span_not_found）",
+    "[469汇总] 落地=N 失败=N 源码过期=0 安全门槛拒绝=N",
+    "[468刀6] 审批额度退款: 退=N",
+    "[468刀2] 审批重投: 尝试=N 放行=M",
+    "[467刀1] 喂料补全（含 def）",
+    "[469刀1] 应用前源码核对不通过(stale) —— 若路灯后续再改被盯上的文件"
+  ],
+  "open_items": [
+    {
+      "id": "470-P0",
+      "title": "运行窗口未到被折叠成 runtime_failed 终态",
+      "detail": "SafeEvolutionExecutor.verify_fix_from_logs L3470 返回 verified=False 且未带 undecidable ⇒ L3866 落到 runtime_failed + needs_repair；3 条实测 detail 为「修复后仅运行 289 秒，需至少 300 秒」。L4025 的另一条路径是正确的（continue 等下一轮）。runtime_failed 无重试入口。",
+      "suggest": "L3470 分支返回 undecidable=True，走 L3847 已有的 needs_reverify 延迟复验分支"
+    },
+    {
+      "id": "470-P1",
+      "title": "已有假证书不回收",
+      "detail": "patch_llm_1793922304_7f17: status=runtime_verified + problem_fixed=True + effectiveness=1.0，但 applied=False，证书来自副本 patch_copy_*",
+      "suggest": "applied is not True 却带 runtime_verified/True ⇒ 降级 needs_apply 并清 problem_fixed"
+    },
+    {
+      "id": "470-P1",
+      "title": "问题发现/规划侧方法名不可靠",
+      "detail": "5/12 补丁瞄准不存在的方法名；其中 1 条把 issue_type 当方法名",
+      "suggest": "469 刀2b 只做到「不构造」，根因在发现/规划侧，建议单独立批"
+    },
+    {
+      "id": "470-P2",
+      "title": "中风险闸 double-gate",
+      "detail": "即便调 mid_risk_min_trust=40，auto_apply_max_risk=2 仍会拦中等(3)",
+      "suggest": "安全口径裁决，需小林/星轨确认后再动"
+    },
+    {
+      "id": "470-P2",
+      "title": "scan_all_organs() 降频返 {} 改变所有调用方语义",
+      "detail": "468 刀4 只兜底了 467 一处；其余 not result 会被读成「没有器官」"
+    }
+  ]
+}
