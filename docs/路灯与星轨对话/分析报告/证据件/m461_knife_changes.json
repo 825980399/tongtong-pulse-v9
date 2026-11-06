@@ -1,0 +1,133 @@
+{
+ "batch": 461,
+ "date": "2026-11-06",
+ "authorization": "星轨 09:19 询问「重启后自修复闭环是否全部完成，没完成继续完成」；本批无编号任务书，按对话授权施工。",
+ "head_at_start": "9d1d921b",
+ "live_process": "pid=19140 @2026-11-06 09:04:01（晚于 460 两笔 01:38/01:44 ⇒ 460 已生效）",
+ "verdict_on_completeness": "**没有全部完成**。461 补上三个最关键的实盘缺口，但前面几轮聊的完整链路仍有 4 项未完成（见 open_items），且本批改动需再次重启才生效、尚未取得真实 apply/回退样本。",
+ "t0_findings": [
+  {
+   "id": 1,
+   "finding": "460 已生效但闭环一次都没走通",
+   "evidence": "self_verdict_ledger.jsonl 仅 3 行全 inconclusive；快照目录从未创建 ⇒ 0 apply / 0 回退 / 0 成功修复；approval_trace 两条 05:14 与 07:45 均 approved=false"
+  },
+  {
+   "id": 2,
+   "finding": "「一次改错下次不再犯」被实盘证伪",
+   "evidence": "converge_voided 里 PulseLiver::_compress_group 的 no_def 作废累计 59 次；voided_no_def 经验 04:44/05:54/07:09/08:38 连写 4 次"
+  },
+  {
+   "id": 3,
+   "finding": "三条失败路径各写各的，没有一处真能停手",
+   "evidence": "459 只写软提醒；445 的 require_full_def 反馈只接 _generate_llm_patch，而实盘作废来自 patch_multi_（generate_multi_file_patch）；460 冷却只在 self_verdict.finalize，作废在 _m280_converge_pending"
+  },
+  {
+   "id": 4,
+   "finding": "0 次 apply 的两处契约错配（不是判据太严）",
+   "evidence": "LLM 补丁 confidence 固定 medium，八闸 confidence_high 只认 high ⇒ 结构性过不了；original_code 是方法体片段（无 def）⇒ 静态探针 false_pass；05:14 样本 5/8 挂在 confidence_high/baseline_positive/problem_gone_true"
+  },
+  {
+   "id": 5,
+   "finding": "主进程运行期派单与结果回传仍缺",
+   "evidence": "discover_all_issues 只有日志/增量代码审查/self_inspector 三源；子进程回来只计数+日志，k1_offload 是唯一写回口；SafeEvolutionExecutor:7166 原注释「子进程不可见父进程运行期指标」"
+  },
+  {
+   "id": 6,
+   "finding": "07:45 样本证据齐备却被 447 边界拦下（正确行为）",
+   "evidence": "baseline_errors=1 / problem_gone=True，但 risk_level=高、gates_total=0 ⇒ scope 层就拦下。本批不放宽该边界"
+  },
+  {
+   "id": 7,
+   "finding": "本批零 cw3-A 漂移",
+   "evidence": "未改任何 IW / pulse_inner_world_* ⇒ 首检即 PASS、基线零漂移 ⇒ 2 笔提交"
+  }
+ ],
+ "knives": [
+  {
+   "id": 1,
+   "name": "生成侧前置闸 + 统一同类错误冷却",
+   "detail": "新建 lesson_cooldown.py：统一台账、连续同类计数按 (file,method,error_type)、冷却生效按 (file,method)；作废路径与自裁决路径写同一台账；守卫挂在 pending 唯一收口 _save_patch_list（覆盖 9 个写点）。",
+   "wiring": [
+    "criteria_window.note_converge_voided",
+    "PatchManager._save_patch_list",
+    "self_verdict.record_lesson"
+   ],
+   "switch": "ENABLE_M461_LESSON_COOLDOWN / ENABLE_M461_GENERATION_GUARD"
+  },
+  {
+   "id": 2,
+   "name": "证据契约修复（让 apply 可达）",
+   "detail": "normalize_snippet 把方法体片段包装成可解析函数体（标 reprobe_scope=snippet，保留原 patch 原文）；三证齐备才按依据把 confidence 提为 high 并写 confidence_source；「只升级不降级」有界放宽 460 契约，保住「探针 0 不许覆盖构造的 2」。不放宽任何闸门。",
+   "switch": "ENABLE_M461_SNIPPET_NORMALIZE / ENABLE_M461_EVIDENCE_CONFIDENCE"
+  },
+  {
+   "id": 3,
+   "name": "主进程运行期派单 + 闭环结果回传",
+   "detail": "新建 runtime_dispatch.py：带证据+去重键+15min 聚合窗口的问题单；ticket/claim/result 三种 kind；EvolutionLoop 加第四问题源；PulseCortex 委派超时出口主动派单、心跳 50 拍消费结构化结果单；self_verdict.finalize 回写 verdict/applied/verified/rolled_back/reason。",
+   "wiring": [
+    "PulseCortex._m458_sweep_delegates",
+    "PulseCortex HeartEvent.BEAT",
+    "PulseCortex._m461_consume_loop_results",
+    "EvolutionLoop.discover_all_issues",
+    "self_verdict.finalize"
+   ],
+   "switch": "ENABLE_M461_RUNTIME_DISPATCH"
+  }
+ ],
+ "real_sample_replay": {
+  "source": "data/patches/approval_trace.jsonl 的两条 2026-11-06 真实审批留痕",
+  "confidence_reconstructed": "按生成侧契约统一设为 medium（SafeEvolutionExecutor:6688）",
+  "sample_0514": {
+   "before": "5/8（confidence_high, baseline_positive, problem_gone_true）",
+   "after": "8/8 全部通过",
+   "self_verdict": "apply",
+   "scope_447": "边界通过",
+   "probe": "true_pass / snippet / baseline=1 / pg=True / conf→high"
+  },
+  "sample_0745": {
+   "before": "5/8",
+   "after": "6/8（risk_low, trust 仍不过）",
+   "self_verdict": "reject",
+   "scope_447": "risk='高' 拦下",
+   "note": "证据齐备也不硬放行，未放宽闸门"
+  }
+ },
+ "quality": {
+  "new_tests": 22,
+  "regression_passed": 202,
+  "total_passed": 224,
+  "existing_red": 0,
+  "warning": "m31 1 warning（既有）",
+  "gates": "cw2（5 子项）/ 事件字符串 / silent_exc 元数 / 废弃导入 / 断链 / 遗留装配 / cw3-B：PASS；cw3-A 首检 PASS（零漂移，未重锚）",
+  "ruff_new": 0,
+  "eol": {
+   "config.py": "LF 8192/0",
+   "self_verdict.py": "LF 795/0",
+   "criteria_window.py": "LF 907/0",
+   "PatchManager.py": "CRLF 7439/0",
+   "EvolutionLoop.py": "CRLF 1081/0",
+   "PulseCortex.py": "CRLF 4382/0",
+   "new modules/tests": "LF"
+  },
+  "production_trace_pollution": 0,
+  "pollution_check": "lesson_cooldown.jsonl 与 runtime_issues.jsonl 均不存在；self_verdict_ledger 仍 3 行；快照目录未创建。failure_experience 9→10 行是活体进程持续写入（非回归污染）"
+ },
+ "open_items": [
+  "本批改动在磁盘上，活体 pid=19140 早于提交 ⇒ 需再次重启才能取得真实 apply/回退样本",
+  "T0 前提核实（生成补丁前先证伪问题是否真的成立）未接入闭环",
+  "A/B 开关回退（同一 case 开关各跑一次锁定唯一变量）未接入闭环",
+  "按根因类型分派修复策略未做；459 的 voided_feature 只在收敛层，分派器未消费",
+  "用户提过的「常驻独立进程循环」未做 —— 现状一次性子进程 + 后台调度已足够，且实盘一轮仅 5~6s；补 A/B 全套回归后才需放宽 600s 超时"
+ ],
+ "files_changed": [
+  "config.py",
+  "nucleus/evolution/lesson_cooldown.py",
+  "nucleus/evolution/runtime_dispatch.py",
+  "nucleus/evolution/self_verdict.py",
+  "nucleus/evolution/criteria_window.py",
+  "nucleus/evolution/EvolutionLoop.py",
+  "nucleus/reasoning/PatchManager.py",
+  "organs/brain/PulseCortex.py",
+  "tests/test_m461_runtime_closed_loop.py"
+ ]
+}
