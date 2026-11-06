@@ -26,6 +26,34 @@ def _gpu_cfg(key: str, default):
     return default
 
 
+def _m473_faiss_gil_guard() -> bool:
+    """★473：free-threading（GIL 已关闭）下默认绕开 faiss，保住全进程并行度。
+
+    根因（实测）：`faiss._swigfaiss_avx2` 未声明 free-threading 兼容，
+    首次 import 会把 GIL **永久**启回（PEP 703），而且只在 import
+    期抛一条 RuntimeWarning，之后无任何日志。一次 >=5000
+    候选检索就足以让整个进程失去 8 线程并行
+    （实测 5.32x -> 1.10x）。
+
+    口径：
+      - GIL 仍开启（3.12 / 3.14 普通构建） => 返回 True，与历史行为完全一致
+      - GIL 已关闭（3.14t） => 返回 False，改走 `_topk_retrieve_cy` 纯 C 路径
+      - 确需在 free-threading 下用 faiss：config 里置 `ALLOW_FAISS_UNDER_FREE_THREADING = True`
+    """
+    try:
+        import sys as _sys
+
+        _gil_on = _sys._is_gil_enabled() if hasattr(_sys, "_is_gil_enabled") else True
+        if _gil_on:
+            return True
+        import config as _cfg
+
+        return bool(getattr(_cfg, "ALLOW_FAISS_UNDER_FREE_THREADING", False))
+    except Exception as e:
+        silent_exc(e, "nucleus/fast_ops.py::_m473_faiss_gil_guard", level="debug")
+        return True
+
+
 # ★PHASE14：GPU 自适应的运行期状态（进程内单例）
 #   设计要点：**不靠猜，靠测**。不同显卡/驱动的性能拐点差异极大
 #   （GTX 1050 Ti 与 RTX 4090 的合理阈值可以差一个数量级），
@@ -211,7 +239,8 @@ def fast_vector_search(query_vector: list, candidate_vectors: list, top_k: int =
             silent_exc(e, where="nucleus.fast_ops::fast_vector_search L206", level="debug")
             _faiss_on = True
             _faiss_min = 5000
-        if _faiss_on and _n >= _faiss_min and _n > 0 and _dim > 0:
+        if (_faiss_on and _n >= _faiss_min and _n > 0 and _dim > 0
+                and _m473_faiss_gil_guard()):
             try:
                 import numpy as _np70
 
