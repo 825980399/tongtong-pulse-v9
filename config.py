@@ -8497,3 +8497,20 @@ ENABLE_M469_SOURCE_PRECHECK = True
 #   关掉 ⇒ 不改 original/modified；LLM 重写整方法时会以
 #   「基础缩进不一致 original=8 modified=0」被缩进关拒绝（实测 12 条里 11 条）。
 ENABLE_M469_GRANULARITY_ALIGN = True
+
+# ===== [M470-CFG] 470 批开关（2026-11-06）=====
+# 刀1b 刀2「粒度对齐」判据收紧：original_code 必须**等于方法体**（按
+#   self_inspector._read_method_body 同规则，即跳过文档字符串）才允许把 original
+#   扩成整方法；且 modified 的 def 行方法名必须与补丁 method 一致。
+#   读取点：nucleus/reasoning/SafeEvolutionExecutor.py::_m470_align_strict_on
+#   关掉 ⇒ 回到 469 刀2 行为：只要整段方法唯一就无条件对齐。**不建议关** ——
+#   实测 22 条历史补丁里旧判据放行 14 条，其中 12 条 original 只是方法内片段或
+#   跨出方法边界，5 条 modified 干脆把方法名改成了别的函数（LLM 幻觉）。
+ENABLE_M470_ALIGN_STRICT = True
+# 刀2 观察窗口未到（<300s）⇒ 转 needs_reverify 延迟复验，**不**判 runtime_failed。
+#   读取点：SafeEvolutionExecutor.py::_m470_window_reverify_on
+#   关掉 ⇒ 回到 470 前行为：窗口未到被判失败 ⇒ needs_repair + 自动回滚已落地补丁。
+ENABLE_M470_WINDOW_REVERIFY = True
+# 刀2 同一补丁的延迟复验次数上限（防 fixed_at 脏数据导致无限复验）。
+#   读取点：SafeEvolutionExecutor.py::_m470_max_reverify
+M470_MAX_REVERIFY = 3

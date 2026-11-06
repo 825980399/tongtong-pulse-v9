@@ -1096,6 +1096,101 @@ def _m469_find_method_span(lines: list, method: str):
     return (_start, _end, int(getattr(_n, "col_offset", 0) or 0))
 
 
+def _m470_window_reverify_on() -> bool:
+    """★470刀2：观察窗口未到 ⇒ 转延迟复验（缺省 True）。
+
+    关掉 ⇒ 回到 470 前行为：`_elapsed < 300` 直接返回 verified=False，
+    调用方据 `undecidable` 缺失折叠成 `runtime_failed` + needs_repair，
+    并对**已落地的补丁执行自动回滚**。
+    """
+    try:
+        import config as _c470w
+        return bool(getattr(_c470w, "ENABLE_M470_WINDOW_REVERIFY", True))
+    except Exception as _e470w:
+        silent_exc(_e470w,
+                   where="SafeEvolutionExecutor::_m470_window_reverify_on",
+                   level="debug")
+        return True
+
+
+def _m470_max_reverify() -> int:
+    """★470刀2：同一补丁的延迟复验次数上限（缺省 3）。
+
+    防的是「fixed_at 是未来时间 / 脏数据」导致 `_elapsed` 恒 < 300 而无限复验。
+    正常补丁第一次复验（3600s 后）窗口早已满足，不会触到上限。
+    """
+    try:
+        import config as _c470m
+        return int(getattr(_c470m, "M470_MAX_REVERIFY", 3) or 3)
+    except Exception as _e470m:
+        silent_exc(_e470m,
+                   where="SafeEvolutionExecutor::_m470_max_reverify",
+                   level="debug")
+        return 3
+
+
+def _m470_align_strict_on() -> bool:
+    """★470刀1：刀2「粒度对齐」判据收紧开关（缺省 True）。
+
+    关掉 ⇒ 回到 469 刀2 的行为（只要整段方法唯一就无条件对齐）。
+    """
+    try:
+        import config as _c470
+        return bool(getattr(_c470, "ENABLE_M470_ALIGN_STRICT", True))
+    except Exception as _e470:
+        silent_exc(_e470,
+                   where="SafeEvolutionExecutor::_m470_align_strict_on",
+                   level="debug")
+        return True
+
+
+def _m470_body_span(lines: list, method: str):
+    """★470刀1：按 ``self_inspector._read_method_body`` 的**同一规则**定位方法体区间。
+
+    返回 ``(body_start, body_end, whole_start, whole_end, indent)``，0-based、end 不含。
+    解析失败 / 同名方法不是恰好 1 个 ⇒ None（不猜）。
+
+    ★为什么必须与 ``_read_method_body`` 同规则：补丁的 ``original_code`` 就取自
+      ``get_method_body()["body"]``，而该函数**跳过文档字符串**（见
+      self_inspector.py::_read_method_body 的「跳过文档字符串」段）。
+      469刀2 拿「def 之后的全部行」当基准比对，两边差一个 docstring ⇒ 判据既漏判
+      又误判：实测 16 条 LLM 补丁里，按旧口径 0 条相等、按本口径 2 条严格相等；
+      而旧判据无条件放行了 14 条，其中 12 条的 original 只是方法内的片段或跨出了
+      方法边界 —— 替换后语法仍合法（ast.parse 通过、方法数不变），但语义已错。
+    """
+    if not method or not lines:
+        return None
+    try:
+        import ast as _ast470
+        _tree = _ast470.parse("\n".join(lines))
+    except Exception as _e470p:
+        silent_exc(_e470p,
+                   where="SafeEvolutionExecutor::_m470_body_span",
+                   level="debug")
+        return None
+    _hit = [n for n in _ast470.walk(_tree)
+            if isinstance(n, (_ast470.FunctionDef, _ast470.AsyncFunctionDef))
+            and n.name == method]
+    if len(_hit) != 1:
+        return None
+    _n = _hit[0]
+    _ws = int(getattr(_n, "lineno", 0) or 0) - 1
+    _we = int(getattr(_n, "end_lineno", 0) or 0)
+    if _ws < 0 or _we <= _ws:
+        return None
+    _bs = _ws + 1
+    if _n.body:
+        _f = _n.body[0]
+        if (isinstance(_f, _ast470.Expr)
+                and isinstance(_f.value, _ast470.Constant)
+                and isinstance(_f.value.value, str)):
+            _bs = int(getattr(_f, "end_lineno", 0) or 0)
+        else:
+            _bs = int(getattr(_f, "lineno", 0) or 1) - 1
+    _bs = min(_bs, _we)
+    return (_bs, _we, _ws, _we, int(getattr(_n, "col_offset", 0) or 0))
+
+
 def _m469_method_exists(patch: dict) -> str:
     """★469刀2b：核对补丁的 `method` 是否真实存在于目标文件的 AST 里。
 
@@ -1172,6 +1267,31 @@ def _m469_align_method_patch(patch: dict) -> dict:
         return _out
 
 
+
+    # ★470刀1b：modified 的 def 行**方法名必须与补丁 method 一致**。
+    #   实测两条「看起来是整方法」的补丁其实指向别的方法：
+    #     · patch_llm_1789842716_c862 → `def _get_node_count(self):`（改名）
+    #     · patch_llm_1790780348_b782 → `        def get_node_count(self):`（8 缩进嵌套且改名）
+    #   旧的「首行 strip 后以 def 开头」判据把两者都当成整方法重写，对齐后
+    #   整个目标方法被换成另一个函数 ⇒ 目标方法**消失**。而替换后 ast.parse 仍通过、
+    #   方法总数也不变（少一个多一个），语法类判据全绿 —— 只有比对「目标方法是否还在」
+    #   才看得见。故此处按名字分档，宁可不改，也不能改错对象。
+    import re as _re470
+    _mm470 = _re470.match(r"(?:async\s+)?def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(", _first)
+    _mname470 = str(patch.get("method") or "").strip()
+    if _mm470 and _mname470 and _mm470.group(1) != _mname470:
+        if _m470_align_strict_on():
+            _module_logger.warning(
+                "[470刀1] modified 指向别的方法名（不对齐）: id=%s file=%s "
+                "期望=%s 实际=%s",
+                patch.get("id"), patch.get("file"),
+                _mname470, _mm470.group(1))
+            return {"ok": False, "how": "modified_other_method",
+                    "detail": (f"modified 定义的是另一个方法 {_mm470.group(1)}"
+                               f"（补丁目标是 {_mname470}），"
+                               "按整方法替换会让目标方法消失"),
+                    "indent": 0, "orig_before_len": len(_orig)}
+        return _out
     _fp = str(patch.get("file") or "").strip()
     _method = str(patch.get("method") or "").strip()
     if not _fp or not _method:
@@ -1204,6 +1324,48 @@ def _m469_align_method_patch(patch: dict) -> dict:
                 "detail": "整段方法在源文件中不是唯一出现，拒绝替换",
                 "indent": 0, "orig_before_len": len(_orig)}
 
+
+    # ★470刀1：**先判关系，再决定要不要对齐**。469刀2 只要有整段方法就无条件把
+    #   original 换成整方法，从不核对 original 到底是不是这个方法的方法体。
+    #   实测 22 条历史 LLM/multi 补丁中，旧判据放行 14 条，其中 12 条：
+    #     · original 只是方法内的片段（如只有 try 块）⇒ 整方法被降级成片段内容；
+    #     · original 跨出了方法边界（如 40 行 vs 方法 20 行）⇒ 后续语句被前置内容吃掉的语义。
+    #   这些补丁替换后 ast.parse 仍通过、方法数也不变 ⇒ 语法判据全部「绿灯」，
+    #   但语义已坏。故此处必须按**内容关系**分档，不是按语法定。
+    import textwrap as _tw470
+    _o470 = _tw470.dedent(_orig.replace("\r\n", "\n")).strip("\n")
+    _w470 = _tw470.dedent(_whole.replace("\r\n", "\n")).strip("\n")
+    if _o470 == _w470:
+        # original 本身就是整方法 ⇒ 不需要扩，原样交给下游（零行为变化）
+        _out["detail"] = "original 已是整方法，无需对齐"
+        return _out
+    _bspan470 = _m470_body_span(_flines, _method)
+    if _bspan470 is None:
+        if _m470_align_strict_on():
+            return {"ok": False, "how": "body_span_not_found",
+                    "detail": ("按 _read_method_body 同规则取不到唯一方法体"
+                               f"（{_method}），无法确认 original 是否等价"),
+                    "indent": 0, "orig_before_len": len(_orig)}
+        _b470 = ""
+    else:
+        _body470 = "\n".join(_flines[_bspan470[0]:_bspan470[1]])
+        _b470 = _tw470.dedent(_body470.replace("\r\n", "\n")).strip("\n")
+    if _o470 != _b470 and _m470_align_strict_on():
+        _is_frag = bool(_o470) and (_o470 in _b470)
+        _why470 = ((f"original 只是该方法内的一段片段（{len(_o470)} 字），"
+                    "不能扩成整方法替换——否则方法其余逻辑会被这一段覆盖")
+                   if _is_frag else
+                   (f"original 与目标方法体内容不等（orig {len(_o470)} 字"
+                    f" / body {len(_b470)} 字）："
+                    "源码已变或素材取错，拒绝按整方法替换"))
+        _module_logger.warning(
+            "[470刀1] 拒绝对齐(%s): id=%s file=%s method=%s orig=%d body=%d",
+            "orig_fragment" if _is_frag else "orig_mismatch",
+            patch.get("id"), patch.get("file"), _method, len(_o470), len(_b470))
+        return {"ok": False,
+                "how": "orig_fragment" if _is_frag else "orig_mismatch",
+                "detail": _why470,
+                "indent": 0, "orig_before_len": len(_orig)}
     import textwrap as _tw469
     _ded = _tw469.dedent(_mod.replace("\r\n", "\n")).strip("\n")
     _pad = " " * _ind
@@ -3684,10 +3846,26 @@ class SafeEvolutionExecutor:
         # 修复后需要至少运行5分钟才有统计意义
         _elapsed = time.time() - _fixed_at
         if _elapsed < 300:
-            return {"verified": False, "baseline": _baseline, "after_fix": 0,
-                    "post_apply_errors": 0,
-                    "effectiveness": 0.0, "new_issues": 0,
-                    "detail": f"修复后仅运行{_elapsed:.0f}秒，需至少300秒才有统计意义"}
+            _w470 = {"verified": False, "baseline": _baseline, "after_fix": 0,
+                     "post_apply_errors": 0,
+                     "effectiveness": 0.0, "new_issues": 0,
+                     "detail": f"修复后仅运行{_elapsed:.0f}秒，需至少300秒才有统计意义"}
+            # ★470刀2：**观察窗口未到 ≠ 修复失败**。
+            #   改前这里只返回 verified=False 且不带 undecidable，调用方
+            #   `if _result.get("undecidable")` 拿到 None ⇒ 落到 else ⇒
+            #   status=runtime_failed + needs_repair + **自动回滚已落地的补丁**。
+            #   实测 3 条补丁因「仅运行 289 秒，需至少 300 秒」被判死刑，只差 11 秒。
+            #   同文件 L4025 另一条路径本来就写了 `continue 等下一轮`，只有这条没跟上。
+            #   修法：带上 undecidable=True ⇒ 走既有的 needs_reverify 延迟复验分支
+            #   （reverify_after = now + 3600s；到点时窗口早已满足，不会空转）。
+            if _m470_window_reverify_on():
+                _w470["undecidable"] = True
+                _w470["window_not_reached"] = True
+                _w470["elapsed"] = round(_elapsed, 1)
+                _module_logger.info(
+                    "[470刀2] 观察窗口未到（%.0fs<300s）⇒ 转延迟复验，不判 runtime_failed: %s.%s",
+                    _elapsed, os.path.basename(str(_file)), _method)
+            return _w470
 
         _after = self._count_errors_for_location(_file, _method, since=_fixed_at)
 
@@ -4070,8 +4248,27 @@ class SafeEvolutionExecutor:
                     _patch["reverify_count"] = int(_patch.get("reverify_count", 0)) + 1
                     _ufile = _patch.get("file", "")
                     _umethod = _patch.get("method", "")
+                    # ★470刀2：复验次数上限 —— 防 `fixed_at` 是未来时间/脏数据时
+                    #   `_elapsed` 恒 < 300 导致无限复验。正常补丁首次复验（3600s 后）
+                    #   窗口早已满足，不会触到上限。超限转 `runtime_undecidable`
+                    #   **终态**（不是 runtime_failed —— 没有任何证据说明修复失败）。
+                    if _patch["reverify_count"] > _m470_max_reverify():
+                        _patch["status"] = "runtime_undecidable"
+                        _patch["runtime_verified"] = False
+                        _patch["m470_reverify_capped"] = True
+                        _patch["needs_runtime_verify"] = False
+                        _module_logger.warning(
+                            "[470刀2] 延迟复验超上限（%d>%d）⇒ 转 runtime_undecidable:"
+                            " %s.%s why=%s",
+                            _patch["reverify_count"], _m470_max_reverify(),
+                            os.path.basename(str(_ufile)), _umethod,
+                            _result.get("detail", "")[:60])
+                        continue
+                    _why_rv470 = ("观察窗口未到(<300s)"
+                                  if _result.get("window_not_reached")
+                                  else "baseline=0 无法判定")
                     _module_logger.info(
-                        f"[延迟复验] baseline=0 无法判定，延迟到 "
+                        f"[延迟复验] {_why_rv470}，延迟到 "
                         f"{_patch['reverify_after']:.0f} 重采基线: "
                         f"{os.path.basename(_ufile)}.{_umethod}")
                     continue
