@@ -1408,6 +1408,16 @@ class PulseLung(BasePulseOrgan):
             _mt = _policy.get("max_tokens_override")
             if _mt:
                 _out["max_tokens"] = int(_mt)
+            # ★471刀3：渠道参数契约（两条百炼渠道实测 HTTP 400，见 config 注释）。
+            #   · force_enable_thinking：上游只接受 true（glm-5.3）
+            #   · reasoning_effort_when_off：关思考时 effort 必须为指定值（qwen3.8-flash 要 none）
+            #   灰度开关关闭时整段跳过，行为与改造前逐字一致。
+            if getattr(_cfg, "ENABLE_M471_CHANNEL_PARAM_CONTRACT", True):
+                if _policy.get("force_enable_thinking"):
+                    _out["enable_thinking"] = True
+                _off_eff = _policy.get("reasoning_effort_when_off")
+                if _off_eff and ("enable_thinking" in _out) and not _out.get("enable_thinking"):
+                    _out["reasoning_effort"] = str(_off_eff)
         except Exception as _e:
             self._log(LogLevel.DEBUG,
                       f"[渠道] 字段策略应用失败（忽略）: {type(_e).__name__}")

@@ -31,7 +31,9 @@ SE_REL = "nucleus/reasoning/SafeEvolutionExecutor.py"
 PM_REL = "nucleus/reasoning/PatchManager.py"
 PCL_REL = "organs/brain/PulseCodeLearner.py"
 CFG_REL = "config.py"
-CSV_REL = "docs/分析报告/技术债务台账_代码实查_20260919.csv"
+# ★471补齐：docs 重排后该台账移入 99_历史归档/分析报告历史/（原路径已不存在，
+#   E1/E2 因此 FileNotFoundError）。判据意图不变，只改定位。
+CSV_REL = "docs/99_历史归档/分析报告历史/技术债务台账_代码实查_20260919.csv"
 SOP_REL = "docs/分析报告/外部审计_台账投递工序.md"
 LEDGER_REL = "data/patches/patch_history.json"
 TRACE_REL = "docs/分析报告/第96批_账本假成功更正留痕.md"
@@ -559,14 +561,23 @@ class TestM96ChannelPriority(unittest.TestCase):
         #   352刀9（2026-10-23 小林触发，方案见 docs/分析报告/模型渠道免费化配置方案_20261023.md）
         #   后：火山方舟免费额度耗尽 ⇒ ark-* 全部挂起，渠道池换成免费渠道为主。
         #   依据 = config.REMOTE_API_CHANNELS["default_channels"] 现值（直接读，不靠记忆）。
+        # ★471补齐（回滚点：本段原为 372刀8 的 7 级阶梯）：466 渠道扩容后
+        #   池子由 7 条变 12 条（11 enabled），且 bailian-qwen-plus / qwen-max
+        #   已被移除、modelscope 被 426刀4 降到 p99+enabled=False（下架哨兵）。
+        #   此处按 config.REMOTE_API_CHANNELS["default_channels"] 现值重钉，
+        #   守的仍是「阶梯与配置表逐条一致」。
         want = [
             (1, "zhipu-47-flash", "glm-4.7-flash"),
-            (2, "bailian-qwen-plus", "qwen-plus"),
-            (3, "siliconflow-qwen2-7b", "zai-org/GLM-5.3-Flash"),
-            (4, "zhipu", "glm-4-flash"),
-            (5, "bailian-qwen-max", "qwen-max"),
-            (7, "modelscope", "Qwen/Qwen2.5-7B-Instruct"),
-            (8, "deepseek", "deepseek-v4-flash"),
+            (2, "bailian-qwen38-flash", "qwen3.8-flash"),
+            (3, "bailian-deepseek-v41-flash", "deepseek-v4.1-flash"),
+            (4, "bailian-glm53", "glm-5.3"),
+            (5, "siliconflow-qwen2-7b", "zai-org/GLM-5.3-Flash"),
+            (6, "bailian-qwen37-plus", "qwen3.7-plus"),
+            (7, "bailian-kimi-k3", "kimi-k3"),
+            (8, "zhipu", "glm-4-flash"),
+            (9, "bailian-deepseek-v4-pro", "deepseek-v4-pro"),
+            (10, "bailian-qwen38-max", "qwen3.8-max"),
+            (11, "deepseek", "deepseek-v4-flash"),
         ]
         by_name = {c[0]: c for c in self.ch}
         for prio, name, model in want:
@@ -586,7 +597,8 @@ class TestM96ChannelPriority(unittest.TestCase):
         """
         names = {c[0] for c in self.ch}
         self.assertIn("zhipu-47-flash", names)
-        self.assertIn("bailian-qwen-plus", names)
+        # ★471补齐：bailian-qwen-plus 已被 466 移除，改钉当期新渠道 qwen38-flash
+        self.assertIn("bailian-qwen38-flash", names)
         self.assertNotIn("ark-ds-v4.1-flash", names)
         self.assertNotIn("ark-glm-5.3-flash", names)
 
@@ -611,7 +623,10 @@ class TestM96ChannelPriority(unittest.TestCase):
         #   现态 priority 排到第 8（modelscope p7、deepseek p8）⇒ "第 7 是付费"已不成立。
         #   改为守原意图的两条：① 全池末位必须是唯一付费渠道 deepseek；
         #   ② 前 7 优先级内不得出现付费渠道（否则等于优先烧钱）。
-        by_prio = sorted([c for c in self.ch if isinstance(c[2], int)],
+        # ★471补齐：modelscope 被 426刀4 置 priority=99 + enabled=False（下架哨兵），
+        #   不是阶梯成员；不排除它会把「末位=付费」判成末位=modelscope。
+        by_prio = sorted([c for c in self.ch
+                          if isinstance(c[2], int) and c[2] < 90],
                          key=lambda c: c[2])
         self.assertEqual(by_prio[-1][0], "deepseek",
                          "收费官方 API 必须是全池末位（兜底）")

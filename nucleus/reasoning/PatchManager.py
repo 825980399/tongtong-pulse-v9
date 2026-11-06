@@ -1420,6 +1420,39 @@ class PatchManager:
         return bool(evo_cfg.get("allow_core_auto_apply", False))
 
     @staticmethod
+    def _m471_core_human_exempt(patch: dict) -> bool:
+        """★471刀1（裁决①·T-96b 一致性）：核心文件对「显式人工批准」开放落地豁免。
+
+        背景：本文件 `apply_all_pending` 的核心闸门原本不区分来源一律拦，而同一方法的
+        T-96b 契约写明「人工批准即为最高授权，不得被自动化开关反向否决」；
+        `_core_markers` 含 `organs/brain/`（T-135d）⇒ 人工批准的 brain 补丁也落不了地。
+
+        ★判据从严（fail-closed）：只认**正面证据** `approved_source == "human"`。
+        该字段由 `_approve_via`（本文件唯一 approved 写入口）在人工口写入；
+        `approve_patch_by_id` 也只在 `by` 以 `human:` 开头时才走 human 口。
+        ★刻意不收 legacy：`approved_source` 缺失的旧获批件无法证明来源，一律不放行
+        （否则 T-135d 的 `test_apply_now_landing_core_rejected` 会被这条豁免放行）。
+
+        开关 `ENABLE_M471_CORE_HUMAN_OVERRIDE` 关闭 ⇒ 恒 False（回到改造前行为）。
+        """
+        try:
+            import config as _c471
+            if not getattr(_c471, "ENABLE_M471_CORE_HUMAN_OVERRIDE", True):
+                return False
+        except Exception as _e471:
+            silent_exc(_e471,
+                       where="PatchManager::_m471_core_human_exempt 读配置失败(fail-closed)",
+                       level="debug")
+            return False
+        if not isinstance(patch, dict):
+            return False
+        if str(patch.get("status") or "") != "approved":
+            return False
+        if patch.get("auto_approved") or patch.get("auto_released"):
+            return False
+        return str(patch.get("approved_source") or "") == "human"
+
+    @staticmethod
     def _m80_gate_blocked(patch: dict, evo_cfg: dict | None = None) -> bool:
         """★T7(P0-3)：免签改写闸门——命中核心文件或总开关关闭 → 拦截(True)。
         与 status==verified 组合：verified 补丁一律禁止升 approved。
@@ -6231,7 +6264,21 @@ class PatchManager:
                 # ★主线第80批 T7 (P0-3)：落地前双判定——核心文件且核心红线开关未开，
                 #   即使已被标 approved 也拒绝自动应用（防御 legacy/旁路漏网）。
                 #   用 allow_core_auto_apply 专用红线（默认 False），而非总开关 auto_apply_enabled。
-                if PatchManager._m80_is_core_file(patch.get("file", "")) and not PatchManager._m80_allow_core_auto_apply():
+                # ★471刀1（裁决①）：先算人工豁免，再决定是否拦。
+                _m471_core = PatchManager._m80_is_core_file(patch.get("file", ""))
+                _m471_exempt = bool(
+                    _m471_core
+                    and not PatchManager._m80_allow_core_auto_apply()
+                    and PatchManager._m471_core_human_exempt(patch))
+                if _m471_exempt:
+                    _module_logger.info(
+                        "[471刀1] 核心文件人工批准豁免(落地): id=%s file=%s method=%s " 
+                        "approved_source=%s signer=%s",
+                        patch.get("id"), patch.get("file"), patch.get("method"),
+                        patch.get("approved_source"), patch.get("approved_signer"))
+                if (_m471_core
+                        and not PatchManager._m80_allow_core_auto_apply()
+                        and not _m471_exempt):
                     patch["applied"] = False
                     patch["apply_error"] = "核心文件免签改写闸门拦截(落地)"
                     results["failed"] += 1

@@ -1919,12 +1919,42 @@ CHANNEL_REQUEST_FIELD_POLICY = {
     "zhipu": {
         "drop": ["thinking", "reasoning_effort"],
     },
+    # ★471刀3（2026-11-06）：百炼两条新渠道的参数契约 —— 实测每次调用必 400，
+    #   原文见 logs/pulse.log 20:02:28-29（pid=52140）。
+    #   · qwen3.8-flash：`enable_thinking=false` 时 `reasoning_effort` 只接受 `none`
+    #     上游原文："'reasoning_effort' must be 'none' when 'enable_thinking' is false"
+    #     而适配器缺省写 `low` ⇒ 修复为关思考时改发 `none`。
+    "bailian-qwen38-flash": {
+        "reasoning_effort_when_off": "none",
+    },
+    #   · glm-5.3：`enable_thinking` 只接受 `true`
+    #     上游原文："The value of the enable_thinking parameter is restricted to True"
+    "bailian-glm53": {
+        "force_enable_thinking": True,
+    },
 }
 
 # ★主线第25批 T2/P2-162：渠道请求字段白名单总开关。
 #   True  = 按 CHANNEL_REQUEST_FIELD_POLICY 裁剪上游不支持的字段（修复 doubao 400）；
 #   False = 完全退回改造前行为（所有渠道都携带 thinking/reasoning_effort）。
 ENABLE_CHANNEL_FIELD_POLICY = True
+
+# ★471刀3：渠道参数契约（`force_enable_thinking` / `reasoning_effort_when_off`）灰度开关。
+#   True  = 按 CHANNEL_REQUEST_FIELD_POLICY 的新键改写参数（修复百炼两渠道 400）；
+#   False = 完全退回改造前行为（只认 drop / max_tokens_override，零回归）。
+#   读取点：organs/body/PulseLung.py::_apply_channel_field_policy
+ENABLE_M471_CHANNEL_PARAM_CONTRACT = True
+
+# ★471刀1（裁决①）：核心文件对「显式人工批准」开放落地豁免。
+#   背景：`apply_all_pending` 的核心闸门（PatchManager 约 L6233）不区分来源一律拦，
+#   而 `apply_all_pending` 的 T-96b 契约写明「人工批准即为最高授权，不得被自动化开关反向否决」；
+#   `_core_markers` 含 `organs/brain/`（T-135d）⇒ 连人工批准的 brain 补丁也落不了地。
+#   本开关只放行**显式人工签名**：`approved_source == "human"`（唯一人工口 _approve_via 写入）
+#   且无 `auto_approved` / `auto_released`。
+#   ★不收 legacy：`approved_source` 缺失的旧获批件一律 fail-closed（无法证明是人批的）。
+#   读取点：nucleus/reasoning/PatchManager.py::_m471_core_human_exempt
+#   False = 完全退回改造前行为（核心文件一律拦，人工批准也不例外）。
+ENABLE_M471_CORE_HUMAN_OVERRIDE = True
 
 # ★主线第58批 T2（P2-393延伸）：ark-seed 深度思考渠道优化。
 #   背景：ark-seed 系列为 Doubao-Seed 深度思考模型，默认开启 thinking，

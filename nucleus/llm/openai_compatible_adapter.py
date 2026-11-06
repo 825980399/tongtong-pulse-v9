@@ -47,7 +47,14 @@ class OpenAICompatibleAdapter(BaseLLMAdapter):
         elif "enable_thinking" in kwargs:
             _think = bool(kwargs.get("enable_thinking"))
             req["thinking"] = {"type": "enabled" if _think else "disabled"}
-            req["reasoning_effort"] = "high" if _think else "low"
+            # ★471刀3：允许调用方**显式**指定 reasoning_effort（渠道契约差异）。
+            #   百炼 qwen3.8-flash 在 enable_thinking=false 时只接受 "none"，
+            #   原实现无条件写 "low" ⇒ 每次调用必 400。
+            #   未显式指定时维持原推导（high/low），对既有渠道零影响。
+            _eff471 = kwargs.get("reasoning_effort")
+            if _eff471 is None:
+                _eff471 = "high" if _think else "low"
+            req["reasoning_effort"] = _eff471
         # 透传额外字段（如 top_p / stop / stream）
         for _k in ("top_p", "stop", "stream", "frequency_penalty", "presence_penalty"):
             if _k in kwargs:
