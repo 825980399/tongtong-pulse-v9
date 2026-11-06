@@ -87,6 +87,20 @@ ext_modules = [
         extra_compile_args=_extra_args,
         extra_link_args=_lto_link_args,
     ),
+    # ★free-threading移植补：topk_retrieve_cy（批量余弦+top-k一体化，向量检索热路径）
+    Extension(
+        "_topk_retrieve_cy",
+        sources=[os.path.join(_CURRENT_DIR, "..", "reasoning", "_topk_retrieve_cy.pyx")],
+        extra_compile_args=_extra_args,
+        extra_link_args=_lto_link_args,
+    ),
+    # ★free-threading移植补：inner_world_math_cy（PulseInnerWorld纯数值计算热路径）
+    Extension(
+        "_inner_world_math_cy",
+        sources=[os.path.join(_CURRENT_DIR, "..", "reasoning", "_inner_world_math_cy.pyx")],
+        extra_compile_args=_extra_args,
+        extra_link_args=_lto_link_args,
+    ),
 ]
 
 
@@ -134,3 +148,12 @@ if os.path.exists(_gpu_dir):
         _target = os.path.join(_gpu_dir, os.path.basename(_ext_file))
         shutil.move(_ext_file, _target)
         print(f"[setup_cython] 已移动: {os.path.basename(_ext_file)} → nucleus/gpu/")
+
+_reasoning_dir = os.path.join(_CURRENT_DIR, "..", "reasoning")
+if os.path.exists(_reasoning_dir):
+    for _mod_name in ["_topk_retrieve_cy", "_inner_world_math_cy"]:
+        _ext_files = glob.glob(os.path.join(_CURRENT_DIR, f"{_mod_name}*{_EXT}"))
+        for _ext_file in _ext_files:
+            _target = os.path.join(_reasoning_dir, os.path.basename(_ext_file))
+            shutil.move(_ext_file, _target)
+            print(f"[setup_cython] 已移动: {os.path.basename(_ext_file)} → nucleus/reasoning/")
