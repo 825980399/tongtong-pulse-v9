@@ -8389,3 +8389,15 @@ M467_UNFIXABLE_STREAK = 5
 #   为什么需要：`_compress_group` 已试 63 次仍未收敛 —— 继续烧不会变好，
 #     只会把 LLM 配额耗在同一种确定性失败上。人工确认问题不存在后可删除该台账重试。
 
+# ===== [M468-CFG] 468 批：进化闭环「最后一公里」三刀（全部默认开）=====
+# 刀1 复验前置门：没落地的补丁不做运行时复验。
+#   读取点：nucleus/reasoning/SafeEvolutionExecutor.py::_m468_reverify_applied_guard_on
+#   关掉 ⇒ 回到 468 前行为（凡 needs_runtime_verify 就复验，含未落地的补丁）。
+ENABLE_M468_REVERIFY_APPLIED_GUARD = True
+# 刀2 审批重投：每轮对滞留 pending 的补丁重投审批桥（日限额仍由 approval_bridge 把关）。
+#   读取点：SafeEvolutionExecutor.py::_m468_approval_retry_on
+ENABLE_M468_APPROVAL_RETRY = True
+# 刀3 生成侧标复核：`sandbox_incompatible=True` 若被两通道判为 idiom 放行，则不再转人工。
+#   读取点：nucleus/evolution/patch_execution_dispatch.py::_m468_recheck_flagged_on
+#   依赖 ENABLE_SANDBOX_PREFILTER_TWO_CHANNEL（两者同时为真才生效）。
+ENABLE_M468_SANDBOX_FLAG_RECHECK = True

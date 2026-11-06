@@ -22,8 +22,6 @@ from collections import deque
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import pytest
-
 import config
 from nucleus.const import LungEvent, MouthEvent
 from organs.brain.PulseCortex import PulseCortex

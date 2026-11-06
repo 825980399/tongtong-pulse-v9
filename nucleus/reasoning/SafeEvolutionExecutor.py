@@ -854,6 +854,78 @@ def _m447_try_approve(patch: dict, patch_manager, *, source: str = "repair") -> 
     return _out
 
 
+# ===== ★468批刀1：复验前置门 —— 没落地的补丁不做运行时复验 =====
+def _m468_reverify_applied_guard_on() -> bool:
+    """`ENABLE_M468_REVERIFY_APPLIED_GUARD`（缺省 True）。
+
+    关 ⇒ 回到 468 前行为（不看 applied，凡 needs_runtime_verify 就复验）。
+    """
+    try:
+        import config as _c468
+        return bool(getattr(_c468, "ENABLE_M468_REVERIFY_APPLIED_GUARD", True))
+    except Exception as _e468g:
+        silent_exc(_e468g,
+                   where="SafeEvolutionExecutor::_m468_reverify_applied_guard_on",
+                   level="debug")
+        return True
+
+
+def _m468_reverify_gate(patch: dict) -> tuple[bool, str]:
+    """★468刀1：该补丁现在**该不该**做运行时复验。
+
+    病因（T0 实测 2026-11-06）：`_llm_patch` 的 `fixed_at` / `baseline_errors` /
+    `needs_runtime_verify` 在「提交待审批」那一刻就打上（本文件 L2888-2896），
+    **不看审批是否通过、不看 apply 是否成功**。于是复验流程捡起一个**源码根本
+    没被改过**的方法去测效果：修复前后都是 0 错误 ⇒ baseline=0 ⇒ 不可判定 ⇒
+    延迟复验 ⇒ 再不可判定 …… 补丁永久悬挂，既不落地也不回滚。
+
+    实证（15:33:15）：`PulseHeart._schedule_next_beat` 的补丁 `applied=False`、
+    `apply_error=None`，而 `organs/body/PulseHeart.py:444-482` 里**根本没有**它
+    声称添加的 `_in_progress` 守卫（`git status` 干净，最后提交是 11-02 的 430 批）。
+    pending 里三条进了复验的补丁 applied **全为 False**，其中
+    `_m383_dump_tier_distribution` 甚至拿到了 `runtime_verified` 证书 ——
+    给没落地的补丁发验证通过证书，是状态机层面的失真。
+
+    Returns: ``(ok, why)`` —— ``ok=False`` 表示**不该复验**。
+    """
+    if not isinstance(patch, dict):
+        return True, ""
+    if not _m468_reverify_applied_guard_on():
+        return True, "guard_off"
+    if patch.get("applied") is True:
+        return True, ""
+    _err = str(patch.get("apply_error") or "").strip()
+    if _err:
+        return False, "apply_failed:%s" % _err[:80]
+    if patch.get("applied") is False:
+        return False, "not_applied"
+    # applied 字段缺失（老件）⇒ 不擅自改变行为，交回原流程
+    return True, "applied_unknown"
+
+
+def _m468_approval_retry_on() -> bool:
+    """`ENABLE_M468_APPROVAL_RETRY`（缺省 True）：每轮对滞留补丁重投审批桥。"""
+    try:
+        import config as _c468r
+        return bool(getattr(_c468r, "ENABLE_M468_APPROVAL_RETRY", True))
+    except Exception as _e468r:
+        silent_exc(_e468r, where="SafeEvolutionExecutor::_m468_approval_retry_on",
+                   level="debug")
+        return True
+
+
+#: ★468刀2：重投时**跳过**的状态（终态/已批/已落地的都不必再问）
+_M468_APPROVAL_RETRY_SKIP = frozenset({
+    "approved", "runtime_verified", "runtime_failed", "runtime_undecidable",
+    "expired_pending", "wont_fix", "rolled_back", "rejected", "superseded",
+    "verification_failed", "replaced", "give_up",
+})
+
+#: ★468刀2：每轮最多重投几条（避免一次把整队列打满，也控日限额下的日志量）
+_M468_APPROVAL_RETRY_MAX = 3
+
+
+
 class SafeEvolutionExecutor:
     """
     安全进化执行器。
@@ -3411,6 +3483,50 @@ class SafeEvolutionExecutor:
             _needs_reverify = 0
             _reverify_delay = 3600  # 延迟复验窗口（秒）：到点后重采基线
 
+            # ★468刀2：审批重投 —— 被日限额挡下的补丁不能永久滞留
+            #   病因（T0 实测 2026-11-06）：`_m447_try_approve` 只在「补丁刚生成」
+            #   那一刻调一次（L2899）。14:53:52 实测
+            #   `approved=False blocked=daily_cap（今日已批准 1 / 上限 1）`，
+            #   14:54:14 新一轮 `[343O3] 豁免298刀1` 入队后再无任何审批/应用日志
+            #   ⇒ 补丁安静地躺在 pending 里，既不 approved 也不 expired。
+            #   `maybe_approve_scoped` 本身幂等、日限额按**本地日**切窗
+            #   （`approved_today` 只数当天留痕），所以次日重投本该能过 ——
+            #   只是全仓再没有任何调用点去问它第二次。
+            try:
+                if _m468_approval_retry_on():
+                    _m468_retried = 0
+                    _m468_approved = 0
+                    _m468_capped = 0
+                    for _p468 in _pending:
+                        if not isinstance(_p468, dict):
+                            continue
+                        if _p468.get("applied") is True:
+                            continue
+                        if _p468.get("approved_at") or _p468.get("approved") is True:
+                            continue
+                        if str(_p468.get("status") or "") in _M468_APPROVAL_RETRY_SKIP:
+                            continue
+                        _r468 = _m447_try_approve(_p468, self._patch_manager,
+                                                  source="retry_468")
+                        _m468_retried += 1
+                        if _r468.get("approved"):
+                            _m468_approved += 1
+                        elif _r468.get("blocked") == "daily_cap":
+                            # 日限额是当天硬约束：再问也没用，直接停手
+                            _m468_capped += 1
+                            break
+                        if _m468_retried >= _M468_APPROVAL_RETRY_MAX:
+                            break
+                    if _m468_retried:
+                        _module_logger.info(
+                            "[468刀2] 审批重投: 尝试=%d 放行=%d 撞日限额=%s（每轮上限=%d）",
+                            _m468_retried, _m468_approved,
+                            "是" if _m468_capped else "否",
+                            _M468_APPROVAL_RETRY_MAX)
+            except Exception as _e468b:
+                silent_exc(_e468b, where="SafeEvolutionExecutor::468 审批重投",
+                           level="warning")
+
             # ★第114批 T-114b①：延迟复验前置——每轮开头对到点(>=reverify_after)的
             #   needs_reverify 补丁重采基线(重数修复后错误)，据实判定，避免 baseline=0
             #   的"不可判定"被永久折叠进 runtime_failed + 回滚。未到点者跳过，等下轮。
@@ -3420,6 +3536,18 @@ class SafeEvolutionExecutor:
                     continue
                 _ra = _patch.get("reverify_after", 0) or 0
                 if _ra and _now < _ra:
+                    continue
+                # ★468刀1：没落地的补丁不复验（病因见 _m468_reverify_gate 注释）
+                _m468_ok, _m468_why = _m468_reverify_gate(_patch)
+                if not _m468_ok:
+                    _patch["needs_runtime_verify"] = False
+                    _patch["m468_awaiting_apply"] = True
+                    _patch["m468_skip_reason"] = _m468_why
+                    _module_logger.info(
+                        "[468刀1] 跳过延迟复验（补丁未落地）: %s.%s why=%s applied=%s",
+                        os.path.basename(str(_patch.get("file", ""))),
+                        _patch.get("method", ""), _m468_why,
+                        _patch.get("applied"))
                     continue
                 _rfile = _patch.get("file", "")
                 _rmethod = _patch.get("method", "")
@@ -3548,6 +3676,18 @@ class SafeEvolutionExecutor:
                     continue  # 已验证过，跳过
                 if _patch.get("status") == "needs_reverify":
                     continue  # ★第114批 T-114b①：由延迟复验前置处理，避免重复判定
+                # ★468刀1：没落地的补丁不做运行时验证（病因见 _m468_reverify_gate）
+                _m468_ok, _m468_why = _m468_reverify_gate(_patch)
+                if not _m468_ok:
+                    _patch["needs_runtime_verify"] = False
+                    _patch["m468_awaiting_apply"] = True
+                    _patch["m468_skip_reason"] = _m468_why
+                    _module_logger.info(
+                        "[468刀1] 跳过运行时验证（补丁未落地）: %s.%s why=%s applied=%s",
+                        os.path.basename(str(_patch.get("file", ""))),
+                        _patch.get("method", ""), _m468_why,
+                        _patch.get("applied"))
+                    continue
                 _total += 1
 
                 _result = self.verify_fix_from_logs(_patch)

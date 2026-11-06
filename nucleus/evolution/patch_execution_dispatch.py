@@ -2017,6 +2017,28 @@ def _m365_prefilter_tier(scan: dict) -> tuple:
     return True, f"unknown:{_cls}"
 
 
+# ===== ★468批刀3：生成侧标复核（325 打的标与 365 两通道口径分裂）=====
+def _m468_recheck_flagged_on() -> bool:
+    """`ENABLE_M468_SANDBOX_FLAG_RECHECK`（缺省 True）。
+
+    关 ⇒ `is_sandbox_incompatible` 对 `sandbox_incompatible=True` 的补丁
+    直接返 True（468 前行为）。
+    """
+    try:
+        import config as _c468d
+        return bool(getattr(_c468d, "ENABLE_M468_SANDBOX_FLAG_RECHECK", True))
+    except Exception as _e468d:
+        silent_exc(_e468d,
+                   where="patch_execution_dispatch::_m468_recheck_flagged_on",
+                   level="warning")
+        return True
+
+
+#: 被刀3 放行的 tier 计数（供漏斗/自检读数）
+_M468_RECHECK_RELEASED: dict = {}
+
+
+
 def is_sandbox_incompatible(patch: dict) -> bool:
     """该补丁是否**结构性**无法通过沙箱（子串黑名单必拦）。
 
@@ -2025,6 +2047,31 @@ def is_sandbox_incompatible(patch: dict) -> bool:
     if not isinstance(patch, dict):
         return False
     if patch.get("sandbox_incompatible") is True:
+        # ★468刀3：生成侧 325刀1 用**原始 would_block** 打标
+        #   （`PatchManager.save_pending_patch` L3688），而 365刀A2 的两通道放行
+        #   只在「字段缺失、现算」那条路上生效 ⇒ 入队时打过标的补丁被这一行
+        #   短路，365 对 idiom 的放行**对它们完全失效**。
+        #   实证：`_schedule_next_beat` 的补丁 `danger_keyword_class='idiom'`、
+        #   `sandbox_blocked_keywords=['getattr(']`，却 `sandbox_incompatible=True`
+        #   ⇒ 派单侧一律转人工。而加「重入守卫」的天然写法就是
+        #   `getattr(self, "_in_progress", False)` —— 生成什么就挡什么。
+        if _m468_recheck_flagged_on() and _m365_two_channel_on():
+            try:
+                _scan468 = scan_dangerous_keywords(
+                    patch.get("modified_code") or patch.get("original_code") or "")
+                _pre468, _tier468 = _m365_prefilter_tier(_scan468)
+                if not _pre468:
+                    _M468_RECHECK_RELEASED[_tier468] = int(
+                        _M468_RECHECK_RELEASED.get(_tier468, 0)) + 1
+                    _module_logger.info(
+                        "[468刀3] 生成侧标已过期（两通道判 %s 放行）: patch=%s method=%s",
+                        _tier468, str(patch.get("id", ""))[:16],
+                        str(patch.get("method") or ""))
+                    return False
+            except Exception as _e468s:
+                silent_exc(_e468s,
+                           where="patch_execution_dispatch::468 生成侧标复核",
+                           level="warning")
         return True
     if patch.get("sandbox_incompatible") is False:
         return False
