@@ -1,0 +1,205 @@
+{
+  "batch": 468,
+  "date": "2026-11-06",
+  "repo": "D:/xinrenlei/tongtong-pulse-v9",
+  "branch": "master",
+  "pushed": false,
+  "commits": [
+    {"sha": "a4f24ea6", "scope": "刀1-3", "stat": "5 files +440 -2"},
+    {"sha": "cb7a9d80", "scope": "刀4", "stat": "3 files +114"},
+    {"sha": "f972f0dc", "scope": "刀5-6", "stat": "5 files +542 -16"}
+  ],
+  "live_process": {
+    "pid": 45988,
+    "started_at": "2026-11-06 15:32:29",
+    "note": "跑的是 468 前代码，六刀全部未生效，必须重启"
+  },
+  "knives": [
+    {
+      "id": "刀1",
+      "name": "复验前置门",
+      "file": "nucleus/reasoning/SafeEvolutionExecutor.py",
+      "switch": "ENABLE_M468_REVERIFY_APPLIED_GUARD",
+      "default": true,
+      "entry": "_m468_reverify_gate(patch) -> (ok, why)",
+      "evidence": {
+        "patch": "patch_llm_1793948040_7ea6",
+        "applied": false,
+        "apply_error": null,
+        "target": "organs/body/PulseHeart.py:444-482 无 _in_progress 守卫，git status 干净",
+        "contradiction": " _m383_dump_tier_distribution 拿到 runtime_verified 证书，而源码未被改过"
+      },
+      "wiring": ["延迟复验前置", "批量运行时验证"],
+      "log_marker": "[468刀1] 跳过延迟复验（补丁未落地） / [468刀1] 跳过运行时验证（补丁未落地）"
+    },
+    {
+      "id": "刀2",
+      "name": "审批重投",
+      "file": "nucleus/reasoning/SafeEvolutionExecutor.py",
+      "switch": "ENABLE_M468_APPROVAL_RETRY",
+      "default": true,
+      "entry": "verify_submitted_patches() 开头重投循环",
+      "constants": {"_M468_APPROVAL_RETRY_SKIP": 13, "_M468_APPROVAL_RETRY_MAX": 3},
+      "evidence": {
+        "ts": "2026-11-06 14:53:52",
+        "log": "approved=False blocked=daily_cap（今日已批准 1 / 上限 1）",
+        "after": "14:54:14 后再无任何审批/应用日志"
+      },
+      "log_marker": "[468刀2] 审批重投: 尝试=%d 放行=%d 撞日限额=%s"
+    },
+    {
+      "id": "刀3",
+      "name": "生成侧标复核",
+      "file": "nucleus/evolution/patch_execution_dispatch.py",
+      "switch": "ENABLE_M468_SANDBOX_FLAG_RECHECK",
+      "default": true,
+      "depends_on": "ENABLE_SANDBOX_PREFILTER_TWO_CHANNEL",
+      "entry": "is_sandbox_incompatible() 的 sandbox_incompatible is True 分支",
+      "evidence": {
+        "patch_target": "PulseHeart._schedule_next_beat",
+        "danger_keyword_class": "idiom",
+        "sandbox_blocked_keywords": ["getattr("],
+        "sandbox_incompatible": true,
+        "result": "两通道本应放行，却被生成侧旧标短路 ⇒ 一律转人工"
+      },
+      "log_marker": "[468刀3] 生成侧标已过期（两通道判 %s 放行）"
+    },
+    {
+      "id": "刀4",
+      "name": "器官文件兜底",
+      "file": "nucleus/reasoning/SafeEvolutionExecutor.py",
+      "switch": "ENABLE_M468_ORGAN_FILE_FALLBACK",
+      "default": true,
+      "entry": "scan_all_organs() 取 file_path 之后追加 resolve_organ_file 兜底",
+      "evidence": {
+        "root_cause": "scan_all_organs() 接 T3 自适应降频(organ_scan 300s)，第二次起返回 {}",
+        "probe": "同一 SelfInspector 实例连调 4 次：66 → 0 → 0 → 0",
+        "symptom": "全量 pulse.log 里 [467刀1] 标记 0 次 —— 467 批从未生效"
+      },
+      "measurements": [
+        {"method": "PulseLiver._compress_group", "before": 12514, "after": 12903, "unit": "字", "note": "兜底前无 def，兜底后含 def"},
+        {"method": "PulseHeart._m374_schedule_ahead", "before": 462, "after": 953, "unit": "字"},
+        {"method": "PulseHeart._schedule_next_beat", "before": 850, "after": 1618, "unit": "字"}
+      ]
+    },
+    {
+      "id": "刀5",
+      "name": "pending 假读数",
+      "file": "main.py",
+      "switch": null,
+      "note": "纯读数修复，无开关，不改任何行为",
+      "entry": "_m422_count_approved_pending() + _M422_DONE_STATUS",
+      "evidence": {
+        "contradiction": [
+          "[422刀3][周期apply] approved=0 ⇒ 本轮不应用：pending=0 approved=0",
+          "[442刀2][补丁链降级] apply=0 但 pending=9（队列=9）"
+        ],
+        "root_cause": "返回字典只有 approved/dead/live，缺 pending 键 ⇒ _cnt.get('pending',0) 恒为 0",
+        "collateral": "440刀3 的日志分级 warning if _pend_n>0 else debug 永久走 DEBUG，真卡住也不告警"
+      },
+      "verification": {
+        "queue_file": "data/patches/pending_patches.json",
+        "queue_total": 9,
+        "status_dist": {"expired_pending": 2, "runtime_undecidable": 1, "runtime_verified": 1, "needs_reverify": 1, "verified": 4},
+        "pending_before": 0,
+        "pending_after": 5,
+        "baseline_source": "按 status 手工分桶（另一入口，避免循环论证）"
+      }
+    },
+    {
+      "id": "刀6",
+      "name": "审批额度结算",
+      "files": ["nucleus/evolution/approval_bridge.py", "nucleus/reasoning/SafeEvolutionExecutor.py", "config.py"],
+      "switch": "ENABLE_M468_APPROVAL_REFUND",
+      "default": true,
+      "entry": "_m468_settle_approval_refund(pending, history, root, now)",
+      "new_api": [
+        "approval_bridge._read_today_rows(root, now)",
+        "approval_bridge._pid_of(row)",
+        "approval_bridge.approved_today_ids(root, now)",
+        "approval_bridge.refunded_today_ids(root, now)",
+        "approval_bridge.note_approval_refund(patch, reason, root, now)"
+      ],
+      "ordering_constraint": "_m468_settle_approval_refund 必须排在 [468刀2] 重投之前",
+      "evidence": {
+        "trace_file": "data/patches/approval_trace.jsonl",
+        "today_total": 16,
+        "today_approved_true": 1,
+        "only_approved": {
+          "ts": "2026-11-06 14:11:21",
+          "patch_id": "patch_llm_1793945467_7587"
+        },
+        "that_patch_outcome": {
+          "status": "approved",
+          "applied": false,
+          "problem_fixed": false,
+          "apply_error": "副本验证失败: ['基础缩进不一致（未替换）: original=8 modified=0'"
+        },
+        "blocked_after": {
+          "daily_cap": 13,
+          "scope": 2
+        },
+        "cap_source": "config.py M447_APPROVE_DAILY_CAP = 1",
+        "consequence": "14:11→17:00 近三小时零落地；pending 堆到 11 条、approved 恒 0"
+      },
+      "settle_rules": [
+        "patch_id 今天确实被放行过（留痕 approved=True）",
+        "今天还没退过（幂等，按 patch_id 去重）",
+        "applied is not True（真落地了不退）",
+        "apply_error 非空（还没尝试过落地的件不退，给它机会）"
+      ],
+      "verification": {
+        "synthetic": "放行1+挡下1 ⇒ approved_today 1→0；二次结算 refunded=0；重复退款行×3 只扣1次",
+        "negative_cases": "已落地/未尝试/未放行/无id/脏行 ⇒ 全不退",
+        "real_replay": {
+          "source": "data/patches/patch_history.json (88 条) + 真实留痕今日段",
+          "scanned": 88,
+          "refunded": 1,
+          "approved_today": "1 → 0",
+          "quota_released": 1
+        },
+        "production_write": "探针未写入生产留痕（字节变化来自活体 16:27:57 正常写入）"
+      }
+    }
+  ],
+  "gates": {
+    "new_tests": "54 passed (34 原有 + 20 新增 G/H 组)",
+    "regression": {"slice1_m447_m439": 35, "slice2_m422k3_m440k3": 21, "slice3_m444k45_m440k1k2": 23},
+    "ruff_delta_vs_head": 0,
+    "ruff_select_F_all": "All checks passed",
+    "precommit_13": "PASS",
+    "layer_health": "6 PASS / 1 FAIL (L5 快照 153s 未刷新，不阻断，活体抖动)",
+    "modified_existing_assertion": {
+      "test": "tests/test_m468_evolution_loop_fixes.py::TestE_ConfigRegistration::test_44_only_appended_at_tail",
+      "old": "_i > len(_s) - 1200",
+      "new": "_i > len(_s) // 2",
+      "why": "本批追加 413 字符后实测距离 1316，顶破硬阈值；按'钉精确值必被新内容顶红'改判",
+      "rollback_point": "用例 docstring 已注明"
+    }
+  },
+  "workspace_isolation": {
+    "file": "config.py",
+    "foreign_change": "REMOTE_API_CHANNELS bailian 2→7（标注 466批 小林裁决），用户与星轨操作",
+    "committed": "只提交 HEAD + 本批 9 行追加",
+    "backup": ".bak_batch468k5/config_worktree_with_466_channels.py",
+    "restored": true,
+    "current_diff": "仅渠道扩容 79 行，等待作者自行提交",
+    "note": "重启读文件系统而非 git，渠道扩容即便未提交也照样生效"
+  },
+  "restart_judges": [
+    {"#": 1, "marker": "[422刀3] pending=", "expect": "5（而非 0），分级恢复 WARNING"},
+    {"#": 2, "marker": "[468刀6] 审批额度退款", "expect": "首轮 退=1，随后 approved_today 归 0"},
+    {"#": 3, "marker": "[468刀2] 审批重投", "expect": "真正放行 1 条"},
+    {"#": 4, "marker": "[467刀1] 喂料补全", "expect": "首次出现"},
+    {"#": 5, "marker": "[468刀1] 跳过…（补丁未落地）", "expect": "拦下 applied=False 的补丁"},
+    {"#": 6, "marker": "[468刀3] 生成侧标已过期", "expect": "getattr 类 idiom 补丁不再转人工"}
+  ],
+  "open_items": [
+    "[LLM门禁] 占位无时效，今日锁 3 处（刀6 生效后随额度释放逐步解开）",
+    "[284刀5] 作废后仍报'提交待审批'属日志措辞误导，行为正确",
+    "scan_all_organs() 降频返 {} 改变所有调用方返回值语义，刀4 只兜底了 467 一处",
+    "代码审查器扫 tests/ 但修复通道不支持（过滤器已跳过，仅 WARNING 偏吵）",
+    "test_m92_patch_guards.py::TestT92gEndToEnd::test_G5 存量红（A/B 已证与本批无关）",
+    "L5 七层自检 FAIL：health_snapshot 153s 未更新 > 90s，活体抖动待观察"
+  ]
+}
