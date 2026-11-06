@@ -72,13 +72,23 @@ def _m465_fail_kind(err_text: str) -> str:
         ⇒ `rate_limited`：换个渠道立刻就能成；
       · 阿里云 403 → `HTTP 403: {... "code":"AllocationQuota.FreeTierOnly"}`
         ⇒ `quota`：免费额度耗尽，同样值得换渠道（换到有额度的那个）；
+      · 硅基流动 402 → `HTTP 402: {"code":30001,"message":"Sorry, your
+        account balance is insufficient"}`（466 T0 线上实测 14:15:29）
+        ⇒ 同样是 `quota`：**账户余额不足与额度耗尽等价**，都必须换道；
+        465 只认 429/403，把 402 判成 `error` 当场停机，
+        而实测活渠道 `zhipu(glm-4-flash)` 排在第 4 位 ⇒ 永远到不了；
       · 其余（超时 / 解析失败 / 5xx）⇒ `error`：**不换道**，
         因为换成另一个慢渠道只会把本轮耗时成倍拉长。
     """
     _t = str(err_text or "")
     if "HTTP 429" in _t or "1305" in _t:
         return "rate_limited"
-    if "HTTP 403" in _t or "FreeTierOnly" in _t:
+    # ★466刀1：402 余额不足 / 额度耗尽 / 配额不足，与 403 同等对待。
+    #   判据来自线上正文，不猜：`HTTP 402: {"code":30001,"message":
+    #   "...balance is insufficient"}`。
+    if ("HTTP 403" in _t or "FreeTierOnly" in _t or "HTTP 402" in _t
+            or "insufficient" in _t.lower() or "余额不足" in _t
+            or "额度不足" in _t or "配额不足" in _t):
         return "quota"
     return "error"
 

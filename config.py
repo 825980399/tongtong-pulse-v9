@@ -8357,5 +8357,5 @@ ENABLE_M465_LLM_CHANNEL_FAILOVER = True
 #     ⇒ 只换一次必然掉在另一个死渠道上，仍然 0 补丁。
 #   死渠道每次只花 0.3s，只有真正活的渠道才耗时，所以按次换是划算的。
 #   ★只在「限流 / 额度耗尽」上继续换；超时 / 解析失败立刻停。
-M465_LLM_FAILOVER_MAX_ATTEMPTS = 3
+M465_LLM_FAILOVER_MAX_ATTEMPTS = 4
 

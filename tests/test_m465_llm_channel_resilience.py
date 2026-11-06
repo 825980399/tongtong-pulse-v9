@@ -137,6 +137,11 @@ def test_http_error_with_empty_body_uses_reason(monkeypatch):
     ('HTTP 400: {"error":{"code":"1305"}}', "rate_limited"),
     (f"HTTP 403: {BODY_403}", "quota"),
     ("HTTP 403: Forbidden", "quota"),
+    # ★466刀1：402 余额不足与额度耗尽等价（正文来自线上 14:15:29 实测）
+    ('HTTP 402: {"code":30001,"message":"Sorry, your account balance is insufficient",'
+     '"data":null}', "quota"),
+    ("HTTP 402: Payment Required", "quota"),
+    ('HTTP 400: {"message":"账户余额不足"}', "quota"),
     ("请求失败: <urlopen error timed out>", "error"),
     ("响应解析失败: Expecting value", "error"),
     ("HTTP 500: internal", "error"),
@@ -242,6 +247,58 @@ def test_failover_walks_past_dead_channel(monkeypatch):
     assert out == "PATCH-P3"
     assert rec == [("bailian-qwen-plus", False), ("zhipu", True)]
     assert asked == [["zhipu-47-flash"], ["zhipu-47-flash", "bailian-qwen-plus"]]
+
+
+def test_failover_reaches_live_channel_behind_402(monkeypatch):
+    """★466刀1：线上真实序列重放 —— 429 → 403 → **402** → 活渠道。
+
+    14:15:29 实测渠道池次序：p1 zhipu-47-flash(429 1302) →
+    p2 bailian-qwen-plus(403 FreeTierOnly) → p3 siliconflow(402 balance
+    insufficient) → p4 zhipu(glm-4-flash，14:15:45 成功 805 字)。
+    465 只认 429/403 ⇒ 402 被判 error ⇒ 在第 3 个死渠道处停机，
+    永远到不了第 4 位的活渠道。本用例把这条链整段重放。
+    """
+    monkeypatch.setattr(config, "M465_LLM_FAILOVER_MAX_ATTEMPTS", 4, raising=False)
+    obj = _mk()
+    seq = [
+        {"name": "bailian-qwen-plus", "api_url": "https://d/plus",
+         "api_key": "k2", "model": "qwen-plus"},
+        {"name": "siliconflow-qwen2-7b", "api_url": "https://s/glm",
+         "api_key": "k3", "model": "zai-org/GLM-5.3-Flash"},
+        {"name": "zhipu", "api_url": "https://z/glm", "api_key": "k4", "model": "glm-4-flash"},
+    ]
+    rec, order = [], []
+
+    def _sel(exclude=""):
+        for c in seq:
+            if c["name"] not in _as_list(exclude):
+                return c
+        return None
+
+    def _call(url, key, prompt, mf, scene, model):
+        order.append(model)
+        if url.endswith("/plus"):
+            obj._m465_last_fail = SEE._m465_fail_kind(
+                'HTTP 403: {"error":{"code":"AllocationQuota.FreeTierOnly"}}')
+            return None
+        if url.endswith("/s/glm"):
+            obj._m465_last_fail = SEE._m465_fail_kind(
+                'HTTP 402: {"code":30001,"message":"Sorry, your account balance is insufficient"}')
+            return None
+        obj._m465_last_fail = ""
+        return "PATCH-LIVE"
+
+    monkeypatch.setattr(obj, "_m96_select_channel", _sel)
+    monkeypatch.setattr(obj, "_call_llm_with_followup", _call)
+    monkeypatch.setattr(obj, "_m96_record_channel_result",
+                        lambda n, s, lat=0.0: rec.append((n, s)))
+    out = obj._m465_failover_retry("p", 0, None, "zhipu-47-flash")
+    assert out == "PATCH-LIVE", "402 若不归为 quota，会在第 3 个死渠道处停机"
+    assert order == ["qwen-plus", "zai-org/GLM-5.3-Flash", "glm-4-flash"]
+    assert rec == [("bailian-qwen-plus", False),
+                   ("siliconflow-qwen2-7b", False),
+                   ("zhipu", True)]
+    assert obj._m44_last_channel == "zhipu"
 
 
 def test_failover_stops_on_non_retryable(monkeypatch):
