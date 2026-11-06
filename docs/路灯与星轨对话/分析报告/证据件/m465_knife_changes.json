@@ -1,0 +1,127 @@
+{
+  "batch": 465,
+  "title": "LLM 修复通道：可观测 + 同轮熔断 + 有界换道",
+  "date": "2026-11-06",
+  "root_cause": {
+    "one_line": "submitted=0 不是准入问题，是渠道问题：p1 渠道整点 429（正文被丢弃看不见）、p2 渠道免费额度耗尽 403、而健康度回写函数只有定义没有调用点 ⇒ 熔断永不开启 ⇒ 每轮重选同一个坏渠道。",
+    "chain": [
+      "① safe_http_json 里 HTTPError 是 URLError 子类，被宽分支接走 ⇒ 响应体丢失 ⇒ 日志只有 data_type=str",
+      "② 探针实测 zhipu-47-flash 连发 6 次里 4 次 HTTP 429（code=1305「该模型当前访问量过大」），耗时 0.30~0.54s",
+      "③ 日志里 13:06:07~10 的 9 次「秒失败」时间戳与此逐字吻合（0.3s 级）",
+      "④ 同刻 bailian-qwen-plus 是 HTTP 403 AllocationQuota.FreeTierOnly（免费额度耗尽，0.32s 秒回）",
+      "⑤ _m96_record_channel_result() 只有 def、零调用点 ⇒ ChannelHealthTracker 从未被喂数据 ⇒ is_available() 恒 True",
+      "⑥ 于是每轮都从 priority=1 重新选中同一个渠道，180s 超时 / 0.3s 429 交替出现，submitted 恒 0"
+    ]
+  },
+  "probes": {
+    "channel_single": {
+      "zhipu-47-flash": {
+        "http_status": 200,
+        "elapsed_s": 38.7,
+        "finish_reason": "length",
+        "content_len": 0,
+        "reasoning_len": 130,
+        "completion_tokens": 64,
+        "reasoning_tokens": 64,
+        "verdict": "EMPTY_CONTENT",
+        "note": "推理模型，64 token 全花在 reason 上；1.65 tok/s 量级"
+      },
+      "bailian-qwen-plus": {
+        "http_status": 403,
+        "elapsed_s": 0.32,
+        "body": "{\"error\":{\"message\":\"Free quota exhausted...\",\"code\":\"AllocationQuota.FreeTierOnly\"}}",
+        "verdict": "QUOTA_EXHAUSTED"
+      }
+    },
+    "thinking_ab": {
+      "baseline_no_thinking_param": {
+        "elapsed_s": 77.2, "content_len": 601, "reasoning_len": 3700,
+        "completion_tokens": 1739, "reasoning_tokens": 1482, "finish_reason": "stop"
+      },
+      "thinking_disabled": {
+        "elapsed_s": 149.69, "content_len": 639, "reasoning_len": 0,
+        "completion_tokens": 277, "reasoning_tokens": 0, "finish_reason": "stop"
+      },
+      "conclusion": "thinking.disabled 被服务端接受（reasoning_tokens=0，token 省 6 倍），但单次耗时方差极大（77~150s），本轮不做默认切换，留 466 评估"
+    },
+    "burst_6x": {
+      "sequence": ["200/49.45s", "429/0.32s", "429/0.30s", "429/0.30s", "200/43.55s", "429/0.54s"],
+      "success": "2/6",
+      "429_body": "{\"error\":{\"code\":\"1305\",\"message\":\"该模型当前访问量过大，请您稍后再试\"}}",
+      "conclusion": "429 的耗时（0.30~0.54s）与生产日志 9 次秒失败完全同量级，假设成立"
+    },
+    "safe_http_json_live_after_fix": {
+      "call_index": 1,
+      "ok": false,
+      "elapsed_s": 0.61,
+      "returned": "HTTP 429: {\"error\":{\"code\":\"1305\",\"message\":\"该模型当前访问量过大，请您稍后再试\"}}",
+      "conclusion": "刀1 在**生产函数**上生效：改前只会是「请求失败: HTTP Error 429: ...」，正文彻底丢失"
+    },
+    "health_loop": {
+      "picked_sequence": ["zhipu-47-flash", "bailian-qwen-plus", "siliconflow-qwen2-7b", "zhipu", "bailian-qwen-max", "deepseek", null],
+      "method": "对每个渠道记 3 次失败（= 默认 circuit_break_threshold）后重选",
+      "conclusion": "回写接线 + 熔断 + 选择器跳过 三者串起来可用"
+    }
+  },
+  "knives": {
+    "刀1_http_error_body": {
+      "file": "nucleus/ssrf_guard.py",
+      "switch": "ENABLE_M465_HTTP_ERROR_BODY",
+      "what": "新增 except urllib.error.HTTPError 分支（置于 URLError 之前），读出响应体、压平空白、截断 400 字，返回 `HTTP <code>: <body>`",
+      "why": "HTTPError 是 URLError 子类，旧宽分支把正文丢了 —— 判据被自己扔掉",
+      "rollback": "开关置 False ⇒ 逐字退回 `请求失败: <e>`"
+    },
+    "刀2_fail_kind": {
+      "file": "nucleus/reasoning/SafeEvolutionExecutor.py",
+      "what": "失败日志补 `失败类=%s 正文=%s`；新增模块级纯函数 _m465_fail_kind() 把正文分成 rate_limited / quota / error",
+      "why": "58 次失败里没有一条能看出是 429 还是 403"
+    },
+    "刀3_same_round_break": {
+      "file": "nucleus/reasoning/SafeEvolutionExecutor.py",
+      "switch": "ENABLE_M465_LLM_SAME_ROUND_BREAK / M465_LLM_FAIL_STREAK_BREAK(3)",
+      "what": "同轮内连续失败达阈值后，_call_llm_for_repair 直接返回 None（log 一次 WARNING）",
+      "why": "13:06 一轮连打 9 次、每次 0.3s 秒失败，空烧配额且无早停"
+    },
+    "刀4a_health_record": {
+      "file": "nucleus/reasoning/SafeEvolutionExecutor.py",
+      "what": "在 _call_llm_for_repair 里真正调用 _m96_record_channel_result(name, ok)",
+      "why": "该函数此前只有定义、**零调用点** ⇒ 熔断永不开启 ⇒ 每轮重选坏渠道"
+    },
+    "刀4b_bounded_failover": {
+      "file": "nucleus/reasoning/SafeEvolutionExecutor.py",
+      "switch": "ENABLE_M465_LLM_CHANNEL_FAILOVER / M465_LLM_FAILOVER_MAX_ATTEMPTS(3)",
+      "what": "_m465_failover_retry：限流/额度耗尽时按 exclude 名单换道，最多 N 个渠道；超时/解析失败立即停",
+      "why": "只换一次必掉在 p2（403 额度耗尽）上，仍然 0 补丁；死渠道每次只花 0.3s"
+    },
+    "刀4c_select_exclude": {
+      "file": "nucleus/reasoning/SafeEvolutionExecutor.py",
+      "what": "_m96_select_channel(exclude=...) 支持单个名字或名单；默认空 ⇒ 既有行为逐字不变"
+    }
+  },
+  "pre_existing_red": {
+    "test": "tests/test_llm_repair_path_m86.py::test_02_empty_content_from_reasoning_model_is_logged",
+    "ab_proof": "git checkout -- nucleus/reasoning/SafeEvolutionExecutor.py 后在 HEAD 上同样 FAILED，故非 465 引入",
+    "cause": "451刀4 把「同类失败连续 3 次才 WARNING」做成全局去重，用例断言首次即 WARNING",
+    "fix": "setUp 里把 M451_LLM_REPAIR_STREAK_THRESHOLD 钉成 1（只钉前提，断言一字未放松）"
+  },
+  "live_state_at_delivery": {
+    "pid": 33400,
+    "started_at": "2026-11-06 12:38:01",
+    "predates_465_commits": true,
+    "latest_funnel": {
+      "at_str": "2026-11-06 13:42:03",
+      "candidate": 12, "admitted": 11, "planned": 11, "processed": 11,
+      "submitted": 0, "cool_skipped_by_policy": 11
+    },
+    "llm_failures_today_by_hour": {
+      "02": 1, "03": 6, "05": 5, "06": 8, "07": 5, "08": 4, "09": 2, "12": 2, "13": 21,
+      "total": 54
+    }
+  },
+  "followups_for_466": [
+    "bailian-qwen-plus 的 ChannelQuotaMonitor 读数「剩余 16.9%」与真实 403 额度耗尽不一致 ⇒ 额度台面需要以失败回执校准",
+    "glm-4.7-flash 支持 thinking.type=disabled（reasoning_tokens=0，token 省 6 倍），但耗时方差 77~150s，需评估是否给修复场景默认关思考",
+    "进化链走 get_active_channels() 的裸 priority，绕过了主对话的 418 质量均衡器（该均衡器已把 zhipu-47-flash 排到最后）",
+    "仍有 submitted>0 未验证：465 只保证「换到能用的渠道」，是否能出补丁要等重启后看漏斗"
+  ]
+}
