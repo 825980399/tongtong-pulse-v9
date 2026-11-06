@@ -64,6 +64,25 @@ def _m451_llm_repair_should_warn(key: str) -> tuple:
         return True, 1
 
 
+def _m465_fail_kind(err_text: str) -> str:
+    """★465刀2：把失败正文归类（决定要不要换道、换道要不要继续）。
+
+    判据来自 465 探针实测的两条真实响应：
+      · 智谱 429 → `HTTP 429: {"error":{"code":"1305","message":"该模型当前访问量过大"}}`
+        ⇒ `rate_limited`：换个渠道立刻就能成；
+      · 阿里云 403 → `HTTP 403: {... "code":"AllocationQuota.FreeTierOnly"}`
+        ⇒ `quota`：免费额度耗尽，同样值得换渠道（换到有额度的那个）；
+      · 其余（超时 / 解析失败 / 5xx）⇒ `error`：**不换道**，
+        因为换成另一个慢渠道只会把本轮耗时成倍拉长。
+    """
+    _t = str(err_text or "")
+    if "HTTP 429" in _t or "1305" in _t:
+        return "rate_limited"
+    if "HTTP 403" in _t or "FreeTierOnly" in _t:
+        return "quota"
+    return "error"
+
+
 
 
 #: ★445刀2：连续 no_def 作废后追加到 prompt 末尾的**硬性要求**。
@@ -1618,6 +1637,9 @@ class SafeEvolutionExecutor:
             with api_rate_limited(enabled=get_llm_call_config().get("enable_rate_limit", True)):
                 _ok, _data = safe_http_json(api_url, method='POST', data=_bytes, headers=_headers, timeout=_timeout)
             if _ok and isinstance(_data, dict):
+                # ★465刀3：成功即清零本轮失败连击（熔断随之解除）
+                self._m465_fail_streak = 0
+                self._m465_break_logged = False
                 # ★第94批 T-94b：暂存 usage 供 `trace_evolution_call` 装饰器留存。
                 #   （本方法被装饰，装饰器在 finally 读 `_last_llm_usage`；
                 #    多次追问时取**最后一次**调用的用量，属可接受的近似。）
@@ -1649,12 +1671,21 @@ class SafeEvolutionExecutor:
                             _m451_n)
                     return _content
             # ★451刀4：连续 3 次才 WARNING（实测 16 条里 6 条挤在 4 秒内）
+            # ★465刀2：把**错误正文**打出来。此前只打 `data_type=str`，
+            #   今日 58 次失败里没有一条能看出是 429 还是 403 —— 判据被自己丢掉了。
+            #   实测（465 探针）：正文形如 `HTTP 429: {"error":{"code":"1305",...}}`。
+            _m465_err = " ".join(str(_data).split())[:300]
+            _m465_kind = _m465_fail_kind(_m465_err)
+            self._m465_last_fail = _m465_kind
+            # ★465刀3：连击计数按**实例**累计；执行器每轮新建实例 ⇒ 天然按轮隔离。
+            self._m465_fail_streak = int(getattr(self, "_m465_fail_streak", 0)) + 1
             _m451_emit2, _m451_n2 = _m451_llm_repair_should_warn("no_result")
             _m451_log2 = (_module_logger.warning if _m451_emit2
                           else _module_logger.debug)
             _m451_log2(
-                "[LLM修复] 调用未返回可用结果（HTTP ok=%s, data_type=%s，连续第 %d 次）",
-                _ok, type(_data).__name__, _m451_n2)
+                "[LLM修复] 调用未返回可用结果（HTTP ok=%s, data_type=%s, 失败类=%s, "
+                "正文=%s，连续第 %d 次）",
+                _ok, type(_data).__name__, _m465_kind, _m465_err, _m451_n2)
             return None
 
         # 第一轮
@@ -1738,10 +1769,13 @@ class SafeEvolutionExecutor:
     _M96_HEALTH = None
     _M96_HEALTH_LOCK = __import__("threading").Lock()
 
-    def _m96_select_channel(self):
+    def _m96_select_channel(self, exclude=""):
         """★第96批 T-96a：从渠道池按优先级选一个可用渠道。
 
         返回渠道 dict（含 name/model/api_url/api_key）；无可用 → None。
+        ★465刀4b：新增 ``exclude``（可为渠道名或名单，默认空 ⇒ 既有行为
+          逐字不变）——换道时用它跳过「本轮已经试过的那几个」，否则会原地
+          重试同一个渠道。
         ★判据与 PulseLung 的生产选择器**同源**：
           ① `config.get_active_channels()`（已按 priority 升序过滤 enabled）；
           ② `ChannelQuotaMonitor.apply_to_channels()`（额度降级/暂停策略）；
@@ -1749,12 +1783,18 @@ class SafeEvolutionExecutor:
         ★优先复用**注入的肺实例**的选择器（`_select_default_channel`），
           保证与主对话通道选择结果一致；无注入时用本实现（等价判据）。
         """
+        # ★465刀4b：exclude 归一成集合（允许传单个名字，也允许传名单）
+        if isinstance(exclude, str):
+            _ex = {exclude} if exclude else set()
+        else:
+            _ex = {str(_x) for _x in (exclude or ()) if _x}
         _lung = SafeEvolutionExecutor._M96_LUNG
         if _lung is not None:
             try:
                 _ch = _lung._select_default_channel()
                 if isinstance(_ch, dict) and _ch.get("api_url") and _ch.get("model"):
-                    return _ch
+                    if str(_ch.get("name") or "") not in _ex:
+                        return _ch
             except Exception as _e96a:
                 _module_logger.debug(
                     "[进化渠道] 复用肺实例选择器失败，转本地实现: %s: %s",
@@ -1784,6 +1824,9 @@ class SafeEvolutionExecutor:
                 continue
             _name = _ch.get("name") or "?"
             if not (_ch.get("api_url") and _ch.get("model")):
+                continue
+            if _name in _ex:
+                _module_logger.debug("[465刀4] %s 本轮已试过，换道时跳过", _name)
                 continue
             if _h is not None:
                 try:
@@ -1835,12 +1878,101 @@ class SafeEvolutionExecutor:
             _module_logger.debug(
                 "[进化渠道] 健康度回写失败: %s: %s", type(_e96r).__name__, _e96r)
 
+    # ===== ★465 批：LLM 修复通道韧性（同轮熔断 / 限流换道） =====
+
+    def _m465_circuit_open(self) -> bool:
+        """★465刀3：本轮 LLM 通道是否已熔断（连续失败达阈值）。"""
+        try:
+            import config as _c465
+            if not bool(getattr(_c465, "ENABLE_M465_LLM_SAME_ROUND_BREAK", True)):
+                return False
+            _lim = int(getattr(_c465, "M465_LLM_FAIL_STREAK_BREAK", 3))
+        except Exception as _e465c:
+            silent_exc(_e465c, where="SafeEvolutionExecutor::465熔断阈值", level="debug")
+            return False
+        _lim = max(1, _lim)
+        _streak = int(getattr(self, "_m465_fail_streak", 0))
+        if _streak < _lim:
+            return False
+        if not getattr(self, "_m465_break_logged", False):
+            self._m465_break_logged = True
+            _module_logger.warning(
+                "[465刀3] 本轮 LLM 修复通道连续失败 %d 次（阈值 %d），已熔断："
+                "本轮剩余问题不再调用 LLM，避免继续空烧配额",
+                _streak, _lim)
+        return True
+
+    def _m465_failover_retry(self, prompt: str, max_followups: int,
+                             scene, tried_name: str) -> str | None:
+        """★465刀4b：限流 / 额度耗尽时**有界换道**（最多 N 个渠道，不递归）。
+
+        ★为什么不是「只换一次」：实测渠道池按 priority 的排列是
+          p1 zhipu-47-flash（当前 429）→ p2 bailian-qwen-plus（403
+          `AllocationQuota.FreeTierOnly`，免费额度已耗尽）⇒ 只换一次必然
+          掉在另一个死渠道上，仍然拿不到补丁。
+          死在「死渠道」上每次只花 0.3s，只有真活的渠道才耗时，所以按次换划算。
+
+        ★只在「限流 / 额度耗尽」上继续换；一旦是超时 / 解析失败立刻停 ——
+          换个慢渠道重试会把本轮耗时成倍拉长。
+        """
+        try:
+            import config as _c465f
+            if not bool(getattr(_c465f, "ENABLE_M465_LLM_CHANNEL_FAILOVER", True)):
+                return None
+            _max_try = int(getattr(_c465f, "M465_LLM_FAILOVER_MAX_ATTEMPTS", 3))
+        except Exception as _e465f:
+            silent_exc(_e465f, where="SafeEvolutionExecutor::465换道开关", level="debug")
+            return None
+        _max_try = max(1, _max_try)
+        _tried = [tried_name] if tried_name else []
+        try:
+            for _i in range(_max_try):
+                _alt = self._m96_select_channel(exclude=_tried)
+                if not isinstance(_alt, dict):
+                    _module_logger.info(
+                        "[465刀4] 无可用备选渠道（已试 %s，第 %d 次），放弃换道",
+                        "→".join(_tried) or "?", _i + 1)
+                    return None
+                _alt_name = str(_alt.get("name") or "")
+                _alt_url = _alt.get("api_url", "")
+                _alt_key = _alt.get("api_key", "")
+                _alt_model = _alt.get("model", "")
+                if not _alt_url or not _alt_key:
+                    _module_logger.info(
+                        "[465刀4] 备选渠道 %s 缺 url/key，跳过", _alt_name or "?")
+                    _tried.append(_alt_name)
+                    continue
+                _module_logger.info(
+                    "[465刀4] 换道第 %d 次：%s → %s（model=%s）",
+                    _i + 1, "→".join(_tried) or "?", _alt_name or "?", _alt_model)
+                self._m44_last_channel = _alt_name or self._m360_channel_of_url(_alt_url)
+                _ans = self._call_llm_with_followup(
+                    _alt_url, _alt_key, prompt, max_followups, scene, _alt_model)
+                self._m96_record_channel_result(_alt_name, bool(_ans))
+                if _ans:
+                    return _ans
+                _tried.append(_alt_name)
+                if getattr(self, "_m465_last_fail", "") not in ("rate_limited", "quota"):
+                    _module_logger.info(
+                        "[465刀4] 换道失败类型=%s（非限流/额度），停止换道",
+                        getattr(self, "_m465_last_fail", ""))
+                    return None
+            return None
+        except Exception as _e465r:
+            silent_exc(_e465r, where="SafeEvolutionExecutor::465换道重试", level="warning")
+            return None
+
     def _call_llm_for_repair(self, issue: dict[str, Any], code_snippet: str,
                              related_logs: str = "",
                              scene: str | None = None) -> str | None:
         """★自适应询问模式（v3）：使用AdaptiveQueryStrategyGenerator动态生成询问策略。
         不写死询问模板，根据问题特征、自我分析、历史经验创造性组织询问方式。
         每次询问后评估效果，成功策略沉淀为可复用模式，实现元学习。"""
+        # ★465刀3：同轮熔断 —— 连续失败达阈值后，本轮后续问题不再调 LLM。
+        #   病因（465 T0 实测）：13:06 那一轮里连打 9 次、每次 0.30~0.54s 秒失败
+        #   （HTTP 429 code=1305「该模型当前访问量过大」），空烧配额且无任何早停。
+        if self._m465_circuit_open():
+            return None
         try:
             import config  # type: ignore[possibly-unbound]
             # ★第96批 T-96a：默认仍是 REMOTE_API_CONFIG；开关打开且渠道池
@@ -1935,6 +2067,17 @@ class SafeEvolutionExecutor:
             _answer = self._call_llm_with_followup(
                 _api_url, _api_key, _prompt, _strategy["max_followups"], scene,
                 _api_model)
+            # ★465刀4：把调用结果回写渠道健康度。此前 `_m96_record_channel_result`
+            #   只有定义、**零调用点** ⇒ `_m96_select_channel` 虽然读
+            #   `ChannelHealthTracker.is_available()`，却从来没人喂数据 ⇒
+            #   熔断永不开启 ⇒ 每轮都重新选中同一个坏渠道（priority=1 的 zhipu）。
+            self._m96_record_channel_result(_m96_name, bool(_answer))
+            # ★465刀4b：限流类失败**当场换下一个渠道重试一次**。
+            #   实测：priority=1 的 zhipu-47-flash 连发 6 次里 4 次 429（0.30~0.54s），
+            #   而次优先渠道同一时刻可用 ⇒ 不换道就等于整轮 0 补丁。
+            if (not _answer) and getattr(self, "_m465_last_fail", "") in ("rate_limited", "quota"):
+                _answer = self._m465_failover_retry(
+                    _prompt, _strategy["max_followups"], scene, _m96_name)
 
             # ★效果评估 + 策略沉淀（元学习闭环）
             if _answer:

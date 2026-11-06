@@ -78,6 +78,16 @@ class TestLLMRepairPathM86(unittest.TestCase):
              "api_key": "sk-test-m86-0000000000000000000000"})
         self._cfg_ctx.start()
         self.addCleanup(self._cfg_ctx.stop)
+        # ★465 T0 附带（存量红，非 465 引入，已用 `git checkout -- ` 做 HEAD A/B 证明）：
+        #   451刀4 把「同一类失败连续 3 次才 WARNING」做成**全局去重**，
+        #   于是本文件 test_02 的**首次**空 content 被压成 DEBUG，
+        #   `assertLogs(level="WARNING")` 恒失败。
+        #   这里只把阈值钉成 1，让「必须留痕」这条规格断言可确定复现；
+        #   **断言本身一字未放松**（仍要求 WARNING + content 为空 + finish_reason=length）。
+        self._m451_ctx = mock.patch.object(
+            _mod.config, "M451_LLM_REPAIR_STREAK_THRESHOLD", 1)
+        self._m451_ctx.start()
+        self.addCleanup(self._m451_ctx.stop)
 
     def test_01_llm_path_entered_with_reasoning_budget(self):
         """先红后绿核心断言：进入了 LLM 调用，且 token 预算/超时为推理模型预留余量。"""

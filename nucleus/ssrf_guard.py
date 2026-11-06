@@ -230,6 +230,42 @@ def safe_http_json(
             except Exception as _m360e:
                 silent_exc(_m360e, where="nucleus.ssrf_guard::safe_http_json 埋点 finish", level="debug")
         return True, _parsed
+    except urllib.error.HTTPError as _e:
+        # ★465刀1：HTTPError 是 URLError 的**子类**，原先被下面那条宽分支接走，
+        #   响应体（真正说明原因的部分）被丢弃 ⇒ 上游只能看到
+        #   「请求失败: HTTP Error 429: Too Many Requests」，分不清
+        #   「免费额度耗尽 / 并发被限 / 参数错」。
+        #   实测（465 探针，2026-11-06）：智谱 429 的正文是
+        #   {"error":{"code":"1305","message":"该模型当前访问量过大，请您稍后再试"}}；
+        #   阿里云百炼 403 的正文是 AllocationQuota.FreeTierOnly（免费额度耗尽）。
+        #   这两条正文才是可判读的判据，丢了就只能瞎猜。
+        #   ★只补正文、不改任何既有分支的返回格式与判定。
+        _m465_on = True
+        try:
+            import config as _c465g
+            _m465_on = bool(getattr(_c465g, "ENABLE_M465_HTTP_ERROR_BODY", True))
+        except Exception as _m465ge:
+            silent_exc(_m465ge, where="nucleus.ssrf_guard::safe_http_json 465开关", level="debug")
+            _m465_on = True
+        if _m360_rid:
+            try:
+                from nucleus.llm.paid_api_trace import finish as _m360_finish
+                _m360_finish(_m360_rid, False,
+                             error=("HTTP %s" % _e.code) if _m465_on else "URLError")
+            except Exception as _m360e:
+                silent_exc(_m360e, where="nucleus.ssrf_guard::safe_http_json 埋点 finish", level="debug")
+        if not _m465_on:
+            # 灰度关闭 → 与旧行为**逐字一致**（旧路径由 URLError 宽分支接住）
+            return False, f"请求失败: {_e}"
+        _m465_body = ""
+        try:
+            _m465_body = _e.read().decode("utf-8", "ignore")
+        except Exception as _m465be:
+            silent_exc(_m465be, where="nucleus.ssrf_guard::safe_http_json 读错误正文", level="debug")
+            _m465_body = ""
+        _m465_txt = " ".join(str(_m465_body).split())[:400] or str(_e.reason)
+        silent_exc(_e, where="nucleus.ssrf_guard::safe_http_json HTTP错误", level="debug")
+        return False, "HTTP %s: %s" % (_e.code, _m465_txt)
     except urllib.error.URLError as _e:
         if _m360_rid:
             try:
