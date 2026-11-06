@@ -8136,3 +8136,57 @@ M460_MAX_BLAST_FILES = 1
 #   ★data/ 整目录被 .gitignore 排除 ⇒ 交付时需复制证据件副本到 docs/.../证据件/。
 M460_SNAPSHOT_DIR_REL = "data/patches/self_verdict_snapshots"
 M460_LEDGER_REL = "data/patches/self_verdict_ledger.jsonl"
+
+
+# ==================== [M461-CFG] 第461批（让闭环真正跑通一轮 + 不再犯 + 主进程派发）====================
+# 触发：2026-11-06 09:04 重启后实盘取证 —— 460 已生效，但闭环**一次都没走通**：
+#   · self_verdict_ledger 3 行全 inconclusive，快照目录从未创建 ⇒ 0 apply / 0 回退 / 0 修复；
+#   · converge_voided 里 PulseLiver::_compress_group 的 no_def 作废累计 **59 次**，
+#     voided_no_def 经验连写 4 次 ⇒ 459 软提醒 + 460 冷却（只在 self_verdict.finalize）
+#     都没覆盖作废路径，「一次改错下次不再犯」被实盘证伪。
+#   · patch_multi_ 走 generate_multi_file_patch，445 的 require_full_def 反馈只接了
+#     _generate_llm_patch 单补丁路径 ⇒ 反馈写了很多、生成侧根本没读。
+# 全部新增键，不覆盖 457~460 任何键。
+#
+# ENABLE_M461_LESSON_COOLDOWN
+#   默认值：True
+#   语义：统一同类错误冷却总闸。作废路径（criteria_window.note_converge_voided）
+#         与自裁决路径（self_verdict.record_lesson）写**同一份**冷却台账；
+#         关掉 ⇒ 逐字节回到 461 前行为（只留软提醒，不改生成）。
+ENABLE_M461_LESSON_COOLDOWN = True
+#
+# M461_COOLDOWN_STREAK_N / M461_COOLDOWN_SEC
+#   默认值：2 / 86400.0（1 天）
+#   语义：同一 (file, method, error_type) 连续同类失败达 N 次 ⇒ 冷却 SEC 秒。
+#         ★按「连续」而非累计：中间出现一次不同错误即断连，避免永久记忆。
+M461_COOLDOWN_STREAK_N = 2
+M461_COOLDOWN_SEC = 86400.0
+M461_COOLDOWN_LEDGER_REL = "data/patches/lesson_cooldown.jsonl"
+#
+# ENABLE_M461_GENERATION_GUARD
+#   默认值：True
+#   语义：生成侧前置闸总闸。在补丁进入 pending 的**唯一收口**
+#         （PatchManager._save_patch_list 的 pending 分支）把冷却中的条目剔除，
+#         并在两条生成路径（单补丁 / 多文件）提前跳过，做到「不再生成」而不只是「不再应用」。
+#   ★为什么挂唯一收口：实盘 9 个写点（入队/审批/收敛/归档/AutoApprover 直写/TTL 回写）
+#     都能进 pending，逐个接必漏；挂一处即全覆盖。
+ENABLE_M461_GENERATION_GUARD = True
+#
+# ENABLE_M461_EVIDENCE_CONFIDENCE / ENABLE_M461_SNIPPET_NORMALIZE
+#   默认值：True / True
+#   语义：修「0 次 apply」的两处**契约错配**（不是放宽八闸）：
+#     ① 生成侧 LLM 补丁固定 confidence="medium"，八闸 confidence_high 只认 "high"
+#        ⇒ LLM 补丁结构性不可能过闸。461 在**三证齐备**时按依据回填 high，
+#        并写 confidence_source="reprobe_true_pass"，无证据绝不提权。
+#     ② original_code 常是方法体片段（无 def）⇒ 静态复现探针解析不到 ⇒ false_pass。
+#        461 把片段包装成可解析函数体再送探针，并标 reprobe_scope="snippet"。
+ENABLE_M461_EVIDENCE_CONFIDENCE = True
+ENABLE_M461_SNIPPET_NORMALIZE = True
+#
+# ENABLE_M461_RUNTIME_DISPATCH / M461_RUNTIME_ISSUE_REL / AGGREGATE_SEC
+#   默认值：True / data/reports/evolution/runtime_issues.jsonl / 900.0
+#   语义：主进程运行期问题派单 + 闭环结果回传。问题单带证据 + dedup_key +
+#         15min 聚合窗口（457 教训：Playwright page_load 超时整天在报，不能逐条派单）。
+ENABLE_M461_RUNTIME_DISPATCH = True
+M461_RUNTIME_ISSUE_REL = "data/reports/evolution/runtime_issues.jsonl"
+M461_RUNTIME_AGGREGATE_SEC = 900.0

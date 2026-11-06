@@ -34,6 +34,7 @@ import ast
 import hashlib
 import json
 import os
+import re
 import sys
 import time
 from typing import Any
@@ -222,6 +223,34 @@ def make_ticket(patch: dict, *, root: str | None = None,
 
 # ==================== ② 证据生产（接既有静态探针） ====================
 
+def normalize_snippet(code: Any) -> tuple[str, bool]:
+    """★461 刀2：把「方法体片段」包装成可解析函数体，供静态复现探针使用。
+
+    实盘 05:14 样本 `original_code` 是 199 字符的**方法体**（没有 `def`），
+    `active_reprobe` 解析不到完整函数 ⇒ `false_pass` ⇒ `baseline_errors=0`
+    ⇒ 八闸 baseline_positive 永假。检测器其实早在 446 刀1 就覆盖了
+    `periodic_task_no_reentry`，卡的是**输入形态**不是判据缺失。
+
+    ★只包装「无 def 且顶层解析失败」的片段；已有 def 但语法错的一律原样返回
+      （不猜、不替生成器背锅）。返回 `(code, wrapped)`。
+    """
+    if not isinstance(code, str) or not code.strip():
+        return str(code or ""), False
+    try:
+        ast.parse(code)
+        return code, False
+    except SyntaxError as _e:
+        silent_exc(_e, where="self_verdict::normalize_snippet parse", level="debug")
+    except Exception as _e:
+        silent_exc(_e, where="self_verdict::normalize_snippet other", level="debug")
+        return code, False
+    if re.search(r"^\s*def\s", code, re.MULTILINE):
+        return code, False
+    _body = "\n".join(("    " + _ln if _ln.strip() else "")
+                       for _ln in code.splitlines())
+    return "def _m461_probe():\n" + _body + "\n", True
+
+
 def collect_evidence(patch: dict) -> dict:
     """审批前统一调用既有探针并**回填副本**，这是 460 批最关键的一刀。
 
@@ -248,9 +277,21 @@ def collect_evidence(patch: dict) -> dict:
         return _out
 
     _p = dict(patch)
+    # ★461 刀2：探针输入单独造一份「归一化副本」，**不改原 patch 的
+    #   original_code / modified_code**（审批留痕必须保留生成器原文）。
+    _probe_patch = dict(_p)
+    _wrapped = False
+    if bool(_cfg("ENABLE_M461_SNIPPET_NORMALIZE", True)):
+        _o, _ow = normalize_snippet(_p.get("original_code"))
+        _m, _mw = normalize_snippet(_p.get("modified_code"))
+        _wrapped = bool(_ow or _mw)
+        if _wrapped:
+            _probe_patch["original_code"] = _o
+            _probe_patch["modified_code"] = _m
+    _out["reprobe_scope"] = "snippet" if _wrapped else "as_is"
     try:
         from nucleus.evolution.patch_active_reprobe import active_reprobe
-        _r = active_reprobe(_p)
+        _r = active_reprobe(_probe_patch)
     except Exception as _e:
         silent_exc(_e, where="self_verdict::collect_evidence active_reprobe", level="debug")
         _out["why"] = f"复现探针不可用: {type(_e).__name__}: {_e}"
@@ -277,22 +318,51 @@ def collect_evidence(patch: dict) -> dict:
         _pg, _pg_why = None, f"映射不可用: {type(_e).__name__}"
     if _pg is not None and "problem_gone" not in _p:
         _p["problem_gone"] = _pg
+    # ★461 刀2：有界放宽 —— **只升级、不降级**。
+    #   460 的「只补缺失」契约是为防「探针如实 0 覆盖构造的 2」；但实盘 05:14
+    #   生成侧显式写了 problem_gone=None / baseline_errors=None，键存在 ⇒ 补不进去。
+    #   这里允许「显式真值」升级 None/False，绝不允许把已有 True 降成 False。
+    if _pg is True and _p.get("problem_gone") is not True:
+        _p["problem_gone"] = True
     _out["problem_gone"] = _p.get("problem_gone")
 
     try:
         from nucleus.evolution.baseline_probe import probe_code_repro
-        _b = probe_code_repro(_p)
+        _b = probe_code_repro(_probe_patch)
     except Exception as _e:
         silent_exc(_e, where="self_verdict::collect_evidence baseline", level="debug")
         _b = {}
     _be = _b.get("baseline_errors")
     _out["baseline_source"] = str(_b.get("baseline_source") or "")
-    if isinstance(_be, int) and _be >= 0 and "baseline_errors" not in _p:
-        _p["baseline_errors"] = _be
-        if "baseline_source" not in _p:
-            _p["baseline_source"] = _out["baseline_source"]
+    if isinstance(_be, int) and _be >= 0:
+        _old_be = _p.get("baseline_errors")
+        _may_upgrade = ("baseline_errors" not in _p or _old_be is None
+                        or (isinstance(_old_be, (int, float)) and _be > _old_be))
+        # ★只升级不降级：探针给 0 而调用方已有 2 ⇒ 不动（460 首轮顶红的教训）
+        if _may_upgrade:
+            _p["baseline_errors"] = _be
+            if "baseline_source" not in _p:
+                _p["baseline_source"] = _out["baseline_source"]
     # 裁决看**合成后的**证据（既有字段优先），不是探针原始值
     _out["baseline_errors"] = _p.get("baseline_errors")
+
+    # ★461 刀2：修「LLM 补丁结构性不可能过闸」的契约错配。
+    #   生成侧给 LLM 补丁固定 confidence="medium"（SafeEvolutionExecutor:6688），
+    #   八闸 confidence_high 只认 "high" ⇒ 05:14 样本 5/8 挂在 confidence=unknown。
+    #   ★不是放宽判据：只有**三证齐备**（静态复现 true_pass + problem_gone 显式真
+    #     + baseline>0）才按依据提权，并写 confidence_source 供事后复核；
+    #     已有 "high" 不动，证据不足绝不提权。
+    _out["confidence_promoted"] = False
+    if bool(_cfg("ENABLE_M461_EVIDENCE_CONFIDENCE", True)):
+        _three = (_out["reprobe_verdict"] == _EVIDENCE_TRUE_PASS
+                  and _out["problem_gone"] is True
+                  and isinstance(_out["baseline_errors"], int)
+                  and _out["baseline_errors"] > 0)
+        _old_conf = str(_p.get("confidence") or "").strip().lower()
+        if _three and _old_conf != "high":
+            _p["confidence"] = "high"
+            _p["confidence_source"] = "m461_reprobe_true_pass"
+            _out["confidence_promoted"] = True
 
     _out["patch"] = _p
     _out["ok"] = True
@@ -518,7 +588,8 @@ def cooldown_active(key: str, *, root: str | None = None,
 
 
 def record_lesson(*, key: str, error_type: str, reason: str,
-                  file_path: str = "", root: str | None = None,
+                  file_path: str = "", method: str = "",
+                  root: str | None = None,
                   now: float | None = None) -> dict:
     """结构化失败经验 → 既有 `patch_failure_experience`（软保证）+ 同类冷却（硬保证）。
 
@@ -555,6 +626,14 @@ def record_lesson(*, key: str, error_type: str, reason: str,
     note_ledger({"kind": "lesson", "at": _now, "dedup_key": key,
                  "error_type": _code, "reason": str(reason or "")[:300],
                  "same_kind_streak": _streak, "schema": SCHEMA}, root=root)
+    # ★461 刀1：两条失败路径（作废 / 自裁决）写**同一份**冷却台账，口径不再漂移。
+    try:
+        from nucleus.evolution import lesson_cooldown as _m461_lc
+        _m461_lc.record(file=str(file_path or ""), method=str(method or ""),
+                        error_type=_code, reason=str(reason or "")[:200],
+                        source="self_verdict", root=root, now=_now)
+    except Exception as _e:
+        silent_exc(_e, where="self_verdict::record_lesson 461统一冷却", level="debug")
 
     _n = int(_cfg("M460_LESSON_COOLDOWN_N", 2))
     if _streak >= _n:
@@ -694,10 +773,23 @@ def finalize(prep: dict, apply_result: dict, patch_manager: Any = None, *,
         _out["lesson"] = record_lesson(
             key=_key, error_type=_error_type, reason=_out["why"],
             file_path=str((_p.get("patch") or {}).get("file") or ""),
+            method=str((_p.get("patch") or {}).get("method") or ""),
             root=root, now=_now)
     note_ledger({"kind": "final", "at": _now, "dedup_key": _key,
                  "verdict": _state, "applied": _out["applied"],
                  "verified": _out["verified"], "rolled_back": _out["rolled_back"],
                  "error_type": _error_type, "why": _out["why"][:300],
                  "schema": SCHEMA}, root=root)
+    # ★461 刀3：结构化结果单回传主进程（心跳有明确消费点，不是只打一行日志）。
+    #   实盘 460 的子进程回来只做计数 + 日志，k1_offload 是唯一写回口且语义很窄。
+    try:
+        from nucleus.evolution import runtime_dispatch as _m461_rd
+        _m461_rd.note_loop_result(
+            patch_id=str((_p.get("patch") or {}).get("id") or ""),
+            dedup_key_=_key, verdict=_state,
+            applied=_out["applied"], verified=_out["verified"],
+            rolled_back=_out["rolled_back"], reason=_out["why"],
+            root=root, now=_now)
+    except Exception as _e:
+        silent_exc(_e, where="self_verdict::finalize 461结果回传", level="debug")
     return _out

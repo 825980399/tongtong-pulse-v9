@@ -311,6 +311,28 @@ class EvolutionLoop(SilentLogMixin):
         """
         log_result = self.discover_issues(log_file=log_file, max_issues=max_issues)
         all_issues = list(log_result.get("issues", []))
+        # ★461 刀3：第四问题源 —— 主进程运行期**主动派单**。
+        #   此前只有日志 / 增量代码审查 / self_inspector 全量扫描三源，
+        #   SafeEvolutionExecutor:7166 自己记着「子进程不可见父进程运行期指标」。
+        #   派单带证据 + dedup_key + 15min 聚合窗口（防刷单），取走即 claim。
+        try:
+            from nucleus.evolution import runtime_dispatch as _m461_rd
+            for _t in _m461_rd.pending_tickets(limit=10):
+                _itype = str(_t.get("issue_type") or "runtime_anomaly")
+                all_issues.append({
+                    "file": str(_t.get("file") or ""),
+                    "method": str(_t.get("method") or ""),
+                    "type": _itype,
+                    "issue_type": _itype,
+                    "description": str(_t.get("evidence") or _t.get("question") or "")[:200],
+                    "severity": str(_t.get("severity") or "medium"),
+                    "source": "runtime_dispatch",
+                    "dedup_key": str(_t.get("dedup_key") or ""),
+                })
+                _m461_rd.claim_ticket(str(_t.get("dedup_key") or ""))
+        except Exception as _e:
+            silent_exc(_e, where="EvolutionLoop.discover_all_issues[461刀3]",
+                       level="debug")
         code_count = 0
         if include_code_review:
             code_result = self.discover_code_issues(max_issues=max_issues // 2)

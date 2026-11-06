@@ -374,6 +374,22 @@ def note_converge_voided(patch_id, file: str = "", method: str = "",
     except Exception as _e:
         silent_exc(_e, where="criteria_window::note_converge_voided 459经验库",
                    level="debug")
+    # ★461 刀1：作废路径接入**统一**冷却台账。
+    #   459 只写软提醒（append_reminder），460 的冷却只在 self_verdict.finalize 生效，
+    #   而实盘 59 次 no_def 作废全发生在这里 ⇒ 三条路径各写各的，没有一处真能停手。
+    #   error_type 复用 459 的 voided_feature（结构化，不塞补丁正文）。
+    try:
+        from nucleus.evolution import lesson_cooldown as _m461_lc
+        from nucleus.patch_failure_experience import voided_feature as _m461_vf
+        _m461_kind, _ = _m461_vf(_rec)
+        _m461_lc.record(file=str(_rec.get("file") or ""),
+                        method=str(_rec.get("method") or ""),
+                        error_type=_m461_kind,
+                        reason="作废：" + str(_rec.get("reason") or "")[:80],
+                        source="converge_voided")
+    except Exception as _e:
+        silent_exc(_e, where="criteria_window::note_converge_voided 461冷却登记",
+                   level="debug")
     return _p
 
 

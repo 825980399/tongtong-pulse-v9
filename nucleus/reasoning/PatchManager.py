@@ -7138,6 +7138,22 @@ class PatchManager:
                        level="warning")
         # ★第280批刀4：pending 队列落盘前做状态机收敛（applied即出队 + 删顶层runtime_verified）。
         if path == self._pending_file:
+            # ★461 刀1：同类错误冷却硬闸 —— 挂在 pending 的**唯一收口**。
+            #   实盘 9 个写点（入队/审批/收敛/归档/AutoApprover 直写/TTL 回写）
+            #   都会经过这里；逐个生成路径接必漏（445 的反馈就只接了单补丁路径，
+            #   而作废来自 patch_multi_ 多文件路径，59 次重复作废由此而来）。
+            #   ★只剔除、不改保留条目字段；失败不影响落盘。
+            try:
+                from nucleus.evolution import lesson_cooldown as _m461_lc
+                _m461_data, _m461_blocked, _m461_rows = _m461_lc.filter_pending(data)
+                if _m461_blocked:
+                    data = _m461_data
+                    _module_logger.info(
+                        "[461刀1] 冷却拦截 %d 条: %s",
+                        _m461_blocked, [str(r.get("method")) for r in _m461_rows[:3]])
+            except Exception as _e:
+                silent_exc(_e, where="PatchManager::_save_patch_list 461冷却闸",
+                           level="warning")
             data = self._m280_converge_pending(data)
             # ★356刀11（洞鉴DJ4-03）：pending **必须走唯一写口**。
             #   本方法背后是 9 个写点（入队/审批/收敛/归档…），加上 AutoApprover

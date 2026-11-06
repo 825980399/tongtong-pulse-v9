@@ -805,6 +805,8 @@ class PulseCortex(BasePulseOrgan):
             # ★458 刀1：委派看门狗（**独立一本账** —— 委派超时发生在内在世界已回
             #   空答案之后，条目早被 pop，上面那条清理永远扫不到，这正是事故成因）
             self._m458_sweep_delegates()
+            # ★461 刀3：主进程消费闭环回传的结构化结果单（内部 50 拍一次）
+            self._m461_consume_loop_results()
             # ★FIX(全局并行调度): 低频触发三通道并行审查（硬件自适应并行度）
             _beat_count = getattr(self, '_parallel_audit_beat_counter', 0) + 1
             self._parallel_audit_beat_counter = _beat_count
@@ -1335,12 +1337,64 @@ class PulseCortex(BasePulseOrgan):
                           f"method={str(_rec.get('method') or '')[:24]} "
                           f"等了{_waited:.1f}s prompt_len={_rec.get('prompt_len')} "
                           f"问题='{str(_rec.get('question') or '')[:40]}...'")
+                # ★461 刀3：主进程运行期问题**主动派给**进化闭环。
+                #   带证据（等了多久 / prompt 长度 / 原问题），不是「一条 ERROR 派一单」。
+                try:
+                    from nucleus.evolution import runtime_dispatch as _m461_rd
+                    _m461_rd.submit_runtime_issue({
+                        "file": "organs/brain/PulseCortex.py",
+                        "method": str(_rec.get("method") or "delegate_timeout"),
+                        "issue_type": "delegate_timeout_no_reply",
+                        "source": "cortex_delegate_watchdog",
+                        "correlation_id": _cid,
+                        "question": str(_rec.get("question") or "")[:200],
+                        "evidence": (
+                            f"委派超时 {_waited:.1f}s prompt_len="
+                            f"{_rec.get('prompt_len')}"),
+                    })
+                except Exception as _e:
+                    silent_exc(_e, where="PulseCortex::_m458_sweep 461派单",
+                               level="debug")
                 _n += 1
             return _n
         except Exception as e:
             silent_exc(e, where="organs.brain.PulseCortex::_m458_sweep_delegates",
                        level="warning")
             return _n
+    def _m461_consume_loop_results(self) -> int:
+        """★461 刀3：主进程消费闭环回传的结果单（明确消费点 + 内存状态 + 留痕）。
+
+        ★低频（50 拍）读取，避免每次心跳都扫台账；结果单是结构化的
+          verdict / applied / verified / rolled_back / reason，不是只看日志。
+        """
+        _n = 0
+        try:
+            import config as _cfg
+            if not bool(getattr(_cfg, "ENABLE_M461_RUNTIME_DISPATCH", True)):
+                return 0
+            self._m461_beat = getattr(self, "_m461_beat", 0) + 1
+            if self._m461_beat % 50 != 0:
+                return 0
+            from nucleus.evolution import runtime_dispatch as _m461_rd
+            _since = float(getattr(self, "_m461_result_since", 0.0))
+            _rows = _m461_rd.consume_loop_results(since=_since, limit=20)
+            for _r in _rows:
+                self._log(LogLevel.INFO,
+                          f"[461刀3] 闭环反馈: verdict={_r.get('verdict')} "
+                          f"applied={_r.get('applied')} "
+                          f"rollback={_r.get('rolled_back')} "
+                          f"key={str(_r.get('dedup_key') or '')[:8]} "
+                          f"why={str(_r.get('reason') or '')[:80]}")
+                _since = max(_since, float(_r.get("at") or 0))
+                _n += 1
+            if _rows:
+                self._m461_result_since = _since
+                self._m461_last_results = _rows[-5:]
+        except Exception as e:
+            silent_exc(e, where="organs.brain.PulseCortex::_m461_consume_loop_results",
+                       level="debug")
+        return _n
+
     def _dialog_mark_output_done(self, correlation_id: str) -> None:
         """标记某会话已输出完毕，并尝试派发队列中的下一条。"""
         if correlation_id:
