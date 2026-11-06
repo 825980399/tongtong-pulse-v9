@@ -67,6 +67,31 @@ def note(counts: dict, *, root: str | None = None,
         except (TypeError, ValueError) as _e:
             silent_exc(_e, where="repair_funnel::note value", level="debug")
             _row[_k] = 0
+    # ★464 刀3：明细行（不进 int 白名单，单独收，防止被 int() 抹平）
+    if bool(_cfg("ENABLE_M464_FUNNEL_DETAIL", True)):
+        _det = (counts or {}).get("cooled_detail")
+        if isinstance(_det, list) and _det:
+            _buckets: dict = {}
+            _top: list = []
+            for _r in _det[:20]:
+                if not isinstance(_r, dict):
+                    continue
+                _act = str(_r.get("policy") or _r.get("action") or "?")[:24]
+                _buckets[_act] = _buckets.get(_act, 0) + 1
+                if len(_top) < 5:
+                    try:
+                        _rem = int(float(_r.get("rem_s") or 0))
+                    except (TypeError, ValueError) as _e2:
+                        silent_exc(_e2, where="repair_funnel::note rem_s", level="debug")
+                        _rem = 0
+                    _top.append({"policy": _act,
+                                 "type": str(_r.get("type") or "")[:40],
+                                 "file": str(_r.get("file") or "")[:60],
+                                 "method": str(_r.get("method") or "")[:60],
+                                 "rem_s": _rem})
+            _row["cooled_buckets"] = _buckets
+            _row["cooled_top"] = _top
+
     _p = funnel_path(root)
     try:
         os.makedirs(os.path.dirname(_p), exist_ok=True)

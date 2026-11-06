@@ -657,6 +657,18 @@ _HIGH_RISK_NON_FIXABLE = frozenset({
     "unsafe_eval", "subprocess_shell", "sql_injection",
 })
 
+# ★464 刀1：本地高置信度规则可修类型（原为 repair_with_distillation 的函数内字面量，
+#   逐项搬上来，内容一字未改）。提到模块级只有一个理由：**载入期台账迁移**也要用
+#   同一份表 —— 463 的 classify(local_fixable_types=...) 与登记侧必须同口径，
+#   否则同一问题会在「放行」与「登记」两侧判出两种结论。
+_LOCAL_FIXABLE_TYPES = frozenset({
+    "silent_exception", "bare_except", "status_request_duplicate",
+    "unbounded_deque", "thread_no_daemon", "no_timeout_http",
+    "mutable_default_arg", "comparison_with_none", "boolean_comparison",
+    "os_path_join", "print_instead_of_log", "fstring_preferred",
+    "bare_return_none_in_except",
+})
+
 # ★PHASE12-P1-2（2026-09-06）：问题类型名别名映射（跨模块笔误补全）。
 #   背景（实测）：self_inspector 产出的类型名与下游 SafeEvolutionExecutor
 #   期望的类型名存在两处不一致，导致这两类问题「永远匹配不上」：
@@ -2098,20 +2110,9 @@ class SafeEvolutionExecutor:
         # ★P1补丁覆盖扩展：本地规则可修类型从 4 类扩到 6 类，
         # 与 _generate_patch 的 elif 分支保持一致（silent_exception/bare_except/
         # status_request_duplicate/unbounded_deque/thread_no_daemon/no_timeout_http）。
-        _local_fixable_types = {
-            "silent_exception", "bare_except", "status_request_duplicate",
-            "unbounded_deque", "thread_no_daemon", "no_timeout_http",
-            # ★2026-09-03扩展：6类→12类高置信度纯文本替换
-            "mutable_default_arg",   # 可变默认参数 def f(x=[]) → None+初始化
-            "comparison_with_none",  # == None → is None
-            "boolean_comparison",    # == True/== False → 直接判断
-            "os_path_join",          # 路径字符串拼接 → os.path.join
-            "print_instead_of_log",  # print( → self._log(（器官类中）
-            "fstring_preferred",     # .format() → f-string
-            # ★主线第76批 T3：except 块内「裸 return None 且无日志」→ 补 WARNING 日志。
-            #   实测该类型长期走「本地无规则·转LLM」，但语义明确、可高置信度文本替换。
-            "bare_return_none_in_except",
-        }
+        # ★464 刀1：字面量已提到模块级 _LOCAL_FIXABLE_TYPES（见文件头常量区），
+        #   载入期台账迁移与登记侧必须同口径。此处仅换引用，行为零变化。
+        _local_fixable_types = _LOCAL_FIXABLE_TYPES
         # ★2026-09-03自主迭代闭环修复（v2）：本地修复与大模型对比并行，比对差异，学习提升。
         # 架构原则：框架自身先处理 → 大模型处理 → 比对差异 → 框架学习 → 逐步提升精度。
         # 大模型调用减少的前提：本地修复成功率>90%且质量与大模型相当，而非简单跳过。
@@ -2135,6 +2136,8 @@ class SafeEvolutionExecutor:
         #   让出问题：白名单/优先级排序是在剩余候选里重排的，名额才真能释放。
         _cooldown_skipped = 0
         _cooldown_expired = 0
+        # ★464 刀3：被冷却候选的明细（最多 20 条），供漏斗行 cooled_buckets/cooled_top
+        _m463_cooled_rows: list[dict] = []
         # ★463 刀2/刀3：漏斗读数 + 强制复检计数（内存级，重启即一次天然复检）
         _m463_candidate = len(issues) if isinstance(issues, list) else 0
         _m463_forced = 0
@@ -2168,6 +2171,27 @@ class SafeEvolutionExecutor:
                             continue
                         _m463_hits[_fp] = _hits463
                     _cooldown_skipped += 1
+                    # ★464 刀3：留明细 —— 只记「被冷却」这一层的当前判据分档与剩余时长。
+                    #   463 只留了「冷却跳过5个」一个数，无法判断那 5 个是本该放行
+                    #   还是本该冷却，实盘排查全靠猜。
+                    if len(_m463_cooled_rows) < 20:
+                        _act464 = ""
+                        try:
+                            _act464 = str(_m463_cp0.classify(
+                                _i, local_fixable_types=_local_fixable_types,
+                                high_risk_types=_HIGH_RISK_NON_FIXABLE,
+                            ).get("action") or "")
+                        except Exception as _e:
+                            silent_exc(_e,
+                                       where="SafeEvolutionExecutor::464 明细分级",
+                                       level="debug")
+                        _m463_cooled_rows.append({
+                            "policy": _act464,
+                            "type": str(_i.get("type") or "")[:40],
+                            "file": str(_i.get("file") or "")[:60],
+                            "method": str(_i.get("method") or "")[:60],
+                            "rem_s": int(max(0.0, _deadline - _now_mono)),
+                        })
                 else:
                     # 冷却到期：解冻，本轮重新参与竞争
                     self._no_fix_cooldown.pop(_fp, None)
@@ -2916,6 +2940,7 @@ class SafeEvolutionExecutor:
                 "submitted": _repaired,
                 "cool_skipped_by_policy": _m463_skipped_cool,
                 "cooldown_registered": _cooled_down,
+                "cooled_detail": _m463_cooled_rows,
             })
         except Exception as _e:
             silent_exc(_e, where="SafeEvolutionExecutor::463 漏斗留痕",
@@ -6359,16 +6384,65 @@ class SafeEvolutionExecutor:
                 _data = _json.load(_f)
             if not isinstance(_data, dict):
                 return
+            import config as _cfg464
             _now = time.monotonic()
+            _rows464: dict[str, list] = {}
             for _fp, _v in _data.items():
                 if not isinstance(_v, (list, tuple)) or len(_v) < 1:
                     continue
-                _rem = float(_v[0])
+                try:
+                    _rem = float(_v[0])
+                except (TypeError, ValueError) as _e:
+                    silent_exc(_e, where="SafeEvolutionExecutor::464 台账解析",
+                               level="debug")
+                    continue
                 if _rem <= 0:
                     continue
-                self._no_fix_cooldown[_fp] = _now + _rem
+                _rows464[_fp] = [_rem, *_v[1:]]
+            # ★464 刀1：载入期按**当前判据**重判历史台账。
+            #   463 只改了「新登记」的 TTL，已落盘的僵尸条目（旧判据 21600s）
+            #   原样装回 —— 实盘 25 条里 11 条按 463 判据本就该放行、最长还锁 4.94h。
+            _mig464 = {"total": 0, "released": 0, "shortened": 0,
+                       "kept": 0, "invalid": 0}
+            if (bool(getattr(_cfg464, "ENABLE_M464_LEDGER_MIGRATION", True))
+                    and bool(getattr(_cfg464, "ENABLE_M463_COOLDOWN_POLICY", True))):
+                try:
+                    from nucleus.evolution import cooldown_policy as _m464_cp
+                    _rows464, _mig464 = _m464_cp.migrate_ledger(
+                        _rows464,
+                        local_fixable_types=_LOCAL_FIXABLE_TYPES,
+                        high_risk_types=_HIGH_RISK_NON_FIXABLE,
+                        short_sec=float(getattr(
+                            _cfg464, "M463_SHORT_COOLDOWN_SEC", 300.0)))
+                except Exception as _e:
+                    silent_exc(_e, where="SafeEvolutionExecutor::464 台账迁移",
+                               level="debug")
+            _hits464: dict[str, int] = {}
+            for _fp, _v in _rows464.items():
+                self._no_fix_cooldown[_fp] = _now + float(_v[0])
                 self._no_fix_cooldown_rounds[_fp] = int(_v[1]) if len(_v) > 1 else 0
+                if (bool(getattr(_cfg464, "ENABLE_M464_PERSIST_RECHECK_HITS", True))
+                        and len(_v) > 2):
+                    try:
+                        _h464 = int(_v[2])
+                    except (TypeError, ValueError) as _e:
+                        silent_exc(_e, where="SafeEvolutionExecutor::464 命中数解析",
+                                   level="debug")
+                        _h464 = 0
+                    if _h464 > 0:
+                        _hits464[_fp] = _h464
+            if _hits464:
+                # ★464 刀2：463 刀2 的「被跳过次数」跨重启续期（此前只存内存，
+                #   重启清零 ⇒ 需 3 轮的强制复检几乎攒不满）。
+                self._m463_recheck_hits = _hits464
             _n = len(self._no_fix_cooldown)
+            if _mig464.get("released") or _mig464.get("shortened"):
+                _module_logger.info(
+                    f"[464刀1][台账迁移] 载入 {_mig464.get('total')} 条 → "
+                    f"放行 {_mig464.get('released')} / 收短 {_mig464.get('shortened')} / "
+                    f"保留 {_mig464.get('kept')}"
+                    f"（按 463 判据重判，只收短不延长）")
+                self._m114a_save_cooldown()
             if _n:
                 _module_logger.info(
                     f"[冷却落盘] 重启加载 {_n} 条验证失败冷却记录（跨重启续期）")
@@ -6384,11 +6458,25 @@ class SafeEvolutionExecutor:
             import json as _json
             _now = time.monotonic()
             _data: dict[str, list] = {}
+            _hits464: dict = getattr(self, "_m463_recheck_hits", None)
+            if not isinstance(_hits464, dict):
+                _hits464 = {}
+            _persist_hits = True
+            try:
+                import config as _cfg464s
+                _persist_hits = bool(
+                    getattr(_cfg464s, "ENABLE_M464_PERSIST_RECHECK_HITS", True))
+            except Exception as _e:
+                silent_exc(_e, where="SafeEvolutionExecutor::464 开关读取",
+                           level="debug")
             for _fp, _dl in self._no_fix_cooldown.items():
                 _rem = _dl - _now
                 if _rem <= 0:
                     continue
-                _data[_fp] = [_rem, int(self._no_fix_cooldown_rounds.get(_fp, 0))]
+                _row464 = [_rem, int(self._no_fix_cooldown_rounds.get(_fp, 0))]
+                if _persist_hits:
+                    _row464.append(int(_hits464.get(_fp, 0) or 0))
+                _data[_fp] = _row464
             _path = self._m114a_cooldown_path()
             os.makedirs(os.path.dirname(_path), exist_ok=True)
             with open(_path, "w", encoding="utf-8") as _f:

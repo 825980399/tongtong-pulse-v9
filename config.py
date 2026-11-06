@@ -8277,3 +8277,37 @@ ENABLE_M463_REPRO_PRIORITY = True
 #     下一轮不必再从 10MB×5 滚动日志里拼漏斗（344 批作废台账的同型教训）。
 ENABLE_M463_REPAIR_FUNNEL = True
 M463_FUNNEL_REL = "data/reports/evolution/repair_funnel.jsonl"
+
+# ==================== [M464-CFG] 第464批（让 463 的判据真正作用到「已落盘」的僵尸台账）====
+# 触发：2026-11-06 12:03 第四次重启后的实盘 + 只读回放（tmp/m464_probe_ledger.py）——
+#   463 已加载（日志出现「463强制复检0个」），但 [P1-3 冷却隔离] 仍是
+#   「候选5个 → 放行0个（冷却跳过5个）」。
+#   ★★根因：463 刀1 只改了**新登记**的 TTL；`_m114a_load_cooldown()` 把
+#     cooldown.json 里的历史条目原样装回，不看新判据。实测 25 条：
+#         skip_cool 11 / cool 11 / cool_short 3
+#     那 11 条（9×periodic_task_no_reentry + 2×non_atomic_write）**本就该放行**，
+#     却仍剩最长 4.94h / 合计占池 99h。
+#   ★★463 刀2（强制复检）也钝：hit 计数在内存里，重启清零；而 evolve 轮
+#     ~30min 一次、进程常重启 ⇒ 3 轮几乎攒不满。
+#   全部新增键，不覆盖 457~463 任何键。
+#
+# ENABLE_M464_LEDGER_MIGRATION
+#   默认值：True
+#   语义：载入 cooldown.json 时按**当前判据**（463 classify）重判每条历史记录：
+#     skip_cool ⇒ 移出台账；cool_short ⇒ 剩余时长收短到 M463_SHORT_COOLDOWN_SEC
+#     （只收短、绝不延长）；cool ⇒ 保留（日志类无代码定位，冷却是对的）。
+#     False ⇒ 逐字节回到 464 前行为（旧台账原样装回）。
+ENABLE_M464_LEDGER_MIGRATION = True
+#
+# ENABLE_M464_PERSIST_RECHECK_HITS
+#   默认值：True
+#   语义：把 463 刀2 的「被冷却跳过次数」写进 cooldown.json 的第 3 个元素，
+#     跨重启续期。此前只存内存 ⇒ 每次重启清零，强制复检形同虚设。
+ENABLE_M464_PERSIST_RECHECK_HITS = True
+#
+# ENABLE_M464_FUNNEL_DETAIL
+#   默认值：True
+#   语义：漏斗行追加 cooled_buckets / cooled_top —— 每轮被冷却的候选按
+#     **当前判据**分档（skip_cool/cool/cool_short）并留前 5 条明细。
+#     此前只有「冷却跳过5个」一个数，无法判断那 5 个是本就该放行还是本该冷却。
+ENABLE_M464_FUNNEL_DETAIL = True

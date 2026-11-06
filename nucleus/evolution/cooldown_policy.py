@@ -96,6 +96,82 @@ def should_force_recheck(hits: int, *, need: int = 3) -> bool:
         return False
 
 
+MIGRATE_SCHEMA = "cooldown_migration/464.v1"
+
+
+def issue_from_fingerprint(fp: str) -> dict:
+    """从冷却指纹反解出 issue（``_cooldown_key`` 的逆运算）。
+
+    指纹只有两种形态（见 ``SafeEvolutionExecutor._issue_identity``）：
+      * 代码类 ``file|method|type``
+      * 日志类 ``organ:X|type:Y|描述摘要``
+    反解只服务于「按当前判据重判历史条目」，不追求与原件逐字一致。
+    """
+    _s = str(fp or "")
+    if _s.startswith("organ:"):
+        _parts = _s.split("|")
+        _organ = _parts[0][len("organ:"):]
+        _type = ""
+        _desc = ""
+        for _p in _parts[1:]:
+            if _p.startswith("type:") and not _type:
+                _type = _p[len("type:"):]
+            elif not _desc:
+                _desc = _p
+        return {"organ": _organ, "type": _type, "description": _desc}
+    _parts = _s.split("|")
+    return {"file": _parts[0] if len(_parts) > 0 else "",
+            "method": _parts[1] if len(_parts) > 1 else "",
+            "type": _parts[2] if len(_parts) > 2 else ""}
+
+
+def migrate_ledger(entries: dict, *, local_fixable_types: Any = None,
+                   high_risk_types: Any = None,
+                   short_sec: float = 300.0) -> tuple[dict, dict]:
+    """★464 刀1：载入期按**当前判据**重判历史台账。
+
+    463 的 ``classify()`` 只影响「新登记」的 TTL；已经落盘的僵尸条目
+    （旧判据 21600s）原样装回，实盘 25 条里 11 条按 463 判据本就该放行、
+    最长还锁 4.94h。本函数把这一步补上：
+
+      * ``skip_cool``   ⇒ **移出**台账（它本就不该被冷却）
+      * ``cool_short``  ⇒ 剩余时长**收短**到 ``short_sec``（不延长，只收短）
+      * ``cool``        ⇒ 原样保留（日志类无代码定位，冷却是对的）
+
+    纯函数：不改入参、不落盘。返回 ``(新台账, 迁移报告)``；
+    台账值保持 ``[剩余秒, ...尾巴]`` 结构，尾巴（轮次/命中数）原样透传。
+    """
+    _out: dict = {}
+    _rep = {"schema": MIGRATE_SCHEMA, "total": 0,
+            "released": 0, "shortened": 0, "kept": 0, "invalid": 0}
+    for _fp, _v in (entries or {}).items():
+        _rep["total"] += 1
+        if not isinstance(_v, (list, tuple)) or len(_v) < 1:
+            _rep["invalid"] += 1
+            continue
+        try:
+            _rem = float(_v[0])
+        except (TypeError, ValueError) as _e:
+            silent_exc(_e, where="cooldown_policy::migrate_ledger rem", level="debug")
+            _rep["invalid"] += 1
+            continue
+        _c = classify(issue_from_fingerprint(_fp),
+                      local_fixable_types=local_fixable_types,
+                      high_risk_types=high_risk_types)
+        _act = _c.get("action")
+        if _act == A_SKIP:
+            _rep["released"] += 1
+            continue
+        if _act == A_COOL_SHORT and _rem > float(short_sec):
+            _rem = float(short_sec)
+            _rep["shortened"] += 1
+        else:
+            _rep["kept"] += 1
+        _out[_fp] = [_rem, *_v[1:]]
+    return _out, _rep
+
+
+
 def priority(issue: dict, *, local_fixable_types: Any = None) -> int:
     """排序键（越小越优先）：可修的代码类排在日志类之前。"""
     if not isinstance(issue, dict):
