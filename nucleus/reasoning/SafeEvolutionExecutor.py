@@ -1144,6 +1144,25 @@ def _m470_align_strict_on() -> bool:
         return True
 
 
+def _m473_should_demote_align_log(how: str) -> bool:
+    """★473刀9：469 那条「粒度无法对齐」是否该降为 INFO。
+
+    背景（实测 2026-11-07 全天）：同一次失败报了两条 WARNING —
+      `[470刀1] modified 指向别的方法名（不对齐）: id=… 期望=… 实际=…`  28 条
+      `[469刀2] 跳过补丁构造：粒度无法对齐（modified_other_method）`      28 条
+    一比一重复，真正的告警被淹。两条信息其实互补（470 给期望/实际方法名，
+    469 给 organ/type），所以不能删任何一条 —— 只能让**重复的那条降级**。
+
+    判据（与日志的实际行为对齐，不靠猜）：
+      * `how == "modified_other_method"` 且 470 严格开关**开** ⇒ 判定点已打全 ⇒ True
+      * 严格开关关 ⇒ 判定点不打任何日志 ⇒ 本条是唯一记录 ⇒ False（保持 WARNING）
+      * 其余档（method_not_found / no_target / orig_mismatch …）⇒ False
+    """
+    if str(how or "") != "modified_other_method":
+        return False
+    return bool(_m470_align_strict_on())
+
+
 def _m470_body_span(lines: list, method: str):
     """★470刀1：按 ``self_inspector._read_method_body`` 的**同一规则**定位方法体区间。
 
@@ -3348,10 +3367,24 @@ class SafeEvolutionExecutor:
                         #   取不到唯一整段 ⇒ 不构造，避免产出注定失败的补丁。
                         _m469_al = _m469_align_method_patch(_llm_patch)
                         if not _m469_al.get("ok"):
-                            _module_logger.warning(
+                            # ★473刀9：`modified_other_method` 这一档**已由 470刀1 在
+                            #   判定点打过完整 WARNING**（id/file/期望方法名/实际方法名）。
+                            #   同一次失败再报一条只有错误码的 WARNING，等于日志翻倍：
+                            #   实测 2026-11-07 全天 28 对 28 条，一比一重复，
+                            #   真正的告警被淹在里面。此处降 INFO 并注明去看上一条；
+                            #   其余档（method_not_found / no_target / orig_mismatch …）
+                            #   仍是 WARNING。
+                            #   470 严格开关关掉时判定点不打 ⇒ 这里自动回 WARNING，
+                            #   不丢可观测性（判据跟日志实际行为一致，不靠猜测）。
+                            _m473_dup = _m473_should_demote_align_log(
+                                _m469_al.get("how"))
+                            _m473_logf = (_module_logger.info if _m473_dup
+                                          else _module_logger.warning)
+                            _m473_logf(
                                 "[469刀2] 跳过补丁构造：粒度无法对齐（%s）—— "
-                                "file=%s, organ=%s, method=%s, type=%s",
-                                _m469_al.get("how"), _loc_label, _organ, _method, _type)
+                                "file=%s, organ=%s, method=%s, type=%s%s",
+                                _m469_al.get("how"), _loc_label, _organ, _method, _type,
+                                "（详细判据见上一条 470刀1）" if _m473_dup else "")
                             _llm_patch["m469_align_failed"] = str(
                                 _m469_al.get("detail") or _m469_al.get("how"))
                             _llm_verify = {
