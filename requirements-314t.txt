@@ -89,7 +89,20 @@ radon==6.0.1
 #   自身有轮子，但运行期硬依赖 dlib（需 CMake + MSVC 现场编译）⇒ 实际不可用。
 #
 # ============================================================================
-# 未纳入本基线（可选、体积大或需额外系统组件），需要时单独安装：
-#   torch==2.15.0        —— 有 cp314t 轮子，但体积约数 GB；仅影响 device_router 实测
-#   pytesseract          —— 有轮子，另需系统级 tesseract 可执行文件
+# 473 批补（2026-11-07）：以下可选依赖**已实测安装成功**并验证不启回 GIL
+#   （逐个独立进程 import 后 sys._is_gil_enabled() 仍为 False）
+# ============================================================================
+torch==2.15.0                    # cp314t 轮子 127MB；device_router/GPUCore 使用
+tiktoken==0.14.0                 # token 计数（nucleus/evidence_injection.py）
+pytesseract==0.3.13              # OCR（organs/senses/visual_engines/ocr_engine.py）
+                                 #   系统级 tesseract 已在 C:\Program Files\Tesseract-OCR
+wecom-aibot-python-sdk==1.0.2    # 企微长连接（nucleus/wecom_chat_bridge.py 的 import aibot）
+aiohttp==3.14.5                  # aibot 依赖
+
+# ============================================================================
+# 仍不可装（缺 cp314t 轮子，且非必需）：
+#   wecom-aibot-sdk-python —— 依赖 pycryptodome，后者需现场编译 C 扩展。
+#     实测报错 `Target does not support a minimal C program: check the C toolchain`：
+#     本机 MSVC 14.51 的 cl.exe 存在，但 Windows SDK 的 Include/Lib 未安装，
+#     连 stdio.h 都找不到（`fatal error C1034`）。装 Windows SDK 后此项可重试。
 # ============================================================================
