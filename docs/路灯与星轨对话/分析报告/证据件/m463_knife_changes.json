@@ -1,0 +1,97 @@
+{
+ "batch": 463,
+ "date": "2026-11-06",
+ "authorization": "星轨 11:22「已重启，进行后续施工任务」；承接 462 §6 第一优先；本批无编号任务书，按对话授权施工。",
+ "head_at_start": "ed89bc24",
+ "live_process": "pid=31240 @2026-11-06 11:16:25（晚于 462 两笔 10:59/11:06 ⇒ 462 已加载；循环首跑延迟 1291s，取证时 11:22 尚未到首跑 ⇒ 462 台账为空不是故障）",
+ "verdict": "462 §6 第一优先「生成侧不产出补丁」的根因已定位并修掉。463 改动在磁盘上，仍需再次重启才生效。",
+ "t0_findings": [
+  {
+   "id": 1,
+   "finding": "★★僵尸冷却把能修的问题全关在门外",
+   "evidence": "09:42 候选15→放行2（冷却跳过13／解冻0）；10:15、10:54 各只放行1；10:57 修复完成 0/15、处理1个。cooldown.json 24 条里含多条 periodic_task_no_reentry / non_atomic_write（剩余冷却 10626~19619s）"
+  },
+  {
+   "id": 2,
+   "finding": "★★根因是「不可修复」被等价于「不在本地规则白名单」",
+   "evidence": "_cooldown_classify() 只看 type 是否在 15 类本地白名单；不在就判本地无规则·转LLM 并冷却 21600s，而 446 检测器早已覆盖这些代码类、462 证据链能给出 8/8"
+  },
+  {
+   "id": 3,
+   "finding": "★★每轮重登记 = 永不过期",
+   "evidence": "登记发生在循环结束后对**所有 processed 问题**（不管本轮是否真尝试过修复），每轮把 deadline 推到 now+TTL ⇒ 实盘「到期解冻恒为 0」"
+  },
+  {
+   "id": 4,
+   "finding": "放行的少数恰好是不可自动修的日志类",
+   "evidence": "skip_reasons 为 本地无规则·转LLM(ERROR)×1 / (growth_need)×1，无 file+method 无法定位代码 ⇒ 0 提交"
+  },
+  {
+   "id": 5,
+   "finding": "本批零 cw3-A 漂移",
+   "evidence": "未改任何 IW / pulse_inner_world_* ⇒ 首检即 PASS、基线零漂移 ⇒ 2 笔提交"
+  }
+ ],
+ "knives": [
+  {
+   "id": 1,
+   "name": "冷却判据分级（cooldown_policy.py）",
+   "detail": "classify()：高危→cool；本地规则可修→skip_cool；有 file+method 且 type 在 446 检测器覆盖表→skip_cool；无定位日志类→cool；其他代码类→cool_short(300s)。接线登记循环，并禁止刷新已有未过期冷却。",
+   "switch": "ENABLE_M463_COOLDOWN_POLICY / ENABLE_M463_NO_REFRESH_COOLDOWN / M463_SHORT_COOLDOWN_SEC"
+  },
+  {
+   "id": 2,
+   "name": "强制复检解冻",
+   "detail": "同一指纹累计被冷却跳过达 3 次 ⇒ 强制放行一次并清零；判据提成纯函数 should_force_recheck(hits, need)，扫描与单测共用口径；日志追加 463强制复检N个。",
+   "switch": "ENABLE_M463_FORCED_RECHECK / M463_FORCED_RECHECK_HITS"
+  },
+  {
+   "id": 3,
+   "name": "候选池优先级 + 修复漏斗留痕",
+   "detail": "priority()：本地规则可修(0)→检测器可复现代码类(1)→其他代码类(2)→日志类(9)；repair_funnel.py 每轮落盘 10 个读数（candidate…submitted）；四处接线均 try/except + silent_exc，失败不影响主流程。",
+   "switch": "ENABLE_M463_REPRO_PRIORITY / ENABLE_M463_REPAIR_FUNNEL"
+  }
+ ],
+ "real_sample_replay": {
+  "source": "data/evolution/cooldown.json 的 24 条真实冷却指纹",
+  "distribution": {
+   "cool": 10,
+   "skip_cool": 11,
+   "cool_short": 3
+  },
+  "freed": "11 条可复现代码类不再进冷却（原剩余冷却 10626~19619s），含 pulseheart._schedule_next_beat / pulsesystemmanager._schedule_health_check / pulsesemanticcomprehension._save_lessons / pulsemetricscollector._m383_dump_tier_distribution 等",
+  "old": "24 条全部在冷却期（实盘候选15→放行1~2、到期解冻0）",
+  "new": "11 条放行 / 3 条改 300s 短冷却 / 10 条维持正常冷却"
+ },
+ "integration_smoke": "实例化 SafeEvolutionExecutor → repair_with_distillation([]) 正常返回全部键、_m463_recheck_hits 已初始化 ⇒ 生产路径无 NameError",
+ "quality": {
+  "new_tests": 18,
+  "regression_passed": 286,
+  "total_passed": 304,
+  "existing_red": 0,
+  "warnings": "m31 1 条既有 warning",
+  "gates": "cw2（5 子项）/ 事件字符串 / silent_exc 元数 / 废弃导入 / 断链 / 遗留装配 / cw3-B：PASS；cw3-A 首检 PASS（零漂移，未重锚 ⇒ 2 笔）",
+  "ruff_new": 0,
+  "eol": {
+   "config.py": "LF 8279/0",
+   "nucleus/reasoning/SafeEvolutionExecutor.py": "CRLF 7511/0",
+   "nucleus/evolution/cooldown_policy.py": "LF 111/0",
+   "nucleus/evolution/repair_funnel.py": "LF 102/0",
+   "tests/test_m463_repair_funnel.py": "LF 190/0"
+  },
+  "production_trace_pollution": 0
+ },
+ "files_changed": [
+  "config.py",
+  "nucleus/reasoning/SafeEvolutionExecutor.py",
+  "nucleus/evolution/cooldown_policy.py",
+  "nucleus/evolution/repair_funnel.py",
+  "tests/test_m463_repair_funnel.py"
+ ],
+ "open_items": [
+  "463 改动需**再次重启**（pid=31240 早于提交）；首跑延迟 1291~2034s，重启后 20~35 分钟才第一轮",
+  "重启后盯 repair_funnel.jsonl 的 admitted（应从 1~2 升到 10+）与 submitted（是否终于 >0）",
+  "真实 apply/rollback 样本仍需一轮有补丁产出的闭环；若 submitted 仍为 0，下一步查 LLM 生成通道为什么不出补丁（本批只修准入）",
+  "常驻独立进程不建议做；假设开关 True 已实弹、handler 实弹锁死、453R 遗留未动"
+ ]
+}
