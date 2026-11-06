@@ -8226,3 +8226,54 @@ M462_AB_REQUIRE_DISCRIMINATIVE = True
 ENABLE_M462_ROOT_CAUSE_ROUTER = True
 M462_ROUTER_TRACE_REL = "data/reports/evolution/root_cause_route.jsonl"
 M462_ROUTER_MAX_HINTS = 2
+
+
+# ==================== [M463-CFG] 第463批（修「生成侧不产出补丁」的根因）====================
+# 触发：2026-11-06 11:16 第三次重启（pid=31240）后取证 ——
+#   462 已加载，但 10:54 第 1 轮仍是「发现 15 个问题、已尝试修复 0 轮」。
+#   ★★实盘漏斗： [P1-3 冷却隔离] 候选15个 → 放行1~2个（冷却跳过13~14个／
+#     **到期解冻 0 个**）→ [修复蒸馏] 共1~2个 → [自主进化] 修复完成 0/15。
+#   ★★根因：SafeEvolutionExecutor._cooldown_classify() 只看 type 是否在
+#     15 类本地规则白名单里；不在就一律判「本地无规则·转LLM」并冷却 21600s。
+#     登记又发生在循环结束后对**所有 processed 问题**（不管本轮是否真尝试过修复），
+#     每轮重登记刷新 TTL ⇒ 实际永不过期。cooldown.json 24 条里赫然有
+#     periodic_task_no_reentry / non_atomic_write 这些 462 检测器能覆盖的代码类问题。
+#     ⇒ 能修的被关在门外，放行的只剩 growth_need / ERROR 日志类（本就不可自动修）。
+#   全部新增键，不覆盖 457~462 任何键。
+#
+# ENABLE_M463_COOLDOWN_POLICY
+#   默认值：True
+#   语义：冷却判据分级总闸。False ⇒ 逐字节回到 463 前行为（可 A/B 复现
+#     「候选15→放行1」的旧现场）。
+ENABLE_M463_COOLDOWN_POLICY = True
+#
+# M463_SHORT_COOLDOWN_SEC
+#   默认值：300.0（5 分钟，约一轮循环）
+#   语义：「本地无规则·转LLM」的代码类问题改用短冷却，不再 21600s 一关 6 小时。
+M463_SHORT_COOLDOWN_SEC = 300.0
+#
+# ENABLE_M463_NO_REFRESH_COOLDOWN
+#   默认值：True
+#   语义：**禁止刷新已有未过期冷却**。旧逻辑每轮重登记都把 deadline 推到 now+TTL，
+#     是「到期解冻恒为 0」的直接原因。打开后同一指纹冷却期内只记一次。
+ENABLE_M463_NO_REFRESH_COOLDOWN = True
+#
+# ENABLE_M463_FORCED_RECHECK / M463_FORCED_RECHECK_HITS
+#   默认值：True / 3
+#   语义：同一指纹累计被冷却跳过达 N 次 ⇒ **强制放行一次复检**并清零计数，
+#     避免 cooldown.json 里的历史条目长期占满候选池（内存级，重启即一次天然复检）。
+ENABLE_M463_FORCED_RECHECK = True
+M463_FORCED_RECHECK_HITS = 3
+#
+# ENABLE_M463_REPRO_PRIORITY
+#   默认值：True
+#   语义：排序时把「本地规则可修 / 446 检测器可复现」的代码类问题排在
+#     growth_need / ERROR 日志类之前，确保有限的修复名额给能出补丁的问题。
+ENABLE_M463_REPRO_PRIORITY = True
+#
+# ENABLE_M463_REPAIR_FUNNEL / M463_FUNNEL_REL
+#   默认值：True / data/reports/evolution/repair_funnel.jsonl
+#   语义：把「候选→冷却跳过→放行→规划→处理→提交」逐层读数 append-only 落盘，
+#     下一轮不必再从 10MB×5 滚动日志里拼漏斗（344 批作废台账的同型教训）。
+ENABLE_M463_REPAIR_FUNNEL = True
+M463_FUNNEL_REL = "data/reports/evolution/repair_funnel.jsonl"

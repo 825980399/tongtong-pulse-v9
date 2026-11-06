@@ -2135,6 +2135,15 @@ class SafeEvolutionExecutor:
         #   让出问题：白名单/优先级排序是在剩余候选里重排的，名额才真能释放。
         _cooldown_skipped = 0
         _cooldown_expired = 0
+        # ★463 刀2/刀3：漏斗读数 + 强制复检计数（内存级，重启即一次天然复检）
+        _m463_candidate = len(issues) if isinstance(issues, list) else 0
+        _m463_forced = 0
+        _m463_hits = getattr(self, "_m463_recheck_hits", None)
+        if _m463_hits is None:
+            _m463_hits = {}
+            self._m463_recheck_hits = _m463_hits
+        import config as _cfg463
+        from nucleus.evolution import cooldown_policy as _m463_cp0
         if self._no_fix_cooldown_enabled and issues:
             _now_mono = time.monotonic()
             _alive = []
@@ -2147,6 +2156,17 @@ class SafeEvolutionExecutor:
                 if _deadline is None:
                     _alive.append(_i)
                 elif _now_mono < _deadline:
+                    # ★463 刀2：累计被冷却跳过达 N 次 ⇒ 强制放行一次复检，
+                    #   避免 cooldown.json 的历史条目长期占满候选池。
+                    if bool(getattr(_cfg463, "ENABLE_M463_FORCED_RECHECK", True)):
+                        _hits463 = int(_m463_hits.get(_fp, 0)) + 1
+                        _need463 = int(getattr(_cfg463, "M463_FORCED_RECHECK_HITS", 3))
+                        if _m463_cp0.should_force_recheck(_hits463, need=_need463):
+                            _m463_hits.pop(_fp, None)
+                            _alive.append(_i)
+                            _m463_forced += 1
+                            continue
+                        _m463_hits[_fp] = _hits463
                     _cooldown_skipped += 1
                 else:
                     # 冷却到期：解冻，本轮重新参与竞争
@@ -2157,7 +2177,8 @@ class SafeEvolutionExecutor:
                 _module_logger.info(
                     f"[P1-3 冷却隔离] 候选{len(issues)}个 → 放行{len(_alive)}个"
                     f"（冷却跳过{_cooldown_skipped}个"
-                    f"／到期解冻{_cooldown_expired}个）")
+                    f"／到期解冻{_cooldown_expired}个"
+                    f"／463强制复检{_m463_forced}个）")
             issues = _alive
 
         _steps = self._plan_multi_step_repair(issues, self_inspector)
@@ -2179,6 +2200,20 @@ class SafeEvolutionExecutor:
             else:
                 _dedup_dropped += 1
         _sorted_issues = _unique_issues
+        # ★463 刀3：可修的代码类排在 growth_need / ERROR 日志类之前，
+        #   避免有限的修复名额被本来就不能自动修的问题占掉。
+        if bool(getattr(_cfg463, "ENABLE_M463_REPRO_PRIORITY", True)):
+            try:
+                from nucleus.evolution import cooldown_policy as _m463_cp
+                _sorted_issues = sorted(
+                    _unique_issues,
+                    key=lambda _x: _m463_cp.priority(
+                        _x, local_fixable_types=_local_fixable_types)
+                    if isinstance(_x, dict) else 99)
+            except Exception as _e:
+                silent_exc(_e, where="SafeEvolutionExecutor::463 排序",
+                           level="debug")
+
         # ★9-问题3修复（2026-09-06）：由硬编码 min(10, ...) 改为实例属性
         #   self._max_repair_issues（默认 20），与上游 discover_all_issues
         #   的 max_issues=20 对齐（main.py:1746）。
@@ -2761,17 +2796,45 @@ class SafeEvolutionExecutor:
             return None
 
         _cooled_down = 0
+        _m463_skipped_cool = 0
         if self._no_fix_cooldown_enabled:
             _now_mono2 = time.monotonic()
             for _issue in _sorted_issues[:_process_count]:
                 if not isinstance(_issue, dict):
                     continue
-                _why = _cooldown_classify(_issue)
-                if _why is None:
-                    continue
-                _ttl = self._cooldown_ttl_for(_why)
-                self._no_fix_cooldown[
-                    self._cooldown_key(_issue)] = _now_mono2 + _ttl
+                # ★463 刀1：判据从「type 在不在本地白名单」改成
+                #   「这条问题有没有可复现的修复路径」。总闸关 ⇒ 回到旧 _cooldown_classify。
+                if bool(getattr(_cfg463, "ENABLE_M463_COOLDOWN_POLICY", True)):
+                    try:
+                        from nucleus.evolution import cooldown_policy as _m463_cp2
+                        _cp = _m463_cp2.classify(
+                            _issue, local_fixable_types=_local_fixable_types,
+                            high_risk_types=_HIGH_RISK_NON_FIXABLE)
+                    except Exception as _e:
+                        silent_exc(_e, where="SafeEvolutionExecutor::463 冷却分级",
+                                   level="debug")
+                        continue
+                    if _cp.get("action") == _m463_cp2.A_SKIP:
+                        _m463_skipped_cool += 1
+                        continue
+                    _fp2 = self._cooldown_key(_issue)
+                    # ★禁止刷新已有未过期冷却：旧逻辑每轮重登记都推 deadline，
+                    #   是实盘「到期解冻恒为 0」的直接原因。
+                    if (bool(getattr(_cfg463, "ENABLE_M463_NO_REFRESH_COOLDOWN", True))
+                            and _fp2 in self._no_fix_cooldown
+                            and self._no_fix_cooldown[_fp2] > _now_mono2):
+                        continue
+                    if _cp.get("action") == _m463_cp2.A_COOL_SHORT:
+                        _ttl = float(getattr(_cfg463, "M463_SHORT_COOLDOWN_SEC", 300.0))
+                    else:
+                        _ttl = self._cooldown_ttl_for(_cp.get("why") or "")
+                else:
+                    _why = _cooldown_classify(_issue)
+                    if _why is None:
+                        continue
+                    _fp2 = self._cooldown_key(_issue)
+                    _ttl = self._cooldown_ttl_for(_why)
+                self._no_fix_cooldown[_fp2] = _now_mono2 + _ttl
                 _cooled_down += 1
             # 顺带清理已解冻的历史项，避免字典随运行时间无界增长
             if len(self._no_fix_cooldown) > 512:
@@ -2839,6 +2902,24 @@ class SafeEvolutionExecutor:
                 len(_sorted_issues[:_process_count]), _repaired, _m84_round_extra)
         except Exception as e:
             _module_logger.debug(f"修复率埋点异常已忽略: {type(e).__name__}: {e}")
+        # ★463 刀3：逐层漏斗一次落盘，下一轮不必再从 10MB×5 滚动日志里拼
+        #   （344 批作废台账的同型教训：关键读数会随轮转消失）。
+        try:
+            from nucleus.evolution import repair_funnel as _m463_rf
+            _m463_rf.note({
+                "candidate": _m463_candidate,
+                "cooldown_skipped": _cooldown_skipped,
+                "forced_recheck": _m463_forced,
+                "admitted": len(issues) if isinstance(issues, list) else 0,
+                "planned": len(_steps),
+                "processed": len(_sorted_issues[:_process_count]),
+                "submitted": _repaired,
+                "cool_skipped_by_policy": _m463_skipped_cool,
+                "cooldown_registered": _cooled_down,
+            })
+        except Exception as _e:
+            silent_exc(_e, where="SafeEvolutionExecutor::463 漏斗留痕",
+                       level="debug")
         return {
             "repaired": _repaired,
             "pass_rate": (_repaired / _total_in) if _total_in else 0.0,
