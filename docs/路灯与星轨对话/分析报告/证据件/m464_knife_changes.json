@@ -1,0 +1,146 @@
+{
+ "batch": 464,
+ "date": "2026-11-06",
+ "authorization": "星轨 12:38「我已经重启了」；承接 463 交付报告 §交接 ①②③（重启后验效 + 仍 0 轮修复则继续查）。本批无编号任务书，按对话授权施工。",
+ "head_at_start": "acfd4364",
+ "live_process": "pid=33400 @2026-11-06 12:38:01（晚于 463 两笔 11:46:37 / 11:53:08 ⇒ 463 已加载）。取证时 12:57 尚未到首跑（前一轮 pid=31240 首跑延迟 ~22min、轮间隔 ~31min）",
+ "verdict": "463 的判据只作用于「新登记」，已落盘的僵尸台账原样装回 —— 这是「463 已加载却仍放行 0」的直接原因。464 把迁移补到载入期，并把强制复检计数落盘、把漏斗补上明细。★重启后实盘已验效：12:47:45 执行器子进程打出「载入 25 条 → 放行 11 / 收短 3 / 保留 11」，cooldown.json 25→14；13:02 第 1 轮 admitted 0→11、processed 11。★但 submitted 仍 0 —— 堵点已从「门槛」移到 LLM 修复通道（今日失败 58 次，见 new_blocker）。",
+ "t0_findings": [
+  {
+   "id": 1,
+   "finding": "★★463 已加载，放行仍为 0（实盘）",
+   "evidence": "12:03:00 pid=17804（463 代码）日志：`[P1-3 冷却隔离] 候选5个 → 放行0个（冷却跳过5个／到期解冻0个／463强制复检0个）`；同轮 `[修复蒸馏] 共0个问题`、`[进化健康] 本轮 发现=0 修复=0`。漏斗首行 candidate=5 / cooldown_skipped=5 / forced_recheck=0 / admitted=0。"
+  },
+  {
+   "id": 2,
+   "finding": "★★台账回放：11 条按 463 判据本就该放行，仍被锁最长 4.94h",
+   "evidence": "tmp/m464_probe_ledger.py 只读回放 data/evolution/cooldown.json（25 条）：skip_cool 11 / cool 11 / cool_short 3。11 条 = 9×periodic_task_no_reentry + 2×non_atomic_write，剩余 TTL 2.44h~4.94h；全表合计占池 99.00h。"
+  },
+  {
+   "id": 3,
+   "finding": "★★根因：载入期不重判 —— 463 刀1 只改「新登记」的 TTL",
+   "evidence": "`_m114a_load_cooldown()`（SafeEvolutionExecutor.py:6348-6376）逐条 `self._no_fix_cooldown[fp] = now + rem`，全程不查 cooldown_policy；classify() 的唯一调用点在 2810（循环结束后的登记段）。⇒ 历史条目按旧判据 21600s 继续生效。"
+  },
+  {
+   "id": 4,
+   "finding": "★463 刀2（强制复检）钝化：命中数只存内存，重启清零",
+   "evidence": "`self._m463_recheck_hits` 在 repair_with_distillation 内 `getattr(..., None) is None` 时新建空字典（:2141-2144），__init__/落盘均无。实盘 evolve 轮 11:38:37 → 12:09:26（≈31min），进程今日重启 10+ 次 ⇒ 需连攒 3 轮才触发，实际攒不满。"
+  },
+  {
+   "id": 5,
+   "finding": "★漏斗只有一个聚合数，无法判定被冷却者的性质",
+   "evidence": "repair_funnel.note() 只写 10 个 int 读数（白名单式），没有「这 5 个是本该放行还是本该冷却」。12:03 那轮只能靠人工回放台账反推。"
+  }
+ ],
+ "knives": [
+  {
+   "id": "464刀1",
+   "name": "载入期台账迁移",
+   "file": "nucleus/evolution/cooldown_policy.py + nucleus/reasoning/SafeEvolutionExecutor.py",
+   "what": "新增 issue_from_fingerprint() / migrate_ledger()（纯函数）；_m114a_load_cooldown 装载前先按当前判据重判：skip_cool ⇒ 移出；cool_short ⇒ 剩余收短到 300s（只收短不延长）；cool ⇒ 保留。迁移后立即落盘，防止下次重启又装回来。",
+   "switch": "ENABLE_M464_LEDGER_MIGRATION（默认 True；关 ⇒ 旧台账原样装回）",
+   "unit": "test_migrate_releases_fixable_code / _shortens_unknown_code_and_keeps_tail / _never_extends_short_entry / _keeps_log_class / _high_risk_kept / _invalid_rows_counted / _is_pure / test_load_migrates_and_rewrites / test_load_migration_gate_off"
+  },
+  {
+   "id": "464刀2",
+   "name": "强制复检命中数跨重启续期",
+   "file": "nucleus/reasoning/SafeEvolutionExecutor.py",
+   "what": "cooldown.json 每条追加第 3 个元素（命中数）；载入时回填 self._m463_recheck_hits。向后兼容：只认 len>=3，旧两元素台账照常加载。",
+   "switch": "ENABLE_M464_PERSIST_RECHECK_HITS（默认 True；关 ⇒ 仍写两元素）",
+   "unit": "test_load_restores_hits / test_save_writes_hits_and_roundtrip / test_save_gate_off_keeps_two_elements"
+  },
+  {
+   "id": "464刀3",
+   "name": "漏斗补冷却明细",
+   "file": "nucleus/evolution/repair_funnel.py + nucleus/reasoning/SafeEvolutionExecutor.py",
+   "what": "被冷却候选逐条记 {policy, type, file, method, rem_s}（最多 20 条）；漏斗行追加 cooled_buckets（按当前判据分档计数）与 cooled_top（前 5 条）。int 白名单不受影响，明细单独收。",
+   "switch": "ENABLE_M464_FUNNEL_DETAIL（默认 True）",
+   "unit": "test_funnel_detail_written / test_funnel_detail_gate_off / test_funnel_detail_bounded"
+  },
+  {
+   "id": "464重构",
+   "name": "本地可修类型表提到模块级",
+   "file": "nucleus/reasoning/SafeEvolutionExecutor.py",
+   "what": "_LOCAL_FIXABLE_TYPES（13 项，逐字搬自 repair_with_distillation 的函数内字面量）；函数内改为引用。理由：载入期迁移与登记侧必须同口径，否则同一问题在「放行」「登记」两侧判出两种结论。"
+  }
+ ],
+ "offline_replay": {
+  "script": "tmp/m464_probe_ledger.py（只读）+ 迁移回放（只读，不写生产台账）",
+  "before": "25 条 / 合计占池 99.00h / 最长 6.00h",
+  "migrate_report": {
+   "total": 25,
+   "released": 11,
+   "shortened": 3,
+   "kept": 11,
+   "invalid": 0
+  },
+  "after": "14 条 / 合计 44.79h / 最长 6.00h（剩下的是日志类 growth_need/ERROR，本就该冷却）",
+  "note": "3 条 long_method 从 5.38h 收短到 300s；11 条代码类直接放行"
+ },
+ "tests": {
+  "new": "tests/test_m464_ledger_migration.py —— 18 passed（两轮复跑均 18/18）",
+  "regression": "test_m463 18 / test_m462 27 / test_m461 22 / test_m460 23 —— 合计 90 passed，0 存量红",
+  "total": 108
+ },
+ "gates": {
+  "cw2": "首检 FAIL（新增 1 处静默 except：`except (TypeError, ValueError): _h464 = 0`）→ 补 silent_exc 后 PASS",
+  "static5": "弃用import / 事件字符串 / 断链 / silent_exc arity / legacy装配 全 rc=0",
+  "red_baseline_collect": "rc=0",
+  "nul": "rc=0",
+  "s4_cold_index": "rc=0",
+  "cw3B": "rc=0",
+  "cw3A": "rc=0（本批未动 PulseInnerWorld/baseline，零漂移 ⇒ 不造 [ci-gate-change] 空提交）",
+  "register": "493 条；本批到期未裁 0 / M2 逾期 0",
+  "register_columns": "493 行 9 列全部完整"
+ },
+ "ruff": {
+  "new_files": "cooldown_policy.py / repair_funnel.py / test_m464_ledger_migration.py —— All checks passed",
+  "added_lines_over_120": 0,
+  "eol": "SafeEvolutionExecutor.py CRLF 7597 / 裸 LF 0；config.py、cooldown_policy.py、repair_funnel.py、test 均纯 LF（与批次前一致）"
+ },
+ "files": [
+  "nucleus/evolution/cooldown_policy.py",
+  "nucleus/evolution/repair_funnel.py",
+  "nucleus/reasoning/SafeEvolutionExecutor.py",
+  "config.py",
+  "tests/test_m464_ledger_migration.py"
+ ],
+ "handoff": [
+  "①不用再重启：迁移已 12:47:45 落地（25→14），三个开关随执行器子进程生效",
+  "②465 第一优先 = LLM 修复通道：先补错误正文可观测 → 再单发验渠道 → 最后加退避/熔断",
+  "③盯 repair_funnel：admitted 应长期 ~11；submitted 一旦 >0 说明通道通了",
+  "④cool_skipped_by_policy 现在有判别力：=11 表示登记侧正常，掉到 0 说明 463刀1 被绕过",
+  "⑤常驻独立进程仍不建议做（瓶颈是单点外部依赖，不是调度形态）"
+ ],
+ "live_round_after_restart": {
+  "migration": "12:47:45 pid=49292（executor 子进程）「[464刀1][台账迁移] 载入 25 条 → 放行 11 / 收短 3 / 保留 11」；12:47:45「重启加载 14 条」；cooldown.json 25→14，与离线回放逐字吻合",
+  "round1": "13:02:58 第1轮开始 → 13:03:06 候选12 → 放行11（冷却跳过1／解冻0／强制复检0） → [修复蒸馏] 共11个问题/规划11步/处理11个 → 13:06:10 修复完成 0/12",
+  "funnel_row": {
+   "candidate": 12,
+   "cooldown_skipped": 1,
+   "forced_recheck": 0,
+   "admitted": 11,
+   "planned": 11,
+   "processed": 11,
+   "submitted": 0,
+   "cool_skipped_by_policy": 11,
+   "cooldown_registered": 0
+  },
+  "read": "admitted 0→11 证明迁移生效；cool_skipped_by_policy=11 证明登记侧没把它们关回去（463刀1+464刀1 合起来切断了「关进去→装回来」的环）；submitted=0 是生成侧问题"
+ },
+ "new_blocker": {
+  "what": "LLM 修复通道读超时 + 秒失败，全天未恢复",
+  "evidence": [
+   "13:06:06 [调用记录] 取数 model=glm-4.7-flash tokens=0 cost=None",
+   "13:06:06 WARNING [LLM修复] 修复建议生成异常，本轮 LLM 通道降级返回 None: TimeoutError: The read operation timed out",
+   "13:06:07~13:06:10 [LLM修复] 调用未返回可用结果（HTTP ok=False, data_type=str，连续第 1~9 次）",
+   "13:06:08 [LLM门禁] 跳过 PulseMetricsCollector.py._m383_dump_tier_distribution(non_atomic_write)：已有待审批补丁，避免重复调用",
+   "今日 02:00–13:00 同类失败累计 58 次（按小时 2/9/1/5/11/7/6/4/1/0/2/10）"
+  ],
+  "gaps": [
+   "safe_http_json 返回的错误正文被丢弃，日志只有 ok=False, data_type=str ⇒ 分不清配额 / 并发限制 / 4xx",
+   "同一轮连打 9 次没有早停 ⇒ 渠道坏掉时每轮空烧约 10 次调用（451刀4 只做了告警去重）",
+   "timeout 取 timeout_by_purpose.evolution（默认 30s）—— 渠道到底通不通需单发实测"
+  ]
+ }
+}
