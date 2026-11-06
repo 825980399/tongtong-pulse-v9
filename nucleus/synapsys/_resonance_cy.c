@@ -4,16 +4,9 @@
 {
     "distutils": {
         "depends": [],
-        "extra_compile_args": [
-            "/O2",
-            "/GL"
-        ],
-        "extra_link_args": [
-            "/LTCG"
-        ],
         "name": "_resonance_cy",
         "sources": [
-            "nucleus/synapsys/_resonance_cy.pyx"
+            "D:\\xinrenlei\\tongtong-pulse-v9\\nucleus/synapsys/_resonance_cy.pyx"
         ]
     },
     "module_name": "_resonance_cy"
@@ -1164,7 +1157,7 @@ static int __Pyx_init_co_variables(void) {
 #define __Pyx_FREETHREADING_COMPATIBLE Py_MOD_GIL_USED
 #endif
 #else
-#define __Pyx_FREETHREADING_COMPATIBLE Py_MOD_GIL_USED
+#define __Pyx_FREETHREADING_COMPATIBLE Py_MOD_GIL_NOT_USED
 #endif
 #define __PYX_DEFAULT_STRING_ENCODING_IS_ASCII 0
 #define __PYX_DEFAULT_STRING_ENCODING_IS_UTF8 0
@@ -2400,7 +2393,7 @@ return 0;
 #endif
 /* #### Code section: module_code ### */
 
-/* "_resonance_cy.pyx":13
+/* "_resonance_cy.pyx":14
  * 
  * 
  * def calc_memory_dim_cy(double query_freq, double node_freq,             # <<<<<<<<<<<<<<
@@ -2451,53 +2444,53 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   {
     PyObject ** const __pyx_pyargnames[] = {&__pyx_mstate_global->__pyx_n_u_query_freq,&__pyx_mstate_global->__pyx_n_u_node_freq,&__pyx_mstate_global->__pyx_n_u_hebbian,&__pyx_mstate_global->__pyx_n_u_activation_count,0};
     const Py_ssize_t __pyx_kwds_len = (__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
-    if (unlikely(__pyx_kwds_len < 0)) __PYX_ERR(0, 13, __pyx_L3_error)
+    if (unlikely(__pyx_kwds_len < 0)) __PYX_ERR(0, 14, __pyx_L3_error)
     if (__pyx_kwds_len > 0) {
       switch (__pyx_nargs) {
         case  4:
         values[3] = __Pyx_ArgRef_FASTCALL(__pyx_args, 3);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[3])) __PYX_ERR(0, 13, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[3])) __PYX_ERR(0, 14, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  3:
         values[2] = __Pyx_ArgRef_FASTCALL(__pyx_args, 2);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[2])) __PYX_ERR(0, 13, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[2])) __PYX_ERR(0, 14, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  2:
         values[1] = __Pyx_ArgRef_FASTCALL(__pyx_args, 1);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 13, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 14, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  1:
         values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 13, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 14, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  0: break;
         default: goto __pyx_L5_argtuple_error;
       }
       const Py_ssize_t kwd_pos_args = __pyx_nargs;
-      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "calc_memory_dim_cy", 0) < (0)) __PYX_ERR(0, 13, __pyx_L3_error)
+      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "calc_memory_dim_cy", 0) < (0)) __PYX_ERR(0, 14, __pyx_L3_error)
       for (Py_ssize_t i = __pyx_nargs; i < 4; i++) {
-        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("calc_memory_dim_cy", 1, 4, 4, i); __PYX_ERR(0, 13, __pyx_L3_error) }
+        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("calc_memory_dim_cy", 1, 4, 4, i); __PYX_ERR(0, 14, __pyx_L3_error) }
       }
     } else if (unlikely(__pyx_nargs != 4)) {
       goto __pyx_L5_argtuple_error;
     } else {
       values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 13, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 14, __pyx_L3_error)
       values[1] = __Pyx_ArgRef_FASTCALL(__pyx_args, 1);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 13, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 14, __pyx_L3_error)
       values[2] = __Pyx_ArgRef_FASTCALL(__pyx_args, 2);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[2])) __PYX_ERR(0, 13, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[2])) __PYX_ERR(0, 14, __pyx_L3_error)
       values[3] = __Pyx_ArgRef_FASTCALL(__pyx_args, 3);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[3])) __PYX_ERR(0, 13, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[3])) __PYX_ERR(0, 14, __pyx_L3_error)
     }
-    __pyx_v_query_freq = __Pyx_PyFloat_AsDouble(values[0]); if (unlikely((__pyx_v_query_freq == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 13, __pyx_L3_error)
-    __pyx_v_node_freq = __Pyx_PyFloat_AsDouble(values[1]); if (unlikely((__pyx_v_node_freq == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 13, __pyx_L3_error)
-    __pyx_v_hebbian = __Pyx_PyFloat_AsDouble(values[2]); if (unlikely((__pyx_v_hebbian == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 14, __pyx_L3_error)
-    __pyx_v_activation_count = __Pyx_PyLong_As_int(values[3]); if (unlikely((__pyx_v_activation_count == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 14, __pyx_L3_error)
+    __pyx_v_query_freq = __Pyx_PyFloat_AsDouble(values[0]); if (unlikely((__pyx_v_query_freq == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 14, __pyx_L3_error)
+    __pyx_v_node_freq = __Pyx_PyFloat_AsDouble(values[1]); if (unlikely((__pyx_v_node_freq == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 14, __pyx_L3_error)
+    __pyx_v_hebbian = __Pyx_PyFloat_AsDouble(values[2]); if (unlikely((__pyx_v_hebbian == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 15, __pyx_L3_error)
+    __pyx_v_activation_count = __Pyx_PyLong_As_int(values[3]); if (unlikely((__pyx_v_activation_count == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 15, __pyx_L3_error)
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("calc_memory_dim_cy", 1, 4, 4, __pyx_nargs); __PYX_ERR(0, 13, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("calc_memory_dim_cy", 1, 4, 4, __pyx_nargs); __PYX_ERR(0, 14, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
@@ -2533,7 +2526,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("calc_memory_dim_cy", 0);
 
-  /* "_resonance_cy.pyx":20
+  /* "_resonance_cy.pyx":21
  *     0.5 + 0.3 + 0.2
  *     """
  *     cdef double score = 0.0             # <<<<<<<<<<<<<<
@@ -2542,7 +2535,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
 */
   __pyx_v_score = 0.0;
 
-  /* "_resonance_cy.pyx":21
+  /* "_resonance_cy.pyx":22
  *     """
  *     cdef double score = 0.0
  *     cdef double freq_sim = 0.0             # <<<<<<<<<<<<<<
@@ -2551,7 +2544,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
 */
   __pyx_v_freq_sim = 0.0;
 
-  /* "_resonance_cy.pyx":22
+  /* "_resonance_cy.pyx":23
  *     cdef double score = 0.0
  *     cdef double freq_sim = 0.0
  *     cdef double act_score = 0.0             # <<<<<<<<<<<<<<
@@ -2560,7 +2553,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
 */
   __pyx_v_act_score = 0.0;
 
-  /* "_resonance_cy.pyx":23
+  /* "_resonance_cy.pyx":24
  *     cdef double freq_sim = 0.0
  *     cdef double act_score = 0.0
  *     cdef double clamped_hebbian = hebbian             # <<<<<<<<<<<<<<
@@ -2569,7 +2562,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
 */
   __pyx_v_clamped_hebbian = __pyx_v_hebbian;
 
-  /* "_resonance_cy.pyx":25
+  /* "_resonance_cy.pyx":26
  *     cdef double clamped_hebbian = hebbian
  * 
  *     with nogil:             # <<<<<<<<<<<<<<
@@ -2582,7 +2575,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
       __Pyx_FastGIL_Remember();
       /*try:*/ {
 
-        /* "_resonance_cy.pyx":27
+        /* "_resonance_cy.pyx":28
  *     with nogil:
  *         #
  *         if query_freq > 0 and node_freq > 0:             # <<<<<<<<<<<<<<
@@ -2600,7 +2593,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
         __pyx_L7_bool_binop_done:;
         if (__pyx_t_1) {
 
-          /* "_resonance_cy.pyx":28
+          /* "_resonance_cy.pyx":29
  *         #
  *         if query_freq > 0 and node_freq > 0:
  *             freq_sim = 1.0 - fabs(query_freq - node_freq) / 50.0             # <<<<<<<<<<<<<<
@@ -2609,7 +2602,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
 */
           __pyx_v_freq_sim = (1.0 - (fabs((__pyx_v_query_freq - __pyx_v_node_freq)) / 50.0));
 
-          /* "_resonance_cy.pyx":29
+          /* "_resonance_cy.pyx":30
  *         if query_freq > 0 and node_freq > 0:
  *             freq_sim = 1.0 - fabs(query_freq - node_freq) / 50.0
  *             if freq_sim < 0.0:             # <<<<<<<<<<<<<<
@@ -2619,7 +2612,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
           __pyx_t_1 = (__pyx_v_freq_sim < 0.0);
           if (__pyx_t_1) {
 
-            /* "_resonance_cy.pyx":30
+            /* "_resonance_cy.pyx":31
  *             freq_sim = 1.0 - fabs(query_freq - node_freq) / 50.0
  *             if freq_sim < 0.0:
  *                 freq_sim = 0.0             # <<<<<<<<<<<<<<
@@ -2628,7 +2621,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
 */
             __pyx_v_freq_sim = 0.0;
 
-            /* "_resonance_cy.pyx":29
+            /* "_resonance_cy.pyx":30
  *         if query_freq > 0 and node_freq > 0:
  *             freq_sim = 1.0 - fabs(query_freq - node_freq) / 50.0
  *             if freq_sim < 0.0:             # <<<<<<<<<<<<<<
@@ -2637,7 +2630,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
 */
           }
 
-          /* "_resonance_cy.pyx":31
+          /* "_resonance_cy.pyx":32
  *             if freq_sim < 0.0:
  *                 freq_sim = 0.0
  *             score += freq_sim * 0.5             # <<<<<<<<<<<<<<
@@ -2646,7 +2639,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
 */
           __pyx_v_score = (__pyx_v_score + (__pyx_v_freq_sim * 0.5));
 
-          /* "_resonance_cy.pyx":27
+          /* "_resonance_cy.pyx":28
  *     with nogil:
  *         #
  *         if query_freq > 0 and node_freq > 0:             # <<<<<<<<<<<<<<
@@ -2655,7 +2648,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
 */
         }
 
-        /* "_resonance_cy.pyx":34
+        /* "_resonance_cy.pyx":35
  * 
  *         # 0-1
  *         if clamped_hebbian > 1.0:             # <<<<<<<<<<<<<<
@@ -2665,7 +2658,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
         __pyx_t_1 = (__pyx_v_clamped_hebbian > 1.0);
         if (__pyx_t_1) {
 
-          /* "_resonance_cy.pyx":35
+          /* "_resonance_cy.pyx":36
  *         # 0-1
  *         if clamped_hebbian > 1.0:
  *             clamped_hebbian = 1.0             # <<<<<<<<<<<<<<
@@ -2674,7 +2667,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
 */
           __pyx_v_clamped_hebbian = 1.0;
 
-          /* "_resonance_cy.pyx":34
+          /* "_resonance_cy.pyx":35
  * 
  *         # 0-1
  *         if clamped_hebbian > 1.0:             # <<<<<<<<<<<<<<
@@ -2683,7 +2676,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
 */
         }
 
-        /* "_resonance_cy.pyx":36
+        /* "_resonance_cy.pyx":37
  *         if clamped_hebbian > 1.0:
  *             clamped_hebbian = 1.0
  *         score += clamped_hebbian * 0.3             # <<<<<<<<<<<<<<
@@ -2692,7 +2685,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
 */
         __pyx_v_score = (__pyx_v_score + (__pyx_v_clamped_hebbian * 0.3));
 
-        /* "_resonance_cy.pyx":39
+        /* "_resonance_cy.pyx":40
  * 
  *         # 1
  *         if activation_count > 0:             # <<<<<<<<<<<<<<
@@ -2702,7 +2695,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
         __pyx_t_1 = (__pyx_v_activation_count > 0);
         if (__pyx_t_1) {
 
-          /* "_resonance_cy.pyx":40
+          /* "_resonance_cy.pyx":41
  *         # 1
  *         if activation_count > 0:
  *             act_score = log10(activation_count + 1) / 5.0             # <<<<<<<<<<<<<<
@@ -2711,7 +2704,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
 */
           __pyx_v_act_score = (log10((__pyx_v_activation_count + 1)) / 5.0);
 
-          /* "_resonance_cy.pyx":41
+          /* "_resonance_cy.pyx":42
  *         if activation_count > 0:
  *             act_score = log10(activation_count + 1) / 5.0
  *             if act_score > 1.0:             # <<<<<<<<<<<<<<
@@ -2721,7 +2714,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
           __pyx_t_1 = (__pyx_v_act_score > 1.0);
           if (__pyx_t_1) {
 
-            /* "_resonance_cy.pyx":42
+            /* "_resonance_cy.pyx":43
  *             act_score = log10(activation_count + 1) / 5.0
  *             if act_score > 1.0:
  *                 act_score = 1.0             # <<<<<<<<<<<<<<
@@ -2730,7 +2723,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
 */
             __pyx_v_act_score = 1.0;
 
-            /* "_resonance_cy.pyx":41
+            /* "_resonance_cy.pyx":42
  *         if activation_count > 0:
  *             act_score = log10(activation_count + 1) / 5.0
  *             if act_score > 1.0:             # <<<<<<<<<<<<<<
@@ -2739,7 +2732,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
 */
           }
 
-          /* "_resonance_cy.pyx":43
+          /* "_resonance_cy.pyx":44
  *             if act_score > 1.0:
  *                 act_score = 1.0
  *             score += act_score * 0.2             # <<<<<<<<<<<<<<
@@ -2748,7 +2741,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
 */
           __pyx_v_score = (__pyx_v_score + (__pyx_v_act_score * 0.2));
 
-          /* "_resonance_cy.pyx":39
+          /* "_resonance_cy.pyx":40
  * 
  *         # 1
  *         if activation_count > 0:             # <<<<<<<<<<<<<<
@@ -2757,7 +2750,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
 */
         }
 
-        /* "_resonance_cy.pyx":46
+        /* "_resonance_cy.pyx":47
  * 
  *         # 1
  *         if score > 1.0:             # <<<<<<<<<<<<<<
@@ -2767,7 +2760,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
         __pyx_t_1 = (__pyx_v_score > 1.0);
         if (__pyx_t_1) {
 
-          /* "_resonance_cy.pyx":47
+          /* "_resonance_cy.pyx":48
  *         # 1
  *         if score > 1.0:
  *             score = 1.0             # <<<<<<<<<<<<<<
@@ -2776,7 +2769,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
 */
           __pyx_v_score = 1.0;
 
-          /* "_resonance_cy.pyx":46
+          /* "_resonance_cy.pyx":47
  * 
  *         # 1
  *         if score > 1.0:             # <<<<<<<<<<<<<<
@@ -2786,7 +2779,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
         }
       }
 
-      /* "_resonance_cy.pyx":25
+      /* "_resonance_cy.pyx":26
  *     cdef double clamped_hebbian = hebbian
  * 
  *     with nogil:             # <<<<<<<<<<<<<<
@@ -2803,7 +2796,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
       }
   }
 
-  /* "_resonance_cy.pyx":49
+  /* "_resonance_cy.pyx":50
  *             score = 1.0
  * 
  *     return score             # <<<<<<<<<<<<<<
@@ -2811,13 +2804,13 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
  * 
 */
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_3 = PyFloat_FromDouble(__pyx_v_score); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 49, __pyx_L1_error)
+  __pyx_t_3 = PyFloat_FromDouble(__pyx_v_score); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 50, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   __pyx_r = __pyx_t_3;
   __pyx_t_3 = 0;
   goto __pyx_L0;
 
-  /* "_resonance_cy.pyx":13
+  /* "_resonance_cy.pyx":14
  * 
  * 
  * def calc_memory_dim_cy(double query_freq, double node_freq,             # <<<<<<<<<<<<<<
@@ -2836,7 +2829,7 @@ static PyObject *__pyx_pf_13_resonance_cy_calc_memory_dim_cy(CYTHON_UNUSED PyObj
   return __pyx_r;
 }
 
-/* "_resonance_cy.pyx":52
+/* "_resonance_cy.pyx":53
  * 
  * 
  * def calc_time_dim_cy(double elapsed_seconds, double source_age_seconds=0.0, bint enable_timeliness=False) -> float:             # <<<<<<<<<<<<<<
@@ -2886,61 +2879,61 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   {
     PyObject ** const __pyx_pyargnames[] = {&__pyx_mstate_global->__pyx_n_u_elapsed_seconds,&__pyx_mstate_global->__pyx_n_u_source_age_seconds,&__pyx_mstate_global->__pyx_n_u_enable_timeliness,0};
     const Py_ssize_t __pyx_kwds_len = (__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
-    if (unlikely(__pyx_kwds_len < 0)) __PYX_ERR(0, 52, __pyx_L3_error)
+    if (unlikely(__pyx_kwds_len < 0)) __PYX_ERR(0, 53, __pyx_L3_error)
     if (__pyx_kwds_len > 0) {
       switch (__pyx_nargs) {
         case  3:
         values[2] = __Pyx_ArgRef_FASTCALL(__pyx_args, 2);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[2])) __PYX_ERR(0, 52, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[2])) __PYX_ERR(0, 53, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  2:
         values[1] = __Pyx_ArgRef_FASTCALL(__pyx_args, 1);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 52, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 53, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  1:
         values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 52, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 53, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  0: break;
         default: goto __pyx_L5_argtuple_error;
       }
       const Py_ssize_t kwd_pos_args = __pyx_nargs;
-      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "calc_time_dim_cy", 0) < (0)) __PYX_ERR(0, 52, __pyx_L3_error)
+      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "calc_time_dim_cy", 0) < (0)) __PYX_ERR(0, 53, __pyx_L3_error)
       for (Py_ssize_t i = __pyx_nargs; i < 1; i++) {
-        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("calc_time_dim_cy", 0, 1, 3, i); __PYX_ERR(0, 52, __pyx_L3_error) }
+        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("calc_time_dim_cy", 0, 1, 3, i); __PYX_ERR(0, 53, __pyx_L3_error) }
       }
     } else {
       switch (__pyx_nargs) {
         case  3:
         values[2] = __Pyx_ArgRef_FASTCALL(__pyx_args, 2);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[2])) __PYX_ERR(0, 52, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[2])) __PYX_ERR(0, 53, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  2:
         values[1] = __Pyx_ArgRef_FASTCALL(__pyx_args, 1);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 52, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 53, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  1:
         values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 52, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 53, __pyx_L3_error)
         break;
         default: goto __pyx_L5_argtuple_error;
       }
     }
-    __pyx_v_elapsed_seconds = __Pyx_PyFloat_AsDouble(values[0]); if (unlikely((__pyx_v_elapsed_seconds == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 52, __pyx_L3_error)
+    __pyx_v_elapsed_seconds = __Pyx_PyFloat_AsDouble(values[0]); if (unlikely((__pyx_v_elapsed_seconds == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 53, __pyx_L3_error)
     if (values[1]) {
-      __pyx_v_source_age_seconds = __Pyx_PyFloat_AsDouble(values[1]); if (unlikely((__pyx_v_source_age_seconds == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 52, __pyx_L3_error)
+      __pyx_v_source_age_seconds = __Pyx_PyFloat_AsDouble(values[1]); if (unlikely((__pyx_v_source_age_seconds == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 53, __pyx_L3_error)
     } else {
       __pyx_v_source_age_seconds = ((double)((double)0.0));
     }
     if (values[2]) {
-      __pyx_v_enable_timeliness = __Pyx_PyObject_IsTrue(values[2]); if (unlikely((__pyx_v_enable_timeliness == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 52, __pyx_L3_error)
+      __pyx_v_enable_timeliness = __Pyx_PyObject_IsTrue(values[2]); if (unlikely((__pyx_v_enable_timeliness == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 53, __pyx_L3_error)
     } else {
       __pyx_v_enable_timeliness = ((int)((int)0));
     }
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("calc_time_dim_cy", 0, 1, 3, __pyx_nargs); __PYX_ERR(0, 52, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("calc_time_dim_cy", 0, 1, 3, __pyx_nargs); __PYX_ERR(0, 53, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
@@ -2974,7 +2967,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("calc_time_dim_cy", 0);
 
-  /* "_resonance_cy.pyx":64
+  /* "_resonance_cy.pyx":65
  *     <7=1.0, <30=0.85, <90=0.65, <365=0.40, >=365=0.20
  *     """
  *     cdef double score = 0.0             # <<<<<<<<<<<<<<
@@ -2983,7 +2976,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
 */
   __pyx_v_score = 0.0;
 
-  /* "_resonance_cy.pyx":65
+  /* "_resonance_cy.pyx":66
  *     """
  *     cdef double score = 0.0
  *     cdef double activation = 0.0             # <<<<<<<<<<<<<<
@@ -2992,7 +2985,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
 */
   __pyx_v_activation = 0.0;
 
-  /* "_resonance_cy.pyx":66
+  /* "_resonance_cy.pyx":67
  *     cdef double score = 0.0
  *     cdef double activation = 0.0
  *     cdef double source = 0.0             # <<<<<<<<<<<<<<
@@ -3001,7 +2994,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
 */
   __pyx_v_source = 0.0;
 
-  /* "_resonance_cy.pyx":68
+  /* "_resonance_cy.pyx":69
  *     cdef double source = 0.0
  * 
  *     with nogil:             # <<<<<<<<<<<<<<
@@ -3014,7 +3007,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
       __Pyx_FastGIL_Remember();
       /*try:*/ {
 
-        /* "_resonance_cy.pyx":70
+        /* "_resonance_cy.pyx":71
  *     with nogil:
  *         #
  *         if elapsed_seconds < 3600:             # <<<<<<<<<<<<<<
@@ -3024,7 +3017,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
         __pyx_t_1 = (__pyx_v_elapsed_seconds < 3600.0);
         if (__pyx_t_1) {
 
-          /* "_resonance_cy.pyx":71
+          /* "_resonance_cy.pyx":72
  *         #
  *         if elapsed_seconds < 3600:
  *             activation = 1.0             # <<<<<<<<<<<<<<
@@ -3033,7 +3026,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
 */
           __pyx_v_activation = 1.0;
 
-          /* "_resonance_cy.pyx":70
+          /* "_resonance_cy.pyx":71
  *     with nogil:
  *         #
  *         if elapsed_seconds < 3600:             # <<<<<<<<<<<<<<
@@ -3043,7 +3036,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
           goto __pyx_L6;
         }
 
-        /* "_resonance_cy.pyx":72
+        /* "_resonance_cy.pyx":73
  *         if elapsed_seconds < 3600:
  *             activation = 1.0
  *         elif elapsed_seconds < 86400:             # <<<<<<<<<<<<<<
@@ -3053,7 +3046,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
         __pyx_t_1 = (__pyx_v_elapsed_seconds < 86400.0);
         if (__pyx_t_1) {
 
-          /* "_resonance_cy.pyx":73
+          /* "_resonance_cy.pyx":74
  *             activation = 1.0
  *         elif elapsed_seconds < 86400:
  *             activation = 1.0 - (elapsed_seconds - 3600) / 82800.0 * 0.7             # <<<<<<<<<<<<<<
@@ -3062,7 +3055,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
 */
           __pyx_v_activation = (1.0 - (((__pyx_v_elapsed_seconds - 3600.0) / 82800.0) * 0.7));
 
-          /* "_resonance_cy.pyx":74
+          /* "_resonance_cy.pyx":75
  *         elif elapsed_seconds < 86400:
  *             activation = 1.0 - (elapsed_seconds - 3600) / 82800.0 * 0.7
  *             if activation < 0.3:             # <<<<<<<<<<<<<<
@@ -3072,7 +3065,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
           __pyx_t_1 = (__pyx_v_activation < 0.3);
           if (__pyx_t_1) {
 
-            /* "_resonance_cy.pyx":75
+            /* "_resonance_cy.pyx":76
  *             activation = 1.0 - (elapsed_seconds - 3600) / 82800.0 * 0.7
  *             if activation < 0.3:
  *                 activation = 0.3             # <<<<<<<<<<<<<<
@@ -3081,7 +3074,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
 */
             __pyx_v_activation = 0.3;
 
-            /* "_resonance_cy.pyx":74
+            /* "_resonance_cy.pyx":75
  *         elif elapsed_seconds < 86400:
  *             activation = 1.0 - (elapsed_seconds - 3600) / 82800.0 * 0.7
  *             if activation < 0.3:             # <<<<<<<<<<<<<<
@@ -3090,7 +3083,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
 */
           }
 
-          /* "_resonance_cy.pyx":72
+          /* "_resonance_cy.pyx":73
  *         if elapsed_seconds < 3600:
  *             activation = 1.0
  *         elif elapsed_seconds < 86400:             # <<<<<<<<<<<<<<
@@ -3100,7 +3093,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
           goto __pyx_L6;
         }
 
-        /* "_resonance_cy.pyx":76
+        /* "_resonance_cy.pyx":77
  *             if activation < 0.3:
  *                 activation = 0.3
  *         elif elapsed_seconds < 604800:             # <<<<<<<<<<<<<<
@@ -3110,7 +3103,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
         __pyx_t_1 = (__pyx_v_elapsed_seconds < 604800.0);
         if (__pyx_t_1) {
 
-          /* "_resonance_cy.pyx":77
+          /* "_resonance_cy.pyx":78
  *                 activation = 0.3
  *         elif elapsed_seconds < 604800:
  *             activation = 0.3 - (elapsed_seconds - 86400) / 518400.0 * 0.2             # <<<<<<<<<<<<<<
@@ -3119,7 +3112,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
 */
           __pyx_v_activation = (0.3 - (((__pyx_v_elapsed_seconds - 86400.0) / 518400.0) * 0.2));
 
-          /* "_resonance_cy.pyx":78
+          /* "_resonance_cy.pyx":79
  *         elif elapsed_seconds < 604800:
  *             activation = 0.3 - (elapsed_seconds - 86400) / 518400.0 * 0.2
  *             if activation < 0.1:             # <<<<<<<<<<<<<<
@@ -3129,7 +3122,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
           __pyx_t_1 = (__pyx_v_activation < 0.1);
           if (__pyx_t_1) {
 
-            /* "_resonance_cy.pyx":79
+            /* "_resonance_cy.pyx":80
  *             activation = 0.3 - (elapsed_seconds - 86400) / 518400.0 * 0.2
  *             if activation < 0.1:
  *                 activation = 0.1             # <<<<<<<<<<<<<<
@@ -3138,7 +3131,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
 */
             __pyx_v_activation = 0.1;
 
-            /* "_resonance_cy.pyx":78
+            /* "_resonance_cy.pyx":79
  *         elif elapsed_seconds < 604800:
  *             activation = 0.3 - (elapsed_seconds - 86400) / 518400.0 * 0.2
  *             if activation < 0.1:             # <<<<<<<<<<<<<<
@@ -3147,7 +3140,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
 */
           }
 
-          /* "_resonance_cy.pyx":76
+          /* "_resonance_cy.pyx":77
  *             if activation < 0.3:
  *                 activation = 0.3
  *         elif elapsed_seconds < 604800:             # <<<<<<<<<<<<<<
@@ -3157,7 +3150,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
           goto __pyx_L6;
         }
 
-        /* "_resonance_cy.pyx":81
+        /* "_resonance_cy.pyx":82
  *                 activation = 0.1
  *         else:
  *             activation = 0.05             # <<<<<<<<<<<<<<
@@ -3169,7 +3162,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
         }
         __pyx_L6:;
 
-        /* "_resonance_cy.pyx":83
+        /* "_resonance_cy.pyx":84
  *             activation = 0.05
  * 
  *         if not enable_timeliness:             # <<<<<<<<<<<<<<
@@ -3179,7 +3172,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
         __pyx_t_1 = (!__pyx_v_enable_timeliness);
         if (__pyx_t_1) {
 
-          /* "_resonance_cy.pyx":84
+          /* "_resonance_cy.pyx":85
  * 
  *         if not enable_timeliness:
  *             score = activation             # <<<<<<<<<<<<<<
@@ -3188,7 +3181,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
 */
           __pyx_v_score = __pyx_v_activation;
 
-          /* "_resonance_cy.pyx":83
+          /* "_resonance_cy.pyx":84
  *             activation = 0.05
  * 
  *         if not enable_timeliness:             # <<<<<<<<<<<<<<
@@ -3198,7 +3191,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
           goto __pyx_L9;
         }
 
-        /* "_resonance_cy.pyx":87
+        /* "_resonance_cy.pyx":88
  *         else:
  *             #
  *             if source_age_seconds < 604800:        # <7             # <<<<<<<<<<<<<<
@@ -3209,7 +3202,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
           __pyx_t_1 = (__pyx_v_source_age_seconds < 604800.0);
           if (__pyx_t_1) {
 
-            /* "_resonance_cy.pyx":88
+            /* "_resonance_cy.pyx":89
  *             #
  *             if source_age_seconds < 604800:        # <7
  *                 source = 1.0             # <<<<<<<<<<<<<<
@@ -3218,7 +3211,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
 */
             __pyx_v_source = 1.0;
 
-            /* "_resonance_cy.pyx":87
+            /* "_resonance_cy.pyx":88
  *         else:
  *             #
  *             if source_age_seconds < 604800:        # <7             # <<<<<<<<<<<<<<
@@ -3228,7 +3221,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
             goto __pyx_L10;
           }
 
-          /* "_resonance_cy.pyx":89
+          /* "_resonance_cy.pyx":90
  *             if source_age_seconds < 604800:        # <7
  *                 source = 1.0
  *             elif source_age_seconds < 2592000:     # <30             # <<<<<<<<<<<<<<
@@ -3238,7 +3231,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
           __pyx_t_1 = (__pyx_v_source_age_seconds < 2592000.0);
           if (__pyx_t_1) {
 
-            /* "_resonance_cy.pyx":90
+            /* "_resonance_cy.pyx":91
  *                 source = 1.0
  *             elif source_age_seconds < 2592000:     # <30
  *                 source = 0.85             # <<<<<<<<<<<<<<
@@ -3247,7 +3240,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
 */
             __pyx_v_source = 0.85;
 
-            /* "_resonance_cy.pyx":89
+            /* "_resonance_cy.pyx":90
  *             if source_age_seconds < 604800:        # <7
  *                 source = 1.0
  *             elif source_age_seconds < 2592000:     # <30             # <<<<<<<<<<<<<<
@@ -3257,7 +3250,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
             goto __pyx_L10;
           }
 
-          /* "_resonance_cy.pyx":91
+          /* "_resonance_cy.pyx":92
  *             elif source_age_seconds < 2592000:     # <30
  *                 source = 0.85
  *             elif source_age_seconds < 7776000:     # <90             # <<<<<<<<<<<<<<
@@ -3267,7 +3260,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
           __pyx_t_1 = (__pyx_v_source_age_seconds < 7776000.0);
           if (__pyx_t_1) {
 
-            /* "_resonance_cy.pyx":92
+            /* "_resonance_cy.pyx":93
  *                 source = 0.85
  *             elif source_age_seconds < 7776000:     # <90
  *                 source = 0.65             # <<<<<<<<<<<<<<
@@ -3276,7 +3269,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
 */
             __pyx_v_source = 0.65;
 
-            /* "_resonance_cy.pyx":91
+            /* "_resonance_cy.pyx":92
  *             elif source_age_seconds < 2592000:     # <30
  *                 source = 0.85
  *             elif source_age_seconds < 7776000:     # <90             # <<<<<<<<<<<<<<
@@ -3286,7 +3279,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
             goto __pyx_L10;
           }
 
-          /* "_resonance_cy.pyx":93
+          /* "_resonance_cy.pyx":94
  *             elif source_age_seconds < 7776000:     # <90
  *                 source = 0.65
  *             elif source_age_seconds < 31536000:    # <365             # <<<<<<<<<<<<<<
@@ -3296,7 +3289,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
           __pyx_t_1 = (__pyx_v_source_age_seconds < 31536000.0);
           if (__pyx_t_1) {
 
-            /* "_resonance_cy.pyx":94
+            /* "_resonance_cy.pyx":95
  *                 source = 0.65
  *             elif source_age_seconds < 31536000:    # <365
  *                 source = 0.40             # <<<<<<<<<<<<<<
@@ -3305,7 +3298,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
 */
             __pyx_v_source = 0.40;
 
-            /* "_resonance_cy.pyx":93
+            /* "_resonance_cy.pyx":94
  *             elif source_age_seconds < 7776000:     # <90
  *                 source = 0.65
  *             elif source_age_seconds < 31536000:    # <365             # <<<<<<<<<<<<<<
@@ -3315,7 +3308,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
             goto __pyx_L10;
           }
 
-          /* "_resonance_cy.pyx":96
+          /* "_resonance_cy.pyx":97
  *                 source = 0.40
  *             else:                                   # >=365
  *                 source = 0.20             # <<<<<<<<<<<<<<
@@ -3327,7 +3320,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
           }
           __pyx_L10:;
 
-          /* "_resonance_cy.pyx":97
+          /* "_resonance_cy.pyx":98
  *             else:                                   # >=365
  *                 source = 0.20
  *             score = 0.5 * activation + 0.5 * source             # <<<<<<<<<<<<<<
@@ -3339,7 +3332,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
         __pyx_L9:;
       }
 
-      /* "_resonance_cy.pyx":68
+      /* "_resonance_cy.pyx":69
  *     cdef double source = 0.0
  * 
  *     with nogil:             # <<<<<<<<<<<<<<
@@ -3356,7 +3349,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
       }
   }
 
-  /* "_resonance_cy.pyx":99
+  /* "_resonance_cy.pyx":100
  *             score = 0.5 * activation + 0.5 * source
  * 
  *     return score             # <<<<<<<<<<<<<<
@@ -3364,13 +3357,13 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
  * 
 */
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_2 = PyFloat_FromDouble(__pyx_v_score); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 99, __pyx_L1_error)
+  __pyx_t_2 = PyFloat_FromDouble(__pyx_v_score); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 100, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __pyx_r = __pyx_t_2;
   __pyx_t_2 = 0;
   goto __pyx_L0;
 
-  /* "_resonance_cy.pyx":52
+  /* "_resonance_cy.pyx":53
  * 
  * 
  * def calc_time_dim_cy(double elapsed_seconds, double source_age_seconds=0.0, bint enable_timeliness=False) -> float:             # <<<<<<<<<<<<<<
@@ -3389,7 +3382,7 @@ static PyObject *__pyx_pf_13_resonance_cy_2calc_time_dim_cy(CYTHON_UNUSED PyObje
   return __pyx_r;
 }
 
-/* "_resonance_cy.pyx":102
+/* "_resonance_cy.pyx":103
  * 
  * 
  * def calc_state_dim_cy(int importance_code) -> float:             # <<<<<<<<<<<<<<
@@ -3437,32 +3430,32 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   {
     PyObject ** const __pyx_pyargnames[] = {&__pyx_mstate_global->__pyx_n_u_importance_code,0};
     const Py_ssize_t __pyx_kwds_len = (__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
-    if (unlikely(__pyx_kwds_len < 0)) __PYX_ERR(0, 102, __pyx_L3_error)
+    if (unlikely(__pyx_kwds_len < 0)) __PYX_ERR(0, 103, __pyx_L3_error)
     if (__pyx_kwds_len > 0) {
       switch (__pyx_nargs) {
         case  1:
         values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 102, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 103, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  0: break;
         default: goto __pyx_L5_argtuple_error;
       }
       const Py_ssize_t kwd_pos_args = __pyx_nargs;
-      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "calc_state_dim_cy", 0) < (0)) __PYX_ERR(0, 102, __pyx_L3_error)
+      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "calc_state_dim_cy", 0) < (0)) __PYX_ERR(0, 103, __pyx_L3_error)
       for (Py_ssize_t i = __pyx_nargs; i < 1; i++) {
-        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("calc_state_dim_cy", 1, 1, 1, i); __PYX_ERR(0, 102, __pyx_L3_error) }
+        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("calc_state_dim_cy", 1, 1, 1, i); __PYX_ERR(0, 103, __pyx_L3_error) }
       }
     } else if (unlikely(__pyx_nargs != 1)) {
       goto __pyx_L5_argtuple_error;
     } else {
       values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 102, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 103, __pyx_L3_error)
     }
-    __pyx_v_importance_code = __Pyx_PyLong_As_int(values[0]); if (unlikely((__pyx_v_importance_code == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 102, __pyx_L3_error)
+    __pyx_v_importance_code = __Pyx_PyLong_As_int(values[0]); if (unlikely((__pyx_v_importance_code == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 103, __pyx_L3_error)
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("calc_state_dim_cy", 1, 1, 1, __pyx_nargs); __PYX_ERR(0, 102, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("calc_state_dim_cy", 1, 1, 1, __pyx_nargs); __PYX_ERR(0, 103, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
@@ -3493,7 +3486,7 @@ static PyObject *__pyx_pf_13_resonance_cy_4calc_state_dim_cy(CYTHON_UNUSED PyObj
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("calc_state_dim_cy", 0);
 
-  /* "_resonance_cy.pyx":108
+  /* "_resonance_cy.pyx":109
  *     importance_code: S=3, A=2, B=1, =0
  *     """
  *     cdef double score = 0.0             # <<<<<<<<<<<<<<
@@ -3502,7 +3495,7 @@ static PyObject *__pyx_pf_13_resonance_cy_4calc_state_dim_cy(CYTHON_UNUSED PyObj
 */
   __pyx_v_score = 0.0;
 
-  /* "_resonance_cy.pyx":110
+  /* "_resonance_cy.pyx":111
  *     cdef double score = 0.0
  * 
  *     with nogil:             # <<<<<<<<<<<<<<
@@ -3515,7 +3508,7 @@ static PyObject *__pyx_pf_13_resonance_cy_4calc_state_dim_cy(CYTHON_UNUSED PyObj
       __Pyx_FastGIL_Remember();
       /*try:*/ {
 
-        /* "_resonance_cy.pyx":111
+        /* "_resonance_cy.pyx":112
  * 
  *     with nogil:
  *         if importance_code == 3:             # <<<<<<<<<<<<<<
@@ -3525,7 +3518,7 @@ static PyObject *__pyx_pf_13_resonance_cy_4calc_state_dim_cy(CYTHON_UNUSED PyObj
         switch (__pyx_v_importance_code) {
           case 3:
 
-          /* "_resonance_cy.pyx":112
+          /* "_resonance_cy.pyx":113
  *     with nogil:
  *         if importance_code == 3:
  *             score = 1.0             # <<<<<<<<<<<<<<
@@ -3534,7 +3527,7 @@ static PyObject *__pyx_pf_13_resonance_cy_4calc_state_dim_cy(CYTHON_UNUSED PyObj
 */
           __pyx_v_score = 1.0;
 
-          /* "_resonance_cy.pyx":111
+          /* "_resonance_cy.pyx":112
  * 
  *     with nogil:
  *         if importance_code == 3:             # <<<<<<<<<<<<<<
@@ -3544,7 +3537,7 @@ static PyObject *__pyx_pf_13_resonance_cy_4calc_state_dim_cy(CYTHON_UNUSED PyObj
           break;
           case 2:
 
-          /* "_resonance_cy.pyx":114
+          /* "_resonance_cy.pyx":115
  *             score = 1.0
  *         elif importance_code == 2:
  *             score = 0.8             # <<<<<<<<<<<<<<
@@ -3553,7 +3546,7 @@ static PyObject *__pyx_pf_13_resonance_cy_4calc_state_dim_cy(CYTHON_UNUSED PyObj
 */
           __pyx_v_score = 0.8;
 
-          /* "_resonance_cy.pyx":113
+          /* "_resonance_cy.pyx":114
  *         if importance_code == 3:
  *             score = 1.0
  *         elif importance_code == 2:             # <<<<<<<<<<<<<<
@@ -3563,7 +3556,7 @@ static PyObject *__pyx_pf_13_resonance_cy_4calc_state_dim_cy(CYTHON_UNUSED PyObj
           break;
           case 1:
 
-          /* "_resonance_cy.pyx":116
+          /* "_resonance_cy.pyx":117
  *             score = 0.8
  *         elif importance_code == 1:
  *             score = 0.5             # <<<<<<<<<<<<<<
@@ -3572,7 +3565,7 @@ static PyObject *__pyx_pf_13_resonance_cy_4calc_state_dim_cy(CYTHON_UNUSED PyObj
 */
           __pyx_v_score = 0.5;
 
-          /* "_resonance_cy.pyx":115
+          /* "_resonance_cy.pyx":116
  *         elif importance_code == 2:
  *             score = 0.8
  *         elif importance_code == 1:             # <<<<<<<<<<<<<<
@@ -3582,7 +3575,7 @@ static PyObject *__pyx_pf_13_resonance_cy_4calc_state_dim_cy(CYTHON_UNUSED PyObj
           break;
           default:
 
-          /* "_resonance_cy.pyx":118
+          /* "_resonance_cy.pyx":119
  *             score = 0.5
  *         else:
  *             score = 0.2             # <<<<<<<<<<<<<<
@@ -3594,7 +3587,7 @@ static PyObject *__pyx_pf_13_resonance_cy_4calc_state_dim_cy(CYTHON_UNUSED PyObj
         }
       }
 
-      /* "_resonance_cy.pyx":110
+      /* "_resonance_cy.pyx":111
  *     cdef double score = 0.0
  * 
  *     with nogil:             # <<<<<<<<<<<<<<
@@ -3611,19 +3604,19 @@ static PyObject *__pyx_pf_13_resonance_cy_4calc_state_dim_cy(CYTHON_UNUSED PyObj
       }
   }
 
-  /* "_resonance_cy.pyx":120
+  /* "_resonance_cy.pyx":121
  *             score = 0.2
  * 
  *     return score             # <<<<<<<<<<<<<<
 */
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = PyFloat_FromDouble(__pyx_v_score); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 120, __pyx_L1_error)
+  __pyx_t_1 = PyFloat_FromDouble(__pyx_v_score); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 121, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
   goto __pyx_L0;
 
-  /* "_resonance_cy.pyx":102
+  /* "_resonance_cy.pyx":103
  * 
  * 
  * def calc_state_dim_cy(int importance_code) -> float:             # <<<<<<<<<<<<<<
@@ -3937,7 +3930,7 @@ static CYTHON_SMALL_CODE int __pyx_pymod_exec__resonance_cy(PyObject *__pyx_pyin
   __pyx_m = __pyx_t_1;
   #endif
   #if CYTHON_COMPILING_IN_CPYTHON_FREETHREADING
-  PyUnstable_Module_SetGIL(__pyx_m, Py_MOD_GIL_USED);
+  PyUnstable_Module_SetGIL(__pyx_m, Py_MOD_GIL_NOT_USED);
   #endif
   __pyx_mstate = __pyx_mstate_global;
   CYTHON_UNUSED_VAR(__pyx_t_1);
@@ -3992,7 +3985,7 @@ __Pyx_RefNannySetupContext("PyInit__resonance_cy", 0);
   (void)__Pyx_modinit_function_import_code(__pyx_mstate);
   /*--- Execution code ---*/
 
-  /* "_resonance_cy.pyx":10
+  /* "_resonance_cy.pyx":11
  * 
  * # PI
  * cdef double PI_CONST = 3.141592653589793             # <<<<<<<<<<<<<<
@@ -4001,45 +3994,45 @@ __Pyx_RefNannySetupContext("PyInit__resonance_cy", 0);
 */
   __pyx_v_13_resonance_cy_PI_CONST = 3.141592653589793;
 
-  /* "_resonance_cy.pyx":13
+  /* "_resonance_cy.pyx":14
  * 
  * 
  * def calc_memory_dim_cy(double query_freq, double node_freq,             # <<<<<<<<<<<<<<
  *                         double hebbian, int activation_count) -> float:
  *     """
 */
-  __pyx_t_2 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 13, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 14, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
-  if (PyDict_SetItem(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_return, __pyx_mstate_global->__pyx_n_u_float) < (0)) __PYX_ERR(0, 13, __pyx_L1_error)
-  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_13_resonance_cy_1calc_memory_dim_cy, 0, __pyx_mstate_global->__pyx_n_u_calc_memory_dim_cy, NULL, __pyx_mstate_global->__pyx_n_u_resonance_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[0])); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 13, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_return, __pyx_mstate_global->__pyx_n_u_float) < (0)) __PYX_ERR(0, 14, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_13_resonance_cy_1calc_memory_dim_cy, 0, __pyx_mstate_global->__pyx_n_u_calc_memory_dim_cy, NULL, __pyx_mstate_global->__pyx_n_u_resonance_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[0])); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 14, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_3);
   #endif
   __Pyx_CyFunction_SetAnnotationsDict(__pyx_t_3, __pyx_t_2);
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_calc_memory_dim_cy, __pyx_t_3) < (0)) __PYX_ERR(0, 13, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_calc_memory_dim_cy, __pyx_t_3) < (0)) __PYX_ERR(0, 14, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-  /* "_resonance_cy.pyx":52
+  /* "_resonance_cy.pyx":53
  * 
  * 
  * def calc_time_dim_cy(double elapsed_seconds, double source_age_seconds=0.0, bint enable_timeliness=False) -> float:             # <<<<<<<<<<<<<<
  *     """
  *     v23.0ResonanceEngine
 */
-  __pyx_t_3 = PyFloat_FromDouble(((double)0.0)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 52, __pyx_L1_error)
+  __pyx_t_3 = PyFloat_FromDouble(((double)0.0)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 53, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
-  __pyx_t_2 = __Pyx_PyBool_FromLong(((int)0)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 52, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyBool_FromLong(((int)0)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 53, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
-  __pyx_t_4 = PyTuple_Pack(2, __pyx_t_3, __pyx_t_2); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 52, __pyx_L1_error)
+  __pyx_t_4 = PyTuple_Pack(2, __pyx_t_3, __pyx_t_2); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 53, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-  __pyx_t_2 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 52, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 53, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
-  if (PyDict_SetItem(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_return, __pyx_mstate_global->__pyx_n_u_float) < (0)) __PYX_ERR(0, 52, __pyx_L1_error)
-  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_13_resonance_cy_3calc_time_dim_cy, 0, __pyx_mstate_global->__pyx_n_u_calc_time_dim_cy, NULL, __pyx_mstate_global->__pyx_n_u_resonance_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[1])); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 52, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_return, __pyx_mstate_global->__pyx_n_u_float) < (0)) __PYX_ERR(0, 53, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_13_resonance_cy_3calc_time_dim_cy, 0, __pyx_mstate_global->__pyx_n_u_calc_time_dim_cy, NULL, __pyx_mstate_global->__pyx_n_u_resonance_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[1])); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 53, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_3);
@@ -4048,33 +4041,33 @@ __Pyx_RefNannySetupContext("PyInit__resonance_cy", 0);
   __Pyx_CyFunction_SetAnnotationsDict(__pyx_t_3, __pyx_t_2);
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_calc_time_dim_cy, __pyx_t_3) < (0)) __PYX_ERR(0, 52, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_calc_time_dim_cy, __pyx_t_3) < (0)) __PYX_ERR(0, 53, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-  /* "_resonance_cy.pyx":102
+  /* "_resonance_cy.pyx":103
  * 
  * 
  * def calc_state_dim_cy(int importance_code) -> float:             # <<<<<<<<<<<<<<
  *     """
  *     v23.0ResonanceEngine
 */
-  __pyx_t_3 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 102, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 103, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
-  if (PyDict_SetItem(__pyx_t_3, __pyx_mstate_global->__pyx_n_u_return, __pyx_mstate_global->__pyx_n_u_float) < (0)) __PYX_ERR(0, 102, __pyx_L1_error)
-  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_13_resonance_cy_5calc_state_dim_cy, 0, __pyx_mstate_global->__pyx_n_u_calc_state_dim_cy, NULL, __pyx_mstate_global->__pyx_n_u_resonance_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[2])); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 102, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_3, __pyx_mstate_global->__pyx_n_u_return, __pyx_mstate_global->__pyx_n_u_float) < (0)) __PYX_ERR(0, 103, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_13_resonance_cy_5calc_state_dim_cy, 0, __pyx_mstate_global->__pyx_n_u_calc_state_dim_cy, NULL, __pyx_mstate_global->__pyx_n_u_resonance_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[2])); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 103, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_2);
   #endif
   __Pyx_CyFunction_SetAnnotationsDict(__pyx_t_2, __pyx_t_3);
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_calc_state_dim_cy, __pyx_t_2) < (0)) __PYX_ERR(0, 102, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_calc_state_dim_cy, __pyx_t_2) < (0)) __PYX_ERR(0, 103, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
   /* "_resonance_cy.pyx":1
- * # _resonance_cy.pyx             # <<<<<<<<<<<<<<
+ * # cython: freethreading_compatible=True             # <<<<<<<<<<<<<<
+ * # _resonance_cy.pyx
  * # v23.0Cython
- * # Python
 */
   __pyx_t_2 = __Pyx_PyDict_NewPresized(0); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 1, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
@@ -4246,17 +4239,17 @@ static int __Pyx_CreateCodeObjects(__pyx_mstatetype *__pyx_mstate) {
   PyObject* tuple_dedup_map = PyDict_New();
   if (unlikely(!tuple_dedup_map)) return -1;
   {
-    const __Pyx_PyCode_New_function_description descr = {4, 0, 0, 8, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 13};
+    const __Pyx_PyCode_New_function_description descr = {4, 0, 0, 8, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 14};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_query_freq, __pyx_mstate->__pyx_n_u_node_freq, __pyx_mstate->__pyx_n_u_hebbian, __pyx_mstate->__pyx_n_u_activation_count, __pyx_mstate->__pyx_n_u_score, __pyx_mstate->__pyx_n_u_freq_sim, __pyx_mstate->__pyx_n_u_act_score, __pyx_mstate->__pyx_n_u_clamped_hebbian};
     __pyx_mstate_global->__pyx_codeobj_tab[0] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_resonance_cy_pyx, __pyx_mstate->__pyx_n_u_calc_memory_dim_cy, __pyx_mstate->__pyx_kp_b_iso88591_AB_1_A_b_j_t2T_R_A_y_1_Yb_2Q_a, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[0])) goto bad;
   }
   {
-    const __Pyx_PyCode_New_function_description descr = {3, 0, 0, 6, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 52};
+    const __Pyx_PyCode_New_function_description descr = {3, 0, 0, 6, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 53};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_elapsed_seconds, __pyx_mstate->__pyx_n_u_source_age_seconds, __pyx_mstate->__pyx_n_u_enable_timeliness, __pyx_mstate->__pyx_n_u_score, __pyx_mstate->__pyx_n_u_activation, __pyx_mstate->__pyx_n_u_source};
     __pyx_mstate_global->__pyx_codeobj_tab[1] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_resonance_cy_pyx, __pyx_mstate->__pyx_n_u_calc_time_dim_cy, __pyx_mstate->__pyx_kp_b_iso88591_LLmmn_Q_2Q_Rq_S_0_A_A_Q_Rq_S_0, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[1])) goto bad;
   }
   {
-    const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 2, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 102};
+    const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 2, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 103};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_importance_code, __pyx_mstate->__pyx_n_u_score};
     __pyx_mstate_global->__pyx_codeobj_tab[2] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_resonance_cy_pyx, __pyx_mstate->__pyx_n_u_calc_state_dim_cy, __pyx_mstate->__pyx_kp_b_iso88591_a_3a_A_S_A_S_A_A_1, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[2])) goto bad;
   }

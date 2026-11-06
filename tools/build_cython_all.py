@@ -33,6 +33,7 @@ import os
 import shutil
 import subprocess
 import sys
+import sysconfig
 from typing import Any
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -53,7 +54,12 @@ _MODULES: list[tuple[str, str, str]] = [
 #: MinGW 候选路径（本机实测落点）
 _MINGW_CANDIDATES = (r"D:\mingw64\bin", r"C:\mingw64\bin")
 _EXT = ".pyd" if sys.platform == "win32" else ".so"
-_ABI = "cp312-win_amd64" if sys.platform == "win32" else ""
+#: 当前解释器的扩展名 ABI 后缀（3.12 -> ``.cp312-win_amd64``，
+#: 3.14t -> ``.cp314t-win_amd64``）。
+#:
+#: ★不得硬编码：cp312 与 cp314t 的 .pyd 必须**各带标签共存**，
+#:   写死任一侧都会让另一侧在 glob / 落位时被误导（473 批实测）。
+_ABI = (sysconfig.get_config_var("EXT_SUFFIX") or _EXT).removesuffix(_EXT)
 
 
 def _pick_compiler() -> tuple[str, str | None]:

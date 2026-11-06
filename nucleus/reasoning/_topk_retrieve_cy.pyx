@@ -1,3 +1,4 @@
+# cython: freethreading_compatible=True
 # _topk_retrieve_cy.pyx
 # ★v27新增：批量余弦相似度 + top-k 排序一体化 Cython 加速（向量检索热路径）
 # 对应 fast_ops.fast_vector_search：一次调用完成「余弦批量计算 + 降序 top-k 选取」，

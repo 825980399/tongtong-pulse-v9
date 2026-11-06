@@ -4,15 +4,12 @@
 {
     "distutils": {
         "depends": [],
-        "extra_compile_args": [
-            "-O2"
-        ],
-        "name": "nucleus.reasoning._inner_world_math_cy",
+        "name": "_inner_world_math_cy",
         "sources": [
-            "nucleus/reasoning/_inner_world_math_cy.pyx"
+            "D:\\xinrenlei\\tongtong-pulse-v9\\nucleus/reasoning/_inner_world_math_cy.pyx"
         ]
     },
-    "module_name": "nucleus.reasoning._inner_world_math_cy"
+    "module_name": "_inner_world_math_cy"
 }
 END: Cython Metadata */
 
@@ -1141,8 +1138,8 @@ static int __Pyx_init_co_variables(void) {
   #endif
 #endif
 
-#define __PYX_HAVE__nucleus__reasoning___inner_world_math_cy
-#define __PYX_HAVE_API__nucleus__reasoning___inner_world_math_cy
+#define __PYX_HAVE___inner_world_math_cy
+#define __PYX_HAVE_API___inner_world_math_cy
 /* Early includes */
 #include <math.h>
 #ifdef _OPENMP
@@ -1160,7 +1157,7 @@ static int __Pyx_init_co_variables(void) {
 #define __Pyx_FREETHREADING_COMPATIBLE Py_MOD_GIL_USED
 #endif
 #else
-#define __Pyx_FREETHREADING_COMPATIBLE Py_MOD_GIL_USED
+#define __Pyx_FREETHREADING_COMPATIBLE Py_MOD_GIL_NOT_USED
 #endif
 #define __PYX_DEFAULT_STRING_ENCODING_IS_ASCII 0
 #define __PYX_DEFAULT_STRING_ENCODING_IS_UTF8 0
@@ -1361,7 +1358,7 @@ static const char *__pyx_filename;
 /* #### Code section: filename_table ### */
 
 static const char* const __pyx_f[] = {
-  "nucleus/reasoning/_inner_world_math_cy.pyx",
+  "_inner_world_math_cy.pyx",
 };
 /* #### Code section: utility_code_proto_before_types ### */
 /* Atomics.proto (used by UnpackUnboundCMethod) */
@@ -2245,31 +2242,31 @@ static int __Pyx_State_RemoveModule(void*);
 
 /* Module declarations from "libc.math" */
 
-/* Module declarations from "nucleus.reasoning._inner_world_math_cy" */
-static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_trust_boost(double, double, int __pyx_skip_dispatch); /*proto*/
-static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_branch_weight(double, int, double, int __pyx_skip_dispatch); /*proto*/
-static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_correlation_score(PyObject *, int __pyx_skip_dispatch); /*proto*/
-static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_weighted_fusion(PyObject *, PyObject *, int __pyx_skip_dispatch); /*proto*/
-static PyObject *__pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_normalize_scores(PyObject *, int __pyx_skip_dispatch); /*proto*/
-static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_cosine_similarity_cy(PyObject *, PyObject *, int __pyx_skip_dispatch); /*proto*/
+/* Module declarations from "_inner_world_math_cy" */
+static double __pyx_f_20_inner_world_math_cy_calc_trust_boost(double, double, int __pyx_skip_dispatch); /*proto*/
+static double __pyx_f_20_inner_world_math_cy_calc_branch_weight(double, int, double, int __pyx_skip_dispatch); /*proto*/
+static double __pyx_f_20_inner_world_math_cy_calc_correlation_score(PyObject *, int __pyx_skip_dispatch); /*proto*/
+static double __pyx_f_20_inner_world_math_cy_weighted_fusion(PyObject *, PyObject *, int __pyx_skip_dispatch); /*proto*/
+static PyObject *__pyx_f_20_inner_world_math_cy_normalize_scores(PyObject *, int __pyx_skip_dispatch); /*proto*/
+static double __pyx_f_20_inner_world_math_cy_cosine_similarity_cy(PyObject *, PyObject *, int __pyx_skip_dispatch); /*proto*/
 /* #### Code section: typeinfo ### */
 /* #### Code section: before_global_var ### */
-#define __Pyx_MODULE_NAME "nucleus.reasoning._inner_world_math_cy"
-extern int __pyx_module_is_main_nucleus__reasoning___inner_world_math_cy;
-int __pyx_module_is_main_nucleus__reasoning___inner_world_math_cy = 0;
+#define __Pyx_MODULE_NAME "_inner_world_math_cy"
+extern int __pyx_module_is_main__inner_world_math_cy;
+int __pyx_module_is_main__inner_world_math_cy = 0;
 
-/* Implementation of "nucleus.reasoning._inner_world_math_cy" */
+/* Implementation of "_inner_world_math_cy" */
 /* #### Code section: global_var ### */
 static PyObject *__pyx_builtin_round;
 /* #### Code section: string_decls ### */
 static const char __pyx_k_inner_world_math_cy_PulseInner[] = "\n_inner_world_math_cy \342\200\224\342\200\224 PulseInnerWorld \347\272\257\346\225\260\345\200\274\350\256\241\347\256\227\347\203\255\350\267\257\345\276\204 C \345\214\226\n\347\211\210\346\234\254: v9.5 PulseNet\n\346\227\245\346\234\237: 2026\345\271\2649\346\234\2102\346\227\245\n\n\350\201\214\350\264\243:\n    1. \345\210\206\346\224\257\347\233\270\345\205\263\346\200\247\346\235\203\351\207\215\350\256\241\347\256\227\357\274\210\345\244\232\345\210\206\346\224\257\346\216\250\347\220\206\350\257\204\345\210\206\357\274\211\n    2. \344\277\241\344\273\273\345\210\206\350\276\271\351\231\205\351\200\222\345\207\217\350\256\241\347\256\227\357\274\210\347\237\245\350\257\206\351\252\214\350\257\201\344\277\241\344\273\273\350\260\203\346\225\264\357\274\211\n    3. \351\200\232\347\224\250\345\212\240\346\235\203\350\236\215\345\220\210\350\257\204\345\210\206\357\274\210\350\212\202\347\202\271\350\236\215\345\220\210/\350\257\201\346\215\256\351\223\276\346\235\203\351\207\215\357\274\211\n    4. \346\211\271\351\207\217\347\233\270\344\274\274\345\272\246\345\275\222\344\270\200\345\214\226\n";
 /* #### Code section: decls ### */
-static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_calc_trust_boost(CYTHON_UNUSED PyObject *__pyx_self, double __pyx_v_current_trust, double __pyx_v_base_boost); /* proto */
-static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_2calc_branch_weight(CYTHON_UNUSED PyObject *__pyx_self, double __pyx_v_relevance, int __pyx_v_content_len, double __pyx_v_correlation_score); /* proto */
-static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_4calc_correlation_score(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_shared_keywords); /* proto */
-static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_6weighted_fusion(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_values, PyObject *__pyx_v_weights); /* proto */
-static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_8normalize_scores(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_scores); /* proto */
-static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_10cosine_similarity_cy(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_vec_a, PyObject *__pyx_v_vec_b); /* proto */
+static PyObject *__pyx_pf_20_inner_world_math_cy_calc_trust_boost(CYTHON_UNUSED PyObject *__pyx_self, double __pyx_v_current_trust, double __pyx_v_base_boost); /* proto */
+static PyObject *__pyx_pf_20_inner_world_math_cy_2calc_branch_weight(CYTHON_UNUSED PyObject *__pyx_self, double __pyx_v_relevance, int __pyx_v_content_len, double __pyx_v_correlation_score); /* proto */
+static PyObject *__pyx_pf_20_inner_world_math_cy_4calc_correlation_score(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_shared_keywords); /* proto */
+static PyObject *__pyx_pf_20_inner_world_math_cy_6weighted_fusion(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_values, PyObject *__pyx_v_weights); /* proto */
+static PyObject *__pyx_pf_20_inner_world_math_cy_8normalize_scores(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_scores); /* proto */
+static PyObject *__pyx_pf_20_inner_world_math_cy_10cosine_similarity_cy(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_vec_a, PyObject *__pyx_v_vec_b); /* proto */
 /* #### Code section: late_includes ### */
 /* #### Code section: module_state ### */
 /* SmallCodeConfig */
@@ -2339,7 +2336,7 @@ static __pyx_mstatetype * const __pyx_mstate_global = &__pyx_mstate_global_stati
 #define __pyx_kp_u_ __pyx_string_tab[0]
 #define __pyx_kp_u_Note_that_Cython_is_deliberately __pyx_string_tab[1]
 #define __pyx_kp_u_add_note __pyx_string_tab[2]
-#define __pyx_kp_u_nucleus_reasoning__inner_world_m_2 __pyx_string_tab[3]
+#define __pyx_kp_u_inner_world_math_cy_pyx __pyx_string_tab[3]
 #define __pyx_n_u_Pyx_PyDict_NextRef __pyx_string_tab[4]
 #define __pyx_n_u_annotate __pyx_string_tab[5]
 #define __pyx_n_u_asyncio_coroutines __pyx_string_tab[6]
@@ -2353,13 +2350,13 @@ static __pyx_mstatetype * const __pyx_mstate_global = &__pyx_mstate_global_stati
 #define __pyx_n_u_cosine_similarity_cy __pyx_string_tab[14]
 #define __pyx_n_u_current_trust __pyx_string_tab[15]
 #define __pyx_n_u_func __pyx_string_tab[16]
-#define __pyx_n_u_is_coroutine __pyx_string_tab[17]
-#define __pyx_n_u_items __pyx_string_tab[18]
-#define __pyx_n_u_main __pyx_string_tab[19]
-#define __pyx_n_u_module __pyx_string_tab[20]
-#define __pyx_n_u_name __pyx_string_tab[21]
-#define __pyx_n_u_normalize_scores __pyx_string_tab[22]
-#define __pyx_n_u_nucleus_reasoning__inner_world_m __pyx_string_tab[23]
+#define __pyx_n_u_inner_world_math_cy __pyx_string_tab[17]
+#define __pyx_n_u_is_coroutine __pyx_string_tab[18]
+#define __pyx_n_u_items __pyx_string_tab[19]
+#define __pyx_n_u_main __pyx_string_tab[20]
+#define __pyx_n_u_module __pyx_string_tab[21]
+#define __pyx_n_u_name __pyx_string_tab[22]
+#define __pyx_n_u_normalize_scores __pyx_string_tab[23]
 #define __pyx_n_u_pop __pyx_string_tab[24]
 #define __pyx_n_u_qualname __pyx_string_tab[25]
 #define __pyx_n_u_relevance __pyx_string_tab[26]
@@ -2437,7 +2434,7 @@ return 0;
 #endif
 /* #### Code section: module_code ### */
 
-/* "nucleus/reasoning/_inner_world_math_cy.pyx":18
+/* "_inner_world_math_cy.pyx":19
  * 
  * 
  * cpdef double calc_trust_boost(double current_trust, double base_boost):             # <<<<<<<<<<<<<<
@@ -2445,18 +2442,18 @@ return 0;
  *     if current_trust >= 90.0:
 */
 
-static PyObject *__pyx_pw_7nucleus_9reasoning_20_inner_world_math_cy_1calc_trust_boost(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_20_inner_world_math_cy_1calc_trust_boost(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_trust_boost(double __pyx_v_current_trust, double __pyx_v_base_boost, CYTHON_UNUSED int __pyx_skip_dispatch) {
+static double __pyx_f_20_inner_world_math_cy_calc_trust_boost(double __pyx_v_current_trust, double __pyx_v_base_boost, CYTHON_UNUSED int __pyx_skip_dispatch) {
   double __pyx_r;
   int __pyx_t_1;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":20
+  /* "_inner_world_math_cy.pyx":21
  * cpdef double calc_trust_boost(double current_trust, double base_boost):
  *     """>80>9010%"""
  *     if current_trust >= 90.0:             # <<<<<<<<<<<<<<
@@ -2466,7 +2463,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_trust_boos
   __pyx_t_1 = (__pyx_v_current_trust >= 90.0);
   if (__pyx_t_1) {
 
-    /* "nucleus/reasoning/_inner_world_math_cy.pyx":21
+    /* "_inner_world_math_cy.pyx":22
  *     """>80>9010%"""
  *     if current_trust >= 90.0:
  *         return base_boost * 0.1             # <<<<<<<<<<<<<<
@@ -2476,7 +2473,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_trust_boos
     __pyx_r = (__pyx_v_base_boost * 0.1);
     goto __pyx_L0;
 
-    /* "nucleus/reasoning/_inner_world_math_cy.pyx":20
+    /* "_inner_world_math_cy.pyx":21
  * cpdef double calc_trust_boost(double current_trust, double base_boost):
  *     """>80>9010%"""
  *     if current_trust >= 90.0:             # <<<<<<<<<<<<<<
@@ -2485,7 +2482,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_trust_boos
 */
   }
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":22
+  /* "_inner_world_math_cy.pyx":23
  *     if current_trust >= 90.0:
  *         return base_boost * 0.1
  *     elif current_trust >= 80.0:             # <<<<<<<<<<<<<<
@@ -2495,7 +2492,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_trust_boos
   __pyx_t_1 = (__pyx_v_current_trust >= 80.0);
   if (__pyx_t_1) {
 
-    /* "nucleus/reasoning/_inner_world_math_cy.pyx":23
+    /* "_inner_world_math_cy.pyx":24
  *         return base_boost * 0.1
  *     elif current_trust >= 80.0:
  *         return base_boost * 0.5             # <<<<<<<<<<<<<<
@@ -2505,7 +2502,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_trust_boos
     __pyx_r = (__pyx_v_base_boost * 0.5);
     goto __pyx_L0;
 
-    /* "nucleus/reasoning/_inner_world_math_cy.pyx":22
+    /* "_inner_world_math_cy.pyx":23
  *     if current_trust >= 90.0:
  *         return base_boost * 0.1
  *     elif current_trust >= 80.0:             # <<<<<<<<<<<<<<
@@ -2514,7 +2511,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_trust_boos
 */
   }
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":24
+  /* "_inner_world_math_cy.pyx":25
  *     elif current_trust >= 80.0:
  *         return base_boost * 0.5
  *     return base_boost             # <<<<<<<<<<<<<<
@@ -2524,7 +2521,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_trust_boos
   __pyx_r = __pyx_v_base_boost;
   goto __pyx_L0;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":18
+  /* "_inner_world_math_cy.pyx":19
  * 
  * 
  * cpdef double calc_trust_boost(double current_trust, double base_boost):             # <<<<<<<<<<<<<<
@@ -2538,16 +2535,16 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_trust_boos
 }
 
 /* Python wrapper */
-static PyObject *__pyx_pw_7nucleus_9reasoning_20_inner_world_math_cy_1calc_trust_boost(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_20_inner_world_math_cy_1calc_trust_boost(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_7nucleus_9reasoning_20_inner_world_math_cy_calc_trust_boost, "\344\277\241\344\273\273\345\210\206\350\276\271\351\231\205\351\200\222\345\207\217\357\274\232\344\277\241\344\273\273>80\346\227\266\345\212\240\345\210\206\345\207\217\345\215\212\357\274\214\344\277\241\344\273\273>90\346\227\266\344\273\205\347\273\23110%");
-static PyMethodDef __pyx_mdef_7nucleus_9reasoning_20_inner_world_math_cy_1calc_trust_boost = {"calc_trust_boost", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_7nucleus_9reasoning_20_inner_world_math_cy_1calc_trust_boost, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_7nucleus_9reasoning_20_inner_world_math_cy_calc_trust_boost};
-static PyObject *__pyx_pw_7nucleus_9reasoning_20_inner_world_math_cy_1calc_trust_boost(PyObject *__pyx_self, 
+PyDoc_STRVAR(__pyx_doc_20_inner_world_math_cy_calc_trust_boost, "\344\277\241\344\273\273\345\210\206\350\276\271\351\231\205\351\200\222\345\207\217\357\274\232\344\277\241\344\273\273>80\346\227\266\345\212\240\345\210\206\345\207\217\345\215\212\357\274\214\344\277\241\344\273\273>90\346\227\266\344\273\205\347\273\23110%");
+static PyMethodDef __pyx_mdef_20_inner_world_math_cy_1calc_trust_boost = {"calc_trust_boost", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_20_inner_world_math_cy_1calc_trust_boost, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_20_inner_world_math_cy_calc_trust_boost};
+static PyObject *__pyx_pw_20_inner_world_math_cy_1calc_trust_boost(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -2578,50 +2575,50 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   {
     PyObject ** const __pyx_pyargnames[] = {&__pyx_mstate_global->__pyx_n_u_current_trust,&__pyx_mstate_global->__pyx_n_u_base_boost,0};
     const Py_ssize_t __pyx_kwds_len = (__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
-    if (unlikely(__pyx_kwds_len < 0)) __PYX_ERR(0, 18, __pyx_L3_error)
+    if (unlikely(__pyx_kwds_len < 0)) __PYX_ERR(0, 19, __pyx_L3_error)
     if (__pyx_kwds_len > 0) {
       switch (__pyx_nargs) {
         case  2:
         values[1] = __Pyx_ArgRef_FASTCALL(__pyx_args, 1);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 18, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 19, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  1:
         values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 18, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 19, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  0: break;
         default: goto __pyx_L5_argtuple_error;
       }
       const Py_ssize_t kwd_pos_args = __pyx_nargs;
-      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "calc_trust_boost", 0) < (0)) __PYX_ERR(0, 18, __pyx_L3_error)
+      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "calc_trust_boost", 0) < (0)) __PYX_ERR(0, 19, __pyx_L3_error)
       for (Py_ssize_t i = __pyx_nargs; i < 2; i++) {
-        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("calc_trust_boost", 1, 2, 2, i); __PYX_ERR(0, 18, __pyx_L3_error) }
+        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("calc_trust_boost", 1, 2, 2, i); __PYX_ERR(0, 19, __pyx_L3_error) }
       }
     } else if (unlikely(__pyx_nargs != 2)) {
       goto __pyx_L5_argtuple_error;
     } else {
       values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 18, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 19, __pyx_L3_error)
       values[1] = __Pyx_ArgRef_FASTCALL(__pyx_args, 1);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 18, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 19, __pyx_L3_error)
     }
-    __pyx_v_current_trust = __Pyx_PyFloat_AsDouble(values[0]); if (unlikely((__pyx_v_current_trust == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 18, __pyx_L3_error)
-    __pyx_v_base_boost = __Pyx_PyFloat_AsDouble(values[1]); if (unlikely((__pyx_v_base_boost == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 18, __pyx_L3_error)
+    __pyx_v_current_trust = __Pyx_PyFloat_AsDouble(values[0]); if (unlikely((__pyx_v_current_trust == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 19, __pyx_L3_error)
+    __pyx_v_base_boost = __Pyx_PyFloat_AsDouble(values[1]); if (unlikely((__pyx_v_base_boost == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 19, __pyx_L3_error)
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("calc_trust_boost", 1, 2, 2, __pyx_nargs); __PYX_ERR(0, 18, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("calc_trust_boost", 1, 2, 2, __pyx_nargs); __PYX_ERR(0, 19, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
   for (Py_ssize_t __pyx_temp=0; __pyx_temp < (Py_ssize_t)(sizeof(values)/sizeof(values[0])); ++__pyx_temp) {
     Py_XDECREF(values[__pyx_temp]);
   }
-  __Pyx_AddTraceback("nucleus.reasoning._inner_world_math_cy.calc_trust_boost", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("_inner_world_math_cy.calc_trust_boost", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_calc_trust_boost(__pyx_self, __pyx_v_current_trust, __pyx_v_base_boost);
+  __pyx_r = __pyx_pf_20_inner_world_math_cy_calc_trust_boost(__pyx_self, __pyx_v_current_trust, __pyx_v_base_boost);
 
   /* function exit code */
   for (Py_ssize_t __pyx_temp=0; __pyx_temp < (Py_ssize_t)(sizeof(values)/sizeof(values[0])); ++__pyx_temp) {
@@ -2631,7 +2628,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_calc_trust_boost(CYTHON_UNUSED PyObject *__pyx_self, double __pyx_v_current_trust, double __pyx_v_base_boost) {
+static PyObject *__pyx_pf_20_inner_world_math_cy_calc_trust_boost(CYTHON_UNUSED PyObject *__pyx_self, double __pyx_v_current_trust, double __pyx_v_base_boost) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   double __pyx_t_1;
@@ -2641,8 +2638,8 @@ static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_calc_trust_
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("calc_trust_boost", 0);
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_trust_boost(__pyx_v_current_trust, __pyx_v_base_boost, 1); if (unlikely(__pyx_t_1 == ((double)-1) && PyErr_Occurred())) __PYX_ERR(0, 18, __pyx_L1_error)
-  __pyx_t_2 = PyFloat_FromDouble(__pyx_t_1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 18, __pyx_L1_error)
+  __pyx_t_1 = __pyx_f_20_inner_world_math_cy_calc_trust_boost(__pyx_v_current_trust, __pyx_v_base_boost, 1); if (unlikely(__pyx_t_1 == ((double)-1) && PyErr_Occurred())) __PYX_ERR(0, 19, __pyx_L1_error)
+  __pyx_t_2 = PyFloat_FromDouble(__pyx_t_1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 19, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __pyx_r = __pyx_t_2;
   __pyx_t_2 = 0;
@@ -2651,7 +2648,7 @@ static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_calc_trust_
   /* function exit code */
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_2);
-  __Pyx_AddTraceback("nucleus.reasoning._inner_world_math_cy.calc_trust_boost", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("_inner_world_math_cy.calc_trust_boost", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -2659,7 +2656,7 @@ static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_calc_trust_
   return __pyx_r;
 }
 
-/* "nucleus/reasoning/_inner_world_math_cy.pyx":27
+/* "_inner_world_math_cy.pyx":28
  * 
  * 
  * cpdef double calc_branch_weight(double relevance, int content_len, double correlation_score):             # <<<<<<<<<<<<<<
@@ -2667,14 +2664,14 @@ static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_calc_trust_
  * 
 */
 
-static PyObject *__pyx_pw_7nucleus_9reasoning_20_inner_world_math_cy_3calc_branch_weight(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_20_inner_world_math_cy_3calc_branch_weight(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_branch_weight(double __pyx_v_relevance, int __pyx_v_content_len, double __pyx_v_correlation_score, CYTHON_UNUSED int __pyx_skip_dispatch) {
+static double __pyx_f_20_inner_world_math_cy_calc_branch_weight(double __pyx_v_relevance, int __pyx_v_content_len, double __pyx_v_correlation_score, CYTHON_UNUSED int __pyx_skip_dispatch) {
   double __pyx_v_weight;
   double __pyx_r;
   __Pyx_RefNannyDeclarations
@@ -2691,7 +2688,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_branch_wei
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("calc_branch_weight", 0);
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":39
+  /* "_inner_world_math_cy.pyx":40
  *          (2)
  *     """
  *     cdef double weight = 1.0             # <<<<<<<<<<<<<<
@@ -2700,7 +2697,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_branch_wei
 */
   __pyx_v_weight = 1.0;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":41
+  /* "_inner_world_math_cy.pyx":42
  *     cdef double weight = 1.0
  *     # 1+0.0~+0.6
  *     weight += relevance * 0.6             # <<<<<<<<<<<<<<
@@ -2709,7 +2706,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_branch_wei
 */
   __pyx_v_weight = (__pyx_v_weight + (__pyx_v_relevance * 0.6));
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":43
+  /* "_inner_world_math_cy.pyx":44
  *     weight += relevance * 0.6
  *     # 2+0.2~+0.4
  *     if content_len >= 80:             # <<<<<<<<<<<<<<
@@ -2719,7 +2716,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_branch_wei
   __pyx_t_1 = (__pyx_v_content_len >= 80);
   if (__pyx_t_1) {
 
-    /* "nucleus/reasoning/_inner_world_math_cy.pyx":44
+    /* "_inner_world_math_cy.pyx":45
  *     # 2+0.2~+0.4
  *     if content_len >= 80:
  *         weight += 0.4             # <<<<<<<<<<<<<<
@@ -2728,7 +2725,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_branch_wei
 */
     __pyx_v_weight = (__pyx_v_weight + 0.4);
 
-    /* "nucleus/reasoning/_inner_world_math_cy.pyx":43
+    /* "_inner_world_math_cy.pyx":44
  *     weight += relevance * 0.6
  *     # 2+0.2~+0.4
  *     if content_len >= 80:             # <<<<<<<<<<<<<<
@@ -2738,7 +2735,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_branch_wei
     goto __pyx_L3;
   }
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":45
+  /* "_inner_world_math_cy.pyx":46
  *     if content_len >= 80:
  *         weight += 0.4
  *     elif content_len >= 40:             # <<<<<<<<<<<<<<
@@ -2748,7 +2745,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_branch_wei
   __pyx_t_1 = (__pyx_v_content_len >= 40);
   if (__pyx_t_1) {
 
-    /* "nucleus/reasoning/_inner_world_math_cy.pyx":46
+    /* "_inner_world_math_cy.pyx":47
  *         weight += 0.4
  *     elif content_len >= 40:
  *         weight += 0.2             # <<<<<<<<<<<<<<
@@ -2757,7 +2754,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_branch_wei
 */
     __pyx_v_weight = (__pyx_v_weight + 0.2);
 
-    /* "nucleus/reasoning/_inner_world_math_cy.pyx":45
+    /* "_inner_world_math_cy.pyx":46
  *     if content_len >= 80:
  *         weight += 0.4
  *     elif content_len >= 40:             # <<<<<<<<<<<<<<
@@ -2767,7 +2764,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_branch_wei
   }
   __pyx_L3:;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":48
+  /* "_inner_world_math_cy.pyx":49
  *         weight += 0.2
  *     # 3+0.0~+0.3
  *     weight += min(0.3, correlation_score)             # <<<<<<<<<<<<<<
@@ -2784,7 +2781,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_branch_wei
   }
   __pyx_v_weight = (__pyx_v_weight + __pyx_t_4);
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":49
+  /* "_inner_world_math_cy.pyx":50
  *     # 3+0.0~+0.3
  *     weight += min(0.3, correlation_score)
  *     return round(weight, 2)             # <<<<<<<<<<<<<<
@@ -2792,7 +2789,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_branch_wei
  * 
 */
   __pyx_t_6 = NULL;
-  __pyx_t_7 = PyFloat_FromDouble(__pyx_v_weight); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 49, __pyx_L1_error)
+  __pyx_t_7 = PyFloat_FromDouble(__pyx_v_weight); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 50, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
   __pyx_t_8 = 1;
   {
@@ -2800,15 +2797,15 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_branch_wei
     __pyx_t_5 = __Pyx_PyObject_FastCall((PyObject*)__pyx_builtin_round, __pyx_callargs+__pyx_t_8, (3-__pyx_t_8) | (__pyx_t_8*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET));
     __Pyx_XDECREF(__pyx_t_6); __pyx_t_6 = 0;
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-    if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 49, __pyx_L1_error)
+    if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 50, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
   }
-  __pyx_t_4 = __Pyx_PyFloat_AsDouble(__pyx_t_5); if (unlikely((__pyx_t_4 == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 49, __pyx_L1_error)
+  __pyx_t_4 = __Pyx_PyFloat_AsDouble(__pyx_t_5); if (unlikely((__pyx_t_4 == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 50, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
   __pyx_r = __pyx_t_4;
   goto __pyx_L0;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":27
+  /* "_inner_world_math_cy.pyx":28
  * 
  * 
  * cpdef double calc_branch_weight(double relevance, int content_len, double correlation_score):             # <<<<<<<<<<<<<<
@@ -2821,7 +2818,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_branch_wei
   __Pyx_XDECREF(__pyx_t_5);
   __Pyx_XDECREF(__pyx_t_6);
   __Pyx_XDECREF(__pyx_t_7);
-  __Pyx_AddTraceback("nucleus.reasoning._inner_world_math_cy.calc_branch_weight", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("_inner_world_math_cy.calc_branch_weight", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = -1;
   __pyx_L0:;
   __Pyx_RefNannyFinishContext();
@@ -2829,16 +2826,16 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_branch_wei
 }
 
 /* Python wrapper */
-static PyObject *__pyx_pw_7nucleus_9reasoning_20_inner_world_math_cy_3calc_branch_weight(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_20_inner_world_math_cy_3calc_branch_weight(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_7nucleus_9reasoning_20_inner_world_math_cy_2calc_branch_weight, "\n    \350\256\241\347\256\227\345\210\206\346\224\257\346\235\203\351\207\215\357\274\210\345\244\232\345\210\206\346\224\257\346\216\250\347\220\206\350\257\204\345\210\206\346\240\270\345\277\203\357\274\211\n\n    Args:\n        relevance: \344\270\216\345\216\237\345\247\213\351\227\256\351\242\230\347\232\204\347\233\270\345\205\263\346\200\247 (0.0-1.0)\n        content_len: \345\206\205\345\256\271\351\225\277\345\272\246\n        correlation_score: \344\270\216\345\205\266\344\273\226\346\226\271\345\220\221\347\232\204\345\205\263\350\201\224\345\210\206\n\n    Returns:\n        \347\273\274\345\220\210\346\235\203\351\207\215 (\344\277\235\347\225\2312\344\275\215\345\260\217\346\225\260)\n    ");
-static PyMethodDef __pyx_mdef_7nucleus_9reasoning_20_inner_world_math_cy_3calc_branch_weight = {"calc_branch_weight", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_7nucleus_9reasoning_20_inner_world_math_cy_3calc_branch_weight, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_7nucleus_9reasoning_20_inner_world_math_cy_2calc_branch_weight};
-static PyObject *__pyx_pw_7nucleus_9reasoning_20_inner_world_math_cy_3calc_branch_weight(PyObject *__pyx_self, 
+PyDoc_STRVAR(__pyx_doc_20_inner_world_math_cy_2calc_branch_weight, "\n    \350\256\241\347\256\227\345\210\206\346\224\257\346\235\203\351\207\215\357\274\210\345\244\232\345\210\206\346\224\257\346\216\250\347\220\206\350\257\204\345\210\206\346\240\270\345\277\203\357\274\211\n\n    Args:\n        relevance: \344\270\216\345\216\237\345\247\213\351\227\256\351\242\230\347\232\204\347\233\270\345\205\263\346\200\247 (0.0-1.0)\n        content_len: \345\206\205\345\256\271\351\225\277\345\272\246\n        correlation_score: \344\270\216\345\205\266\344\273\226\346\226\271\345\220\221\347\232\204\345\205\263\350\201\224\345\210\206\n\n    Returns:\n        \347\273\274\345\220\210\346\235\203\351\207\215 (\344\277\235\347\225\2312\344\275\215\345\260\217\346\225\260)\n    ");
+static PyMethodDef __pyx_mdef_20_inner_world_math_cy_3calc_branch_weight = {"calc_branch_weight", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_20_inner_world_math_cy_3calc_branch_weight, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_20_inner_world_math_cy_2calc_branch_weight};
+static PyObject *__pyx_pw_20_inner_world_math_cy_3calc_branch_weight(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -2870,57 +2867,57 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   {
     PyObject ** const __pyx_pyargnames[] = {&__pyx_mstate_global->__pyx_n_u_relevance,&__pyx_mstate_global->__pyx_n_u_content_len,&__pyx_mstate_global->__pyx_n_u_correlation_score,0};
     const Py_ssize_t __pyx_kwds_len = (__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
-    if (unlikely(__pyx_kwds_len < 0)) __PYX_ERR(0, 27, __pyx_L3_error)
+    if (unlikely(__pyx_kwds_len < 0)) __PYX_ERR(0, 28, __pyx_L3_error)
     if (__pyx_kwds_len > 0) {
       switch (__pyx_nargs) {
         case  3:
         values[2] = __Pyx_ArgRef_FASTCALL(__pyx_args, 2);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[2])) __PYX_ERR(0, 27, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[2])) __PYX_ERR(0, 28, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  2:
         values[1] = __Pyx_ArgRef_FASTCALL(__pyx_args, 1);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 27, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 28, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  1:
         values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 27, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 28, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  0: break;
         default: goto __pyx_L5_argtuple_error;
       }
       const Py_ssize_t kwd_pos_args = __pyx_nargs;
-      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "calc_branch_weight", 0) < (0)) __PYX_ERR(0, 27, __pyx_L3_error)
+      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "calc_branch_weight", 0) < (0)) __PYX_ERR(0, 28, __pyx_L3_error)
       for (Py_ssize_t i = __pyx_nargs; i < 3; i++) {
-        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("calc_branch_weight", 1, 3, 3, i); __PYX_ERR(0, 27, __pyx_L3_error) }
+        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("calc_branch_weight", 1, 3, 3, i); __PYX_ERR(0, 28, __pyx_L3_error) }
       }
     } else if (unlikely(__pyx_nargs != 3)) {
       goto __pyx_L5_argtuple_error;
     } else {
       values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 27, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 28, __pyx_L3_error)
       values[1] = __Pyx_ArgRef_FASTCALL(__pyx_args, 1);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 27, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 28, __pyx_L3_error)
       values[2] = __Pyx_ArgRef_FASTCALL(__pyx_args, 2);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[2])) __PYX_ERR(0, 27, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[2])) __PYX_ERR(0, 28, __pyx_L3_error)
     }
-    __pyx_v_relevance = __Pyx_PyFloat_AsDouble(values[0]); if (unlikely((__pyx_v_relevance == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 27, __pyx_L3_error)
-    __pyx_v_content_len = __Pyx_PyLong_As_int(values[1]); if (unlikely((__pyx_v_content_len == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 27, __pyx_L3_error)
-    __pyx_v_correlation_score = __Pyx_PyFloat_AsDouble(values[2]); if (unlikely((__pyx_v_correlation_score == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 27, __pyx_L3_error)
+    __pyx_v_relevance = __Pyx_PyFloat_AsDouble(values[0]); if (unlikely((__pyx_v_relevance == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 28, __pyx_L3_error)
+    __pyx_v_content_len = __Pyx_PyLong_As_int(values[1]); if (unlikely((__pyx_v_content_len == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 28, __pyx_L3_error)
+    __pyx_v_correlation_score = __Pyx_PyFloat_AsDouble(values[2]); if (unlikely((__pyx_v_correlation_score == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 28, __pyx_L3_error)
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("calc_branch_weight", 1, 3, 3, __pyx_nargs); __PYX_ERR(0, 27, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("calc_branch_weight", 1, 3, 3, __pyx_nargs); __PYX_ERR(0, 28, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
   for (Py_ssize_t __pyx_temp=0; __pyx_temp < (Py_ssize_t)(sizeof(values)/sizeof(values[0])); ++__pyx_temp) {
     Py_XDECREF(values[__pyx_temp]);
   }
-  __Pyx_AddTraceback("nucleus.reasoning._inner_world_math_cy.calc_branch_weight", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("_inner_world_math_cy.calc_branch_weight", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_2calc_branch_weight(__pyx_self, __pyx_v_relevance, __pyx_v_content_len, __pyx_v_correlation_score);
+  __pyx_r = __pyx_pf_20_inner_world_math_cy_2calc_branch_weight(__pyx_self, __pyx_v_relevance, __pyx_v_content_len, __pyx_v_correlation_score);
 
   /* function exit code */
   for (Py_ssize_t __pyx_temp=0; __pyx_temp < (Py_ssize_t)(sizeof(values)/sizeof(values[0])); ++__pyx_temp) {
@@ -2930,7 +2927,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_2calc_branch_weight(CYTHON_UNUSED PyObject *__pyx_self, double __pyx_v_relevance, int __pyx_v_content_len, double __pyx_v_correlation_score) {
+static PyObject *__pyx_pf_20_inner_world_math_cy_2calc_branch_weight(CYTHON_UNUSED PyObject *__pyx_self, double __pyx_v_relevance, int __pyx_v_content_len, double __pyx_v_correlation_score) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   double __pyx_t_1;
@@ -2940,8 +2937,8 @@ static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_2calc_branc
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("calc_branch_weight", 0);
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_branch_weight(__pyx_v_relevance, __pyx_v_content_len, __pyx_v_correlation_score, 1); if (unlikely(__pyx_t_1 == ((double)-1) && PyErr_Occurred())) __PYX_ERR(0, 27, __pyx_L1_error)
-  __pyx_t_2 = PyFloat_FromDouble(__pyx_t_1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 27, __pyx_L1_error)
+  __pyx_t_1 = __pyx_f_20_inner_world_math_cy_calc_branch_weight(__pyx_v_relevance, __pyx_v_content_len, __pyx_v_correlation_score, 1); if (unlikely(__pyx_t_1 == ((double)-1) && PyErr_Occurred())) __PYX_ERR(0, 28, __pyx_L1_error)
+  __pyx_t_2 = PyFloat_FromDouble(__pyx_t_1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 28, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __pyx_r = __pyx_t_2;
   __pyx_t_2 = 0;
@@ -2950,7 +2947,7 @@ static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_2calc_branc
   /* function exit code */
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_2);
-  __Pyx_AddTraceback("nucleus.reasoning._inner_world_math_cy.calc_branch_weight", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("_inner_world_math_cy.calc_branch_weight", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -2958,7 +2955,7 @@ static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_2calc_branc
   return __pyx_r;
 }
 
-/* "nucleus/reasoning/_inner_world_math_cy.pyx":52
+/* "_inner_world_math_cy.pyx":53
  * 
  * 
  * cpdef double calc_correlation_score(list shared_keywords):             # <<<<<<<<<<<<<<
@@ -2966,14 +2963,14 @@ static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_2calc_branc
  * 
 */
 
-static PyObject *__pyx_pw_7nucleus_9reasoning_20_inner_world_math_cy_5calc_correlation_score(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_20_inner_world_math_cy_5calc_correlation_score(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_correlation_score(PyObject *__pyx_v_shared_keywords, CYTHON_UNUSED int __pyx_skip_dispatch) {
+static double __pyx_f_20_inner_world_math_cy_calc_correlation_score(PyObject *__pyx_v_shared_keywords, CYTHON_UNUSED int __pyx_skip_dispatch) {
   double __pyx_v_score;
   int __pyx_v_n;
   int __pyx_v_i;
@@ -2995,7 +2992,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_correlatio
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("calc_correlation_score", 0);
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":62
+  /* "_inner_world_math_cy.pyx":63
  *          (0.3)
  *     """
  *     cdef double score = 0.0             # <<<<<<<<<<<<<<
@@ -3004,7 +3001,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_correlatio
 */
   __pyx_v_score = 0.0;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":63
+  /* "_inner_world_math_cy.pyx":64
  *     """
  *     cdef double score = 0.0
  *     cdef int n = len(shared_keywords)             # <<<<<<<<<<<<<<
@@ -3013,12 +3010,12 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_correlatio
 */
   if (unlikely(__pyx_v_shared_keywords == Py_None)) {
     PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
-    __PYX_ERR(0, 63, __pyx_L1_error)
+    __PYX_ERR(0, 64, __pyx_L1_error)
   }
-  __pyx_t_1 = __Pyx_PyList_GET_SIZE(__pyx_v_shared_keywords); if (unlikely(__pyx_t_1 == ((Py_ssize_t)-1))) __PYX_ERR(0, 63, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyList_GET_SIZE(__pyx_v_shared_keywords); if (unlikely(__pyx_t_1 == ((Py_ssize_t)-1))) __PYX_ERR(0, 64, __pyx_L1_error)
   __pyx_v_n = __pyx_t_1;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":65
+  /* "_inner_world_math_cy.pyx":66
  *     cdef int n = len(shared_keywords)
  *     cdef int i
  *     for i in range(n):             # <<<<<<<<<<<<<<
@@ -3030,31 +3027,31 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_correlatio
   for (__pyx_t_4 = 0; __pyx_t_4 < __pyx_t_3; __pyx_t_4+=1) {
     __pyx_v_i = __pyx_t_4;
 
-    /* "nucleus/reasoning/_inner_world_math_cy.pyx":66
+    /* "_inner_world_math_cy.pyx":67
  *     cdef int i
  *     for i in range(n):
  *         score += shared_keywords[i] * 0.1             # <<<<<<<<<<<<<<
  *     return min(0.3, score)
  * 
 */
-    __pyx_t_5 = PyFloat_FromDouble(__pyx_v_score); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 66, __pyx_L1_error)
+    __pyx_t_5 = PyFloat_FromDouble(__pyx_v_score); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 67, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
     if (unlikely(__pyx_v_shared_keywords == Py_None)) {
       PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-      __PYX_ERR(0, 66, __pyx_L1_error)
+      __PYX_ERR(0, 67, __pyx_L1_error)
     }
-    __pyx_t_6 = PyNumber_Multiply(__Pyx_PyList_GET_ITEM(__pyx_v_shared_keywords, __pyx_v_i), __pyx_mstate_global->__pyx_float_0_1); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 66, __pyx_L1_error)
+    __pyx_t_6 = PyNumber_Multiply(__Pyx_PyList_GET_ITEM(__pyx_v_shared_keywords, __pyx_v_i), __pyx_mstate_global->__pyx_float_0_1); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 67, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_7 = PyNumber_InPlaceAdd(__pyx_t_5, __pyx_t_6); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 66, __pyx_L1_error)
+    __pyx_t_7 = PyNumber_InPlaceAdd(__pyx_t_5, __pyx_t_6); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 67, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    __pyx_t_8 = __Pyx_PyFloat_AsDouble(__pyx_t_7); if (unlikely((__pyx_t_8 == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 66, __pyx_L1_error)
+    __pyx_t_8 = __Pyx_PyFloat_AsDouble(__pyx_t_7); if (unlikely((__pyx_t_8 == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 67, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     __pyx_v_score = __pyx_t_8;
   }
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":67
+  /* "_inner_world_math_cy.pyx":68
  *     for i in range(n):
  *         score += shared_keywords[i] * 0.1
  *     return min(0.3, score)             # <<<<<<<<<<<<<<
@@ -3072,7 +3069,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_correlatio
   __pyx_r = __pyx_t_10;
   goto __pyx_L0;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":52
+  /* "_inner_world_math_cy.pyx":53
  * 
  * 
  * cpdef double calc_correlation_score(list shared_keywords):             # <<<<<<<<<<<<<<
@@ -3085,7 +3082,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_correlatio
   __Pyx_XDECREF(__pyx_t_5);
   __Pyx_XDECREF(__pyx_t_6);
   __Pyx_XDECREF(__pyx_t_7);
-  __Pyx_AddTraceback("nucleus.reasoning._inner_world_math_cy.calc_correlation_score", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("_inner_world_math_cy.calc_correlation_score", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = -1;
   __pyx_L0:;
   __Pyx_RefNannyFinishContext();
@@ -3093,16 +3090,16 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_correlatio
 }
 
 /* Python wrapper */
-static PyObject *__pyx_pw_7nucleus_9reasoning_20_inner_world_math_cy_5calc_correlation_score(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_20_inner_world_math_cy_5calc_correlation_score(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_7nucleus_9reasoning_20_inner_world_math_cy_4calc_correlation_score, "\n    \350\256\241\347\256\227\345\210\206\346\224\257\351\227\264\345\205\263\350\201\224\345\210\206\n\n    Args:\n        shared_keywords: \345\205\261\344\272\253\345\205\263\351\224\256\350\257\215\346\225\260\351\207\217\345\210\227\350\241\250\n\n    Returns:\n        \345\205\263\350\201\224\345\210\206 (\344\270\212\351\231\2200.3)\n    ");
-static PyMethodDef __pyx_mdef_7nucleus_9reasoning_20_inner_world_math_cy_5calc_correlation_score = {"calc_correlation_score", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_7nucleus_9reasoning_20_inner_world_math_cy_5calc_correlation_score, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_7nucleus_9reasoning_20_inner_world_math_cy_4calc_correlation_score};
-static PyObject *__pyx_pw_7nucleus_9reasoning_20_inner_world_math_cy_5calc_correlation_score(PyObject *__pyx_self, 
+PyDoc_STRVAR(__pyx_doc_20_inner_world_math_cy_4calc_correlation_score, "\n    \350\256\241\347\256\227\345\210\206\346\224\257\351\227\264\345\205\263\350\201\224\345\210\206\n\n    Args:\n        shared_keywords: \345\205\261\344\272\253\345\205\263\351\224\256\350\257\215\346\225\260\351\207\217\345\210\227\350\241\250\n\n    Returns:\n        \345\205\263\350\201\224\345\210\206 (\344\270\212\351\231\2200.3)\n    ");
+static PyMethodDef __pyx_mdef_20_inner_world_math_cy_5calc_correlation_score = {"calc_correlation_score", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_20_inner_world_math_cy_5calc_correlation_score, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_20_inner_world_math_cy_4calc_correlation_score};
+static PyObject *__pyx_pw_20_inner_world_math_cy_5calc_correlation_score(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -3132,44 +3129,44 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   {
     PyObject ** const __pyx_pyargnames[] = {&__pyx_mstate_global->__pyx_n_u_shared_keywords,0};
     const Py_ssize_t __pyx_kwds_len = (__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
-    if (unlikely(__pyx_kwds_len < 0)) __PYX_ERR(0, 52, __pyx_L3_error)
+    if (unlikely(__pyx_kwds_len < 0)) __PYX_ERR(0, 53, __pyx_L3_error)
     if (__pyx_kwds_len > 0) {
       switch (__pyx_nargs) {
         case  1:
         values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 52, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 53, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  0: break;
         default: goto __pyx_L5_argtuple_error;
       }
       const Py_ssize_t kwd_pos_args = __pyx_nargs;
-      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "calc_correlation_score", 0) < (0)) __PYX_ERR(0, 52, __pyx_L3_error)
+      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "calc_correlation_score", 0) < (0)) __PYX_ERR(0, 53, __pyx_L3_error)
       for (Py_ssize_t i = __pyx_nargs; i < 1; i++) {
-        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("calc_correlation_score", 1, 1, 1, i); __PYX_ERR(0, 52, __pyx_L3_error) }
+        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("calc_correlation_score", 1, 1, 1, i); __PYX_ERR(0, 53, __pyx_L3_error) }
       }
     } else if (unlikely(__pyx_nargs != 1)) {
       goto __pyx_L5_argtuple_error;
     } else {
       values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 52, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 53, __pyx_L3_error)
     }
     __pyx_v_shared_keywords = ((PyObject*)values[0]);
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("calc_correlation_score", 1, 1, 1, __pyx_nargs); __PYX_ERR(0, 52, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("calc_correlation_score", 1, 1, 1, __pyx_nargs); __PYX_ERR(0, 53, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
   for (Py_ssize_t __pyx_temp=0; __pyx_temp < (Py_ssize_t)(sizeof(values)/sizeof(values[0])); ++__pyx_temp) {
     Py_XDECREF(values[__pyx_temp]);
   }
-  __Pyx_AddTraceback("nucleus.reasoning._inner_world_math_cy.calc_correlation_score", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("_inner_world_math_cy.calc_correlation_score", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_shared_keywords), (&PyList_Type), 1, "shared_keywords", 1))) __PYX_ERR(0, 52, __pyx_L1_error)
-  __pyx_r = __pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_4calc_correlation_score(__pyx_self, __pyx_v_shared_keywords);
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_shared_keywords), (&PyList_Type), 1, "shared_keywords", 1))) __PYX_ERR(0, 53, __pyx_L1_error)
+  __pyx_r = __pyx_pf_20_inner_world_math_cy_4calc_correlation_score(__pyx_self, __pyx_v_shared_keywords);
 
   /* function exit code */
   goto __pyx_L0;
@@ -3188,7 +3185,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_4calc_correlation_score(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_shared_keywords) {
+static PyObject *__pyx_pf_20_inner_world_math_cy_4calc_correlation_score(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_shared_keywords) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   double __pyx_t_1;
@@ -3198,8 +3195,8 @@ static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_4calc_corre
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("calc_correlation_score", 0);
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_calc_correlation_score(__pyx_v_shared_keywords, 1); if (unlikely(__pyx_t_1 == ((double)-1) && PyErr_Occurred())) __PYX_ERR(0, 52, __pyx_L1_error)
-  __pyx_t_2 = PyFloat_FromDouble(__pyx_t_1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 52, __pyx_L1_error)
+  __pyx_t_1 = __pyx_f_20_inner_world_math_cy_calc_correlation_score(__pyx_v_shared_keywords, 1); if (unlikely(__pyx_t_1 == ((double)-1) && PyErr_Occurred())) __PYX_ERR(0, 53, __pyx_L1_error)
+  __pyx_t_2 = PyFloat_FromDouble(__pyx_t_1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 53, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __pyx_r = __pyx_t_2;
   __pyx_t_2 = 0;
@@ -3208,7 +3205,7 @@ static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_4calc_corre
   /* function exit code */
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_2);
-  __Pyx_AddTraceback("nucleus.reasoning._inner_world_math_cy.calc_correlation_score", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("_inner_world_math_cy.calc_correlation_score", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -3216,7 +3213,7 @@ static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_4calc_corre
   return __pyx_r;
 }
 
-/* "nucleus/reasoning/_inner_world_math_cy.pyx":70
+/* "_inner_world_math_cy.pyx":71
  * 
  * 
  * cpdef double weighted_fusion(list values, list weights):             # <<<<<<<<<<<<<<
@@ -3224,14 +3221,14 @@ static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_4calc_corre
  * 
 */
 
-static PyObject *__pyx_pw_7nucleus_9reasoning_20_inner_world_math_cy_7weighted_fusion(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_20_inner_world_math_cy_7weighted_fusion(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_weighted_fusion(PyObject *__pyx_v_values, PyObject *__pyx_v_weights, CYTHON_UNUSED int __pyx_skip_dispatch) {
+static double __pyx_f_20_inner_world_math_cy_weighted_fusion(PyObject *__pyx_v_values, PyObject *__pyx_v_weights, CYTHON_UNUSED int __pyx_skip_dispatch) {
   double __pyx_v_total;
   double __pyx_v_weight_sum;
   int __pyx_v_n;
@@ -3252,7 +3249,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_weighted_fusion
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("weighted_fusion", 0);
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":81
+  /* "_inner_world_math_cy.pyx":82
  * 
  *     """
  *     cdef double total = 0.0             # <<<<<<<<<<<<<<
@@ -3261,7 +3258,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_weighted_fusion
 */
   __pyx_v_total = 0.0;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":82
+  /* "_inner_world_math_cy.pyx":83
  *     """
  *     cdef double total = 0.0
  *     cdef double weight_sum = 0.0             # <<<<<<<<<<<<<<
@@ -3270,7 +3267,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_weighted_fusion
 */
   __pyx_v_weight_sum = 0.0;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":83
+  /* "_inner_world_math_cy.pyx":84
  *     cdef double total = 0.0
  *     cdef double weight_sum = 0.0
  *     cdef int n = len(values)             # <<<<<<<<<<<<<<
@@ -3279,12 +3276,12 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_weighted_fusion
 */
   if (unlikely(__pyx_v_values == Py_None)) {
     PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
-    __PYX_ERR(0, 83, __pyx_L1_error)
+    __PYX_ERR(0, 84, __pyx_L1_error)
   }
-  __pyx_t_1 = __Pyx_PyList_GET_SIZE(__pyx_v_values); if (unlikely(__pyx_t_1 == ((Py_ssize_t)-1))) __PYX_ERR(0, 83, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyList_GET_SIZE(__pyx_v_values); if (unlikely(__pyx_t_1 == ((Py_ssize_t)-1))) __PYX_ERR(0, 84, __pyx_L1_error)
   __pyx_v_n = __pyx_t_1;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":85
+  /* "_inner_world_math_cy.pyx":86
  *     cdef int n = len(values)
  *     cdef int i
  *     for i in range(n):             # <<<<<<<<<<<<<<
@@ -3296,55 +3293,55 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_weighted_fusion
   for (__pyx_t_4 = 0; __pyx_t_4 < __pyx_t_3; __pyx_t_4+=1) {
     __pyx_v_i = __pyx_t_4;
 
-    /* "nucleus/reasoning/_inner_world_math_cy.pyx":86
+    /* "_inner_world_math_cy.pyx":87
  *     cdef int i
  *     for i in range(n):
  *         total += values[i] * weights[i]             # <<<<<<<<<<<<<<
  *         weight_sum += weights[i]
  *     if weight_sum <= 0.0:
 */
-    __pyx_t_5 = PyFloat_FromDouble(__pyx_v_total); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 86, __pyx_L1_error)
+    __pyx_t_5 = PyFloat_FromDouble(__pyx_v_total); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 87, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
     if (unlikely(__pyx_v_values == Py_None)) {
       PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-      __PYX_ERR(0, 86, __pyx_L1_error)
+      __PYX_ERR(0, 87, __pyx_L1_error)
     }
     if (unlikely(__pyx_v_weights == Py_None)) {
       PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-      __PYX_ERR(0, 86, __pyx_L1_error)
+      __PYX_ERR(0, 87, __pyx_L1_error)
     }
-    __pyx_t_6 = PyNumber_Multiply(__Pyx_PyList_GET_ITEM(__pyx_v_values, __pyx_v_i), __Pyx_PyList_GET_ITEM(__pyx_v_weights, __pyx_v_i)); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 86, __pyx_L1_error)
+    __pyx_t_6 = PyNumber_Multiply(__Pyx_PyList_GET_ITEM(__pyx_v_values, __pyx_v_i), __Pyx_PyList_GET_ITEM(__pyx_v_weights, __pyx_v_i)); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 87, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_7 = PyNumber_InPlaceAdd(__pyx_t_5, __pyx_t_6); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 86, __pyx_L1_error)
+    __pyx_t_7 = PyNumber_InPlaceAdd(__pyx_t_5, __pyx_t_6); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 87, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    __pyx_t_8 = __Pyx_PyFloat_AsDouble(__pyx_t_7); if (unlikely((__pyx_t_8 == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 86, __pyx_L1_error)
+    __pyx_t_8 = __Pyx_PyFloat_AsDouble(__pyx_t_7); if (unlikely((__pyx_t_8 == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 87, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     __pyx_v_total = __pyx_t_8;
 
-    /* "nucleus/reasoning/_inner_world_math_cy.pyx":87
+    /* "_inner_world_math_cy.pyx":88
  *     for i in range(n):
  *         total += values[i] * weights[i]
  *         weight_sum += weights[i]             # <<<<<<<<<<<<<<
  *     if weight_sum <= 0.0:
  *         return 0.0
 */
-    __pyx_t_7 = PyFloat_FromDouble(__pyx_v_weight_sum); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 87, __pyx_L1_error)
+    __pyx_t_7 = PyFloat_FromDouble(__pyx_v_weight_sum); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 88, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     if (unlikely(__pyx_v_weights == Py_None)) {
       PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-      __PYX_ERR(0, 87, __pyx_L1_error)
+      __PYX_ERR(0, 88, __pyx_L1_error)
     }
-    __pyx_t_6 = PyNumber_InPlaceAdd(__pyx_t_7, __Pyx_PyList_GET_ITEM(__pyx_v_weights, __pyx_v_i)); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 87, __pyx_L1_error)
+    __pyx_t_6 = PyNumber_InPlaceAdd(__pyx_t_7, __Pyx_PyList_GET_ITEM(__pyx_v_weights, __pyx_v_i)); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 88, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-    __pyx_t_8 = __Pyx_PyFloat_AsDouble(__pyx_t_6); if (unlikely((__pyx_t_8 == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 87, __pyx_L1_error)
+    __pyx_t_8 = __Pyx_PyFloat_AsDouble(__pyx_t_6); if (unlikely((__pyx_t_8 == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 88, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
     __pyx_v_weight_sum = __pyx_t_8;
   }
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":88
+  /* "_inner_world_math_cy.pyx":89
  *         total += values[i] * weights[i]
  *         weight_sum += weights[i]
  *     if weight_sum <= 0.0:             # <<<<<<<<<<<<<<
@@ -3354,7 +3351,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_weighted_fusion
   __pyx_t_9 = (__pyx_v_weight_sum <= 0.0);
   if (__pyx_t_9) {
 
-    /* "nucleus/reasoning/_inner_world_math_cy.pyx":89
+    /* "_inner_world_math_cy.pyx":90
  *         weight_sum += weights[i]
  *     if weight_sum <= 0.0:
  *         return 0.0             # <<<<<<<<<<<<<<
@@ -3364,7 +3361,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_weighted_fusion
     __pyx_r = 0.0;
     goto __pyx_L0;
 
-    /* "nucleus/reasoning/_inner_world_math_cy.pyx":88
+    /* "_inner_world_math_cy.pyx":89
  *         total += values[i] * weights[i]
  *         weight_sum += weights[i]
  *     if weight_sum <= 0.0:             # <<<<<<<<<<<<<<
@@ -3373,7 +3370,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_weighted_fusion
 */
   }
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":90
+  /* "_inner_world_math_cy.pyx":91
  *     if weight_sum <= 0.0:
  *         return 0.0
  *     return total / weight_sum             # <<<<<<<<<<<<<<
@@ -3382,12 +3379,12 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_weighted_fusion
 */
   if (unlikely(__pyx_v_weight_sum == 0)) {
     PyErr_SetString(PyExc_ZeroDivisionError, "float division");
-    __PYX_ERR(0, 90, __pyx_L1_error)
+    __PYX_ERR(0, 91, __pyx_L1_error)
   }
   __pyx_r = (__pyx_v_total / __pyx_v_weight_sum);
   goto __pyx_L0;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":70
+  /* "_inner_world_math_cy.pyx":71
  * 
  * 
  * cpdef double weighted_fusion(list values, list weights):             # <<<<<<<<<<<<<<
@@ -3400,7 +3397,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_weighted_fusion
   __Pyx_XDECREF(__pyx_t_5);
   __Pyx_XDECREF(__pyx_t_6);
   __Pyx_XDECREF(__pyx_t_7);
-  __Pyx_AddTraceback("nucleus.reasoning._inner_world_math_cy.weighted_fusion", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("_inner_world_math_cy.weighted_fusion", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = -1;
   __pyx_L0:;
   __Pyx_RefNannyFinishContext();
@@ -3408,16 +3405,16 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_weighted_fusion
 }
 
 /* Python wrapper */
-static PyObject *__pyx_pw_7nucleus_9reasoning_20_inner_world_math_cy_7weighted_fusion(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_20_inner_world_math_cy_7weighted_fusion(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_7nucleus_9reasoning_20_inner_world_math_cy_6weighted_fusion, "\n    \351\200\232\347\224\250\345\212\240\346\235\203\350\236\215\345\220\210\350\257\204\345\210\206\n\n    Args:\n        values: \346\225\260\345\200\274\345\210\227\350\241\250\n        weights: \346\235\203\351\207\215\345\210\227\350\241\250\357\274\210\344\270\216values\347\255\211\351\225\277\357\274\211\n\n    Returns:\n        \345\212\240\346\235\203\345\271\263\345\235\207\345\200\274\n    ");
-static PyMethodDef __pyx_mdef_7nucleus_9reasoning_20_inner_world_math_cy_7weighted_fusion = {"weighted_fusion", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_7nucleus_9reasoning_20_inner_world_math_cy_7weighted_fusion, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_7nucleus_9reasoning_20_inner_world_math_cy_6weighted_fusion};
-static PyObject *__pyx_pw_7nucleus_9reasoning_20_inner_world_math_cy_7weighted_fusion(PyObject *__pyx_self, 
+PyDoc_STRVAR(__pyx_doc_20_inner_world_math_cy_6weighted_fusion, "\n    \351\200\232\347\224\250\345\212\240\346\235\203\350\236\215\345\220\210\350\257\204\345\210\206\n\n    Args:\n        values: \346\225\260\345\200\274\345\210\227\350\241\250\n        weights: \346\235\203\351\207\215\345\210\227\350\241\250\357\274\210\344\270\216values\347\255\211\351\225\277\357\274\211\n\n    Returns:\n        \345\212\240\346\235\203\345\271\263\345\235\207\345\200\274\n    ");
+static PyMethodDef __pyx_mdef_20_inner_world_math_cy_7weighted_fusion = {"weighted_fusion", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_20_inner_world_math_cy_7weighted_fusion, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_20_inner_world_math_cy_6weighted_fusion};
+static PyObject *__pyx_pw_20_inner_world_math_cy_7weighted_fusion(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -3448,52 +3445,52 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   {
     PyObject ** const __pyx_pyargnames[] = {&__pyx_mstate_global->__pyx_n_u_values,&__pyx_mstate_global->__pyx_n_u_weights,0};
     const Py_ssize_t __pyx_kwds_len = (__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
-    if (unlikely(__pyx_kwds_len < 0)) __PYX_ERR(0, 70, __pyx_L3_error)
+    if (unlikely(__pyx_kwds_len < 0)) __PYX_ERR(0, 71, __pyx_L3_error)
     if (__pyx_kwds_len > 0) {
       switch (__pyx_nargs) {
         case  2:
         values[1] = __Pyx_ArgRef_FASTCALL(__pyx_args, 1);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 70, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 71, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  1:
         values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 70, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 71, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  0: break;
         default: goto __pyx_L5_argtuple_error;
       }
       const Py_ssize_t kwd_pos_args = __pyx_nargs;
-      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "weighted_fusion", 0) < (0)) __PYX_ERR(0, 70, __pyx_L3_error)
+      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "weighted_fusion", 0) < (0)) __PYX_ERR(0, 71, __pyx_L3_error)
       for (Py_ssize_t i = __pyx_nargs; i < 2; i++) {
-        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("weighted_fusion", 1, 2, 2, i); __PYX_ERR(0, 70, __pyx_L3_error) }
+        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("weighted_fusion", 1, 2, 2, i); __PYX_ERR(0, 71, __pyx_L3_error) }
       }
     } else if (unlikely(__pyx_nargs != 2)) {
       goto __pyx_L5_argtuple_error;
     } else {
       values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 70, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 71, __pyx_L3_error)
       values[1] = __Pyx_ArgRef_FASTCALL(__pyx_args, 1);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 70, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 71, __pyx_L3_error)
     }
     __pyx_v_values = ((PyObject*)values[0]);
     __pyx_v_weights = ((PyObject*)values[1]);
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("weighted_fusion", 1, 2, 2, __pyx_nargs); __PYX_ERR(0, 70, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("weighted_fusion", 1, 2, 2, __pyx_nargs); __PYX_ERR(0, 71, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
   for (Py_ssize_t __pyx_temp=0; __pyx_temp < (Py_ssize_t)(sizeof(values)/sizeof(values[0])); ++__pyx_temp) {
     Py_XDECREF(values[__pyx_temp]);
   }
-  __Pyx_AddTraceback("nucleus.reasoning._inner_world_math_cy.weighted_fusion", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("_inner_world_math_cy.weighted_fusion", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_values), (&PyList_Type), 1, "values", 1))) __PYX_ERR(0, 70, __pyx_L1_error)
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_weights), (&PyList_Type), 1, "weights", 1))) __PYX_ERR(0, 70, __pyx_L1_error)
-  __pyx_r = __pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_6weighted_fusion(__pyx_self, __pyx_v_values, __pyx_v_weights);
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_values), (&PyList_Type), 1, "values", 1))) __PYX_ERR(0, 71, __pyx_L1_error)
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_weights), (&PyList_Type), 1, "weights", 1))) __PYX_ERR(0, 71, __pyx_L1_error)
+  __pyx_r = __pyx_pf_20_inner_world_math_cy_6weighted_fusion(__pyx_self, __pyx_v_values, __pyx_v_weights);
 
   /* function exit code */
   goto __pyx_L0;
@@ -3512,7 +3509,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_6weighted_fusion(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_values, PyObject *__pyx_v_weights) {
+static PyObject *__pyx_pf_20_inner_world_math_cy_6weighted_fusion(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_values, PyObject *__pyx_v_weights) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   double __pyx_t_1;
@@ -3522,8 +3519,8 @@ static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_6weighted_f
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("weighted_fusion", 0);
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_weighted_fusion(__pyx_v_values, __pyx_v_weights, 1); if (unlikely(__pyx_t_1 == ((double)-1) && PyErr_Occurred())) __PYX_ERR(0, 70, __pyx_L1_error)
-  __pyx_t_2 = PyFloat_FromDouble(__pyx_t_1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 70, __pyx_L1_error)
+  __pyx_t_1 = __pyx_f_20_inner_world_math_cy_weighted_fusion(__pyx_v_values, __pyx_v_weights, 1); if (unlikely(__pyx_t_1 == ((double)-1) && PyErr_Occurred())) __PYX_ERR(0, 71, __pyx_L1_error)
+  __pyx_t_2 = PyFloat_FromDouble(__pyx_t_1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 71, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __pyx_r = __pyx_t_2;
   __pyx_t_2 = 0;
@@ -3532,7 +3529,7 @@ static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_6weighted_f
   /* function exit code */
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_2);
-  __Pyx_AddTraceback("nucleus.reasoning._inner_world_math_cy.weighted_fusion", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("_inner_world_math_cy.weighted_fusion", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -3540,7 +3537,7 @@ static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_6weighted_f
   return __pyx_r;
 }
 
-/* "nucleus/reasoning/_inner_world_math_cy.pyx":93
+/* "_inner_world_math_cy.pyx":94
  * 
  * 
  * cpdef list normalize_scores(list scores):             # <<<<<<<<<<<<<<
@@ -3548,14 +3545,14 @@ static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_6weighted_f
  *     Softmax
 */
 
-static PyObject *__pyx_pw_7nucleus_9reasoning_20_inner_world_math_cy_9normalize_scores(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_20_inner_world_math_cy_9normalize_scores(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static PyObject *__pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_normalize_scores(PyObject *__pyx_v_scores, CYTHON_UNUSED int __pyx_skip_dispatch) {
+static PyObject *__pyx_f_20_inner_world_math_cy_normalize_scores(PyObject *__pyx_v_scores, CYTHON_UNUSED int __pyx_skip_dispatch) {
   int __pyx_v_n;
   double __pyx_v_max_score;
   int __pyx_v_i;
@@ -3580,7 +3577,7 @@ static PyObject *__pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_normalize_sc
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("normalize_scores", 0);
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":103
+  /* "_inner_world_math_cy.pyx":104
  * 
  *     """
  *     cdef int n = len(scores)             # <<<<<<<<<<<<<<
@@ -3589,12 +3586,12 @@ static PyObject *__pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_normalize_sc
 */
   if (unlikely(__pyx_v_scores == Py_None)) {
     PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
-    __PYX_ERR(0, 103, __pyx_L1_error)
+    __PYX_ERR(0, 104, __pyx_L1_error)
   }
-  __pyx_t_1 = __Pyx_PyList_GET_SIZE(__pyx_v_scores); if (unlikely(__pyx_t_1 == ((Py_ssize_t)-1))) __PYX_ERR(0, 103, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyList_GET_SIZE(__pyx_v_scores); if (unlikely(__pyx_t_1 == ((Py_ssize_t)-1))) __PYX_ERR(0, 104, __pyx_L1_error)
   __pyx_v_n = __pyx_t_1;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":104
+  /* "_inner_world_math_cy.pyx":105
  *     """
  *     cdef int n = len(scores)
  *     if n == 0:             # <<<<<<<<<<<<<<
@@ -3604,7 +3601,7 @@ static PyObject *__pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_normalize_sc
   __pyx_t_2 = (__pyx_v_n == 0);
   if (__pyx_t_2) {
 
-    /* "nucleus/reasoning/_inner_world_math_cy.pyx":105
+    /* "_inner_world_math_cy.pyx":106
  *     cdef int n = len(scores)
  *     if n == 0:
  *         return []             # <<<<<<<<<<<<<<
@@ -3612,13 +3609,13 @@ static PyObject *__pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_normalize_sc
  *     cdef int i
 */
     __Pyx_XDECREF(__pyx_r);
-    __pyx_t_3 = PyList_New(0); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 105, __pyx_L1_error)
+    __pyx_t_3 = PyList_New(0); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 106, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
     __pyx_r = ((PyObject*)__pyx_t_3);
     __pyx_t_3 = 0;
     goto __pyx_L0;
 
-    /* "nucleus/reasoning/_inner_world_math_cy.pyx":104
+    /* "_inner_world_math_cy.pyx":105
  *     """
  *     cdef int n = len(scores)
  *     if n == 0:             # <<<<<<<<<<<<<<
@@ -3627,7 +3624,7 @@ static PyObject *__pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_normalize_sc
 */
   }
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":106
+  /* "_inner_world_math_cy.pyx":107
  *     if n == 0:
  *         return []
  *     cdef double max_score = scores[0]             # <<<<<<<<<<<<<<
@@ -3636,12 +3633,12 @@ static PyObject *__pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_normalize_sc
 */
   if (unlikely(__pyx_v_scores == Py_None)) {
     PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-    __PYX_ERR(0, 106, __pyx_L1_error)
+    __PYX_ERR(0, 107, __pyx_L1_error)
   }
-  __pyx_t_4 = __Pyx_PyFloat_AsDouble(__Pyx_PyList_GET_ITEM(__pyx_v_scores, 0)); if (unlikely((__pyx_t_4 == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 106, __pyx_L1_error)
+  __pyx_t_4 = __Pyx_PyFloat_AsDouble(__Pyx_PyList_GET_ITEM(__pyx_v_scores, 0)); if (unlikely((__pyx_t_4 == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 107, __pyx_L1_error)
   __pyx_v_max_score = __pyx_t_4;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":108
+  /* "_inner_world_math_cy.pyx":109
  *     cdef double max_score = scores[0]
  *     cdef int i
  *     for i in range(1, n):             # <<<<<<<<<<<<<<
@@ -3653,7 +3650,7 @@ static PyObject *__pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_normalize_sc
   for (__pyx_t_7 = 1; __pyx_t_7 < __pyx_t_6; __pyx_t_7+=1) {
     __pyx_v_i = __pyx_t_7;
 
-    /* "nucleus/reasoning/_inner_world_math_cy.pyx":109
+    /* "_inner_world_math_cy.pyx":110
  *     cdef int i
  *     for i in range(1, n):
  *         if scores[i] > max_score:             # <<<<<<<<<<<<<<
@@ -3662,17 +3659,17 @@ static PyObject *__pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_normalize_sc
 */
     if (unlikely(__pyx_v_scores == Py_None)) {
       PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-      __PYX_ERR(0, 109, __pyx_L1_error)
+      __PYX_ERR(0, 110, __pyx_L1_error)
     }
-    __pyx_t_3 = PyFloat_FromDouble(__pyx_v_max_score); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 109, __pyx_L1_error)
+    __pyx_t_3 = PyFloat_FromDouble(__pyx_v_max_score); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 110, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
-    __pyx_t_8 = PyObject_RichCompare(__Pyx_PyList_GET_ITEM(__pyx_v_scores, __pyx_v_i), __pyx_t_3, Py_GT); __Pyx_XGOTREF(__pyx_t_8); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 109, __pyx_L1_error)
+    __pyx_t_8 = PyObject_RichCompare(__Pyx_PyList_GET_ITEM(__pyx_v_scores, __pyx_v_i), __pyx_t_3, Py_GT); __Pyx_XGOTREF(__pyx_t_8); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 110, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-    __pyx_t_2 = __Pyx_PyObject_IsTrue(__pyx_t_8); if (unlikely((__pyx_t_2 < 0))) __PYX_ERR(0, 109, __pyx_L1_error)
+    __pyx_t_2 = __Pyx_PyObject_IsTrue(__pyx_t_8); if (unlikely((__pyx_t_2 < 0))) __PYX_ERR(0, 110, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
     if (__pyx_t_2) {
 
-      /* "nucleus/reasoning/_inner_world_math_cy.pyx":110
+      /* "_inner_world_math_cy.pyx":111
  *     for i in range(1, n):
  *         if scores[i] > max_score:
  *             max_score = scores[i]             # <<<<<<<<<<<<<<
@@ -3681,12 +3678,12 @@ static PyObject *__pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_normalize_sc
 */
       if (unlikely(__pyx_v_scores == Py_None)) {
         PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-        __PYX_ERR(0, 110, __pyx_L1_error)
+        __PYX_ERR(0, 111, __pyx_L1_error)
       }
-      __pyx_t_4 = __Pyx_PyFloat_AsDouble(__Pyx_PyList_GET_ITEM(__pyx_v_scores, __pyx_v_i)); if (unlikely((__pyx_t_4 == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 110, __pyx_L1_error)
+      __pyx_t_4 = __Pyx_PyFloat_AsDouble(__Pyx_PyList_GET_ITEM(__pyx_v_scores, __pyx_v_i)); if (unlikely((__pyx_t_4 == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 111, __pyx_L1_error)
       __pyx_v_max_score = __pyx_t_4;
 
-      /* "nucleus/reasoning/_inner_world_math_cy.pyx":109
+      /* "_inner_world_math_cy.pyx":110
  *     cdef int i
  *     for i in range(1, n):
  *         if scores[i] > max_score:             # <<<<<<<<<<<<<<
@@ -3696,7 +3693,7 @@ static PyObject *__pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_normalize_sc
     }
   }
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":111
+  /* "_inner_world_math_cy.pyx":112
  *         if scores[i] > max_score:
  *             max_score = scores[i]
  *     cdef double sum_exp = 0.0             # <<<<<<<<<<<<<<
@@ -3705,19 +3702,19 @@ static PyObject *__pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_normalize_sc
 */
   __pyx_v_sum_exp = 0.0;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":112
+  /* "_inner_world_math_cy.pyx":113
  *             max_score = scores[i]
  *     cdef double sum_exp = 0.0
  *     cdef list exps = []             # <<<<<<<<<<<<<<
  *     cdef double e
  *     for i in range(n):
 */
-  __pyx_t_8 = PyList_New(0); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 112, __pyx_L1_error)
+  __pyx_t_8 = PyList_New(0); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 113, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_8);
   __pyx_v_exps = ((PyObject*)__pyx_t_8);
   __pyx_t_8 = 0;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":114
+  /* "_inner_world_math_cy.pyx":115
  *     cdef list exps = []
  *     cdef double e
  *     for i in range(n):             # <<<<<<<<<<<<<<
@@ -3729,7 +3726,7 @@ static PyObject *__pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_normalize_sc
   for (__pyx_t_7 = 0; __pyx_t_7 < __pyx_t_6; __pyx_t_7+=1) {
     __pyx_v_i = __pyx_t_7;
 
-    /* "nucleus/reasoning/_inner_world_math_cy.pyx":115
+    /* "_inner_world_math_cy.pyx":116
  *     cdef double e
  *     for i in range(n):
  *         e = exp(scores[i] - max_score)             # <<<<<<<<<<<<<<
@@ -3738,30 +3735,30 @@ static PyObject *__pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_normalize_sc
 */
     if (unlikely(__pyx_v_scores == Py_None)) {
       PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-      __PYX_ERR(0, 115, __pyx_L1_error)
+      __PYX_ERR(0, 116, __pyx_L1_error)
     }
-    __pyx_t_8 = PyFloat_FromDouble(__pyx_v_max_score); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 115, __pyx_L1_error)
+    __pyx_t_8 = PyFloat_FromDouble(__pyx_v_max_score); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 116, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
-    __pyx_t_3 = PyNumber_Subtract(__Pyx_PyList_GET_ITEM(__pyx_v_scores, __pyx_v_i), __pyx_t_8); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 115, __pyx_L1_error)
+    __pyx_t_3 = PyNumber_Subtract(__Pyx_PyList_GET_ITEM(__pyx_v_scores, __pyx_v_i), __pyx_t_8); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 116, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    __pyx_t_4 = __Pyx_PyFloat_AsDouble(__pyx_t_3); if (unlikely((__pyx_t_4 == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 115, __pyx_L1_error)
+    __pyx_t_4 = __Pyx_PyFloat_AsDouble(__pyx_t_3); if (unlikely((__pyx_t_4 == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 116, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
     __pyx_v_e = exp(__pyx_t_4);
 
-    /* "nucleus/reasoning/_inner_world_math_cy.pyx":116
+    /* "_inner_world_math_cy.pyx":117
  *     for i in range(n):
  *         e = exp(scores[i] - max_score)
  *         exps.append(e)             # <<<<<<<<<<<<<<
  *         sum_exp += e
  *     cdef list result = []
 */
-    __pyx_t_3 = PyFloat_FromDouble(__pyx_v_e); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 116, __pyx_L1_error)
+    __pyx_t_3 = PyFloat_FromDouble(__pyx_v_e); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 117, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
-    __pyx_t_9 = __Pyx_PyList_Append(__pyx_v_exps, __pyx_t_3); if (unlikely(__pyx_t_9 == ((int)-1))) __PYX_ERR(0, 116, __pyx_L1_error)
+    __pyx_t_9 = __Pyx_PyList_Append(__pyx_v_exps, __pyx_t_3); if (unlikely(__pyx_t_9 == ((int)-1))) __PYX_ERR(0, 117, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-    /* "nucleus/reasoning/_inner_world_math_cy.pyx":117
+    /* "_inner_world_math_cy.pyx":118
  *         e = exp(scores[i] - max_score)
  *         exps.append(e)
  *         sum_exp += e             # <<<<<<<<<<<<<<
@@ -3771,19 +3768,19 @@ static PyObject *__pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_normalize_sc
     __pyx_v_sum_exp = (__pyx_v_sum_exp + __pyx_v_e);
   }
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":118
+  /* "_inner_world_math_cy.pyx":119
  *         exps.append(e)
  *         sum_exp += e
  *     cdef list result = []             # <<<<<<<<<<<<<<
  *     for i in range(n):
  *         result.append(exps[i] / sum_exp if sum_exp > 0.0 else 1.0 / n)
 */
-  __pyx_t_3 = PyList_New(0); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 118, __pyx_L1_error)
+  __pyx_t_3 = PyList_New(0); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 119, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   __pyx_v_result = ((PyObject*)__pyx_t_3);
   __pyx_t_3 = 0;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":119
+  /* "_inner_world_math_cy.pyx":120
  *         sum_exp += e
  *     cdef list result = []
  *     for i in range(n):             # <<<<<<<<<<<<<<
@@ -3795,7 +3792,7 @@ static PyObject *__pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_normalize_sc
   for (__pyx_t_7 = 0; __pyx_t_7 < __pyx_t_6; __pyx_t_7+=1) {
     __pyx_v_i = __pyx_t_7;
 
-    /* "nucleus/reasoning/_inner_world_math_cy.pyx":120
+    /* "_inner_world_math_cy.pyx":121
  *     cdef list result = []
  *     for i in range(n):
  *         result.append(exps[i] / sum_exp if sum_exp > 0.0 else 1.0 / n)             # <<<<<<<<<<<<<<
@@ -3804,9 +3801,9 @@ static PyObject *__pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_normalize_sc
 */
     __pyx_t_2 = (__pyx_v_sum_exp > 0.0);
     if (__pyx_t_2) {
-      __pyx_t_8 = PyFloat_FromDouble(__pyx_v_sum_exp); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 120, __pyx_L1_error)
+      __pyx_t_8 = PyFloat_FromDouble(__pyx_v_sum_exp); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 121, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_8);
-      __pyx_t_10 = __Pyx_PyNumber_Divide(__Pyx_PyList_GET_ITEM(__pyx_v_exps, __pyx_v_i), __pyx_t_8); if (unlikely(!__pyx_t_10)) __PYX_ERR(0, 120, __pyx_L1_error)
+      __pyx_t_10 = __Pyx_PyNumber_Divide(__Pyx_PyList_GET_ITEM(__pyx_v_exps, __pyx_v_i), __pyx_t_8); if (unlikely(!__pyx_t_10)) __PYX_ERR(0, 121, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_10);
       __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
       __pyx_t_3 = __pyx_t_10;
@@ -3814,18 +3811,18 @@ static PyObject *__pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_normalize_sc
     } else {
       if (unlikely(__pyx_v_n == 0)) {
         PyErr_SetString(PyExc_ZeroDivisionError, "float division");
-        __PYX_ERR(0, 120, __pyx_L1_error)
+        __PYX_ERR(0, 121, __pyx_L1_error)
       }
-      __pyx_t_10 = PyFloat_FromDouble((1.0 / ((double)__pyx_v_n))); if (unlikely(!__pyx_t_10)) __PYX_ERR(0, 120, __pyx_L1_error)
+      __pyx_t_10 = PyFloat_FromDouble((1.0 / ((double)__pyx_v_n))); if (unlikely(!__pyx_t_10)) __PYX_ERR(0, 121, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_10);
       __pyx_t_3 = __pyx_t_10;
       __pyx_t_10 = 0;
     }
-    __pyx_t_9 = __Pyx_PyList_Append(__pyx_v_result, __pyx_t_3); if (unlikely(__pyx_t_9 == ((int)-1))) __PYX_ERR(0, 120, __pyx_L1_error)
+    __pyx_t_9 = __Pyx_PyList_Append(__pyx_v_result, __pyx_t_3); if (unlikely(__pyx_t_9 == ((int)-1))) __PYX_ERR(0, 121, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
   }
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":121
+  /* "_inner_world_math_cy.pyx":122
  *     for i in range(n):
  *         result.append(exps[i] / sum_exp if sum_exp > 0.0 else 1.0 / n)
  *     return result             # <<<<<<<<<<<<<<
@@ -3837,7 +3834,7 @@ static PyObject *__pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_normalize_sc
   __pyx_r = __pyx_v_result;
   goto __pyx_L0;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":93
+  /* "_inner_world_math_cy.pyx":94
  * 
  * 
  * cpdef list normalize_scores(list scores):             # <<<<<<<<<<<<<<
@@ -3850,7 +3847,7 @@ static PyObject *__pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_normalize_sc
   __Pyx_XDECREF(__pyx_t_3);
   __Pyx_XDECREF(__pyx_t_8);
   __Pyx_XDECREF(__pyx_t_10);
-  __Pyx_AddTraceback("nucleus.reasoning._inner_world_math_cy.normalize_scores", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("_inner_world_math_cy.normalize_scores", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = 0;
   __pyx_L0:;
   __Pyx_XDECREF(__pyx_v_exps);
@@ -3861,16 +3858,16 @@ static PyObject *__pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_normalize_sc
 }
 
 /* Python wrapper */
-static PyObject *__pyx_pw_7nucleus_9reasoning_20_inner_world_math_cy_9normalize_scores(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_20_inner_world_math_cy_9normalize_scores(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_7nucleus_9reasoning_20_inner_world_math_cy_8normalize_scores, "\n    \346\211\271\351\207\217\345\210\206\346\225\260\345\275\222\344\270\200\345\214\226\357\274\210Softmax\357\274\211\n\n    Args:\n        scores: \345\216\237\345\247\213\345\210\206\346\225\260\345\210\227\350\241\250\n\n    Returns:\n        \345\275\222\344\270\200\345\214\226\345\220\216\347\232\204\346\246\202\347\216\207\345\210\206\345\270\203\n    ");
-static PyMethodDef __pyx_mdef_7nucleus_9reasoning_20_inner_world_math_cy_9normalize_scores = {"normalize_scores", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_7nucleus_9reasoning_20_inner_world_math_cy_9normalize_scores, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_7nucleus_9reasoning_20_inner_world_math_cy_8normalize_scores};
-static PyObject *__pyx_pw_7nucleus_9reasoning_20_inner_world_math_cy_9normalize_scores(PyObject *__pyx_self, 
+PyDoc_STRVAR(__pyx_doc_20_inner_world_math_cy_8normalize_scores, "\n    \346\211\271\351\207\217\345\210\206\346\225\260\345\275\222\344\270\200\345\214\226\357\274\210Softmax\357\274\211\n\n    Args:\n        scores: \345\216\237\345\247\213\345\210\206\346\225\260\345\210\227\350\241\250\n\n    Returns:\n        \345\275\222\344\270\200\345\214\226\345\220\216\347\232\204\346\246\202\347\216\207\345\210\206\345\270\203\n    ");
+static PyMethodDef __pyx_mdef_20_inner_world_math_cy_9normalize_scores = {"normalize_scores", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_20_inner_world_math_cy_9normalize_scores, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_20_inner_world_math_cy_8normalize_scores};
+static PyObject *__pyx_pw_20_inner_world_math_cy_9normalize_scores(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -3900,44 +3897,44 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   {
     PyObject ** const __pyx_pyargnames[] = {&__pyx_mstate_global->__pyx_n_u_scores,0};
     const Py_ssize_t __pyx_kwds_len = (__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
-    if (unlikely(__pyx_kwds_len < 0)) __PYX_ERR(0, 93, __pyx_L3_error)
+    if (unlikely(__pyx_kwds_len < 0)) __PYX_ERR(0, 94, __pyx_L3_error)
     if (__pyx_kwds_len > 0) {
       switch (__pyx_nargs) {
         case  1:
         values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 93, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 94, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  0: break;
         default: goto __pyx_L5_argtuple_error;
       }
       const Py_ssize_t kwd_pos_args = __pyx_nargs;
-      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "normalize_scores", 0) < (0)) __PYX_ERR(0, 93, __pyx_L3_error)
+      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "normalize_scores", 0) < (0)) __PYX_ERR(0, 94, __pyx_L3_error)
       for (Py_ssize_t i = __pyx_nargs; i < 1; i++) {
-        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("normalize_scores", 1, 1, 1, i); __PYX_ERR(0, 93, __pyx_L3_error) }
+        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("normalize_scores", 1, 1, 1, i); __PYX_ERR(0, 94, __pyx_L3_error) }
       }
     } else if (unlikely(__pyx_nargs != 1)) {
       goto __pyx_L5_argtuple_error;
     } else {
       values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 93, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 94, __pyx_L3_error)
     }
     __pyx_v_scores = ((PyObject*)values[0]);
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("normalize_scores", 1, 1, 1, __pyx_nargs); __PYX_ERR(0, 93, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("normalize_scores", 1, 1, 1, __pyx_nargs); __PYX_ERR(0, 94, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
   for (Py_ssize_t __pyx_temp=0; __pyx_temp < (Py_ssize_t)(sizeof(values)/sizeof(values[0])); ++__pyx_temp) {
     Py_XDECREF(values[__pyx_temp]);
   }
-  __Pyx_AddTraceback("nucleus.reasoning._inner_world_math_cy.normalize_scores", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("_inner_world_math_cy.normalize_scores", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_scores), (&PyList_Type), 1, "scores", 1))) __PYX_ERR(0, 93, __pyx_L1_error)
-  __pyx_r = __pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_8normalize_scores(__pyx_self, __pyx_v_scores);
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_scores), (&PyList_Type), 1, "scores", 1))) __PYX_ERR(0, 94, __pyx_L1_error)
+  __pyx_r = __pyx_pf_20_inner_world_math_cy_8normalize_scores(__pyx_self, __pyx_v_scores);
 
   /* function exit code */
   goto __pyx_L0;
@@ -3956,7 +3953,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_8normalize_scores(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_scores) {
+static PyObject *__pyx_pf_20_inner_world_math_cy_8normalize_scores(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_scores) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -3965,7 +3962,7 @@ static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_8normalize_
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("normalize_scores", 0);
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_normalize_scores(__pyx_v_scores, 1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 93, __pyx_L1_error)
+  __pyx_t_1 = __pyx_f_20_inner_world_math_cy_normalize_scores(__pyx_v_scores, 1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 94, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -3974,7 +3971,7 @@ static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_8normalize_
   /* function exit code */
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_1);
-  __Pyx_AddTraceback("nucleus.reasoning._inner_world_math_cy.normalize_scores", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("_inner_world_math_cy.normalize_scores", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -3982,7 +3979,7 @@ static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_8normalize_
   return __pyx_r;
 }
 
-/* "nucleus/reasoning/_inner_world_math_cy.pyx":124
+/* "_inner_world_math_cy.pyx":125
  * 
  * 
  * cpdef double cosine_similarity_cy(list vec_a, list vec_b):             # <<<<<<<<<<<<<<
@@ -3990,14 +3987,14 @@ static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_8normalize_
  *     Pythonnumpy
 */
 
-static PyObject *__pyx_pw_7nucleus_9reasoning_20_inner_world_math_cy_11cosine_similarity_cy(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_20_inner_world_math_cy_11cosine_similarity_cy(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_cosine_similarity_cy(PyObject *__pyx_v_vec_a, PyObject *__pyx_v_vec_b, CYTHON_UNUSED int __pyx_skip_dispatch) {
+static double __pyx_f_20_inner_world_math_cy_cosine_similarity_cy(PyObject *__pyx_v_vec_a, PyObject *__pyx_v_vec_b, CYTHON_UNUSED int __pyx_skip_dispatch) {
   int __pyx_v_n;
   double __pyx_v_dot;
   double __pyx_v_norm_a;
@@ -4020,7 +4017,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_cosine_similari
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("cosine_similarity_cy", 0);
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":135
+  /* "_inner_world_math_cy.pyx":136
  *          (-1.0 ~ 1.0)
  *     """
  *     cdef int n = len(vec_a)             # <<<<<<<<<<<<<<
@@ -4029,12 +4026,12 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_cosine_similari
 */
   if (unlikely(__pyx_v_vec_a == Py_None)) {
     PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
-    __PYX_ERR(0, 135, __pyx_L1_error)
+    __PYX_ERR(0, 136, __pyx_L1_error)
   }
-  __pyx_t_1 = __Pyx_PyList_GET_SIZE(__pyx_v_vec_a); if (unlikely(__pyx_t_1 == ((Py_ssize_t)-1))) __PYX_ERR(0, 135, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyList_GET_SIZE(__pyx_v_vec_a); if (unlikely(__pyx_t_1 == ((Py_ssize_t)-1))) __PYX_ERR(0, 136, __pyx_L1_error)
   __pyx_v_n = __pyx_t_1;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":136
+  /* "_inner_world_math_cy.pyx":137
  *     """
  *     cdef int n = len(vec_a)
  *     if n == 0 or n != len(vec_b):             # <<<<<<<<<<<<<<
@@ -4049,15 +4046,15 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_cosine_similari
   }
   if (unlikely(__pyx_v_vec_b == Py_None)) {
     PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
-    __PYX_ERR(0, 136, __pyx_L1_error)
+    __PYX_ERR(0, 137, __pyx_L1_error)
   }
-  __pyx_t_1 = __Pyx_PyList_GET_SIZE(__pyx_v_vec_b); if (unlikely(__pyx_t_1 == ((Py_ssize_t)-1))) __PYX_ERR(0, 136, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyList_GET_SIZE(__pyx_v_vec_b); if (unlikely(__pyx_t_1 == ((Py_ssize_t)-1))) __PYX_ERR(0, 137, __pyx_L1_error)
   __pyx_t_3 = (__pyx_v_n != __pyx_t_1);
   __pyx_t_2 = __pyx_t_3;
   __pyx_L4_bool_binop_done:;
   if (__pyx_t_2) {
 
-    /* "nucleus/reasoning/_inner_world_math_cy.pyx":137
+    /* "_inner_world_math_cy.pyx":138
  *     cdef int n = len(vec_a)
  *     if n == 0 or n != len(vec_b):
  *         return 0.0             # <<<<<<<<<<<<<<
@@ -4067,7 +4064,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_cosine_similari
     __pyx_r = 0.0;
     goto __pyx_L0;
 
-    /* "nucleus/reasoning/_inner_world_math_cy.pyx":136
+    /* "_inner_world_math_cy.pyx":137
  *     """
  *     cdef int n = len(vec_a)
  *     if n == 0 or n != len(vec_b):             # <<<<<<<<<<<<<<
@@ -4076,7 +4073,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_cosine_similari
 */
   }
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":138
+  /* "_inner_world_math_cy.pyx":139
  *     if n == 0 or n != len(vec_b):
  *         return 0.0
  *     cdef double dot = 0.0             # <<<<<<<<<<<<<<
@@ -4085,7 +4082,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_cosine_similari
 */
   __pyx_v_dot = 0.0;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":139
+  /* "_inner_world_math_cy.pyx":140
  *         return 0.0
  *     cdef double dot = 0.0
  *     cdef double norm_a = 0.0             # <<<<<<<<<<<<<<
@@ -4094,7 +4091,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_cosine_similari
 */
   __pyx_v_norm_a = 0.0;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":140
+  /* "_inner_world_math_cy.pyx":141
  *     cdef double dot = 0.0
  *     cdef double norm_a = 0.0
  *     cdef double norm_b = 0.0             # <<<<<<<<<<<<<<
@@ -4103,7 +4100,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_cosine_similari
 */
   __pyx_v_norm_b = 0.0;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":142
+  /* "_inner_world_math_cy.pyx":143
  *     cdef double norm_b = 0.0
  *     cdef int i
  *     for i in range(n):             # <<<<<<<<<<<<<<
@@ -4115,89 +4112,89 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_cosine_similari
   for (__pyx_t_6 = 0; __pyx_t_6 < __pyx_t_5; __pyx_t_6+=1) {
     __pyx_v_i = __pyx_t_6;
 
-    /* "nucleus/reasoning/_inner_world_math_cy.pyx":143
+    /* "_inner_world_math_cy.pyx":144
  *     cdef int i
  *     for i in range(n):
  *         dot += vec_a[i] * vec_b[i]             # <<<<<<<<<<<<<<
  *         norm_a += vec_a[i] * vec_a[i]
  *         norm_b += vec_b[i] * vec_b[i]
 */
-    __pyx_t_7 = PyFloat_FromDouble(__pyx_v_dot); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 143, __pyx_L1_error)
+    __pyx_t_7 = PyFloat_FromDouble(__pyx_v_dot); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 144, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     if (unlikely(__pyx_v_vec_a == Py_None)) {
       PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-      __PYX_ERR(0, 143, __pyx_L1_error)
+      __PYX_ERR(0, 144, __pyx_L1_error)
     }
     if (unlikely(__pyx_v_vec_b == Py_None)) {
       PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-      __PYX_ERR(0, 143, __pyx_L1_error)
+      __PYX_ERR(0, 144, __pyx_L1_error)
     }
-    __pyx_t_8 = PyNumber_Multiply(__Pyx_PyList_GET_ITEM(__pyx_v_vec_a, __pyx_v_i), __Pyx_PyList_GET_ITEM(__pyx_v_vec_b, __pyx_v_i)); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 143, __pyx_L1_error)
+    __pyx_t_8 = PyNumber_Multiply(__Pyx_PyList_GET_ITEM(__pyx_v_vec_a, __pyx_v_i), __Pyx_PyList_GET_ITEM(__pyx_v_vec_b, __pyx_v_i)); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 144, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
-    __pyx_t_9 = PyNumber_InPlaceAdd(__pyx_t_7, __pyx_t_8); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 143, __pyx_L1_error)
+    __pyx_t_9 = PyNumber_InPlaceAdd(__pyx_t_7, __pyx_t_8); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 144, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_9);
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    __pyx_t_10 = __Pyx_PyFloat_AsDouble(__pyx_t_9); if (unlikely((__pyx_t_10 == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 143, __pyx_L1_error)
+    __pyx_t_10 = __Pyx_PyFloat_AsDouble(__pyx_t_9); if (unlikely((__pyx_t_10 == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 144, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
     __pyx_v_dot = __pyx_t_10;
 
-    /* "nucleus/reasoning/_inner_world_math_cy.pyx":144
+    /* "_inner_world_math_cy.pyx":145
  *     for i in range(n):
  *         dot += vec_a[i] * vec_b[i]
  *         norm_a += vec_a[i] * vec_a[i]             # <<<<<<<<<<<<<<
  *         norm_b += vec_b[i] * vec_b[i]
  *     if norm_a <= 0.0 or norm_b <= 0.0:
 */
-    __pyx_t_9 = PyFloat_FromDouble(__pyx_v_norm_a); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 144, __pyx_L1_error)
+    __pyx_t_9 = PyFloat_FromDouble(__pyx_v_norm_a); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 145, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_9);
     if (unlikely(__pyx_v_vec_a == Py_None)) {
       PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-      __PYX_ERR(0, 144, __pyx_L1_error)
+      __PYX_ERR(0, 145, __pyx_L1_error)
     }
     if (unlikely(__pyx_v_vec_a == Py_None)) {
       PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-      __PYX_ERR(0, 144, __pyx_L1_error)
+      __PYX_ERR(0, 145, __pyx_L1_error)
     }
-    __pyx_t_8 = PyNumber_Multiply(__Pyx_PyList_GET_ITEM(__pyx_v_vec_a, __pyx_v_i), __Pyx_PyList_GET_ITEM(__pyx_v_vec_a, __pyx_v_i)); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 144, __pyx_L1_error)
+    __pyx_t_8 = PyNumber_Multiply(__Pyx_PyList_GET_ITEM(__pyx_v_vec_a, __pyx_v_i), __Pyx_PyList_GET_ITEM(__pyx_v_vec_a, __pyx_v_i)); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 145, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
-    __pyx_t_7 = PyNumber_InPlaceAdd(__pyx_t_9, __pyx_t_8); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 144, __pyx_L1_error)
+    __pyx_t_7 = PyNumber_InPlaceAdd(__pyx_t_9, __pyx_t_8); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 145, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    __pyx_t_10 = __Pyx_PyFloat_AsDouble(__pyx_t_7); if (unlikely((__pyx_t_10 == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 144, __pyx_L1_error)
+    __pyx_t_10 = __Pyx_PyFloat_AsDouble(__pyx_t_7); if (unlikely((__pyx_t_10 == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 145, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     __pyx_v_norm_a = __pyx_t_10;
 
-    /* "nucleus/reasoning/_inner_world_math_cy.pyx":145
+    /* "_inner_world_math_cy.pyx":146
  *         dot += vec_a[i] * vec_b[i]
  *         norm_a += vec_a[i] * vec_a[i]
  *         norm_b += vec_b[i] * vec_b[i]             # <<<<<<<<<<<<<<
  *     if norm_a <= 0.0 or norm_b <= 0.0:
  *         return 0.0
 */
-    __pyx_t_7 = PyFloat_FromDouble(__pyx_v_norm_b); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 145, __pyx_L1_error)
+    __pyx_t_7 = PyFloat_FromDouble(__pyx_v_norm_b); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 146, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_7);
     if (unlikely(__pyx_v_vec_b == Py_None)) {
       PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-      __PYX_ERR(0, 145, __pyx_L1_error)
+      __PYX_ERR(0, 146, __pyx_L1_error)
     }
     if (unlikely(__pyx_v_vec_b == Py_None)) {
       PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-      __PYX_ERR(0, 145, __pyx_L1_error)
+      __PYX_ERR(0, 146, __pyx_L1_error)
     }
-    __pyx_t_8 = PyNumber_Multiply(__Pyx_PyList_GET_ITEM(__pyx_v_vec_b, __pyx_v_i), __Pyx_PyList_GET_ITEM(__pyx_v_vec_b, __pyx_v_i)); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 145, __pyx_L1_error)
+    __pyx_t_8 = PyNumber_Multiply(__Pyx_PyList_GET_ITEM(__pyx_v_vec_b, __pyx_v_i), __Pyx_PyList_GET_ITEM(__pyx_v_vec_b, __pyx_v_i)); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 146, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_8);
-    __pyx_t_9 = PyNumber_InPlaceAdd(__pyx_t_7, __pyx_t_8); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 145, __pyx_L1_error)
+    __pyx_t_9 = PyNumber_InPlaceAdd(__pyx_t_7, __pyx_t_8); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 146, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_9);
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    __pyx_t_10 = __Pyx_PyFloat_AsDouble(__pyx_t_9); if (unlikely((__pyx_t_10 == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 145, __pyx_L1_error)
+    __pyx_t_10 = __Pyx_PyFloat_AsDouble(__pyx_t_9); if (unlikely((__pyx_t_10 == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 146, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
     __pyx_v_norm_b = __pyx_t_10;
   }
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":146
+  /* "_inner_world_math_cy.pyx":147
  *         norm_a += vec_a[i] * vec_a[i]
  *         norm_b += vec_b[i] * vec_b[i]
  *     if norm_a <= 0.0 or norm_b <= 0.0:             # <<<<<<<<<<<<<<
@@ -4215,7 +4212,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_cosine_similari
   __pyx_L9_bool_binop_done:;
   if (__pyx_t_2) {
 
-    /* "nucleus/reasoning/_inner_world_math_cy.pyx":147
+    /* "_inner_world_math_cy.pyx":148
  *         norm_b += vec_b[i] * vec_b[i]
  *     if norm_a <= 0.0 or norm_b <= 0.0:
  *         return 0.0             # <<<<<<<<<<<<<<
@@ -4224,7 +4221,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_cosine_similari
     __pyx_r = 0.0;
     goto __pyx_L0;
 
-    /* "nucleus/reasoning/_inner_world_math_cy.pyx":146
+    /* "_inner_world_math_cy.pyx":147
  *         norm_a += vec_a[i] * vec_a[i]
  *         norm_b += vec_b[i] * vec_b[i]
  *     if norm_a <= 0.0 or norm_b <= 0.0:             # <<<<<<<<<<<<<<
@@ -4233,7 +4230,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_cosine_similari
 */
   }
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":148
+  /* "_inner_world_math_cy.pyx":149
  *     if norm_a <= 0.0 or norm_b <= 0.0:
  *         return 0.0
  *     return dot / (sqrt(norm_a) * sqrt(norm_b))             # <<<<<<<<<<<<<<
@@ -4241,12 +4238,12 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_cosine_similari
   __pyx_t_10 = (sqrt(__pyx_v_norm_a) * sqrt(__pyx_v_norm_b));
   if (unlikely(__pyx_t_10 == 0)) {
     PyErr_SetString(PyExc_ZeroDivisionError, "float division");
-    __PYX_ERR(0, 148, __pyx_L1_error)
+    __PYX_ERR(0, 149, __pyx_L1_error)
   }
   __pyx_r = (__pyx_v_dot / __pyx_t_10);
   goto __pyx_L0;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":124
+  /* "_inner_world_math_cy.pyx":125
  * 
  * 
  * cpdef double cosine_similarity_cy(list vec_a, list vec_b):             # <<<<<<<<<<<<<<
@@ -4259,7 +4256,7 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_cosine_similari
   __Pyx_XDECREF(__pyx_t_7);
   __Pyx_XDECREF(__pyx_t_8);
   __Pyx_XDECREF(__pyx_t_9);
-  __Pyx_AddTraceback("nucleus.reasoning._inner_world_math_cy.cosine_similarity_cy", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("_inner_world_math_cy.cosine_similarity_cy", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = -1;
   __pyx_L0:;
   __Pyx_RefNannyFinishContext();
@@ -4267,16 +4264,16 @@ static double __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_cosine_similari
 }
 
 /* Python wrapper */
-static PyObject *__pyx_pw_7nucleus_9reasoning_20_inner_world_math_cy_11cosine_similarity_cy(PyObject *__pyx_self, 
+static PyObject *__pyx_pw_20_inner_world_math_cy_11cosine_similarity_cy(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
 PyObject *__pyx_args, PyObject *__pyx_kwds
 #endif
 ); /*proto*/
-PyDoc_STRVAR(__pyx_doc_7nucleus_9reasoning_20_inner_world_math_cy_10cosine_similarity_cy, "\n    \344\275\231\345\274\246\347\233\270\344\274\274\345\272\246\357\274\210\347\272\257Python\345\210\227\350\241\250\347\211\210\346\234\254\357\274\214\347\224\250\344\272\216\344\270\215\346\224\257\346\214\201numpy\347\232\204\345\234\272\346\231\257\357\274\211\n\n    Args:\n        vec_a: \345\220\221\351\207\217A\n        vec_b: \345\220\221\351\207\217B\n\n    Returns:\n        \344\275\231\345\274\246\347\233\270\344\274\274\345\272\246 (-1.0 ~ 1.0)\n    ");
-static PyMethodDef __pyx_mdef_7nucleus_9reasoning_20_inner_world_math_cy_11cosine_similarity_cy = {"cosine_similarity_cy", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_7nucleus_9reasoning_20_inner_world_math_cy_11cosine_similarity_cy, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_7nucleus_9reasoning_20_inner_world_math_cy_10cosine_similarity_cy};
-static PyObject *__pyx_pw_7nucleus_9reasoning_20_inner_world_math_cy_11cosine_similarity_cy(PyObject *__pyx_self, 
+PyDoc_STRVAR(__pyx_doc_20_inner_world_math_cy_10cosine_similarity_cy, "\n    \344\275\231\345\274\246\347\233\270\344\274\274\345\272\246\357\274\210\347\272\257Python\345\210\227\350\241\250\347\211\210\346\234\254\357\274\214\347\224\250\344\272\216\344\270\215\346\224\257\346\214\201numpy\347\232\204\345\234\272\346\231\257\357\274\211\n\n    Args:\n        vec_a: \345\220\221\351\207\217A\n        vec_b: \345\220\221\351\207\217B\n\n    Returns:\n        \344\275\231\345\274\246\347\233\270\344\274\274\345\272\246 (-1.0 ~ 1.0)\n    ");
+static PyMethodDef __pyx_mdef_20_inner_world_math_cy_11cosine_similarity_cy = {"cosine_similarity_cy", (PyCFunction)(void(*)(void))(__Pyx_PyCFunction_FastCallWithKeywords)__pyx_pw_20_inner_world_math_cy_11cosine_similarity_cy, __Pyx_METH_FASTCALL|METH_KEYWORDS, __pyx_doc_20_inner_world_math_cy_10cosine_similarity_cy};
+static PyObject *__pyx_pw_20_inner_world_math_cy_11cosine_similarity_cy(PyObject *__pyx_self, 
 #if CYTHON_METH_FASTCALL
 PyObject *const *__pyx_args, Py_ssize_t __pyx_nargs, PyObject *__pyx_kwds
 #else
@@ -4307,52 +4304,52 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   {
     PyObject ** const __pyx_pyargnames[] = {&__pyx_mstate_global->__pyx_n_u_vec_a,&__pyx_mstate_global->__pyx_n_u_vec_b,0};
     const Py_ssize_t __pyx_kwds_len = (__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
-    if (unlikely(__pyx_kwds_len < 0)) __PYX_ERR(0, 124, __pyx_L3_error)
+    if (unlikely(__pyx_kwds_len < 0)) __PYX_ERR(0, 125, __pyx_L3_error)
     if (__pyx_kwds_len > 0) {
       switch (__pyx_nargs) {
         case  2:
         values[1] = __Pyx_ArgRef_FASTCALL(__pyx_args, 1);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 124, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 125, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  1:
         values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 124, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 125, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  0: break;
         default: goto __pyx_L5_argtuple_error;
       }
       const Py_ssize_t kwd_pos_args = __pyx_nargs;
-      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "cosine_similarity_cy", 0) < (0)) __PYX_ERR(0, 124, __pyx_L3_error)
+      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "cosine_similarity_cy", 0) < (0)) __PYX_ERR(0, 125, __pyx_L3_error)
       for (Py_ssize_t i = __pyx_nargs; i < 2; i++) {
-        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("cosine_similarity_cy", 1, 2, 2, i); __PYX_ERR(0, 124, __pyx_L3_error) }
+        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("cosine_similarity_cy", 1, 2, 2, i); __PYX_ERR(0, 125, __pyx_L3_error) }
       }
     } else if (unlikely(__pyx_nargs != 2)) {
       goto __pyx_L5_argtuple_error;
     } else {
       values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 124, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 125, __pyx_L3_error)
       values[1] = __Pyx_ArgRef_FASTCALL(__pyx_args, 1);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 124, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 125, __pyx_L3_error)
     }
     __pyx_v_vec_a = ((PyObject*)values[0]);
     __pyx_v_vec_b = ((PyObject*)values[1]);
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("cosine_similarity_cy", 1, 2, 2, __pyx_nargs); __PYX_ERR(0, 124, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("cosine_similarity_cy", 1, 2, 2, __pyx_nargs); __PYX_ERR(0, 125, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
   for (Py_ssize_t __pyx_temp=0; __pyx_temp < (Py_ssize_t)(sizeof(values)/sizeof(values[0])); ++__pyx_temp) {
     Py_XDECREF(values[__pyx_temp]);
   }
-  __Pyx_AddTraceback("nucleus.reasoning._inner_world_math_cy.cosine_similarity_cy", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("_inner_world_math_cy.cosine_similarity_cy", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_vec_a), (&PyList_Type), 1, "vec_a", 1))) __PYX_ERR(0, 124, __pyx_L1_error)
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_vec_b), (&PyList_Type), 1, "vec_b", 1))) __PYX_ERR(0, 124, __pyx_L1_error)
-  __pyx_r = __pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_10cosine_similarity_cy(__pyx_self, __pyx_v_vec_a, __pyx_v_vec_b);
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_vec_a), (&PyList_Type), 1, "vec_a", 1))) __PYX_ERR(0, 125, __pyx_L1_error)
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_vec_b), (&PyList_Type), 1, "vec_b", 1))) __PYX_ERR(0, 125, __pyx_L1_error)
+  __pyx_r = __pyx_pf_20_inner_world_math_cy_10cosine_similarity_cy(__pyx_self, __pyx_v_vec_a, __pyx_v_vec_b);
 
   /* function exit code */
   goto __pyx_L0;
@@ -4371,7 +4368,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_10cosine_similarity_cy(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_vec_a, PyObject *__pyx_v_vec_b) {
+static PyObject *__pyx_pf_20_inner_world_math_cy_10cosine_similarity_cy(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_vec_a, PyObject *__pyx_v_vec_b) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   double __pyx_t_1;
@@ -4381,8 +4378,8 @@ static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_10cosine_si
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("cosine_similarity_cy", 0);
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __pyx_f_7nucleus_9reasoning_20_inner_world_math_cy_cosine_similarity_cy(__pyx_v_vec_a, __pyx_v_vec_b, 1); if (unlikely(__pyx_t_1 == ((double)-1) && PyErr_Occurred())) __PYX_ERR(0, 124, __pyx_L1_error)
-  __pyx_t_2 = PyFloat_FromDouble(__pyx_t_1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 124, __pyx_L1_error)
+  __pyx_t_1 = __pyx_f_20_inner_world_math_cy_cosine_similarity_cy(__pyx_v_vec_a, __pyx_v_vec_b, 1); if (unlikely(__pyx_t_1 == ((double)-1) && PyErr_Occurred())) __PYX_ERR(0, 125, __pyx_L1_error)
+  __pyx_t_2 = PyFloat_FromDouble(__pyx_t_1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 125, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __pyx_r = __pyx_t_2;
   __pyx_t_2 = 0;
@@ -4391,7 +4388,7 @@ static PyObject *__pyx_pf_7nucleus_9reasoning_20_inner_world_math_cy_10cosine_si
   /* function exit code */
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_2);
-  __Pyx_AddTraceback("nucleus.reasoning._inner_world_math_cy.cosine_similarity_cy", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("_inner_world_math_cy.cosine_similarity_cy", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
   __Pyx_XGIVEREF(__pyx_r);
@@ -4692,7 +4689,7 @@ static CYTHON_SMALL_CODE int __pyx_pymod_exec__inner_world_math_cy(PyObject *__p
   __pyx_m = __pyx_t_1;
   #endif
   #if CYTHON_COMPILING_IN_CPYTHON_FREETHREADING
-  PyUnstable_Module_SetGIL(__pyx_m, Py_MOD_GIL_USED);
+  PyUnstable_Module_SetGIL(__pyx_m, Py_MOD_GIL_NOT_USED);
   #endif
   __pyx_mstate = __pyx_mstate_global;
   CYTHON_UNUSED_VAR(__pyx_t_1);
@@ -4723,13 +4720,13 @@ __Pyx_RefNannySetupContext("PyInit__inner_world_math_cy", 0);
   if (__Pyx_InitConstants(__pyx_mstate) < (0)) __PYX_ERR(0, 1, __pyx_L1_error)
   stringtab_initialized = 1;
   if (__Pyx_InitGlobals() < (0)) __PYX_ERR(0, 1, __pyx_L1_error)
-  if (__pyx_module_is_main_nucleus__reasoning___inner_world_math_cy) {
+  if (__pyx_module_is_main__inner_world_math_cy) {
     if (PyObject_SetAttr(__pyx_m, __pyx_mstate_global->__pyx_n_u_name, __pyx_mstate_global->__pyx_n_u_main) < (0)) __PYX_ERR(0, 1, __pyx_L1_error)
   }
   {
     PyObject *modules = PyImport_GetModuleDict(); if (unlikely(!modules)) __PYX_ERR(0, 1, __pyx_L1_error)
-    if (!PyDict_GetItemString(modules, "nucleus.reasoning._inner_world_math_cy")) {
-      if (unlikely((PyDict_SetItemString(modules, "nucleus.reasoning._inner_world_math_cy", __pyx_m) < 0))) __PYX_ERR(0, 1, __pyx_L1_error)
+    if (!PyDict_GetItemString(modules, "_inner_world_math_cy")) {
+      if (unlikely((PyDict_SetItemString(modules, "_inner_world_math_cy", __pyx_m) < 0))) __PYX_ERR(0, 1, __pyx_L1_error)
     }
   }
   /*--- Builtin init code ---*/
@@ -4747,100 +4744,100 @@ __Pyx_RefNannySetupContext("PyInit__inner_world_math_cy", 0);
   (void)__Pyx_modinit_function_import_code(__pyx_mstate);
   /*--- Execution code ---*/
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":18
+  /* "_inner_world_math_cy.pyx":19
  * 
  * 
  * cpdef double calc_trust_boost(double current_trust, double base_boost):             # <<<<<<<<<<<<<<
  *     """>80>9010%"""
  *     if current_trust >= 90.0:
 */
-  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_7nucleus_9reasoning_20_inner_world_math_cy_1calc_trust_boost, 0, __pyx_mstate_global->__pyx_n_u_calc_trust_boost, NULL, __pyx_mstate_global->__pyx_n_u_nucleus_reasoning__inner_world_m, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[0])); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 18, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_20_inner_world_math_cy_1calc_trust_boost, 0, __pyx_mstate_global->__pyx_n_u_calc_trust_boost, NULL, __pyx_mstate_global->__pyx_n_u_inner_world_math_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[0])); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 19, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_2);
   #endif
-  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_calc_trust_boost, __pyx_t_2) < (0)) __PYX_ERR(0, 18, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_calc_trust_boost, __pyx_t_2) < (0)) __PYX_ERR(0, 19, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":27
+  /* "_inner_world_math_cy.pyx":28
  * 
  * 
  * cpdef double calc_branch_weight(double relevance, int content_len, double correlation_score):             # <<<<<<<<<<<<<<
  *     """
  * 
 */
-  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_7nucleus_9reasoning_20_inner_world_math_cy_3calc_branch_weight, 0, __pyx_mstate_global->__pyx_n_u_calc_branch_weight, NULL, __pyx_mstate_global->__pyx_n_u_nucleus_reasoning__inner_world_m, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[1])); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 27, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_20_inner_world_math_cy_3calc_branch_weight, 0, __pyx_mstate_global->__pyx_n_u_calc_branch_weight, NULL, __pyx_mstate_global->__pyx_n_u_inner_world_math_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[1])); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 28, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_2);
   #endif
-  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_calc_branch_weight, __pyx_t_2) < (0)) __PYX_ERR(0, 27, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_calc_branch_weight, __pyx_t_2) < (0)) __PYX_ERR(0, 28, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":52
+  /* "_inner_world_math_cy.pyx":53
  * 
  * 
  * cpdef double calc_correlation_score(list shared_keywords):             # <<<<<<<<<<<<<<
  *     """
  * 
 */
-  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_7nucleus_9reasoning_20_inner_world_math_cy_5calc_correlation_score, 0, __pyx_mstate_global->__pyx_n_u_calc_correlation_score, NULL, __pyx_mstate_global->__pyx_n_u_nucleus_reasoning__inner_world_m, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[2])); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 52, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_20_inner_world_math_cy_5calc_correlation_score, 0, __pyx_mstate_global->__pyx_n_u_calc_correlation_score, NULL, __pyx_mstate_global->__pyx_n_u_inner_world_math_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[2])); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 53, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_2);
   #endif
-  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_calc_correlation_score, __pyx_t_2) < (0)) __PYX_ERR(0, 52, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_calc_correlation_score, __pyx_t_2) < (0)) __PYX_ERR(0, 53, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":70
+  /* "_inner_world_math_cy.pyx":71
  * 
  * 
  * cpdef double weighted_fusion(list values, list weights):             # <<<<<<<<<<<<<<
  *     """
  * 
 */
-  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_7nucleus_9reasoning_20_inner_world_math_cy_7weighted_fusion, 0, __pyx_mstate_global->__pyx_n_u_weighted_fusion, NULL, __pyx_mstate_global->__pyx_n_u_nucleus_reasoning__inner_world_m, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[3])); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 70, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_20_inner_world_math_cy_7weighted_fusion, 0, __pyx_mstate_global->__pyx_n_u_weighted_fusion, NULL, __pyx_mstate_global->__pyx_n_u_inner_world_math_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[3])); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 71, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_2);
   #endif
-  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_weighted_fusion, __pyx_t_2) < (0)) __PYX_ERR(0, 70, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_weighted_fusion, __pyx_t_2) < (0)) __PYX_ERR(0, 71, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":93
+  /* "_inner_world_math_cy.pyx":94
  * 
  * 
  * cpdef list normalize_scores(list scores):             # <<<<<<<<<<<<<<
  *     """
  *     Softmax
 */
-  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_7nucleus_9reasoning_20_inner_world_math_cy_9normalize_scores, 0, __pyx_mstate_global->__pyx_n_u_normalize_scores, NULL, __pyx_mstate_global->__pyx_n_u_nucleus_reasoning__inner_world_m, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[4])); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 93, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_20_inner_world_math_cy_9normalize_scores, 0, __pyx_mstate_global->__pyx_n_u_normalize_scores, NULL, __pyx_mstate_global->__pyx_n_u_inner_world_math_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[4])); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 94, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_2);
   #endif
-  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_normalize_scores, __pyx_t_2) < (0)) __PYX_ERR(0, 93, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_normalize_scores, __pyx_t_2) < (0)) __PYX_ERR(0, 94, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":124
+  /* "_inner_world_math_cy.pyx":125
  * 
  * 
  * cpdef double cosine_similarity_cy(list vec_a, list vec_b):             # <<<<<<<<<<<<<<
  *     """
  *     Pythonnumpy
 */
-  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_7nucleus_9reasoning_20_inner_world_math_cy_11cosine_similarity_cy, 0, __pyx_mstate_global->__pyx_n_u_cosine_similarity_cy, NULL, __pyx_mstate_global->__pyx_n_u_nucleus_reasoning__inner_world_m, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[5])); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 124, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_20_inner_world_math_cy_11cosine_similarity_cy, 0, __pyx_mstate_global->__pyx_n_u_cosine_similarity_cy, NULL, __pyx_mstate_global->__pyx_n_u_inner_world_math_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[5])); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 125, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_2);
   #endif
-  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_cosine_similarity_cy, __pyx_t_2) < (0)) __PYX_ERR(0, 124, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_cosine_similarity_cy, __pyx_t_2) < (0)) __PYX_ERR(0, 125, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "nucleus/reasoning/_inner_world_math_cy.pyx":1
- * # cython: language_level=3             # <<<<<<<<<<<<<<
+  /* "_inner_world_math_cy.pyx":1
+ * # cython: freethreading_compatible=True             # <<<<<<<<<<<<<<
+ * # cython: language_level=3
  * # cython: boundscheck=False
- * # cython: wraparound=False
 */
   __pyx_t_2 = __Pyx_PyDict_NewPresized(0); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 1, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
@@ -4854,7 +4851,7 @@ __Pyx_RefNannySetupContext("PyInit__inner_world_math_cy", 0);
   __Pyx_XDECREF(__pyx_t_2);
   if (__pyx_m) {
     if (__pyx_mstate->__pyx_d && stringtab_initialized) {
-      __Pyx_AddTraceback("init nucleus.reasoning._inner_world_math_cy", __pyx_clineno, __pyx_lineno, __pyx_filename);
+      __Pyx_AddTraceback("init _inner_world_math_cy", __pyx_clineno, __pyx_lineno, __pyx_filename);
     }
     #if !CYTHON_USE_MODULE_STATE
     Py_CLEAR(__pyx_m);
@@ -4868,7 +4865,7 @@ __Pyx_RefNannySetupContext("PyInit__inner_world_math_cy", 0);
     }
     #endif
   } else if (!PyErr_Occurred()) {
-    PyErr_SetString(PyExc_ImportError, "init nucleus.reasoning._inner_world_math_cy");
+    PyErr_SetString(PyExc_ImportError, "init _inner_world_math_cy");
   }
   __pyx_L0:;
   __Pyx_RefNannyFinishContext();
@@ -4883,7 +4880,7 @@ __Pyx_RefNannySetupContext("PyInit__inner_world_math_cy", 0);
 
 static int __Pyx_InitCachedBuiltins(__pyx_mstatetype *__pyx_mstate) {
   CYTHON_UNUSED_VAR(__pyx_mstate);
-  __pyx_builtin_round = __Pyx_GetBuiltinName(__pyx_mstate->__pyx_n_u_round); if (!__pyx_builtin_round) __PYX_ERR(0, 49, __pyx_L1_error)
+  __pyx_builtin_round = __Pyx_GetBuiltinName(__pyx_mstate->__pyx_n_u_round); if (!__pyx_builtin_round) __PYX_ERR(0, 50, __pyx_L1_error)
 
   /* Cached unbound methods */
   __pyx_mstate->__pyx_umethod_PyDict_Type_items.type = (PyObject*)&PyDict_Type;
@@ -4910,25 +4907,25 @@ static int __Pyx_InitCachedConstants(__pyx_mstatetype *__pyx_mstate) {
 static int __Pyx_InitConstants(__pyx_mstatetype *__pyx_mstate) {
   CYTHON_UNUSED_VAR(__pyx_mstate);
   {
-    const struct { const unsigned int length: 8; } index[] = {{1},{179},{8},{42},{20},{12},{18},{10},{18},{22},{16},{18},{11},{17},{20},{13},{8},{13},{5},{8},{10},{8},{16},{38},{3},{12},{9},{5},{6},{12},{10},{15},{8},{6},{5},{5},{15},{7},{52},{173},{162},{86},{44},{65}};
-    #if (CYTHON_COMPRESS_STRINGS) == 2 /* compression: bz2 (833 bytes) */
-const char* const cstring = "BZh91AY&SY\262\243\\S\000\000\211\377\377\377\355\277\366\376\203\277@\277\241z\240\277\377\377\375@@@@@@@@@\000@@@\000@\000@\002\334\255T$X\303B\025\000\003F\305\006\321\001\241\240\001\352\000\006\215\003@bz\214z\246\323MA\240\024\310\021\244\033Q\35254h\032\003@\001\240\032\000\000\000\323CM\007\000\r\001\240h\000i\246@\001\243L\200\r\0310@b\000\000Ji\010C)\26252\236(\000h\000\000\036\240\000=@\000\033\324M\001f4\265\377lv\313\266\366\301m;\037\300\376\262@\230I\222\003\003\033\203O*\306Rf\007\031\010-W\241\006\202\004\232.9(\004\261\021\tH\234\203\200\311\002#%\254#\030\213[\253\274\014\006w\346\014+\306\032\23357\351\303\270\277\305]\373.\312\307\3554\301\346\232\375Ce\303\221\235\"\t&\3779\024\020\370\364\265S\nk\2561T\032\n\\c*K}I;\373P\006]\375\232\001NY\016\206@\215r[r\273'\017o\312\252'\023@\206\356\355\2311@\320k&%\270\354\221\233/\323;\315,\260\332N\224bM\0309\025\366\306\243V\215\276\0234\321\002\"\030\254B\0034i\242\313X\276\263\374\320G\257\354\375RSI\351U\305}\332\260\226\300\232U\336\326$C^l\346m\t;`\335c.\235\254Tc\236\224\212G\272,\261\024\207\335\254\no9N\300c\006,\303\0349Z0\305e\303B\215\211\377\257\243\014\225\256\221,\367\216\241\232A\013\367t\32672o\022\260\n\342\333Q\2148\302\273G\002\034\343Q\312E\271\253\243\271p\300TZ\245\251\247`\306v\030\033%o\342\352\313\014\222\226lSf\031\370\303\213\030\237.g\256\310\245n\234d@\302\302\220\266\03487(tg\203\nO\317u\320F\010\014\332\230\225\003Z\207\205\005J\261\005\361\022(\210\247%[\276\022|W\263\301\247+|\345\272\"\010\251\330\3009\241YkF\2307\002\314\231\333\202\235!\323\275\255mo~\215\2071d\253X\251H\245\320\246`ea\330\026S\r\242\202\005\351\204%aON\271\013XRvU:\010\"\032\210%l\354\341l\331\366/\254\262\261\324\027\003e\241\216\350j18\264\013\356\2701C\210\254\302\305UC\323\275!X\226\226}|yY\214-\341\206\210\261\361Y6\252\314\212/A,\270\361s2\2756\300\205\324M\276\256\233\004l\371\006\3226C\3126\243I\244k\266=\005\232\203J\r\236\025\301\312c\234!\371\035\240K\021\251\365\027\361\312\204\025\305k""\254\003l\031\202\305T\t\"\225\365Y\265b+i\020:\351E \026\004b\221\315*\350sX\033\320o\277fr\0324\247[+BdB2\312{%\347#\245\002=G\016\204\032\302\263\214)\367(iO\225\301\304\327d\316\230\356\301b_\004T\274\000d\213\310\306]\323\353\250uj\016(5Tt\016\210l\356\220\212(1\010\260\253\021\377\027rE8P\220\262\243\\S";
-    PyObject *data = __Pyx_DecompressString(cstring, 833, 2);
+    const struct { const unsigned int length: 8; } index[] = {{1},{179},{8},{24},{20},{12},{18},{10},{18},{22},{16},{18},{11},{17},{20},{13},{8},{20},{13},{5},{8},{10},{8},{16},{3},{12},{9},{5},{6},{12},{10},{15},{8},{6},{5},{5},{15},{7},{52},{173},{162},{86},{44},{65}};
+    #if (CYTHON_COMPRESS_STRINGS) == 2 /* compression: bz2 (826 bytes) */
+const char* const cstring = "BZh91AY&SY\222\322\005\243\000\000\207\377\377\377\355\277\366\376\203?@\277\241z\240\277\377\377\375@@@@@@@@@\000@@@\000@\000@\002\334\256\253\210\223\235\303S)\225\032\000h6H`\215\031\032\031\032f\240\320\006F\023F\0010\365M\246\247\240\324OF\2216\232\217J\030i2\000\320\000\000\000\000\000\0004\r\001\023i4\325O\322\232\036\246\201\243@h\320\000\320\032\r\000\001\240\000\000\r\002SH\"\231\244\315\032\021\351@\000\000\000\036\240\000=@\000\321\264M\031\025\342K\037\365\216\361\247ol\026\323\261\272\033\314\220&\022d\200\272\306\340\324K\000\312L\300\343!\005\213R\020h I\242\343\222\200K\t\020\224\212\0108\nx\031\253q \324\243JYK\340\240E\244@\203\024\357\333\227o\257\352\377R\177X\317\373N4\214\025U\007\234\356^\033-\374\214\351\020I7\371\310\240\207\323\255\242\252\260`\244\314T\343&\270\325\221\303r\244\010\256+f\261:5\323M\236\010>Q2TW\214-\3564B\214\"\010\030\001\332\351\212F\203W2[\216\311\032\370\376\366\274\345\255\r\244\351F$\343\007\"\266\014S\337\320\004F@@\003)\tA\031\207\260F\275w\225\017vq\320\351\371\221\321\021\235_E~,-\001J7\351\274H\205\223\3275\255I\332\314\270\21545j\234TT\221P\372b\313\t\035\272\203R\232Y\013BD\312Ea@\326\211\005WI@\\2\304_\324\331VV\225D\024Ej\n\354\rG\323\330Gf[H%\000K\016t\nJ\304\315p\2725\244\353-\020\331\255F\313\305Q\035d\\\315 \240\231\022\006J\035\354\366\242\254\260\303^|JP\267Pi!T\253\2566\234EB#|\001A\250\204Hq%&\234\2362\232 \322\351\312\030\336#\211F\344\351\240\341R\360\244\274\261\210\"Q\001L\270j\223\303M\260k\352\322\314\321\004T\354\\\034\314\260bh\335\201\223\207^K[\210\235!\323\275\215eou\260\343\275\252]R)\223\265\0102D\356\027nN7\334\312\255\223\324\t5\032\300\345\010\223$\2211\020@\222\006\202S\336\035\022\227\205I\250\242\244\306\nd\250\230\225@\363d\365\007\001I\357\nA\254\033R\010\347N5\307j\020\312V\361\330c`\246\010Q\021\312\352\265#w\016\030\032\316S\227\005\376~W*\262\006\232g\300\301Ub6|\343g\033!\350\033A\234\3166\236G\254\257@gA\263\305\322[\356;\343\255\013ph\233\260\340\301\277k\026\300\333\320""\350D\022\347\357\214W\014\033\3141j\352\3568\214\246\340,'\356m\214A\321\360Q\021\204\312\"\202\374\212\034<qL\215h\213\225\031\004'\003\250\335j\013P\035\371l\332\243\255)\276av\002\221#\376W\034\215\231\375\253e\356\010L\364:Y\010%\274\3027\007\333M|\027\005\tQ\354pcD\n\t@7\252\210\004&28\010\310\214\377\305\334\221N\024$$\264\201h\300";
+    PyObject *data = __Pyx_DecompressString(cstring, 826, 2);
     if (unlikely(!data)) __PYX_ERR(0, 1, __pyx_L1_error)
     const char* const bytes = __Pyx_PyBytes_AsString(data);
     #if !CYTHON_ASSUME_SAFE_MACROS
     if (likely(bytes)); else { Py_DECREF(data); __PYX_ERR(0, 1, __pyx_L1_error) }
     #endif
-    #elif (CYTHON_COMPRESS_STRINGS) != 0 /* compression: zlib (780 bytes) */
-const char* const cstring = "x\332uQMo\0231\020M`\013AE\240\264\245\024\004\302\341C\234\010\n\024\304\r\205OqA\r\010!N\226\327;i\014\216\235\330\336\266\013\010q\334\243\217>\356\221#G\216\374\204\036\367\330\237\320\237\300l6\224\217\302\036\274\343\361\233y\357\315\334\177\256\035\0207b\216<\314\334H+\",I@\212\030\014s 3b\235\021\334\201\251@\212l<\336\270\261~o\2350\225\020\003o\201;Kl\032s\311\254\005K\364\220\304\251\220N(\342\262\t\330.y6$\231N\211\002H\210\323d\202\270\337\013\334\010\024\261\340\252\200\\gJi\307\234\320\212b\271P\233\327I\"\014\222\210-\250\252\2370i\241\313\222\204\"\016T\312%\244\366\246\001f\265B\364M*\224\002C\267\265\221\t\03537\242<\353N\262\035J7\360\330\310\036\241\023\372\034v\334\013\030R:g\003\214l\246\270\320]\256\215NQ<\330\230Y\240\261\326\326q&9\215\rS|D\267Al\216\352\014B\r\310Z\253\305\013\314\262\316\244\326\315\353$\366AA\230c\034b\306\337q\255P\264\243\022\324\341jm+\270\025c!\231\021.C\345<E\020\342\353\246t\230*N)\025\226\036\310\024\016\306\226\242S\244\301o\254\223TB\025)6\306\277\322f\314\244x\0175\207\235\017\254{0\260\356\277\0066\321\023J\247)\223u\023\324\t[\350\036\220S%u#Jqes\022\214\022\030\262T:;b\006\022\372\0162\354\227 \310A\245{\213\311\024\354\026p\312\252#\256\207\210\300aj\321\177}\265\273\215+Eo\177\245\261p.4\313\250\355\227}\337\017\366\242V\276\220\277\362\035\337+[m\177\251h\026\313\305\203\202\225\321\351<\365\375\317\315\252`\251\306\226\321\361\317&_\316\373e\353t>-\243\013\341I\321)z\277Z\334\366\254l-\346w}\333_\361/\374\264<\271\026\216\005\026\020{>t\312\350\314_|'\363\207\371\324\037\363\314\333p9\364\253\304S\337\363\030,\343st\026;\374\016?\225o\372\201OB'\334\016q\261\370\345\336\327[_\337|K\276_\376\336/\243\305\274\267\333\350\024\355\375\325Cz\037\344\334/\2418\036\332\250\242\326\276\212R\243s\241=;\376\0205\363\355_\206#\341Z\230\026\315\262\265\344\257\371i8\032n\205W\225\335\303\t\244\331F\212\025,:\036l\361\223b1_\317\255\277\212\356v\202)V\212A\301v\033\027B\277R8[\301\3050\370\337\036V\347\004\257\213~1(""[\253~3\014\002\253\230>\340h\007\007\014w\321\030\372\306N{\370\366\t\0254\253\267\017\263q\2368\213s\355\374\272\3273\272\024\246\373k\215\205\363\225\355S\371[\364\331\251j?\326\333[\362\235\362\304\231\272\017\306{\321\314lUz\3077\375Zh\377\000\037W\330;";
-    PyObject *data = __Pyx_DecompressString(cstring, 780, 1);
+    #elif (CYTHON_COMPRESS_STRINGS) != 0 /* compression: zlib (763 bytes) */
+const char* const cstring = "x\332uQMO\024A\020\335\325A\327`$\013\270\"\321\330\353G<I\262\210\204\233YP\214\027\302b\210\361\324\351\351\251e[f\273w\247{\200\021c8\316\261\217}\234\243G\217\036\371\t\034\347\310O\340'X\263\263\002\212\316\241\247\272\352\275\252\367\252_o(\003\304\364\230!k\211\351)I\204&\001\204\302\207\210\031\010\023\242M$\270\201\250\000I\262\371v\363\305\322\312\022a2 \021|\006n4\321\261\317C\2465h\242\272\304\217Eh\204$&\031\200^ \357\273$Q1\221\000\0011\212\014\020w\231`z \211\006S\004\3449\223R\031f\204\222\024\351B\356<'\201\210p\210\330\203\202\275\316B\r\013,\010(\342\200\n)!\242\373*\n\003\332g\246Gy\2620H\016(\335\304c3y\203\272\351\006\034\230-\350R:\356\r\030\351Dr\241\026\270\212T\214RA\373L\003\365\225\322\206\263\220S?b\222\367\350>\210\235^\231Ah\004a\251L\343\005FY\023\305\332\214y!\366AA\230c\034|\306w\271\222\006\244\241!\310\253l\245\013\270\026}\021\262H\230\004\225\363\030A\210/\233\322n,9\245\377\262H\205\246\347\322\205\201\276\246X\302\321\370\365U\020\207PD\222\365\361/U\324g\241\370\002\345\\=P\003J\2071\013\3132\252\202=\364\n\330M\006%\204R|\2161\035\243\000\272,\016\215\356\261\010\002\272\013\tj\t\020d\240P\271\307\302\030\364\036p\312\212\303/W\206\300n\254\321my\325'\225'Y\353l\2662q\337Us\257ngl\333vN\275Z:\221n\333\246m\345\265\272}\224U\263\231l5c\2717\225\306\266}T-\010\323%6\367n\036E\351L\332\316kS\3510\367\036\270\365\254\231\265.Z\274\264,\257M\246\313\266n\237\330-;\314o\317\271\033\2169\304\316\273f\356\335\375k\336\355t-\035\332\033\226Y\355\036\273v\221xg[\026\203\031,{\367\260\303e\370\235t\307vl\340\232\356\245\363\263\311\357+?\026\177|\372\031\034?>n\347\336d\332:\2514\263\372Y\343\212\336\325\224\333i\024\307]\035U\224\332\033(\325\273\357\352\243\343\017Q#\337\366\203\273\346\236\271aV\315k\323\366\231\035\272\353n\321m\027v\257&p\314>\216\230E\322M\247\263\337#&\323\245T\333\247\350\356\300E\331l\326\311\330I\345\201k\027\nGO\360\320u\376\367\016\215\361\200\217Y;\353\344\265\206\335q\035\307\212I\207\270\332\316\371\204e""4\206\276\261\323)\326\276\241\202jQ;\034\255\363\326=\334k\363\342^\356\350\221\033\236\315U&\346\013\333w\322\317\350\263Yp\277\226\2577m\233\371\255\273e\037\214O\275\221\331\202\372\312V\355\234\253\377\002\007\247\311\367";
+    PyObject *data = __Pyx_DecompressString(cstring, 763, 1);
     if (unlikely(!data)) __PYX_ERR(0, 1, __pyx_L1_error)
     const char* const bytes = __Pyx_PyBytes_AsString(data);
     #if !CYTHON_ASSUME_SAFE_MACROS
     if (likely(bytes)); else { Py_DECREF(data); __PYX_ERR(0, 1, __pyx_L1_error) }
     #endif
-    #else /* compression: none (1231 bytes) */
-const char* const bytes = "?Note that Cython is deliberately stricter than PEP-484 and rejects subclasses of builtin types. If you need to pass subclasses then set the 'annotation_typing' directive to False.add_notenucleus/reasoning/_inner_world_math_cy.pyx__Pyx_PyDict_NextRef__annotate__asyncio.coroutinesbase_boostcalc_branch_weightcalc_correlation_scorecalc_trust_boostcline_in_tracebackcontent_lencorrelation_scorecosine_similarity_cycurrent_trust__func___is_coroutineitems__main____module____name__normalize_scoresnucleus.reasoning._inner_world_math_cypop__qualname__relevanceroundscores__set_name__setdefaultshared_keywords__test__valuesvec_avec_bweighted_fusionweights\320\000#\2401\360\024\000\005\031\230\001\330\004\021\220\023\220A\220Q\340\004\010\210\005\210U\220!\2201\330\010\021\220\037\240\001\240\023\240B\240a\330\004\017\210u\220A\200\001\360\024\000\005\022\220\023\220A\220Q\330\004\007\200r\210\023\210A\330\010\017\210q\330\004\034\230F\240!\2401\340\004\010\210\005\210U\220!\2203\220a\330\010\013\2106\220\021\220#\220R\220q\330\014\030\230\006\230a\230q\330\004\032\230!\330\004\025\220Q\340\004\010\210\005\210U\220!\2201\330\010\014\210C\210q\220\006\220a\220s\230\"\230A\330\010\014\210G\2201\220A\330\010\023\2201\330\004\027\220q\330\004\010\210\005\210U\220!\2201\330\010\016\210g\220Q\220d\230!\2303\230b\240\013\2508\2602\260Y\270d\300\"\300A\330\004\013\2101\320\000!\240\021\360\026\000\005\022\220\023\220A\220Q\330\004\007\200r\210\023\210B\210c\220\022\2203\220c\230\021\230!\330\010\017\210q\330\004\026\220a\330\004\031\230\021\330\004\031\230\021\340\004\010\210\005\210U\220!\2201\330\010\017\210u\220A\220S\230\002\230%\230q\240\001\330\010\022\220%\220q\230\003\2302\230U\240!\2401\330\010\022\220%\220q\230\003\2302\230U\240!\2401\330\004\007\200w\210c\220\024\220S\230\007\230s\240!\330\010\017\210q\330\004\013\2104\210s\220$\220a\220x\230r\240\024\240Q\240a\320\000\034\230A\360\026\000\005\031\230\001\330\004\035\230Q\330\004\021\220\023\220A\220Q\340\004\010\210\005\210U""\220!\2201\330\010\021\220\026\220q\230\003\2302\230W\240A\240Q\330\010\026\220g\230Q\230a\330\004\007\200{\220#\220Q\330\010\017\210q\330\004\013\2106\220\022\2201\320\000\035\230Q\340\004\007\200~\220S\230\001\330\010\017\210{\230\"\230A\330\t\027\220s\230!\330\010\017\210{\230\"\230A\330\004\013\2101\320\000\037\230q\360\030\000\005\032\230\021\340\004\016\210j\230\002\230!\340\004\007\200|\2203\220a\330\010\022\220!\330\t\025\220S\230\001\330\010\022\220!\340\004\022\220%\220q\330\004\013\2105\220\001\220\030\230\021";
+    #else /* compression: none (1195 bytes) */
+const char* const bytes = "?Note that Cython is deliberately stricter than PEP-484 and rejects subclasses of builtin types. If you need to pass subclasses then set the 'annotation_typing' directive to False.add_note_inner_world_math_cy.pyx__Pyx_PyDict_NextRef__annotate__asyncio.coroutinesbase_boostcalc_branch_weightcalc_correlation_scorecalc_trust_boostcline_in_tracebackcontent_lencorrelation_scorecosine_similarity_cycurrent_trust__func___inner_world_math_cy_is_coroutineitems__main____module____name__normalize_scorespop__qualname__relevanceroundscores__set_name__setdefaultshared_keywords__test__valuesvec_avec_bweighted_fusionweights\320\000#\2401\360\024\000\005\031\230\001\330\004\021\220\023\220A\220Q\340\004\010\210\005\210U\220!\2201\330\010\021\220\037\240\001\240\023\240B\240a\330\004\017\210u\220A\200\001\360\024\000\005\022\220\023\220A\220Q\330\004\007\200r\210\023\210A\330\010\017\210q\330\004\034\230F\240!\2401\340\004\010\210\005\210U\220!\2203\220a\330\010\013\2106\220\021\220#\220R\220q\330\014\030\230\006\230a\230q\330\004\032\230!\330\004\025\220Q\340\004\010\210\005\210U\220!\2201\330\010\014\210C\210q\220\006\220a\220s\230\"\230A\330\010\014\210G\2201\220A\330\010\023\2201\330\004\027\220q\330\004\010\210\005\210U\220!\2201\330\010\016\210g\220Q\220d\230!\2303\230b\240\013\2508\2602\260Y\270d\300\"\300A\330\004\013\2101\320\000!\240\021\360\026\000\005\022\220\023\220A\220Q\330\004\007\200r\210\023\210B\210c\220\022\2203\220c\230\021\230!\330\010\017\210q\330\004\026\220a\330\004\031\230\021\330\004\031\230\021\340\004\010\210\005\210U\220!\2201\330\010\017\210u\220A\220S\230\002\230%\230q\240\001\330\010\022\220%\220q\230\003\2302\230U\240!\2401\330\010\022\220%\220q\230\003\2302\230U\240!\2401\330\004\007\200w\210c\220\024\220S\230\007\230s\240!\330\010\017\210q\330\004\013\2104\210s\220$\220a\220x\230r\240\024\240Q\240a\320\000\034\230A\360\026\000\005\031\230\001\330\004\035\230Q\330\004\021\220\023\220A\220Q\340\004\010\210\005\210U\220!\2201\330\010\021\220\026\220q""\230\003\2302\230W\240A\240Q\330\010\026\220g\230Q\230a\330\004\007\200{\220#\220Q\330\010\017\210q\330\004\013\2106\220\022\2201\320\000\035\230Q\340\004\007\200~\220S\230\001\330\010\017\210{\230\"\230A\330\t\027\220s\230!\330\010\017\210{\230\"\230A\330\004\013\2101\320\000\037\230q\360\030\000\005\032\230\021\340\004\016\210j\230\002\230!\340\004\007\200|\2203\220a\330\010\022\220!\330\t\025\220S\230\001\330\010\022\220!\340\004\022\220%\220q\330\004\013\2105\220\001\220\030\230\021";
     PyObject *data = NULL;
     CYTHON_UNUSED_VAR(__Pyx_DecompressString);
     #endif
@@ -5052,34 +5049,34 @@ static int __Pyx_CreateCodeObjects(__pyx_mstatetype *__pyx_mstate) {
   PyObject* tuple_dedup_map = PyDict_New();
   if (unlikely(!tuple_dedup_map)) return -1;
   {
-    const __Pyx_PyCode_New_function_description descr = {2, 0, 0, 2, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 18};
+    const __Pyx_PyCode_New_function_description descr = {2, 0, 0, 2, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 19};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_current_trust, __pyx_mstate->__pyx_n_u_base_boost};
-    __pyx_mstate_global->__pyx_codeobj_tab[0] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_nucleus_reasoning__inner_world_m_2, __pyx_mstate->__pyx_n_u_calc_trust_boost, __pyx_mstate->__pyx_kp_b_iso88591_Q_S_A_s_A_1, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[0])) goto bad;
+    __pyx_mstate_global->__pyx_codeobj_tab[0] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_inner_world_math_cy_pyx, __pyx_mstate->__pyx_n_u_calc_trust_boost, __pyx_mstate->__pyx_kp_b_iso88591_Q_S_A_s_A_1, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[0])) goto bad;
   }
   {
-    const __Pyx_PyCode_New_function_description descr = {3, 0, 0, 3, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 27};
+    const __Pyx_PyCode_New_function_description descr = {3, 0, 0, 3, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 28};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_relevance, __pyx_mstate->__pyx_n_u_content_len, __pyx_mstate->__pyx_n_u_correlation_score};
-    __pyx_mstate_global->__pyx_codeobj_tab[1] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_nucleus_reasoning__inner_world_m_2, __pyx_mstate->__pyx_n_u_calc_branch_weight, __pyx_mstate->__pyx_kp_b_iso88591_q_j_3a_S_q_5, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[1])) goto bad;
+    __pyx_mstate_global->__pyx_codeobj_tab[1] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_inner_world_math_cy_pyx, __pyx_mstate->__pyx_n_u_calc_branch_weight, __pyx_mstate->__pyx_kp_b_iso88591_q_j_3a_S_q_5, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[1])) goto bad;
   }
   {
-    const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 1, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 52};
+    const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 1, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 53};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_shared_keywords};
-    __pyx_mstate_global->__pyx_codeobj_tab[2] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_nucleus_reasoning__inner_world_m_2, __pyx_mstate->__pyx_n_u_calc_correlation_score, __pyx_mstate->__pyx_kp_b_iso88591_1_AQ_U_1_Ba_uA, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[2])) goto bad;
+    __pyx_mstate_global->__pyx_codeobj_tab[2] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_inner_world_math_cy_pyx, __pyx_mstate->__pyx_n_u_calc_correlation_score, __pyx_mstate->__pyx_kp_b_iso88591_1_AQ_U_1_Ba_uA, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[2])) goto bad;
   }
   {
-    const __Pyx_PyCode_New_function_description descr = {2, 0, 0, 2, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 70};
+    const __Pyx_PyCode_New_function_description descr = {2, 0, 0, 2, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 71};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_values, __pyx_mstate->__pyx_n_u_weights};
-    __pyx_mstate_global->__pyx_codeobj_tab[3] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_nucleus_reasoning__inner_world_m_2, __pyx_mstate->__pyx_n_u_weighted_fusion, __pyx_mstate->__pyx_kp_b_iso88591_A_Q_AQ_U_1_q_2WAQ_gQa_Q_q_6_1, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[3])) goto bad;
+    __pyx_mstate_global->__pyx_codeobj_tab[3] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_inner_world_math_cy_pyx, __pyx_mstate->__pyx_n_u_weighted_fusion, __pyx_mstate->__pyx_kp_b_iso88591_A_Q_AQ_U_1_q_2WAQ_gQa_Q_q_6_1, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[3])) goto bad;
   }
   {
-    const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 1, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 93};
+    const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 1, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 94};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_scores};
-    __pyx_mstate_global->__pyx_codeobj_tab[4] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_nucleus_reasoning__inner_world_m_2, __pyx_mstate->__pyx_n_u_normalize_scores, __pyx_mstate->__pyx_kp_b_iso88591_AQ_r_A_q_F_1_U_3a_6_Rq_aq_Q_U_1, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[4])) goto bad;
+    __pyx_mstate_global->__pyx_codeobj_tab[4] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_inner_world_math_cy_pyx, __pyx_mstate->__pyx_n_u_normalize_scores, __pyx_mstate->__pyx_kp_b_iso88591_AQ_r_A_q_F_1_U_3a_6_Rq_aq_Q_U_1, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[4])) goto bad;
   }
   {
-    const __Pyx_PyCode_New_function_description descr = {2, 0, 0, 2, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 124};
+    const __Pyx_PyCode_New_function_description descr = {2, 0, 0, 2, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 125};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_vec_a, __pyx_mstate->__pyx_n_u_vec_b};
-    __pyx_mstate_global->__pyx_codeobj_tab[5] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_nucleus_reasoning__inner_world_m_2, __pyx_mstate->__pyx_n_u_cosine_similarity_cy, __pyx_mstate->__pyx_kp_b_iso88591_AQ_r_Bc_3c_q_a_U_1_uAS_q_q_2U_1, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[5])) goto bad;
+    __pyx_mstate_global->__pyx_codeobj_tab[5] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_inner_world_math_cy_pyx, __pyx_mstate->__pyx_n_u_cosine_similarity_cy, __pyx_mstate->__pyx_kp_b_iso88591_AQ_r_Bc_3c_q_a_U_1_uAS_q_q_2U_1, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[5])) goto bad;
   }
   Py_DECREF(tuple_dedup_map);
   return 0;

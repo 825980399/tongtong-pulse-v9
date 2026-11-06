@@ -1,3 +1,4 @@
+# cython: freethreading_compatible=True
 # _cosine_cpu_cy.pyx
 # ★v25.1新增：批量余弦相似度 Cython 加速版（CPU 降级路径热路径）
 # 对应 GPUCore._cosine_cpu（纯数值数组循环，输出完全一致）

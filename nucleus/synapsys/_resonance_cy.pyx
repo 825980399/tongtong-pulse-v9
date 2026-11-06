@@ -1,3 +1,4 @@
+# cython: freethreading_compatible=True
 # _resonance_cy.pyx
 # ★v23.0新增：五维共振得分的Cython加速版
 # 仅包含纯数值计算，不涉及Python对象操作

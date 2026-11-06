@@ -1,3 +1,4 @@
+# cython: freethreading_compatible=True
 # _oscillon_cy.pyx
 # ★v23.0新增：振荡场纯数值计算的Cython加速版
 # 仅包含纯数学计算，不涉及Python对象操作

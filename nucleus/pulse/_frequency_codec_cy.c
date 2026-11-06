@@ -4,15 +4,9 @@
 {
     "distutils": {
         "depends": [],
-        "extra_compile_args": [
-            "-O3"
-        ],
-        "extra_link_args": [
-            "-flto"
-        ],
         "name": "_frequency_codec_cy",
         "sources": [
-            "_frequency_codec_cy.pyx"
+            "D:\\xinrenlei\\tongtong-pulse-v9\\nucleus/pulse/_frequency_codec_cy.pyx"
         ]
     },
     "module_name": "_frequency_codec_cy"
@@ -1168,7 +1162,7 @@ static int __Pyx_init_co_variables(void) {
 #define __Pyx_FREETHREADING_COMPATIBLE Py_MOD_GIL_USED
 #endif
 #else
-#define __Pyx_FREETHREADING_COMPATIBLE Py_MOD_GIL_USED
+#define __Pyx_FREETHREADING_COMPATIBLE Py_MOD_GIL_NOT_USED
 #endif
 #define __PYX_DEFAULT_STRING_ENCODING_IS_ASCII 0
 #define __PYX_DEFAULT_STRING_ENCODING_IS_UTF8 0
@@ -2441,8 +2435,14 @@ static void __Pyx_RaiseUnboundLocalError(const char *varname);
 /* DivInt[long].proto */
 static CYTHON_INLINE long __Pyx_div_long(long, long, int b_is_constant);
 
+/* ModInt[long].proto */
+static CYTHON_INLINE long __Pyx_mod_long(long, long, int b_is_constant);
+
 /* ErrOccurredWithGIL.proto */
 static CYTHON_INLINE int __Pyx_ErrOccurredWithGIL(void);
+
+/* BufferIndexError.proto */
+static void __Pyx_RaiseBufferIndexError(int axis);
 
 /* pyint_simplify.proto */
 static CYTHON_INLINE int __Pyx_PyInt_FromNumber(PyObject **number_var, const char *argname, int accept_none);
@@ -3118,7 +3118,7 @@ typedef struct {
   PyObject *__pyx_slice[1];
   PyObject *__pyx_tuple[2];
   PyObject *__pyx_codeobj_tab[3];
-  PyObject *__pyx_string_tab[159];
+  PyObject *__pyx_string_tab[160];
   PyObject *__pyx_number_tab[7];
 /* #### Code section: module_state_contents ### */
 /* CommonTypesMetaclass.module_state_decls */
@@ -3231,94 +3231,95 @@ static __pyx_mstatetype * const __pyx_mstate_global = &__pyx_mstate_global_stati
 #define __pyx_n_u_data __pyx_string_tab[68]
 #define __pyx_n_u_dict __pyx_string_tab[69]
 #define __pyx_n_u_dtype_is_object __pyx_string_tab[70]
-#define __pyx_n_u_encode __pyx_string_tab[71]
-#define __pyx_n_u_encode_batch_cy __pyx_string_tab[72]
-#define __pyx_n_u_encode_cy __pyx_string_tab[73]
-#define __pyx_n_u_enumerate __pyx_string_tab[74]
-#define __pyx_n_u_error __pyx_string_tab[75]
-#define __pyx_n_u_flags __pyx_string_tab[76]
-#define __pyx_n_u_float __pyx_string_tab[77]
-#define __pyx_n_u_format __pyx_string_tab[78]
-#define __pyx_n_u_fortran __pyx_string_tab[79]
-#define __pyx_n_u_freq __pyx_string_tab[80]
-#define __pyx_n_u_frequency_codec_cy __pyx_string_tab[81]
-#define __pyx_n_u_from_bytes __pyx_string_tab[82]
-#define __pyx_n_u_func __pyx_string_tab[83]
-#define __pyx_n_u_get __pyx_string_tab[84]
-#define __pyx_n_u_getstate __pyx_string_tab[85]
-#define __pyx_n_u_hash_avg __pyx_string_tab[86]
-#define __pyx_n_u_i __pyx_string_tab[87]
-#define __pyx_n_u_id __pyx_string_tab[88]
-#define __pyx_n_u_import __pyx_string_tab[89]
-#define __pyx_n_u_index __pyx_string_tab[90]
-#define __pyx_n_u_int __pyx_string_tab[91]
-#define __pyx_n_u_is_coroutine __pyx_string_tab[92]
-#define __pyx_n_u_items __pyx_string_tab[93]
-#define __pyx_n_u_itemsize __pyx_string_tab[94]
-#define __pyx_n_u_keywords __pyx_string_tab[95]
-#define __pyx_n_u_kw __pyx_string_tab[96]
-#define __pyx_n_u_kw_bytes __pyx_string_tab[97]
-#define __pyx_n_u_kw_clean __pyx_string_tab[98]
-#define __pyx_n_u_kw_hash __pyx_string_tab[99]
-#define __pyx_n_u_kw_hash_list __pyx_string_tab[100]
-#define __pyx_n_u_list __pyx_string_tab[101]
-#define __pyx_n_u_lower __pyx_string_tab[102]
-#define __pyx_n_u_main __pyx_string_tab[103]
-#define __pyx_n_u_math __pyx_string_tab[104]
-#define __pyx_n_u_md5_int __pyx_string_tab[105]
-#define __pyx_n_u_memview __pyx_string_tab[106]
-#define __pyx_n_u_mode __pyx_string_tab[107]
-#define __pyx_n_u_module __pyx_string_tab[108]
-#define __pyx_n_u_name __pyx_string_tab[109]
-#define __pyx_n_u_name_2 __pyx_string_tab[110]
-#define __pyx_n_u_ndim __pyx_string_tab[111]
-#define __pyx_n_u_new __pyx_string_tab[112]
-#define __pyx_n_u_node __pyx_string_tab[113]
-#define __pyx_n_u_nodes __pyx_string_tab[114]
-#define __pyx_n_u_obj __pyx_string_tab[115]
-#define __pyx_n_u_out __pyx_string_tab[116]
-#define __pyx_n_u_pack __pyx_string_tab[117]
-#define __pyx_n_u_pop __pyx_string_tab[118]
-#define __pyx_n_u_pyx_checksum __pyx_string_tab[119]
-#define __pyx_n_u_pyx_state __pyx_string_tab[120]
-#define __pyx_n_u_pyx_type __pyx_string_tab[121]
-#define __pyx_n_u_pyx_unpickle_Enum __pyx_string_tab[122]
-#define __pyx_n_u_pyx_vtable __pyx_string_tab[123]
-#define __pyx_n_u_qualname __pyx_string_tab[124]
-#define __pyx_n_u_raw_anchor __pyx_string_tab[125]
-#define __pyx_n_u_raw_mod __pyx_string_tab[126]
-#define __pyx_n_u_raw_words __pyx_string_tab[127]
-#define __pyx_n_u_reduce __pyx_string_tab[128]
-#define __pyx_n_u_reduce_cython __pyx_string_tab[129]
-#define __pyx_n_u_reduce_ex __pyx_string_tab[130]
-#define __pyx_n_u_register __pyx_string_tab[131]
-#define __pyx_n_u_results __pyx_string_tab[132]
-#define __pyx_n_u_return __pyx_string_tab[133]
-#define __pyx_n_u_round __pyx_string_tab[134]
-#define __pyx_n_u_set_name __pyx_string_tab[135]
-#define __pyx_n_u_setdefault __pyx_string_tab[136]
-#define __pyx_n_u_setstate __pyx_string_tab[137]
-#define __pyx_n_u_setstate_cython __pyx_string_tab[138]
-#define __pyx_n_u_shape __pyx_string_tab[139]
-#define __pyx_n_u_size __pyx_string_tab[140]
-#define __pyx_n_u_start __pyx_string_tab[141]
-#define __pyx_n_u_step __pyx_string_tab[142]
-#define __pyx_n_u_stop __pyx_string_tab[143]
-#define __pyx_n_u_str __pyx_string_tab[144]
-#define __pyx_n_u_struct __pyx_string_tab[145]
-#define __pyx_n_u_sum __pyx_string_tab[146]
-#define __pyx_n_u_test __pyx_string_tab[147]
-#define __pyx_n_u_text __pyx_string_tab[148]
-#define __pyx_n_u_unpack __pyx_string_tab[149]
-#define __pyx_n_u_update __pyx_string_tab[150]
-#define __pyx_n_u_value __pyx_string_tab[151]
-#define __pyx_n_u_values __pyx_string_tab[152]
-#define __pyx_n_u_w __pyx_string_tab[153]
-#define __pyx_n_u_x __pyx_string_tab[154]
-#define __pyx_kp_b_iso88591_1_U_3aq_uAQ_1D_AYa_4q_D_T_A_y_w __pyx_string_tab[155]
-#define __pyx_kp_b_iso88591_A_Qas_4s_7_3k_q_2V1 __pyx_string_tab[156]
-#define __pyx_kp_b_iso88591_U_4A_t1_q_t1_s_1_D_d_5_HAU_fTU __pyx_string_tab[157]
-#define __pyx_n_b_O __pyx_string_tab[158]
+#define __pyx_n_u_empty __pyx_string_tab[71]
+#define __pyx_n_u_encode __pyx_string_tab[72]
+#define __pyx_n_u_encode_batch_cy __pyx_string_tab[73]
+#define __pyx_n_u_encode_cy __pyx_string_tab[74]
+#define __pyx_n_u_enumerate __pyx_string_tab[75]
+#define __pyx_n_u_error __pyx_string_tab[76]
+#define __pyx_n_u_flags __pyx_string_tab[77]
+#define __pyx_n_u_float __pyx_string_tab[78]
+#define __pyx_n_u_format __pyx_string_tab[79]
+#define __pyx_n_u_fortran __pyx_string_tab[80]
+#define __pyx_n_u_freq __pyx_string_tab[81]
+#define __pyx_n_u_frequency_codec_cy __pyx_string_tab[82]
+#define __pyx_n_u_from_bytes __pyx_string_tab[83]
+#define __pyx_n_u_func __pyx_string_tab[84]
+#define __pyx_n_u_get __pyx_string_tab[85]
+#define __pyx_n_u_getstate __pyx_string_tab[86]
+#define __pyx_n_u_hash_avg __pyx_string_tab[87]
+#define __pyx_n_u_i __pyx_string_tab[88]
+#define __pyx_n_u_id __pyx_string_tab[89]
+#define __pyx_n_u_import __pyx_string_tab[90]
+#define __pyx_n_u_index __pyx_string_tab[91]
+#define __pyx_n_u_int __pyx_string_tab[92]
+#define __pyx_n_u_is_coroutine __pyx_string_tab[93]
+#define __pyx_n_u_items __pyx_string_tab[94]
+#define __pyx_n_u_itemsize __pyx_string_tab[95]
+#define __pyx_n_u_keywords __pyx_string_tab[96]
+#define __pyx_n_u_kw __pyx_string_tab[97]
+#define __pyx_n_u_kw_bytes __pyx_string_tab[98]
+#define __pyx_n_u_kw_clean __pyx_string_tab[99]
+#define __pyx_n_u_kw_hash __pyx_string_tab[100]
+#define __pyx_n_u_kw_hash_list __pyx_string_tab[101]
+#define __pyx_n_u_list __pyx_string_tab[102]
+#define __pyx_n_u_lower __pyx_string_tab[103]
+#define __pyx_n_u_main __pyx_string_tab[104]
+#define __pyx_n_u_math __pyx_string_tab[105]
+#define __pyx_n_u_md5_int __pyx_string_tab[106]
+#define __pyx_n_u_memview __pyx_string_tab[107]
+#define __pyx_n_u_mode __pyx_string_tab[108]
+#define __pyx_n_u_module __pyx_string_tab[109]
+#define __pyx_n_u_name __pyx_string_tab[110]
+#define __pyx_n_u_name_2 __pyx_string_tab[111]
+#define __pyx_n_u_ndim __pyx_string_tab[112]
+#define __pyx_n_u_new __pyx_string_tab[113]
+#define __pyx_n_u_node __pyx_string_tab[114]
+#define __pyx_n_u_nodes __pyx_string_tab[115]
+#define __pyx_n_u_obj __pyx_string_tab[116]
+#define __pyx_n_u_out __pyx_string_tab[117]
+#define __pyx_n_u_pack __pyx_string_tab[118]
+#define __pyx_n_u_pop __pyx_string_tab[119]
+#define __pyx_n_u_pyx_checksum __pyx_string_tab[120]
+#define __pyx_n_u_pyx_state __pyx_string_tab[121]
+#define __pyx_n_u_pyx_type __pyx_string_tab[122]
+#define __pyx_n_u_pyx_unpickle_Enum __pyx_string_tab[123]
+#define __pyx_n_u_pyx_vtable __pyx_string_tab[124]
+#define __pyx_n_u_qualname __pyx_string_tab[125]
+#define __pyx_n_u_raw_anchor __pyx_string_tab[126]
+#define __pyx_n_u_raw_mod __pyx_string_tab[127]
+#define __pyx_n_u_raw_words __pyx_string_tab[128]
+#define __pyx_n_u_reduce __pyx_string_tab[129]
+#define __pyx_n_u_reduce_cython __pyx_string_tab[130]
+#define __pyx_n_u_reduce_ex __pyx_string_tab[131]
+#define __pyx_n_u_register __pyx_string_tab[132]
+#define __pyx_n_u_results __pyx_string_tab[133]
+#define __pyx_n_u_return __pyx_string_tab[134]
+#define __pyx_n_u_round __pyx_string_tab[135]
+#define __pyx_n_u_set_name __pyx_string_tab[136]
+#define __pyx_n_u_setdefault __pyx_string_tab[137]
+#define __pyx_n_u_setstate __pyx_string_tab[138]
+#define __pyx_n_u_setstate_cython __pyx_string_tab[139]
+#define __pyx_n_u_shape __pyx_string_tab[140]
+#define __pyx_n_u_size __pyx_string_tab[141]
+#define __pyx_n_u_start __pyx_string_tab[142]
+#define __pyx_n_u_step __pyx_string_tab[143]
+#define __pyx_n_u_stop __pyx_string_tab[144]
+#define __pyx_n_u_str __pyx_string_tab[145]
+#define __pyx_n_u_struct __pyx_string_tab[146]
+#define __pyx_n_u_sum __pyx_string_tab[147]
+#define __pyx_n_u_test __pyx_string_tab[148]
+#define __pyx_n_u_text __pyx_string_tab[149]
+#define __pyx_n_u_unpack __pyx_string_tab[150]
+#define __pyx_n_u_update __pyx_string_tab[151]
+#define __pyx_n_u_value __pyx_string_tab[152]
+#define __pyx_n_u_values __pyx_string_tab[153]
+#define __pyx_n_u_w __pyx_string_tab[154]
+#define __pyx_n_u_x __pyx_string_tab[155]
+#define __pyx_kp_b_iso88591_1_U_3aq_uAQ_1D_AYa_4q_D_T_A_y_w __pyx_string_tab[156]
+#define __pyx_kp_b_iso88591_A_s_6_A_auA_6_c_3at3awa_3k_q_2V __pyx_string_tab[157]
+#define __pyx_kp_b_iso88591_U_4A_t1_q_t1_s_1_D_d_5_HAU_fTU __pyx_string_tab[158]
+#define __pyx_n_b_O __pyx_string_tab[159]
 #define __pyx_float_0_0 __pyx_number_tab[0]
 #define __pyx_float_10000_0 __pyx_number_tab[1]
 #define __pyx_int_0 __pyx_number_tab[2]
@@ -3351,7 +3352,7 @@ static CYTHON_SMALL_CODE int __pyx_m_clear(PyObject *m) {
   for (int i=0; i<1; ++i) { Py_CLEAR(clear_module_state->__pyx_slice[i]); }
   for (int i=0; i<2; ++i) { Py_CLEAR(clear_module_state->__pyx_tuple[i]); }
   for (int i=0; i<3; ++i) { Py_CLEAR(clear_module_state->__pyx_codeobj_tab[i]); }
-  for (int i=0; i<159; ++i) { Py_CLEAR(clear_module_state->__pyx_string_tab[i]); }
+  for (int i=0; i<160; ++i) { Py_CLEAR(clear_module_state->__pyx_string_tab[i]); }
   for (int i=0; i<7; ++i) { Py_CLEAR(clear_module_state->__pyx_number_tab[i]); }
 /* #### Code section: module_state_clear_contents ### */
 /* CommonTypesMetaclass.module_state_clear */
@@ -3386,7 +3387,7 @@ static CYTHON_SMALL_CODE int __pyx_m_traverse(PyObject *m, visitproc visit, void
   for (int i=0; i<1; ++i) { __Pyx_VISIT_CONST(traverse_module_state->__pyx_slice[i]); }
   for (int i=0; i<2; ++i) { __Pyx_VISIT_CONST(traverse_module_state->__pyx_tuple[i]); }
   for (int i=0; i<3; ++i) { __Pyx_VISIT_CONST(traverse_module_state->__pyx_codeobj_tab[i]); }
-  for (int i=0; i<159; ++i) { __Pyx_VISIT_CONST(traverse_module_state->__pyx_string_tab[i]); }
+  for (int i=0; i<160; ++i) { __Pyx_VISIT_CONST(traverse_module_state->__pyx_string_tab[i]); }
   for (int i=0; i<7; ++i) { __Pyx_VISIT_CONST(traverse_module_state->__pyx_number_tab[i]); }
 /* #### Code section: module_state_traverse_contents ### */
 /* CommonTypesMetaclass.module_state_traverse */
@@ -15888,7 +15889,7 @@ static PyObject *__pyx_unpickle_Enum__set_state(struct __pyx_MemviewEnum_obj *__
   return __pyx_r;
 }
 
-/* "_frequency_codec_cy.pyx":51
+/* "_frequency_codec_cy.pyx":52
  * ]
  * 
  * cdef inline uint32_t _ROL(uint32_t x, int c) nogil:             # <<<<<<<<<<<<<<
@@ -15899,7 +15900,7 @@ static PyObject *__pyx_unpickle_Enum__set_state(struct __pyx_MemviewEnum_obj *__
 static CYTHON_INLINE uint32_t __pyx_f_19_frequency_codec_cy__ROL(uint32_t __pyx_v_x, int __pyx_v_c) {
   uint32_t __pyx_r;
 
-  /* "_frequency_codec_cy.pyx":52
+  /* "_frequency_codec_cy.pyx":53
  * 
  * cdef inline uint32_t _ROL(uint32_t x, int c) nogil:
  *     return (x << c) | (x >> (32 - c))             # <<<<<<<<<<<<<<
@@ -15909,7 +15910,7 @@ static CYTHON_INLINE uint32_t __pyx_f_19_frequency_codec_cy__ROL(uint32_t __pyx_
   __pyx_r = ((__pyx_v_x << __pyx_v_c) | (__pyx_v_x >> (32 - __pyx_v_c)));
   goto __pyx_L0;
 
-  /* "_frequency_codec_cy.pyx":51
+  /* "_frequency_codec_cy.pyx":52
  * ]
  * 
  * cdef inline uint32_t _ROL(uint32_t x, int c) nogil:             # <<<<<<<<<<<<<<
@@ -15922,7 +15923,7 @@ static CYTHON_INLINE uint32_t __pyx_f_19_frequency_codec_cy__ROL(uint32_t __pyx_
   return __pyx_r;
 }
 
-/* "_frequency_codec_cy.pyx":55
+/* "_frequency_codec_cy.pyx":56
  * 
  * 
  * cdef void _md5_transform(uint32_t* state, const uint8_t* block) nogil:             # <<<<<<<<<<<<<<
@@ -15949,7 +15950,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_transform(uint32_t *__pyx_v_state
   int __pyx_clineno = 0;
   PyGILState_STATE __pyx_gilstate_save;
 
-  /* "_frequency_codec_cy.pyx":56
+  /* "_frequency_codec_cy.pyx":57
  * 
  * cdef void _md5_transform(uint32_t* state, const uint8_t* block) nogil:
  *     cdef uint32_t a = state[0]             # <<<<<<<<<<<<<<
@@ -15958,7 +15959,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_transform(uint32_t *__pyx_v_state
 */
   __pyx_v_a = (__pyx_v_state[0]);
 
-  /* "_frequency_codec_cy.pyx":57
+  /* "_frequency_codec_cy.pyx":58
  * cdef void _md5_transform(uint32_t* state, const uint8_t* block) nogil:
  *     cdef uint32_t a = state[0]
  *     cdef uint32_t b = state[1]             # <<<<<<<<<<<<<<
@@ -15967,7 +15968,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_transform(uint32_t *__pyx_v_state
 */
   __pyx_v_b = (__pyx_v_state[1]);
 
-  /* "_frequency_codec_cy.pyx":58
+  /* "_frequency_codec_cy.pyx":59
  *     cdef uint32_t a = state[0]
  *     cdef uint32_t b = state[1]
  *     cdef uint32_t c = state[2]             # <<<<<<<<<<<<<<
@@ -15976,7 +15977,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_transform(uint32_t *__pyx_v_state
 */
   __pyx_v_c = (__pyx_v_state[2]);
 
-  /* "_frequency_codec_cy.pyx":59
+  /* "_frequency_codec_cy.pyx":60
  *     cdef uint32_t b = state[1]
  *     cdef uint32_t c = state[2]
  *     cdef uint32_t d = state[3]             # <<<<<<<<<<<<<<
@@ -15985,7 +15986,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_transform(uint32_t *__pyx_v_state
 */
   __pyx_v_d = (__pyx_v_state[3]);
 
-  /* "_frequency_codec_cy.pyx":63
+  /* "_frequency_codec_cy.pyx":64
  *     cdef uint32_t f, g, tmp
  *     cdef int i
  *     for i in range(16):             # <<<<<<<<<<<<<<
@@ -15995,7 +15996,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_transform(uint32_t *__pyx_v_state
   for (__pyx_t_1 = 0; __pyx_t_1 < 16; __pyx_t_1+=1) {
     __pyx_v_i = __pyx_t_1;
 
-    /* "_frequency_codec_cy.pyx":64
+    /* "_frequency_codec_cy.pyx":65
  *     cdef int i
  *     for i in range(16):
  *         x[i] = (<uint32_t>block[i*4]) | (<uint32_t>block[i*4+1] << 8) \             # <<<<<<<<<<<<<<
@@ -16005,7 +16006,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_transform(uint32_t *__pyx_v_state
     (__pyx_v_x[__pyx_v_i]) = (((((uint32_t)(__pyx_v_block[(__pyx_v_i * 4)])) | (((uint32_t)(__pyx_v_block[((__pyx_v_i * 4) + 1)])) << 8)) | (((uint32_t)(__pyx_v_block[((__pyx_v_i * 4) + 2)])) << 16)) | (((uint32_t)(__pyx_v_block[((__pyx_v_i * 4) + 3)])) << 24));
   }
 
-  /* "_frequency_codec_cy.pyx":66
+  /* "_frequency_codec_cy.pyx":67
  *         x[i] = (<uint32_t>block[i*4]) | (<uint32_t>block[i*4+1] << 8) \
  *              | (<uint32_t>block[i*4+2] << 16) | (<uint32_t>block[i*4+3] << 24)
  *     for i in range(64):             # <<<<<<<<<<<<<<
@@ -16015,7 +16016,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_transform(uint32_t *__pyx_v_state
   for (__pyx_t_1 = 0; __pyx_t_1 < 64; __pyx_t_1+=1) {
     __pyx_v_i = __pyx_t_1;
 
-    /* "_frequency_codec_cy.pyx":67
+    /* "_frequency_codec_cy.pyx":68
  *              | (<uint32_t>block[i*4+2] << 16) | (<uint32_t>block[i*4+3] << 24)
  *     for i in range(64):
  *         if i < 16:             # <<<<<<<<<<<<<<
@@ -16025,7 +16026,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_transform(uint32_t *__pyx_v_state
     __pyx_t_2 = (__pyx_v_i < 16);
     if (__pyx_t_2) {
 
-      /* "_frequency_codec_cy.pyx":68
+      /* "_frequency_codec_cy.pyx":69
  *     for i in range(64):
  *         if i < 16:
  *             f = (b & c) | ((~b) & d)             # <<<<<<<<<<<<<<
@@ -16034,7 +16035,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_transform(uint32_t *__pyx_v_state
 */
       __pyx_v_f = ((__pyx_v_b & __pyx_v_c) | ((~__pyx_v_b) & __pyx_v_d));
 
-      /* "_frequency_codec_cy.pyx":69
+      /* "_frequency_codec_cy.pyx":70
  *         if i < 16:
  *             f = (b & c) | ((~b) & d)
  *             g = i             # <<<<<<<<<<<<<<
@@ -16043,7 +16044,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_transform(uint32_t *__pyx_v_state
 */
       __pyx_v_g = __pyx_v_i;
 
-      /* "_frequency_codec_cy.pyx":67
+      /* "_frequency_codec_cy.pyx":68
  *              | (<uint32_t>block[i*4+2] << 16) | (<uint32_t>block[i*4+3] << 24)
  *     for i in range(64):
  *         if i < 16:             # <<<<<<<<<<<<<<
@@ -16053,7 +16054,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_transform(uint32_t *__pyx_v_state
       goto __pyx_L7;
     }
 
-    /* "_frequency_codec_cy.pyx":70
+    /* "_frequency_codec_cy.pyx":71
  *             f = (b & c) | ((~b) & d)
  *             g = i
  *         elif i < 32:             # <<<<<<<<<<<<<<
@@ -16063,7 +16064,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_transform(uint32_t *__pyx_v_state
     __pyx_t_2 = (__pyx_v_i < 32);
     if (__pyx_t_2) {
 
-      /* "_frequency_codec_cy.pyx":71
+      /* "_frequency_codec_cy.pyx":72
  *             g = i
  *         elif i < 32:
  *             f = (d & b) | ((~d) & c)             # <<<<<<<<<<<<<<
@@ -16072,16 +16073,16 @@ static void __pyx_f_19_frequency_codec_cy__md5_transform(uint32_t *__pyx_v_state
 */
       __pyx_v_f = ((__pyx_v_d & __pyx_v_b) | ((~__pyx_v_d) & __pyx_v_c));
 
-      /* "_frequency_codec_cy.pyx":72
+      /* "_frequency_codec_cy.pyx":73
  *         elif i < 32:
  *             f = (d & b) | ((~d) & c)
  *             g = (5 * i + 1) % 16             # <<<<<<<<<<<<<<
  *         elif i < 48:
  *             f = b ^ c ^ d
 */
-      __pyx_v_g = (((5 * __pyx_v_i) + 1) % 16);
+      __pyx_v_g = __Pyx_mod_long(((5 * __pyx_v_i) + 1), 16, 1);
 
-      /* "_frequency_codec_cy.pyx":70
+      /* "_frequency_codec_cy.pyx":71
  *             f = (b & c) | ((~b) & d)
  *             g = i
  *         elif i < 32:             # <<<<<<<<<<<<<<
@@ -16091,7 +16092,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_transform(uint32_t *__pyx_v_state
       goto __pyx_L7;
     }
 
-    /* "_frequency_codec_cy.pyx":73
+    /* "_frequency_codec_cy.pyx":74
  *             f = (d & b) | ((~d) & c)
  *             g = (5 * i + 1) % 16
  *         elif i < 48:             # <<<<<<<<<<<<<<
@@ -16101,7 +16102,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_transform(uint32_t *__pyx_v_state
     __pyx_t_2 = (__pyx_v_i < 48);
     if (__pyx_t_2) {
 
-      /* "_frequency_codec_cy.pyx":74
+      /* "_frequency_codec_cy.pyx":75
  *             g = (5 * i + 1) % 16
  *         elif i < 48:
  *             f = b ^ c ^ d             # <<<<<<<<<<<<<<
@@ -16110,16 +16111,16 @@ static void __pyx_f_19_frequency_codec_cy__md5_transform(uint32_t *__pyx_v_state
 */
       __pyx_v_f = ((__pyx_v_b ^ __pyx_v_c) ^ __pyx_v_d);
 
-      /* "_frequency_codec_cy.pyx":75
+      /* "_frequency_codec_cy.pyx":76
  *         elif i < 48:
  *             f = b ^ c ^ d
  *             g = (3 * i + 5) % 16             # <<<<<<<<<<<<<<
  *         else:
  *             f = c ^ (b | (~d))
 */
-      __pyx_v_g = (((3 * __pyx_v_i) + 5) % 16);
+      __pyx_v_g = __Pyx_mod_long(((3 * __pyx_v_i) + 5), 16, 1);
 
-      /* "_frequency_codec_cy.pyx":73
+      /* "_frequency_codec_cy.pyx":74
  *             f = (d & b) | ((~d) & c)
  *             g = (5 * i + 1) % 16
  *         elif i < 48:             # <<<<<<<<<<<<<<
@@ -16129,7 +16130,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_transform(uint32_t *__pyx_v_state
       goto __pyx_L7;
     }
 
-    /* "_frequency_codec_cy.pyx":77
+    /* "_frequency_codec_cy.pyx":78
  *             g = (3 * i + 5) % 16
  *         else:
  *             f = c ^ (b | (~d))             # <<<<<<<<<<<<<<
@@ -16139,18 +16140,18 @@ static void __pyx_f_19_frequency_codec_cy__md5_transform(uint32_t *__pyx_v_state
     /*else*/ {
       __pyx_v_f = (__pyx_v_c ^ (__pyx_v_b | (~__pyx_v_d)));
 
-      /* "_frequency_codec_cy.pyx":78
+      /* "_frequency_codec_cy.pyx":79
  *         else:
  *             f = c ^ (b | (~d))
  *             g = (7 * i) % 16             # <<<<<<<<<<<<<<
  *         tmp = d
  *         d = c
 */
-      __pyx_v_g = ((7 * __pyx_v_i) % 16);
+      __pyx_v_g = __Pyx_mod_long((7 * __pyx_v_i), 16, 1);
     }
     __pyx_L7:;
 
-    /* "_frequency_codec_cy.pyx":79
+    /* "_frequency_codec_cy.pyx":80
  *             f = c ^ (b | (~d))
  *             g = (7 * i) % 16
  *         tmp = d             # <<<<<<<<<<<<<<
@@ -16159,7 +16160,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_transform(uint32_t *__pyx_v_state
 */
     __pyx_v_tmp = __pyx_v_d;
 
-    /* "_frequency_codec_cy.pyx":80
+    /* "_frequency_codec_cy.pyx":81
  *             g = (7 * i) % 16
  *         tmp = d
  *         d = c             # <<<<<<<<<<<<<<
@@ -16168,7 +16169,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_transform(uint32_t *__pyx_v_state
 */
     __pyx_v_d = __pyx_v_c;
 
-    /* "_frequency_codec_cy.pyx":81
+    /* "_frequency_codec_cy.pyx":82
  *         tmp = d
  *         d = c
  *         c = b             # <<<<<<<<<<<<<<
@@ -16177,17 +16178,17 @@ static void __pyx_f_19_frequency_codec_cy__md5_transform(uint32_t *__pyx_v_state
 */
     __pyx_v_c = __pyx_v_b;
 
-    /* "_frequency_codec_cy.pyx":82
+    /* "_frequency_codec_cy.pyx":83
  *         d = c
  *         c = b
  *         b = b + _ROL(a + f + _MD5_K[i] + x[g], _MD5_S[i])             # <<<<<<<<<<<<<<
  *         a = tmp
  *     state[0] += a
 */
-    __pyx_t_3 = __pyx_f_19_frequency_codec_cy__ROL((((__pyx_v_a + __pyx_v_f) + (__pyx_v_19_frequency_codec_cy__MD5_K[__pyx_v_i])) + (__pyx_v_x[__pyx_v_g])), (__pyx_v_19_frequency_codec_cy__MD5_S[__pyx_v_i])); if (unlikely(__pyx_t_3 == ((uint32_t)-1) && __Pyx_ErrOccurredWithGIL())) __PYX_ERR(0, 82, __pyx_L1_error)
+    __pyx_t_3 = __pyx_f_19_frequency_codec_cy__ROL((((__pyx_v_a + __pyx_v_f) + (__pyx_v_19_frequency_codec_cy__MD5_K[__pyx_v_i])) + (__pyx_v_x[__pyx_v_g])), (__pyx_v_19_frequency_codec_cy__MD5_S[__pyx_v_i])); if (unlikely(__pyx_t_3 == ((uint32_t)-1) && __Pyx_ErrOccurredWithGIL())) __PYX_ERR(0, 83, __pyx_L1_error)
     __pyx_v_b = (__pyx_v_b + __pyx_t_3);
 
-    /* "_frequency_codec_cy.pyx":83
+    /* "_frequency_codec_cy.pyx":84
  *         c = b
  *         b = b + _ROL(a + f + _MD5_K[i] + x[g], _MD5_S[i])
  *         a = tmp             # <<<<<<<<<<<<<<
@@ -16197,7 +16198,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_transform(uint32_t *__pyx_v_state
     __pyx_v_a = __pyx_v_tmp;
   }
 
-  /* "_frequency_codec_cy.pyx":84
+  /* "_frequency_codec_cy.pyx":85
  *         b = b + _ROL(a + f + _MD5_K[i] + x[g], _MD5_S[i])
  *         a = tmp
  *     state[0] += a             # <<<<<<<<<<<<<<
@@ -16207,7 +16208,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_transform(uint32_t *__pyx_v_state
   __pyx_t_4 = 0;
   (__pyx_v_state[__pyx_t_4]) = ((__pyx_v_state[__pyx_t_4]) + __pyx_v_a);
 
-  /* "_frequency_codec_cy.pyx":85
+  /* "_frequency_codec_cy.pyx":86
  *         a = tmp
  *     state[0] += a
  *     state[1] += b             # <<<<<<<<<<<<<<
@@ -16217,7 +16218,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_transform(uint32_t *__pyx_v_state
   __pyx_t_4 = 1;
   (__pyx_v_state[__pyx_t_4]) = ((__pyx_v_state[__pyx_t_4]) + __pyx_v_b);
 
-  /* "_frequency_codec_cy.pyx":86
+  /* "_frequency_codec_cy.pyx":87
  *     state[0] += a
  *     state[1] += b
  *     state[2] += c             # <<<<<<<<<<<<<<
@@ -16227,7 +16228,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_transform(uint32_t *__pyx_v_state
   __pyx_t_4 = 2;
   (__pyx_v_state[__pyx_t_4]) = ((__pyx_v_state[__pyx_t_4]) + __pyx_v_c);
 
-  /* "_frequency_codec_cy.pyx":87
+  /* "_frequency_codec_cy.pyx":88
  *     state[1] += b
  *     state[2] += c
  *     state[3] += d             # <<<<<<<<<<<<<<
@@ -16237,7 +16238,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_transform(uint32_t *__pyx_v_state
   __pyx_t_4 = 3;
   (__pyx_v_state[__pyx_t_4]) = ((__pyx_v_state[__pyx_t_4]) + __pyx_v_d);
 
-  /* "_frequency_codec_cy.pyx":55
+  /* "_frequency_codec_cy.pyx":56
  * 
  * 
  * cdef void _md5_transform(uint32_t* state, const uint8_t* block) nogil:             # <<<<<<<<<<<<<<
@@ -16254,7 +16255,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_transform(uint32_t *__pyx_v_state
   __pyx_L0:;
 }
 
-/* "_frequency_codec_cy.pyx":90
+/* "_frequency_codec_cy.pyx":91
  * 
  * 
  * cdef void _md5_full(const uint8_t* data, size_t length, uint8_t out[16]) nogil:             # <<<<<<<<<<<<<<
@@ -16278,7 +16279,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
   int __pyx_clineno = 0;
   PyGILState_STATE __pyx_gilstate_save;
 
-  /* "_frequency_codec_cy.pyx":92
+  /* "_frequency_codec_cy.pyx":93
  * cdef void _md5_full(const uint8_t* data, size_t length, uint8_t out[16]) nogil:
  *     cdef uint32_t state[4]
  *     state[0] = 0x67452301             # <<<<<<<<<<<<<<
@@ -16287,7 +16288,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
 */
   (__pyx_v_state[0]) = 0x67452301;
 
-  /* "_frequency_codec_cy.pyx":93
+  /* "_frequency_codec_cy.pyx":94
  *     cdef uint32_t state[4]
  *     state[0] = 0x67452301
  *     state[1] = 0xefcdab89             # <<<<<<<<<<<<<<
@@ -16296,7 +16297,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
 */
   (__pyx_v_state[1]) = 0xefcdab89;
 
-  /* "_frequency_codec_cy.pyx":94
+  /* "_frequency_codec_cy.pyx":95
  *     state[0] = 0x67452301
  *     state[1] = 0xefcdab89
  *     state[2] = 0x98badcfe             # <<<<<<<<<<<<<<
@@ -16305,7 +16306,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
 */
   (__pyx_v_state[2]) = 0x98badcfe;
 
-  /* "_frequency_codec_cy.pyx":95
+  /* "_frequency_codec_cy.pyx":96
  *     state[1] = 0xefcdab89
  *     state[2] = 0x98badcfe
  *     state[3] = 0x10325476             # <<<<<<<<<<<<<<
@@ -16314,7 +16315,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
 */
   (__pyx_v_state[3]) = 0x10325476;
 
-  /* "_frequency_codec_cy.pyx":96
+  /* "_frequency_codec_cy.pyx":97
  *     state[2] = 0x98badcfe
  *     state[3] = 0x10325476
  *     cdef uint64_t total = length             # <<<<<<<<<<<<<<
@@ -16323,7 +16324,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
 */
   __pyx_v_total = __pyx_v_length;
 
-  /* "_frequency_codec_cy.pyx":97
+  /* "_frequency_codec_cy.pyx":98
  *     state[3] = 0x10325476
  *     cdef uint64_t total = length
  *     cdef size_t processed = 0             # <<<<<<<<<<<<<<
@@ -16332,7 +16333,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
 */
   __pyx_v_processed = 0;
 
-  /* "_frequency_codec_cy.pyx":101
+  /* "_frequency_codec_cy.pyx":102
  *     cdef size_t remaining, i
  *     #  64
  *     while length - processed >= 64:             # <<<<<<<<<<<<<<
@@ -16343,16 +16344,16 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
     __pyx_t_1 = ((__pyx_v_length - __pyx_v_processed) >= 64);
     if (!__pyx_t_1) break;
 
-    /* "_frequency_codec_cy.pyx":102
+    /* "_frequency_codec_cy.pyx":103
  *     #  64
  *     while length - processed >= 64:
  *         _md5_transform(state, data + processed)             # <<<<<<<<<<<<<<
  *         processed += 64
  *     #
 */
-    __pyx_f_19_frequency_codec_cy__md5_transform(__pyx_v_state, (__pyx_v_data + __pyx_v_processed)); if (unlikely(__Pyx_ErrOccurredWithGIL())) __PYX_ERR(0, 102, __pyx_L1_error)
+    __pyx_f_19_frequency_codec_cy__md5_transform(__pyx_v_state, (__pyx_v_data + __pyx_v_processed)); if (unlikely(__Pyx_ErrOccurredWithGIL())) __PYX_ERR(0, 103, __pyx_L1_error)
 
-    /* "_frequency_codec_cy.pyx":103
+    /* "_frequency_codec_cy.pyx":104
  *     while length - processed >= 64:
  *         _md5_transform(state, data + processed)
  *         processed += 64             # <<<<<<<<<<<<<<
@@ -16362,7 +16363,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
     __pyx_v_processed = (__pyx_v_processed + 64);
   }
 
-  /* "_frequency_codec_cy.pyx":105
+  /* "_frequency_codec_cy.pyx":106
  *         processed += 64
  *     #
  *     remaining = length - processed             # <<<<<<<<<<<<<<
@@ -16371,7 +16372,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
 */
   __pyx_v_remaining = (__pyx_v_length - __pyx_v_processed);
 
-  /* "_frequency_codec_cy.pyx":106
+  /* "_frequency_codec_cy.pyx":107
  *     #
  *     remaining = length - processed
  *     for i in range(remaining):             # <<<<<<<<<<<<<<
@@ -16383,7 +16384,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
   for (__pyx_t_4 = 0; __pyx_t_4 < __pyx_t_3; __pyx_t_4+=1) {
     __pyx_v_i = __pyx_t_4;
 
-    /* "_frequency_codec_cy.pyx":107
+    /* "_frequency_codec_cy.pyx":108
  *     remaining = length - processed
  *     for i in range(remaining):
  *         block[i] = data[processed + i]             # <<<<<<<<<<<<<<
@@ -16393,7 +16394,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
     (__pyx_v_block[__pyx_v_i]) = (__pyx_v_data[(__pyx_v_processed + __pyx_v_i)]);
   }
 
-  /* "_frequency_codec_cy.pyx":108
+  /* "_frequency_codec_cy.pyx":109
  *     for i in range(remaining):
  *         block[i] = data[processed + i]
  *     block[remaining] = 0x80             # <<<<<<<<<<<<<<
@@ -16402,7 +16403,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
 */
   (__pyx_v_block[__pyx_v_remaining]) = 0x80;
 
-  /* "_frequency_codec_cy.pyx":109
+  /* "_frequency_codec_cy.pyx":110
  *         block[i] = data[processed + i]
  *     block[remaining] = 0x80
  *     if remaining < 56:             # <<<<<<<<<<<<<<
@@ -16412,7 +16413,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
   __pyx_t_1 = (__pyx_v_remaining < 56);
   if (__pyx_t_1) {
 
-    /* "_frequency_codec_cy.pyx":110
+    /* "_frequency_codec_cy.pyx":111
  *     block[remaining] = 0x80
  *     if remaining < 56:
  *         for i in range(remaining + 1, 56):             # <<<<<<<<<<<<<<
@@ -16422,7 +16423,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
     for (__pyx_t_2 = (__pyx_v_remaining + 1); __pyx_t_2 < 56; __pyx_t_2+=1) {
       __pyx_v_i = __pyx_t_2;
 
-      /* "_frequency_codec_cy.pyx":111
+      /* "_frequency_codec_cy.pyx":112
  *     if remaining < 56:
  *         for i in range(remaining + 1, 56):
  *             block[i] = 0             # <<<<<<<<<<<<<<
@@ -16432,7 +16433,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
       (__pyx_v_block[__pyx_v_i]) = 0;
     }
 
-    /* "_frequency_codec_cy.pyx":113
+    /* "_frequency_codec_cy.pyx":114
  *             block[i] = 0
  *         # bitlittle-endian 64
  *         for i in range(8):             # <<<<<<<<<<<<<<
@@ -16442,7 +16443,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
     for (__pyx_t_2 = 0; __pyx_t_2 < 8; __pyx_t_2+=1) {
       __pyx_v_i = __pyx_t_2;
 
-      /* "_frequency_codec_cy.pyx":114
+      /* "_frequency_codec_cy.pyx":115
  *         # bitlittle-endian 64
  *         for i in range(8):
  *             block[56 + i] = <uint8_t>((total * 8) >> (8 * i))             # <<<<<<<<<<<<<<
@@ -16452,16 +16453,16 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
       (__pyx_v_block[(56 + __pyx_v_i)]) = ((uint8_t)((__pyx_v_total * 8) >> (8 * __pyx_v_i)));
     }
 
-    /* "_frequency_codec_cy.pyx":115
+    /* "_frequency_codec_cy.pyx":116
  *         for i in range(8):
  *             block[56 + i] = <uint8_t>((total * 8) >> (8 * i))
  *         _md5_transform(state, block)             # <<<<<<<<<<<<<<
  *     else:
  *         for i in range(remaining + 1, 64):
 */
-    __pyx_f_19_frequency_codec_cy__md5_transform(__pyx_v_state, __pyx_v_block); if (unlikely(__Pyx_ErrOccurredWithGIL())) __PYX_ERR(0, 115, __pyx_L1_error)
+    __pyx_f_19_frequency_codec_cy__md5_transform(__pyx_v_state, __pyx_v_block); if (unlikely(__Pyx_ErrOccurredWithGIL())) __PYX_ERR(0, 116, __pyx_L1_error)
 
-    /* "_frequency_codec_cy.pyx":109
+    /* "_frequency_codec_cy.pyx":110
  *         block[i] = data[processed + i]
  *     block[remaining] = 0x80
  *     if remaining < 56:             # <<<<<<<<<<<<<<
@@ -16471,7 +16472,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
     goto __pyx_L7;
   }
 
-  /* "_frequency_codec_cy.pyx":117
+  /* "_frequency_codec_cy.pyx":118
  *         _md5_transform(state, block)
  *     else:
  *         for i in range(remaining + 1, 64):             # <<<<<<<<<<<<<<
@@ -16482,7 +16483,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
     for (__pyx_t_2 = (__pyx_v_remaining + 1); __pyx_t_2 < 64; __pyx_t_2+=1) {
       __pyx_v_i = __pyx_t_2;
 
-      /* "_frequency_codec_cy.pyx":118
+      /* "_frequency_codec_cy.pyx":119
  *     else:
  *         for i in range(remaining + 1, 64):
  *             block[i] = 0             # <<<<<<<<<<<<<<
@@ -16492,16 +16493,16 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
       (__pyx_v_block[__pyx_v_i]) = 0;
     }
 
-    /* "_frequency_codec_cy.pyx":119
+    /* "_frequency_codec_cy.pyx":120
  *         for i in range(remaining + 1, 64):
  *             block[i] = 0
  *         _md5_transform(state, block)             # <<<<<<<<<<<<<<
  *         #  +
  *         for i in range(56):
 */
-    __pyx_f_19_frequency_codec_cy__md5_transform(__pyx_v_state, __pyx_v_block); if (unlikely(__Pyx_ErrOccurredWithGIL())) __PYX_ERR(0, 119, __pyx_L1_error)
+    __pyx_f_19_frequency_codec_cy__md5_transform(__pyx_v_state, __pyx_v_block); if (unlikely(__Pyx_ErrOccurredWithGIL())) __PYX_ERR(0, 120, __pyx_L1_error)
 
-    /* "_frequency_codec_cy.pyx":121
+    /* "_frequency_codec_cy.pyx":122
  *         _md5_transform(state, block)
  *         #  +
  *         for i in range(56):             # <<<<<<<<<<<<<<
@@ -16511,7 +16512,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
     for (__pyx_t_2 = 0; __pyx_t_2 < 56; __pyx_t_2+=1) {
       __pyx_v_i = __pyx_t_2;
 
-      /* "_frequency_codec_cy.pyx":122
+      /* "_frequency_codec_cy.pyx":123
  *         #  +
  *         for i in range(56):
  *             block[i] = 0             # <<<<<<<<<<<<<<
@@ -16521,7 +16522,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
       (__pyx_v_block[__pyx_v_i]) = 0;
     }
 
-    /* "_frequency_codec_cy.pyx":123
+    /* "_frequency_codec_cy.pyx":124
  *         for i in range(56):
  *             block[i] = 0
  *         for i in range(8):             # <<<<<<<<<<<<<<
@@ -16531,7 +16532,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
     for (__pyx_t_2 = 0; __pyx_t_2 < 8; __pyx_t_2+=1) {
       __pyx_v_i = __pyx_t_2;
 
-      /* "_frequency_codec_cy.pyx":124
+      /* "_frequency_codec_cy.pyx":125
  *             block[i] = 0
  *         for i in range(8):
  *             block[56 + i] = <uint8_t>((total * 8) >> (8 * i))             # <<<<<<<<<<<<<<
@@ -16541,18 +16542,18 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
       (__pyx_v_block[(56 + __pyx_v_i)]) = ((uint8_t)((__pyx_v_total * 8) >> (8 * __pyx_v_i)));
     }
 
-    /* "_frequency_codec_cy.pyx":125
+    /* "_frequency_codec_cy.pyx":126
  *         for i in range(8):
  *             block[56 + i] = <uint8_t>((total * 8) >> (8 * i))
  *         _md5_transform(state, block)             # <<<<<<<<<<<<<<
  *     #  little-endian
  *     for i in range(4):
 */
-    __pyx_f_19_frequency_codec_cy__md5_transform(__pyx_v_state, __pyx_v_block); if (unlikely(__Pyx_ErrOccurredWithGIL())) __PYX_ERR(0, 125, __pyx_L1_error)
+    __pyx_f_19_frequency_codec_cy__md5_transform(__pyx_v_state, __pyx_v_block); if (unlikely(__Pyx_ErrOccurredWithGIL())) __PYX_ERR(0, 126, __pyx_L1_error)
   }
   __pyx_L7:;
 
-  /* "_frequency_codec_cy.pyx":127
+  /* "_frequency_codec_cy.pyx":128
  *         _md5_transform(state, block)
  *     #  little-endian
  *     for i in range(4):             # <<<<<<<<<<<<<<
@@ -16562,7 +16563,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
   for (__pyx_t_2 = 0; __pyx_t_2 < 4; __pyx_t_2+=1) {
     __pyx_v_i = __pyx_t_2;
 
-    /* "_frequency_codec_cy.pyx":128
+    /* "_frequency_codec_cy.pyx":129
  *     #  little-endian
  *     for i in range(4):
  *         out[i*4]     = <uint8_t>(state[i] & 0xff)             # <<<<<<<<<<<<<<
@@ -16571,7 +16572,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
 */
     (__pyx_v_out[(__pyx_v_i * 4)]) = ((uint8_t)((__pyx_v_state[__pyx_v_i]) & 0xff));
 
-    /* "_frequency_codec_cy.pyx":129
+    /* "_frequency_codec_cy.pyx":130
  *     for i in range(4):
  *         out[i*4]     = <uint8_t>(state[i] & 0xff)
  *         out[i*4+1]   = <uint8_t>((state[i] >> 8) & 0xff)             # <<<<<<<<<<<<<<
@@ -16580,7 +16581,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
 */
     (__pyx_v_out[((__pyx_v_i * 4) + 1)]) = ((uint8_t)(((__pyx_v_state[__pyx_v_i]) >> 8) & 0xff));
 
-    /* "_frequency_codec_cy.pyx":130
+    /* "_frequency_codec_cy.pyx":131
  *         out[i*4]     = <uint8_t>(state[i] & 0xff)
  *         out[i*4+1]   = <uint8_t>((state[i] >> 8) & 0xff)
  *         out[i*4+2]   = <uint8_t>((state[i] >> 16) & 0xff)             # <<<<<<<<<<<<<<
@@ -16589,7 +16590,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
 */
     (__pyx_v_out[((__pyx_v_i * 4) + 2)]) = ((uint8_t)(((__pyx_v_state[__pyx_v_i]) >> 16) & 0xff));
 
-    /* "_frequency_codec_cy.pyx":131
+    /* "_frequency_codec_cy.pyx":132
  *         out[i*4+1]   = <uint8_t>((state[i] >> 8) & 0xff)
  *         out[i*4+2]   = <uint8_t>((state[i] >> 16) & 0xff)
  *         out[i*4+3]   = <uint8_t>((state[i] >> 24) & 0xff)             # <<<<<<<<<<<<<<
@@ -16599,7 +16600,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
     (__pyx_v_out[((__pyx_v_i * 4) + 3)]) = ((uint8_t)(((__pyx_v_state[__pyx_v_i]) >> 24) & 0xff));
   }
 
-  /* "_frequency_codec_cy.pyx":90
+  /* "_frequency_codec_cy.pyx":91
  * 
  * 
  * cdef void _md5_full(const uint8_t* data, size_t length, uint8_t out[16]) nogil:             # <<<<<<<<<<<<<<
@@ -16616,7 +16617,7 @@ static void __pyx_f_19_frequency_codec_cy__md5_full(uint8_t const *__pyx_v_data,
   __pyx_L0:;
 }
 
-/* "_frequency_codec_cy.pyx":134
+/* "_frequency_codec_cy.pyx":135
  * 
  * 
  * def _md5_int(bytes data) -> int:             # <<<<<<<<<<<<<<
@@ -16664,32 +16665,32 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   {
     PyObject ** const __pyx_pyargnames[] = {&__pyx_mstate_global->__pyx_n_u_data,0};
     const Py_ssize_t __pyx_kwds_len = (__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
-    if (unlikely(__pyx_kwds_len < 0)) __PYX_ERR(0, 134, __pyx_L3_error)
+    if (unlikely(__pyx_kwds_len < 0)) __PYX_ERR(0, 135, __pyx_L3_error)
     if (__pyx_kwds_len > 0) {
       switch (__pyx_nargs) {
         case  1:
         values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 134, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 135, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  0: break;
         default: goto __pyx_L5_argtuple_error;
       }
       const Py_ssize_t kwd_pos_args = __pyx_nargs;
-      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "_md5_int", 0) < (0)) __PYX_ERR(0, 134, __pyx_L3_error)
+      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "_md5_int", 0) < (0)) __PYX_ERR(0, 135, __pyx_L3_error)
       for (Py_ssize_t i = __pyx_nargs; i < 1; i++) {
-        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("_md5_int", 1, 1, 1, i); __PYX_ERR(0, 134, __pyx_L3_error) }
+        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("_md5_int", 1, 1, 1, i); __PYX_ERR(0, 135, __pyx_L3_error) }
       }
     } else if (unlikely(__pyx_nargs != 1)) {
       goto __pyx_L5_argtuple_error;
     } else {
       values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 134, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 135, __pyx_L3_error)
     }
     __pyx_v_data = ((PyObject*)values[0]);
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("_md5_int", 1, 1, 1, __pyx_nargs); __PYX_ERR(0, 134, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("_md5_int", 1, 1, 1, __pyx_nargs); __PYX_ERR(0, 135, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
@@ -16700,7 +16701,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_data), (&PyBytes_Type), 1, "data", 1))) __PYX_ERR(0, 134, __pyx_L1_error)
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_data), (&PyBytes_Type), 1, "data", 1))) __PYX_ERR(0, 135, __pyx_L1_error)
   __pyx_r = __pyx_pf_19_frequency_codec_cy__md5_int(__pyx_self, __pyx_v_data);
 
   /* function exit code */
@@ -16723,86 +16724,144 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
 static PyObject *__pyx_pf_19_frequency_codec_cy__md5_int(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_data) {
   __Pyx_memviewslice __pyx_v_buf = { 0, 0, { 0 }, { 0 }, { 0 } };
   uint8_t __pyx_v_out[16];
+  uint8_t __pyx_v__empty[1];
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   __Pyx_memviewslice __pyx_t_1 = { 0, 0, { 0 }, { 0 }, { 0 } };
   Py_ssize_t __pyx_t_2;
-  Py_ssize_t __pyx_t_3;
-  PyObject *__pyx_t_4 = NULL;
-  PyObject *__pyx_t_5 = NULL;
+  int __pyx_t_3;
+  Py_ssize_t __pyx_t_4;
+  int __pyx_t_5;
   PyObject *__pyx_t_6 = NULL;
   PyObject *__pyx_t_7 = NULL;
   PyObject *__pyx_t_8 = NULL;
-  size_t __pyx_t_9;
+  PyObject *__pyx_t_9 = NULL;
+  PyObject *__pyx_t_10 = NULL;
+  size_t __pyx_t_11;
   int __pyx_lineno = 0;
   const char *__pyx_filename = NULL;
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("_md5_int", 0);
 
-  /* "_frequency_codec_cy.pyx":139
+  /* "_frequency_codec_cy.pyx":140
  *      int(hashlib.md5(data).hexdigest(), 16)  MD5
  *     """
  *     cdef const uint8_t[::1] buf = data             # <<<<<<<<<<<<<<
  *     cdef uint8_t out[16]
- *     _md5_full(&buf[0], len(data), out)
+ *     cdef uint8_t _empty[1]
 */
-  __pyx_t_1 = __Pyx_PyObject_to_MemoryviewSlice_dc_nn_uint8_t__const__(__pyx_v_data, 0); if (unlikely(!__pyx_t_1.memview)) __PYX_ERR(0, 139, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyObject_to_MemoryviewSlice_dc_nn_uint8_t__const__(__pyx_v_data, 0); if (unlikely(!__pyx_t_1.memview)) __PYX_ERR(0, 140, __pyx_L1_error)
   __pyx_v_buf = __pyx_t_1;
   __pyx_t_1.memview = NULL;
   __pyx_t_1.data = NULL;
 
-  /* "_frequency_codec_cy.pyx":141
- *     cdef const uint8_t[::1] buf = data
- *     cdef uint8_t out[16]
- *     _md5_full(&buf[0], len(data), out)             # <<<<<<<<<<<<<<
+  /* "_frequency_codec_cy.pyx":146
+ *     #   `_md5_full`  length=0  datarange(0)
+ *     #   ****   1
+ *     if len(data) == 0:             # <<<<<<<<<<<<<<
+ *         _empty[0] = 0
+ *         _md5_full(&_empty[0], 0, out)
+*/
+  if (unlikely(__pyx_v_data == Py_None)) {
+    PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
+    __PYX_ERR(0, 146, __pyx_L1_error)
+  }
+  __pyx_t_2 = __Pyx_PyBytes_GET_SIZE(__pyx_v_data); if (unlikely(__pyx_t_2 == ((Py_ssize_t)-1))) __PYX_ERR(0, 146, __pyx_L1_error)
+  __pyx_t_3 = (__pyx_t_2 == 0);
+  if (__pyx_t_3) {
+
+    /* "_frequency_codec_cy.pyx":147
+ *     #   ****   1
+ *     if len(data) == 0:
+ *         _empty[0] = 0             # <<<<<<<<<<<<<<
+ *         _md5_full(&_empty[0], 0, out)
+ *     else:
+*/
+    (__pyx_v__empty[0]) = 0;
+
+    /* "_frequency_codec_cy.pyx":148
+ *     if len(data) == 0:
+ *         _empty[0] = 0
+ *         _md5_full(&_empty[0], 0, out)             # <<<<<<<<<<<<<<
+ *     else:
+ *         _md5_full(&buf[0], len(data), out)
+*/
+    __pyx_f_19_frequency_codec_cy__md5_full((&(__pyx_v__empty[0])), 0, __pyx_v_out); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 148, __pyx_L1_error)
+
+    /* "_frequency_codec_cy.pyx":146
+ *     #   `_md5_full`  length=0  datarange(0)
+ *     #   ****   1
+ *     if len(data) == 0:             # <<<<<<<<<<<<<<
+ *         _empty[0] = 0
+ *         _md5_full(&_empty[0], 0, out)
+*/
+    goto __pyx_L3;
+  }
+
+  /* "_frequency_codec_cy.pyx":150
+ *         _md5_full(&_empty[0], 0, out)
+ *     else:
+ *         _md5_full(&buf[0], len(data), out)             # <<<<<<<<<<<<<<
  *     return int.from_bytes(bytes(out[:16]), 'big')
  * 
 */
-  __pyx_t_2 = 0;
-  if (unlikely(__pyx_v_data == Py_None)) {
-    PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
-    __PYX_ERR(0, 141, __pyx_L1_error)
+  /*else*/ {
+    __pyx_t_4 = 0;
+    __pyx_t_5 = -1;
+    if (__pyx_t_4 < 0) {
+      __pyx_t_4 += __pyx_v_buf.shape[0];
+      if (unlikely(__pyx_t_4 < 0)) __pyx_t_5 = 0;
+    } else if (unlikely(__pyx_t_4 >= __pyx_v_buf.shape[0])) __pyx_t_5 = 0;
+    if (unlikely(__pyx_t_5 != -1)) {
+      __Pyx_RaiseBufferIndexError(__pyx_t_5);
+      __PYX_ERR(0, 150, __pyx_L1_error)
+    }
+    if (unlikely(__pyx_v_data == Py_None)) {
+      PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
+      __PYX_ERR(0, 150, __pyx_L1_error)
+    }
+    __pyx_t_2 = __Pyx_PyBytes_GET_SIZE(__pyx_v_data); if (unlikely(__pyx_t_2 == ((Py_ssize_t)-1))) __PYX_ERR(0, 150, __pyx_L1_error)
+    __pyx_f_19_frequency_codec_cy__md5_full((&(*((uint8_t const  *) ( /* dim=0 */ ((char *) (((uint8_t const  *) __pyx_v_buf.data) + __pyx_t_4)) )))), __pyx_t_2, __pyx_v_out); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 150, __pyx_L1_error)
   }
-  __pyx_t_3 = __Pyx_PyBytes_GET_SIZE(__pyx_v_data); if (unlikely(__pyx_t_3 == ((Py_ssize_t)-1))) __PYX_ERR(0, 141, __pyx_L1_error)
-  __pyx_f_19_frequency_codec_cy__md5_full((&(*((uint8_t const  *) ( /* dim=0 */ ((char *) (((uint8_t const  *) __pyx_v_buf.data) + __pyx_t_2)) )))), __pyx_t_3, __pyx_v_out); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 141, __pyx_L1_error)
+  __pyx_L3:;
 
-  /* "_frequency_codec_cy.pyx":142
- *     cdef uint8_t out[16]
- *     _md5_full(&buf[0], len(data), out)
+  /* "_frequency_codec_cy.pyx":151
+ *     else:
+ *         _md5_full(&buf[0], len(data), out)
  *     return int.from_bytes(bytes(out[:16]), 'big')             # <<<<<<<<<<<<<<
  * 
  * 
 */
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_5 = ((PyObject *)(&PyLong_Type));
-  __Pyx_INCREF(__pyx_t_5);
-  __pyx_t_7 = NULL;
-  __pyx_t_8 = __Pyx_PyBytes_FromStringAndSize(((char const *)__pyx_v_out) + 0, 16 - 0); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 142, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_8);
-  __pyx_t_9 = 1;
+  __pyx_t_7 = ((PyObject *)(&PyLong_Type));
+  __Pyx_INCREF(__pyx_t_7);
+  __pyx_t_9 = NULL;
+  __pyx_t_10 = __Pyx_PyBytes_FromStringAndSize(((char const *)__pyx_v_out) + 0, 16 - 0); if (unlikely(!__pyx_t_10)) __PYX_ERR(0, 151, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_10);
+  __pyx_t_11 = 1;
   {
-    PyObject *__pyx_callargs[2] = {__pyx_t_7, __pyx_t_8};
-    __pyx_t_6 = __Pyx_PyObject_FastCall((PyObject*)(&PyBytes_Type), __pyx_callargs+__pyx_t_9, (2-__pyx_t_9) | (__pyx_t_9*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET));
+    PyObject *__pyx_callargs[2] = {__pyx_t_9, __pyx_t_10};
+    __pyx_t_8 = __Pyx_PyObject_FastCall((PyObject*)(&PyBytes_Type), __pyx_callargs+__pyx_t_11, (2-__pyx_t_11) | (__pyx_t_11*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET));
+    __Pyx_XDECREF(__pyx_t_9); __pyx_t_9 = 0;
+    __Pyx_DECREF(__pyx_t_10); __pyx_t_10 = 0;
+    if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 151, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_8);
+  }
+  __pyx_t_11 = 0;
+  {
+    PyObject *__pyx_callargs[3] = {__pyx_t_7, __pyx_t_8, __pyx_mstate_global->__pyx_n_u_big};
+    __pyx_t_6 = __Pyx_PyObject_FastCallMethod((PyObject*)__pyx_mstate_global->__pyx_n_u_from_bytes, __pyx_callargs+__pyx_t_11, (3-__pyx_t_11) | (1*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET));
     __Pyx_XDECREF(__pyx_t_7); __pyx_t_7 = 0;
     __Pyx_DECREF(__pyx_t_8); __pyx_t_8 = 0;
-    if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 142, __pyx_L1_error)
+    if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 151, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
   }
-  __pyx_t_9 = 0;
-  {
-    PyObject *__pyx_callargs[3] = {__pyx_t_5, __pyx_t_6, __pyx_mstate_global->__pyx_n_u_big};
-    __pyx_t_4 = __Pyx_PyObject_FastCallMethod((PyObject*)__pyx_mstate_global->__pyx_n_u_from_bytes, __pyx_callargs+__pyx_t_9, (3-__pyx_t_9) | (1*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET));
-    __Pyx_XDECREF(__pyx_t_5); __pyx_t_5 = 0;
-    __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 142, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_4);
-  }
-  if (__Pyx_PyInt_FromNumber(&__pyx_t_4, NULL, 1) < (0)) __PYX_ERR(0, 142, __pyx_L1_error)
-  __pyx_r = ((PyObject*)__pyx_t_4);
-  __pyx_t_4 = 0;
+  if (__Pyx_PyInt_FromNumber(&__pyx_t_6, NULL, 1) < (0)) __PYX_ERR(0, 151, __pyx_L1_error)
+  __pyx_r = ((PyObject*)__pyx_t_6);
+  __pyx_t_6 = 0;
   goto __pyx_L0;
 
-  /* "_frequency_codec_cy.pyx":134
+  /* "_frequency_codec_cy.pyx":135
  * 
  * 
  * def _md5_int(bytes data) -> int:             # <<<<<<<<<<<<<<
@@ -16813,11 +16872,11 @@ static PyObject *__pyx_pf_19_frequency_codec_cy__md5_int(CYTHON_UNUSED PyObject 
   /* function exit code */
   __pyx_L1_error:;
   __PYX_XCLEAR_MEMVIEW(&__pyx_t_1, 1);
-  __Pyx_XDECREF(__pyx_t_4);
-  __Pyx_XDECREF(__pyx_t_5);
   __Pyx_XDECREF(__pyx_t_6);
   __Pyx_XDECREF(__pyx_t_7);
   __Pyx_XDECREF(__pyx_t_8);
+  __Pyx_XDECREF(__pyx_t_9);
+  __Pyx_XDECREF(__pyx_t_10);
   __Pyx_AddTraceback("_frequency_codec_cy._md5_int", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
@@ -16827,7 +16886,7 @@ static PyObject *__pyx_pf_19_frequency_codec_cy__md5_int(CYTHON_UNUSED PyObject 
   return __pyx_r;
 }
 
-/* "_frequency_codec_cy.pyx":145
+/* "_frequency_codec_cy.pyx":154
  * 
  * 
  * def encode_cy(value: str, keywords: list = None) -> float:             # <<<<<<<<<<<<<<
@@ -16876,35 +16935,35 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   {
     PyObject ** const __pyx_pyargnames[] = {&__pyx_mstate_global->__pyx_n_u_value,&__pyx_mstate_global->__pyx_n_u_keywords,0};
     const Py_ssize_t __pyx_kwds_len = (__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
-    if (unlikely(__pyx_kwds_len < 0)) __PYX_ERR(0, 145, __pyx_L3_error)
+    if (unlikely(__pyx_kwds_len < 0)) __PYX_ERR(0, 154, __pyx_L3_error)
     if (__pyx_kwds_len > 0) {
       switch (__pyx_nargs) {
         case  2:
         values[1] = __Pyx_ArgRef_FASTCALL(__pyx_args, 1);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 145, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 154, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  1:
         values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 145, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 154, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  0: break;
         default: goto __pyx_L5_argtuple_error;
       }
       const Py_ssize_t kwd_pos_args = __pyx_nargs;
-      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "encode_cy", 0) < (0)) __PYX_ERR(0, 145, __pyx_L3_error)
+      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "encode_cy", 0) < (0)) __PYX_ERR(0, 154, __pyx_L3_error)
       if (!values[1]) values[1] = __Pyx_NewRef(((PyObject*)Py_None));
       for (Py_ssize_t i = __pyx_nargs; i < 1; i++) {
-        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("encode_cy", 0, 1, 2, i); __PYX_ERR(0, 145, __pyx_L3_error) }
+        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("encode_cy", 0, 1, 2, i); __PYX_ERR(0, 154, __pyx_L3_error) }
       }
     } else {
       switch (__pyx_nargs) {
         case  2:
         values[1] = __Pyx_ArgRef_FASTCALL(__pyx_args, 1);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 145, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 154, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  1:
         values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 145, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 154, __pyx_L3_error)
         break;
         default: goto __pyx_L5_argtuple_error;
       }
@@ -16915,7 +16974,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("encode_cy", 0, 1, 2, __pyx_nargs); __PYX_ERR(0, 145, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("encode_cy", 0, 1, 2, __pyx_nargs); __PYX_ERR(0, 154, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
@@ -16926,8 +16985,8 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_value), (&PyUnicode_Type), 0, "value", 2))) __PYX_ERR(0, 145, __pyx_L1_error)
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_keywords), (&PyList_Type), 1, "keywords", 2))) __PYX_ERR(0, 145, __pyx_L1_error)
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_value), (&PyUnicode_Type), 0, "value", 2))) __PYX_ERR(0, 154, __pyx_L1_error)
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_keywords), (&PyList_Type), 1, "keywords", 2))) __PYX_ERR(0, 154, __pyx_L1_error)
   __pyx_r = __pyx_pf_19_frequency_codec_cy_2encode_cy(__pyx_self, __pyx_v_value, __pyx_v_keywords);
 
   /* function exit code */
@@ -16981,7 +17040,7 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_2encode_cy(CYTHON_UNUSED PyObjec
   __Pyx_RefNannySetupContext("encode_cy", 0);
   __Pyx_INCREF(__pyx_v_keywords);
 
-  /* "_frequency_codec_cy.pyx":162
+  /* "_frequency_codec_cy.pyx":171
  *          [0.0, 100.0]
  *     """
  *     if not value:             # <<<<<<<<<<<<<<
@@ -16990,14 +17049,14 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_2encode_cy(CYTHON_UNUSED PyObjec
 */
   {
     Py_ssize_t __pyx_temp = __Pyx_PyUnicode_IS_TRUE(__pyx_v_value);
-    if (unlikely(((!CYTHON_ASSUME_SAFE_SIZE) && __pyx_temp < 0))) __PYX_ERR(0, 162, __pyx_L1_error)
+    if (unlikely(((!CYTHON_ASSUME_SAFE_SIZE) && __pyx_temp < 0))) __PYX_ERR(0, 171, __pyx_L1_error)
     __pyx_t_1 = (__pyx_temp != 0);
   }
 
   __pyx_t_2 = (!__pyx_t_1);
   if (__pyx_t_2) {
 
-    /* "_frequency_codec_cy.pyx":163
+    /* "_frequency_codec_cy.pyx":172
  *     """
  *     if not value:
  *         return 0.0             # <<<<<<<<<<<<<<
@@ -17009,7 +17068,7 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_2encode_cy(CYTHON_UNUSED PyObjec
     __pyx_r = __pyx_mstate_global->__pyx_float_0_0;
     goto __pyx_L0;
 
-    /* "_frequency_codec_cy.pyx":162
+    /* "_frequency_codec_cy.pyx":171
  *          [0.0, 100.0]
  *     """
  *     if not value:             # <<<<<<<<<<<<<<
@@ -17018,7 +17077,7 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_2encode_cy(CYTHON_UNUSED PyObjec
 */
   }
 
-  /* "_frequency_codec_cy.pyx":166
+  /* "_frequency_codec_cy.pyx":175
  * 
  *     # 1:
  *     if not keywords:             # <<<<<<<<<<<<<<
@@ -17029,14 +17088,14 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_2encode_cy(CYTHON_UNUSED PyObjec
   else
   {
     Py_ssize_t __pyx_temp = __Pyx_PyList_GET_SIZE(__pyx_v_keywords);
-    if (unlikely(((!CYTHON_ASSUME_SAFE_SIZE) && __pyx_temp < 0))) __PYX_ERR(0, 166, __pyx_L1_error)
+    if (unlikely(((!CYTHON_ASSUME_SAFE_SIZE) && __pyx_temp < 0))) __PYX_ERR(0, 175, __pyx_L1_error)
     __pyx_t_2 = (__pyx_temp != 0);
   }
 
   __pyx_t_1 = (!__pyx_t_2);
   if (__pyx_t_1) {
 
-    /* "_frequency_codec_cy.pyx":167
+    /* "_frequency_codec_cy.pyx":176
  *     # 1:
  *     if not keywords:
  *         text = str(value)             # <<<<<<<<<<<<<<
@@ -17046,28 +17105,28 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_2encode_cy(CYTHON_UNUSED PyObjec
     __Pyx_INCREF(__pyx_v_value);
     __pyx_v_text = __pyx_v_value;
 
-    /* "_frequency_codec_cy.pyx":168
+    /* "_frequency_codec_cy.pyx":177
  *     if not keywords:
  *         text = str(value)
  *         raw_words = text.replace("", " ").replace("", " ").replace("", " ").split()             # <<<<<<<<<<<<<<
  *         keywords = [w for w in raw_words if len(w) >= 2][:3]
  * 
 */
-    __pyx_t_3 = PyUnicode_Replace(__pyx_v_text, __pyx_mstate_global->__pyx_kp_u__6, __pyx_mstate_global->__pyx_kp_u__7, -1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 168, __pyx_L1_error)
+    __pyx_t_3 = PyUnicode_Replace(__pyx_v_text, __pyx_mstate_global->__pyx_kp_u__6, __pyx_mstate_global->__pyx_kp_u__7, -1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 177, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
-    __pyx_t_4 = PyUnicode_Replace(((PyObject*)__pyx_t_3), __pyx_mstate_global->__pyx_kp_u__8, __pyx_mstate_global->__pyx_kp_u__7, -1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 168, __pyx_L1_error)
+    __pyx_t_4 = PyUnicode_Replace(((PyObject*)__pyx_t_3), __pyx_mstate_global->__pyx_kp_u__8, __pyx_mstate_global->__pyx_kp_u__7, -1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 177, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-    __pyx_t_3 = PyUnicode_Replace(((PyObject*)__pyx_t_4), __pyx_mstate_global->__pyx_n_u__9, __pyx_mstate_global->__pyx_kp_u__7, -1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 168, __pyx_L1_error)
+    __pyx_t_3 = PyUnicode_Replace(((PyObject*)__pyx_t_4), __pyx_mstate_global->__pyx_n_u__9, __pyx_mstate_global->__pyx_kp_u__7, -1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 177, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-    __pyx_t_4 = PyUnicode_Split(((PyObject*)__pyx_t_3), ((PyObject *)NULL), -1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 168, __pyx_L1_error)
+    __pyx_t_4 = PyUnicode_Split(((PyObject*)__pyx_t_3), ((PyObject *)NULL), -1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 177, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
     __pyx_v_raw_words = ((PyObject*)__pyx_t_4);
     __pyx_t_4 = 0;
 
-    /* "_frequency_codec_cy.pyx":169
+    /* "_frequency_codec_cy.pyx":178
  *         text = str(value)
  *         raw_words = text.replace("", " ").replace("", " ").replace("", " ").split()
  *         keywords = [w for w in raw_words if len(w) >= 2][:3]             # <<<<<<<<<<<<<<
@@ -17075,7 +17134,7 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_2encode_cy(CYTHON_UNUSED PyObjec
  *     if not keywords:
 */
     { /* enter inner scope */
-      __pyx_t_4 = PyList_New(0); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 169, __pyx_L7_error)
+      __pyx_t_4 = PyList_New(0); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 178, __pyx_L7_error)
       __Pyx_GOTREF(__pyx_t_4);
       __pyx_t_3 = __pyx_v_raw_words; __Pyx_INCREF(__pyx_t_3);
       __pyx_t_5 = 0;
@@ -17083,20 +17142,20 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_2encode_cy(CYTHON_UNUSED PyObjec
         {
           Py_ssize_t __pyx_temp = __Pyx_PyList_GET_SIZE(__pyx_t_3);
           #if !CYTHON_ASSUME_SAFE_SIZE
-          if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 169, __pyx_L7_error)
+          if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 178, __pyx_L7_error)
           #endif
           if (__pyx_t_5 >= __pyx_temp) break;
         }
         __pyx_t_6 = __Pyx_PyList_GET_ITEM_REF(__pyx_t_3, __pyx_t_5, __Pyx_ReferenceSharing_OwnStrongReference);
         ++__pyx_t_5;
-        if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 169, __pyx_L7_error)
+        if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 178, __pyx_L7_error)
         __Pyx_GOTREF(__pyx_t_6);
         __Pyx_XDECREF_SET(__pyx_7genexpr__pyx_v_w, __pyx_t_6);
         __pyx_t_6 = 0;
-        __pyx_t_7 = PyObject_Length(__pyx_7genexpr__pyx_v_w); if (unlikely(__pyx_t_7 == ((Py_ssize_t)-1))) __PYX_ERR(0, 169, __pyx_L7_error)
+        __pyx_t_7 = PyObject_Length(__pyx_7genexpr__pyx_v_w); if (unlikely(__pyx_t_7 == ((Py_ssize_t)-1))) __PYX_ERR(0, 178, __pyx_L7_error)
         __pyx_t_1 = (__pyx_t_7 >= 2);
         if (__pyx_t_1) {
-          if (unlikely(__Pyx_ListComp_Append(__pyx_t_4, (PyObject*)__pyx_7genexpr__pyx_v_w))) __PYX_ERR(0, 169, __pyx_L7_error)
+          if (unlikely(__Pyx_ListComp_Append(__pyx_t_4, (PyObject*)__pyx_7genexpr__pyx_v_w))) __PYX_ERR(0, 178, __pyx_L7_error)
         }
       }
       __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
@@ -17107,13 +17166,13 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_2encode_cy(CYTHON_UNUSED PyObjec
       goto __pyx_L1_error;
       __pyx_L12_exit_scope:;
     } /* exit inner scope */
-    __pyx_t_3 = __Pyx_PyList_GetSlice(__pyx_t_4, 0, 3); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 169, __pyx_L1_error)
+    __pyx_t_3 = __Pyx_PyList_GetSlice(__pyx_t_4, 0, 3); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 178, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
     __Pyx_DECREF_SET(__pyx_v_keywords, ((PyObject*)__pyx_t_3));
     __pyx_t_3 = 0;
 
-    /* "_frequency_codec_cy.pyx":166
+    /* "_frequency_codec_cy.pyx":175
  * 
  *     # 1:
  *     if not keywords:             # <<<<<<<<<<<<<<
@@ -17122,7 +17181,7 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_2encode_cy(CYTHON_UNUSED PyObjec
 */
   }
 
-  /* "_frequency_codec_cy.pyx":171
+  /* "_frequency_codec_cy.pyx":180
  *         keywords = [w for w in raw_words if len(w) >= 2][:3]
  * 
  *     if not keywords:             # <<<<<<<<<<<<<<
@@ -17133,27 +17192,27 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_2encode_cy(CYTHON_UNUSED PyObjec
   else
   {
     Py_ssize_t __pyx_temp = __Pyx_PyList_GET_SIZE(__pyx_v_keywords);
-    if (unlikely(((!CYTHON_ASSUME_SAFE_SIZE) && __pyx_temp < 0))) __PYX_ERR(0, 171, __pyx_L1_error)
+    if (unlikely(((!CYTHON_ASSUME_SAFE_SIZE) && __pyx_temp < 0))) __PYX_ERR(0, 180, __pyx_L1_error)
     __pyx_t_1 = (__pyx_temp != 0);
   }
 
   __pyx_t_2 = (!__pyx_t_1);
   if (__pyx_t_2) {
 
-    /* "_frequency_codec_cy.pyx":173
+    /* "_frequency_codec_cy.pyx":182
  *     if not keywords:
  *         #
  *         raw_anchor = len(str(value)) * 1.7             # <<<<<<<<<<<<<<
  *     else:
  *         # 2: C MD5
 */
-    __pyx_t_5 = __Pyx_PyUnicode_GET_LENGTH(__pyx_v_value); if (unlikely(__pyx_t_5 == ((Py_ssize_t)-1))) __PYX_ERR(0, 173, __pyx_L1_error)
-    __pyx_t_3 = PyFloat_FromDouble((__pyx_t_5 * 1.7)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 173, __pyx_L1_error)
+    __pyx_t_5 = __Pyx_PyUnicode_GET_LENGTH(__pyx_v_value); if (unlikely(__pyx_t_5 == ((Py_ssize_t)-1))) __PYX_ERR(0, 182, __pyx_L1_error)
+    __pyx_t_3 = PyFloat_FromDouble((__pyx_t_5 * 1.7)); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 182, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
     __pyx_v_raw_anchor = __pyx_t_3;
     __pyx_t_3 = 0;
 
-    /* "_frequency_codec_cy.pyx":171
+    /* "_frequency_codec_cy.pyx":180
  *         keywords = [w for w in raw_words if len(w) >= 2][:3]
  * 
  *     if not keywords:             # <<<<<<<<<<<<<<
@@ -17163,7 +17222,7 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_2encode_cy(CYTHON_UNUSED PyObjec
     goto __pyx_L13;
   }
 
-  /* "_frequency_codec_cy.pyx":176
+  /* "_frequency_codec_cy.pyx":185
  *     else:
  *         # 2: C MD5
  *         kw_hash_list = []             # <<<<<<<<<<<<<<
@@ -17171,12 +17230,12 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_2encode_cy(CYTHON_UNUSED PyObjec
  *             kw_clean = kw.lower()
 */
   /*else*/ {
-    __pyx_t_3 = PyList_New(0); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 176, __pyx_L1_error)
+    __pyx_t_3 = PyList_New(0); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 185, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
     __pyx_v_kw_hash_list = ((PyObject*)__pyx_t_3);
     __pyx_t_3 = 0;
 
-    /* "_frequency_codec_cy.pyx":177
+    /* "_frequency_codec_cy.pyx":186
  *         # 2: C MD5
  *         kw_hash_list = []
  *         for kw in keywords:             # <<<<<<<<<<<<<<
@@ -17185,7 +17244,7 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_2encode_cy(CYTHON_UNUSED PyObjec
 */
     if (unlikely(__pyx_v_keywords == Py_None)) {
       PyErr_SetString(PyExc_TypeError, "'NoneType' object is not iterable");
-      __PYX_ERR(0, 177, __pyx_L1_error)
+      __PYX_ERR(0, 186, __pyx_L1_error)
     }
     __pyx_t_3 = __pyx_v_keywords; __Pyx_INCREF(__pyx_t_3);
     __pyx_t_5 = 0;
@@ -17193,18 +17252,18 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_2encode_cy(CYTHON_UNUSED PyObjec
       {
         Py_ssize_t __pyx_temp = __Pyx_PyList_GET_SIZE(__pyx_t_3);
         #if !CYTHON_ASSUME_SAFE_SIZE
-        if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 177, __pyx_L1_error)
+        if (unlikely((__pyx_temp < 0))) __PYX_ERR(0, 186, __pyx_L1_error)
         #endif
         if (__pyx_t_5 >= __pyx_temp) break;
       }
       __pyx_t_4 = __Pyx_PyList_GET_ITEM_REF(__pyx_t_3, __pyx_t_5, __Pyx_ReferenceSharing_OwnStrongReference);
       ++__pyx_t_5;
-      if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 177, __pyx_L1_error)
+      if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 186, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_4);
       __Pyx_XDECREF_SET(__pyx_v_kw, __pyx_t_4);
       __pyx_t_4 = 0;
 
-      /* "_frequency_codec_cy.pyx":178
+      /* "_frequency_codec_cy.pyx":187
  *         kw_hash_list = []
  *         for kw in keywords:
  *             kw_clean = kw.lower()             # <<<<<<<<<<<<<<
@@ -17218,13 +17277,13 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_2encode_cy(CYTHON_UNUSED PyObjec
         PyObject *__pyx_callargs[2] = {__pyx_t_6, NULL};
         __pyx_t_4 = __Pyx_PyObject_FastCallMethod((PyObject*)__pyx_mstate_global->__pyx_n_u_lower, __pyx_callargs+__pyx_t_8, (1-__pyx_t_8) | (1*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET));
         __Pyx_XDECREF(__pyx_t_6); __pyx_t_6 = 0;
-        if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 178, __pyx_L1_error)
+        if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 187, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_4);
       }
       __Pyx_XDECREF_SET(__pyx_v_kw_clean, __pyx_t_4);
       __pyx_t_4 = 0;
 
-      /* "_frequency_codec_cy.pyx":179
+      /* "_frequency_codec_cy.pyx":188
  *         for kw in keywords:
  *             kw_clean = kw.lower()
  *             kw_bytes = kw_clean.encode('utf-8')             # <<<<<<<<<<<<<<
@@ -17238,13 +17297,13 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_2encode_cy(CYTHON_UNUSED PyObjec
         PyObject *__pyx_callargs[2] = {__pyx_t_6, __pyx_mstate_global->__pyx_kp_u_utf_8};
         __pyx_t_4 = __Pyx_PyObject_FastCallMethod((PyObject*)__pyx_mstate_global->__pyx_n_u_encode, __pyx_callargs+__pyx_t_8, (2-__pyx_t_8) | (1*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET));
         __Pyx_XDECREF(__pyx_t_6); __pyx_t_6 = 0;
-        if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 179, __pyx_L1_error)
+        if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 188, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_4);
       }
       __Pyx_XDECREF_SET(__pyx_v_kw_bytes, __pyx_t_4);
       __pyx_t_4 = 0;
 
-      /* "_frequency_codec_cy.pyx":180
+      /* "_frequency_codec_cy.pyx":189
  *             kw_clean = kw.lower()
  *             kw_bytes = kw_clean.encode('utf-8')
  *             kw_hash = _md5_int(kw_bytes)             # <<<<<<<<<<<<<<
@@ -17252,7 +17311,7 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_2encode_cy(CYTHON_UNUSED PyObjec
  * 
 */
       __pyx_t_6 = NULL;
-      __Pyx_GetModuleGlobalName(__pyx_t_9, __pyx_mstate_global->__pyx_n_u_md5_int); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 180, __pyx_L1_error)
+      __Pyx_GetModuleGlobalName(__pyx_t_9, __pyx_mstate_global->__pyx_n_u_md5_int); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 189, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_9);
       __pyx_t_8 = 1;
       #if CYTHON_UNPACK_METHODS
@@ -17271,22 +17330,22 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_2encode_cy(CYTHON_UNUSED PyObjec
         __pyx_t_4 = __Pyx_PyObject_FastCall((PyObject*)__pyx_t_9, __pyx_callargs+__pyx_t_8, (2-__pyx_t_8) | (__pyx_t_8*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET));
         __Pyx_XDECREF(__pyx_t_6); __pyx_t_6 = 0;
         __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
-        if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 180, __pyx_L1_error)
+        if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 189, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_4);
       }
       __Pyx_XDECREF_SET(__pyx_v_kw_hash, __pyx_t_4);
       __pyx_t_4 = 0;
 
-      /* "_frequency_codec_cy.pyx":181
+      /* "_frequency_codec_cy.pyx":190
  *             kw_bytes = kw_clean.encode('utf-8')
  *             kw_hash = _md5_int(kw_bytes)
  *             kw_hash_list.append(kw_hash)             # <<<<<<<<<<<<<<
  * 
  *         hash_avg = sum(kw_hash_list) / len(kw_hash_list)
 */
-      __pyx_t_10 = __Pyx_PyList_Append(__pyx_v_kw_hash_list, __pyx_v_kw_hash); if (unlikely(__pyx_t_10 == ((int)-1))) __PYX_ERR(0, 181, __pyx_L1_error)
+      __pyx_t_10 = __Pyx_PyList_Append(__pyx_v_kw_hash_list, __pyx_v_kw_hash); if (unlikely(__pyx_t_10 == ((int)-1))) __PYX_ERR(0, 190, __pyx_L1_error)
 
-      /* "_frequency_codec_cy.pyx":177
+      /* "_frequency_codec_cy.pyx":186
  *         # 2: C MD5
  *         kw_hash_list = []
  *         for kw in keywords:             # <<<<<<<<<<<<<<
@@ -17296,7 +17355,7 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_2encode_cy(CYTHON_UNUSED PyObjec
     }
     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-    /* "_frequency_codec_cy.pyx":183
+    /* "_frequency_codec_cy.pyx":192
  *             kw_hash_list.append(kw_hash)
  * 
  *         hash_avg = sum(kw_hash_list) / len(kw_hash_list)             # <<<<<<<<<<<<<<
@@ -17309,56 +17368,56 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_2encode_cy(CYTHON_UNUSED PyObjec
       PyObject *__pyx_callargs[2] = {__pyx_t_4, __pyx_v_kw_hash_list};
       __pyx_t_3 = __Pyx_PyObject_FastCall((PyObject*)__pyx_builtin_sum, __pyx_callargs+__pyx_t_8, (2-__pyx_t_8) | (__pyx_t_8*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET));
       __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
-      if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 183, __pyx_L1_error)
+      if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 192, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_3);
     }
-    __pyx_t_5 = __Pyx_PyList_GET_SIZE(__pyx_v_kw_hash_list); if (unlikely(__pyx_t_5 == ((Py_ssize_t)-1))) __PYX_ERR(0, 183, __pyx_L1_error)
-    __pyx_t_4 = PyLong_FromSsize_t(__pyx_t_5); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 183, __pyx_L1_error)
+    __pyx_t_5 = __Pyx_PyList_GET_SIZE(__pyx_v_kw_hash_list); if (unlikely(__pyx_t_5 == ((Py_ssize_t)-1))) __PYX_ERR(0, 192, __pyx_L1_error)
+    __pyx_t_4 = PyLong_FromSsize_t(__pyx_t_5); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 192, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
-    __pyx_t_9 = __Pyx_PyNumber_Divide(__pyx_t_3, __pyx_t_4); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 183, __pyx_L1_error)
+    __pyx_t_9 = __Pyx_PyNumber_Divide(__pyx_t_3, __pyx_t_4); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 192, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_9);
     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
     __pyx_v_hash_avg = __pyx_t_9;
     __pyx_t_9 = 0;
 
-    /* "_frequency_codec_cy.pyx":185
+    /* "_frequency_codec_cy.pyx":194
  *         hash_avg = sum(kw_hash_list) / len(kw_hash_list)
  *         #
  *         raw_mod = hash_avg % 10000.0             # <<<<<<<<<<<<<<
  *         raw_anchor = raw_mod / 10000.0
  * 
 */
-    __pyx_t_9 = __Pyx_PyFloat_RemainderObjC(__pyx_v_hash_avg, __pyx_mstate_global->__pyx_float_10000_0, 10000.0, 0, 0); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 185, __pyx_L1_error)
+    __pyx_t_9 = __Pyx_PyFloat_RemainderObjC(__pyx_v_hash_avg, __pyx_mstate_global->__pyx_float_10000_0, 10000.0, 0, 0); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 194, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_9);
     __pyx_v_raw_mod = __pyx_t_9;
     __pyx_t_9 = 0;
 
-    /* "_frequency_codec_cy.pyx":186
+    /* "_frequency_codec_cy.pyx":195
  *         #
  *         raw_mod = hash_avg % 10000.0
  *         raw_anchor = raw_mod / 10000.0             # <<<<<<<<<<<<<<
  * 
  *     # 3:  [0, 100]
 */
-    __pyx_t_9 = __Pyx_PyFloat_TrueDivideObjC(__pyx_v_raw_mod, __pyx_mstate_global->__pyx_float_10000_0, 10000.0, 0, 0); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 186, __pyx_L1_error)
+    __pyx_t_9 = __Pyx_PyFloat_TrueDivideObjC(__pyx_v_raw_mod, __pyx_mstate_global->__pyx_float_10000_0, 10000.0, 0, 0); if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 195, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_9);
     __pyx_v_raw_anchor = __pyx_t_9;
     __pyx_t_9 = 0;
   }
   __pyx_L13:;
 
-  /* "_frequency_codec_cy.pyx":190
+  /* "_frequency_codec_cy.pyx":199
  *     # 3:  [0, 100]
  *     # v23.0C doublenogilC
  *     cdef double cdef_raw_anchor = raw_anchor             # <<<<<<<<<<<<<<
  *     cdef double cdef_rad
  *     cdef double cdef_freq
 */
-  __pyx_t_11 = __Pyx_PyFloat_AsDouble(__pyx_v_raw_anchor); if (unlikely((__pyx_t_11 == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 190, __pyx_L1_error)
+  __pyx_t_11 = __Pyx_PyFloat_AsDouble(__pyx_v_raw_anchor); if (unlikely((__pyx_t_11 == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 199, __pyx_L1_error)
   __pyx_v_cdef_raw_anchor = __pyx_t_11;
 
-  /* "_frequency_codec_cy.pyx":194
+  /* "_frequency_codec_cy.pyx":203
  *     cdef double cdef_freq
  * 
  *     with nogil:             # <<<<<<<<<<<<<<
@@ -17371,7 +17430,7 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_2encode_cy(CYTHON_UNUSED PyObjec
       __Pyx_FastGIL_Remember();
       /*try:*/ {
 
-        /* "_frequency_codec_cy.pyx":195
+        /* "_frequency_codec_cy.pyx":204
  * 
  *     with nogil:
  *         cdef_rad = cdef_raw_anchor * PI_CONST * 0.9             # <<<<<<<<<<<<<<
@@ -17380,7 +17439,7 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_2encode_cy(CYTHON_UNUSED PyObjec
 */
         __pyx_v_cdef_rad = ((__pyx_v_cdef_raw_anchor * __pyx_v_19_frequency_codec_cy_PI_CONST) * 0.9);
 
-        /* "_frequency_codec_cy.pyx":196
+        /* "_frequency_codec_cy.pyx":205
  *     with nogil:
  *         cdef_rad = cdef_raw_anchor * PI_CONST * 0.9
  *         cdef_freq = sin(cdef_rad) * 50.0 + 50.0             # <<<<<<<<<<<<<<
@@ -17390,7 +17449,7 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_2encode_cy(CYTHON_UNUSED PyObjec
         __pyx_v_cdef_freq = ((sin(__pyx_v_cdef_rad) * 50.0) + 50.0);
       }
 
-      /* "_frequency_codec_cy.pyx":194
+      /* "_frequency_codec_cy.pyx":203
  *     cdef double cdef_freq
  * 
  *     with nogil:             # <<<<<<<<<<<<<<
@@ -17407,7 +17466,7 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_2encode_cy(CYTHON_UNUSED PyObjec
       }
   }
 
-  /* "_frequency_codec_cy.pyx":198
+  /* "_frequency_codec_cy.pyx":207
  *         cdef_freq = sin(cdef_rad) * 50.0 + 50.0
  * 
  *     return round(cdef_freq, 4)             # <<<<<<<<<<<<<<
@@ -17416,7 +17475,7 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_2encode_cy(CYTHON_UNUSED PyObjec
 */
   __Pyx_XDECREF(__pyx_r);
   __pyx_t_4 = NULL;
-  __pyx_t_3 = PyFloat_FromDouble(__pyx_v_cdef_freq); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 198, __pyx_L1_error)
+  __pyx_t_3 = PyFloat_FromDouble(__pyx_v_cdef_freq); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 207, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   __pyx_t_8 = 1;
   {
@@ -17424,14 +17483,14 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_2encode_cy(CYTHON_UNUSED PyObjec
     __pyx_t_9 = __Pyx_PyObject_FastCall((PyObject*)__pyx_builtin_round, __pyx_callargs+__pyx_t_8, (3-__pyx_t_8) | (__pyx_t_8*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET));
     __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-    if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 198, __pyx_L1_error)
+    if (unlikely(!__pyx_t_9)) __PYX_ERR(0, 207, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_9);
   }
   __pyx_r = __pyx_t_9;
   __pyx_t_9 = 0;
   goto __pyx_L0;
 
-  /* "_frequency_codec_cy.pyx":145
+  /* "_frequency_codec_cy.pyx":154
  * 
  * 
  * def encode_cy(value: str, keywords: list = None) -> float:             # <<<<<<<<<<<<<<
@@ -17465,7 +17524,7 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_2encode_cy(CYTHON_UNUSED PyObjec
   return __pyx_r;
 }
 
-/* "_frequency_codec_cy.pyx":201
+/* "_frequency_codec_cy.pyx":210
  * 
  * 
  * def encode_batch_cy(list nodes) -> list:             # <<<<<<<<<<<<<<
@@ -17513,32 +17572,32 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   {
     PyObject ** const __pyx_pyargnames[] = {&__pyx_mstate_global->__pyx_n_u_nodes,0};
     const Py_ssize_t __pyx_kwds_len = (__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
-    if (unlikely(__pyx_kwds_len < 0)) __PYX_ERR(0, 201, __pyx_L3_error)
+    if (unlikely(__pyx_kwds_len < 0)) __PYX_ERR(0, 210, __pyx_L3_error)
     if (__pyx_kwds_len > 0) {
       switch (__pyx_nargs) {
         case  1:
         values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 201, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 210, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  0: break;
         default: goto __pyx_L5_argtuple_error;
       }
       const Py_ssize_t kwd_pos_args = __pyx_nargs;
-      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "encode_batch_cy", 0) < (0)) __PYX_ERR(0, 201, __pyx_L3_error)
+      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "encode_batch_cy", 0) < (0)) __PYX_ERR(0, 210, __pyx_L3_error)
       for (Py_ssize_t i = __pyx_nargs; i < 1; i++) {
-        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("encode_batch_cy", 1, 1, 1, i); __PYX_ERR(0, 201, __pyx_L3_error) }
+        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("encode_batch_cy", 1, 1, 1, i); __PYX_ERR(0, 210, __pyx_L3_error) }
       }
     } else if (unlikely(__pyx_nargs != 1)) {
       goto __pyx_L5_argtuple_error;
     } else {
       values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 201, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 210, __pyx_L3_error)
     }
     __pyx_v_nodes = ((PyObject*)values[0]);
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("encode_batch_cy", 1, 1, 1, __pyx_nargs); __PYX_ERR(0, 201, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("encode_batch_cy", 1, 1, 1, __pyx_nargs); __PYX_ERR(0, 210, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
@@ -17549,7 +17608,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_nodes), (&PyList_Type), 1, "nodes", 1))) __PYX_ERR(0, 201, __pyx_L1_error)
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_nodes), (&PyList_Type), 1, "nodes", 1))) __PYX_ERR(0, 210, __pyx_L1_error)
   __pyx_r = __pyx_pf_19_frequency_codec_cy_4encode_batch_cy(__pyx_self, __pyx_v_nodes);
 
   /* function exit code */
@@ -17593,19 +17652,19 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_4encode_batch_cy(CYTHON_UNUSED P
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("encode_batch_cy", 0);
 
-  /* "_frequency_codec_cy.pyx":216
+  /* "_frequency_codec_cy.pyx":225
  * 
  *     """
  *     cdef list results = []             # <<<<<<<<<<<<<<
  *     cdef dict node
  *     cdef str value
 */
-  __pyx_t_1 = PyList_New(0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 216, __pyx_L1_error)
+  __pyx_t_1 = PyList_New(0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 225, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_v_results = ((PyObject*)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "_frequency_codec_cy.pyx":223
+  /* "_frequency_codec_cy.pyx":232
  *     cdef int i
  * 
  *     for i in range(len(nodes)):             # <<<<<<<<<<<<<<
@@ -17614,14 +17673,14 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_4encode_batch_cy(CYTHON_UNUSED P
 */
   if (unlikely(__pyx_v_nodes == Py_None)) {
     PyErr_SetString(PyExc_TypeError, "object of type 'NoneType' has no len()");
-    __PYX_ERR(0, 223, __pyx_L1_error)
+    __PYX_ERR(0, 232, __pyx_L1_error)
   }
-  __pyx_t_2 = __Pyx_PyList_GET_SIZE(__pyx_v_nodes); if (unlikely(__pyx_t_2 == ((Py_ssize_t)-1))) __PYX_ERR(0, 223, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyList_GET_SIZE(__pyx_v_nodes); if (unlikely(__pyx_t_2 == ((Py_ssize_t)-1))) __PYX_ERR(0, 232, __pyx_L1_error)
   __pyx_t_3 = __pyx_t_2;
   for (__pyx_t_4 = 0; __pyx_t_4 < __pyx_t_3; __pyx_t_4+=1) {
     __pyx_v_i = __pyx_t_4;
 
-    /* "_frequency_codec_cy.pyx":224
+    /* "_frequency_codec_cy.pyx":233
  * 
  *     for i in range(len(nodes)):
  *         node = nodes[i]             # <<<<<<<<<<<<<<
@@ -17630,15 +17689,15 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_4encode_batch_cy(CYTHON_UNUSED P
 */
     if (unlikely(__pyx_v_nodes == Py_None)) {
       PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-      __PYX_ERR(0, 224, __pyx_L1_error)
+      __PYX_ERR(0, 233, __pyx_L1_error)
     }
-    __pyx_t_1 = __Pyx_PyList_GET_ITEM(__pyx_v_nodes, __pyx_v_i);
-    __Pyx_INCREF(__pyx_t_1);
-    if (!(likely(PyDict_CheckExact(__pyx_t_1))||((__pyx_t_1) == Py_None) || __Pyx_RaiseUnexpectedTypeError("dict", __pyx_t_1))) __PYX_ERR(0, 224, __pyx_L1_error)
+    __pyx_t_1 = __Pyx_GetItemInt_List(__pyx_v_nodes, __pyx_v_i, int, 1, __Pyx_PyLong_From_int, 1, 1, 1, 1, __Pyx_ReferenceSharing_FunctionArgument); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 233, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_1);
+    if (!(likely(PyDict_CheckExact(__pyx_t_1))||((__pyx_t_1) == Py_None) || __Pyx_RaiseUnexpectedTypeError("dict", __pyx_t_1))) __PYX_ERR(0, 233, __pyx_L1_error)
     __Pyx_XDECREF_SET(__pyx_v_node, ((PyObject*)__pyx_t_1));
     __pyx_t_1 = 0;
 
-    /* "_frequency_codec_cy.pyx":225
+    /* "_frequency_codec_cy.pyx":234
  *     for i in range(len(nodes)):
  *         node = nodes[i]
  *         value = str(node.get("value", ""))             # <<<<<<<<<<<<<<
@@ -17647,17 +17706,17 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_4encode_batch_cy(CYTHON_UNUSED P
 */
     if (unlikely(__pyx_v_node == Py_None)) {
       PyErr_Format(PyExc_AttributeError, "'NoneType' object has no attribute '%.30s'", "get");
-      __PYX_ERR(0, 225, __pyx_L1_error)
+      __PYX_ERR(0, 234, __pyx_L1_error)
     }
-    __pyx_t_1 = __Pyx_PyDict_GetItemDefault(__pyx_v_node, __pyx_mstate_global->__pyx_n_u_value, __pyx_mstate_global->__pyx_kp_u__10); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 225, __pyx_L1_error)
+    __pyx_t_1 = __Pyx_PyDict_GetItemDefault(__pyx_v_node, __pyx_mstate_global->__pyx_n_u_value, __pyx_mstate_global->__pyx_kp_u__10); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 234, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_1);
-    __pyx_t_5 = __Pyx_PyObject_Unicode(__pyx_t_1); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 225, __pyx_L1_error)
+    __pyx_t_5 = __Pyx_PyObject_Unicode(__pyx_t_1); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 234, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
     __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
     __Pyx_XDECREF_SET(__pyx_v_value, ((PyObject*)__pyx_t_5));
     __pyx_t_5 = 0;
 
-    /* "_frequency_codec_cy.pyx":226
+    /* "_frequency_codec_cy.pyx":235
  *         node = nodes[i]
  *         value = str(node.get("value", ""))
  *         keywords = list(node.get("keywords", []) or [])             # <<<<<<<<<<<<<<
@@ -17666,14 +17725,14 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_4encode_batch_cy(CYTHON_UNUSED P
 */
     if (unlikely(__pyx_v_node == Py_None)) {
       PyErr_Format(PyExc_AttributeError, "'NoneType' object has no attribute '%.30s'", "get");
-      __PYX_ERR(0, 226, __pyx_L1_error)
+      __PYX_ERR(0, 235, __pyx_L1_error)
     }
-    __pyx_t_1 = PyList_New(0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 226, __pyx_L1_error)
+    __pyx_t_1 = PyList_New(0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 235, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_1);
-    __pyx_t_6 = __Pyx_PyDict_GetItemDefault(__pyx_v_node, __pyx_mstate_global->__pyx_n_u_keywords, __pyx_t_1); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 226, __pyx_L1_error)
+    __pyx_t_6 = __Pyx_PyDict_GetItemDefault(__pyx_v_node, __pyx_mstate_global->__pyx_n_u_keywords, __pyx_t_1); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 235, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-    __pyx_t_7 = __Pyx_PyObject_IsTrue(__pyx_t_6); if (unlikely((__pyx_t_7 < 0))) __PYX_ERR(0, 226, __pyx_L1_error)
+    __pyx_t_7 = __Pyx_PyObject_IsTrue(__pyx_t_6); if (unlikely((__pyx_t_7 < 0))) __PYX_ERR(0, 235, __pyx_L1_error)
     if (!__pyx_t_7) {
       __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
     } else {
@@ -17682,19 +17741,19 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_4encode_batch_cy(CYTHON_UNUSED P
       __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
       goto __pyx_L5_bool_binop_done;
     }
-    __pyx_t_6 = PyList_New(0); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 226, __pyx_L1_error)
+    __pyx_t_6 = PyList_New(0); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 235, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_INCREF(__pyx_t_6);
     __pyx_t_5 = __pyx_t_6;
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
     __pyx_L5_bool_binop_done:;
-    __pyx_t_6 = __Pyx_PySequence_ListKeepNew(__pyx_t_5); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 226, __pyx_L1_error)
+    __pyx_t_6 = __Pyx_PySequence_ListKeepNew(__pyx_t_5); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 235, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
     __Pyx_XDECREF_SET(__pyx_v_keywords, ((PyObject*)__pyx_t_6));
     __pyx_t_6 = 0;
 
-    /* "_frequency_codec_cy.pyx":227
+    /* "_frequency_codec_cy.pyx":236
  *         value = str(node.get("value", ""))
  *         keywords = list(node.get("keywords", []) or [])
  *         freq = encode_cy(value, keywords)             # <<<<<<<<<<<<<<
@@ -17702,7 +17761,7 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_4encode_batch_cy(CYTHON_UNUSED P
  * 
 */
     __pyx_t_5 = NULL;
-    __Pyx_GetModuleGlobalName(__pyx_t_1, __pyx_mstate_global->__pyx_n_u_encode_cy); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 227, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_1, __pyx_mstate_global->__pyx_n_u_encode_cy); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 236, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_1);
     __pyx_t_8 = 1;
     #if CYTHON_UNPACK_METHODS
@@ -17721,27 +17780,27 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_4encode_batch_cy(CYTHON_UNUSED P
       __pyx_t_6 = __Pyx_PyObject_FastCall((PyObject*)__pyx_t_1, __pyx_callargs+__pyx_t_8, (3-__pyx_t_8) | (__pyx_t_8*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET));
       __Pyx_XDECREF(__pyx_t_5); __pyx_t_5 = 0;
       __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 227, __pyx_L1_error)
+      if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 236, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_6);
     }
-    __pyx_t_9 = __Pyx_PyFloat_AsFloat(__pyx_t_6); if (unlikely((__pyx_t_9 == (float)-1) && PyErr_Occurred())) __PYX_ERR(0, 227, __pyx_L1_error)
+    __pyx_t_9 = __Pyx_PyFloat_AsFloat(__pyx_t_6); if (unlikely((__pyx_t_9 == (float)-1) && PyErr_Occurred())) __PYX_ERR(0, 236, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
     __pyx_v_freq = __pyx_t_9;
 
-    /* "_frequency_codec_cy.pyx":228
+    /* "_frequency_codec_cy.pyx":237
  *         keywords = list(node.get("keywords", []) or [])
  *         freq = encode_cy(value, keywords)
  *         results.append(freq)             # <<<<<<<<<<<<<<
  * 
  *     return results
 */
-    __pyx_t_6 = PyFloat_FromDouble(__pyx_v_freq); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 228, __pyx_L1_error)
+    __pyx_t_6 = PyFloat_FromDouble(__pyx_v_freq); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 237, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_10 = __Pyx_PyList_Append(__pyx_v_results, __pyx_t_6); if (unlikely(__pyx_t_10 == ((int)-1))) __PYX_ERR(0, 228, __pyx_L1_error)
+    __pyx_t_10 = __Pyx_PyList_Append(__pyx_v_results, __pyx_t_6); if (unlikely(__pyx_t_10 == ((int)-1))) __PYX_ERR(0, 237, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
   }
 
-  /* "_frequency_codec_cy.pyx":230
+  /* "_frequency_codec_cy.pyx":239
  *         results.append(freq)
  * 
  *     return results             # <<<<<<<<<<<<<<
@@ -17751,7 +17810,7 @@ static PyObject *__pyx_pf_19_frequency_codec_cy_4encode_batch_cy(CYTHON_UNUSED P
   __pyx_r = __pyx_v_results;
   goto __pyx_L0;
 
-  /* "_frequency_codec_cy.pyx":201
+  /* "_frequency_codec_cy.pyx":210
  * 
  * 
  * def encode_batch_cy(list nodes) -> list:             # <<<<<<<<<<<<<<
@@ -19064,7 +19123,7 @@ static CYTHON_SMALL_CODE int __pyx_pymod_exec__frequency_codec_cy(PyObject *__py
   __pyx_m = __pyx_t_1;
   #endif
   #if CYTHON_COMPILING_IN_CPYTHON_FREETHREADING
-  PyUnstable_Module_SetGIL(__pyx_m, Py_MOD_GIL_USED);
+  PyUnstable_Module_SetGIL(__pyx_m, Py_MOD_GIL_NOT_USED);
   #endif
   __pyx_mstate = __pyx_mstate_global;
   CYTHON_UNUSED_VAR(__pyx_t_1);
@@ -19610,20 +19669,20 @@ __Pyx_RefNannySetupContext("PyInit__frequency_codec_cy", 0);
   if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_pyx_unpickle_Enum, __pyx_t_4) < (0)) __PYX_ERR(1, 4, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-  /* "_frequency_codec_cy.pyx":12
+  /* "_frequency_codec_cy.pyx":13
  * #   Parity 1 _md5_int == hashlib
  * 
  * import math          #  Python  nogil             # <<<<<<<<<<<<<<
  * 
  * from libc.stdint cimport uint8_t, uint32_t, uint64_t
 */
-  __pyx_t_1 = __Pyx_Import(__pyx_mstate_global->__pyx_n_u_math, 0, 0, NULL, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 12, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_Import(__pyx_mstate_global->__pyx_n_u_math, 0, 0, NULL, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 13, __pyx_L1_error)
   __pyx_t_4 = __pyx_t_1;
   __Pyx_GOTREF(__pyx_t_4);
-  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_math, __pyx_t_4) < (0)) __PYX_ERR(0, 12, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_math, __pyx_t_4) < (0)) __PYX_ERR(0, 13, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-  /* "_frequency_codec_cy.pyx":19
+  /* "_frequency_codec_cy.pyx":20
  * 
  * # PIC doublenogil
  * cdef double PI_CONST = 3.141592653589793             # <<<<<<<<<<<<<<
@@ -19632,7 +19691,7 @@ __Pyx_RefNannySetupContext("PyInit__frequency_codec_cy", 0);
 */
   __pyx_v_19_frequency_codec_cy_PI_CONST = 3.141592653589793;
 
-  /* "_frequency_codec_cy.pyx":24
+  /* "_frequency_codec_cy.pyx":25
  * 
  * cdef uint32_t _MD5_S[64]
  * _MD5_S = [             # <<<<<<<<<<<<<<
@@ -19705,7 +19764,7 @@ __Pyx_RefNannySetupContext("PyInit__frequency_codec_cy", 0);
   __pyx_t_9[63] = 21;
   memcpy(&(__pyx_v_19_frequency_codec_cy__MD5_S[0]), __pyx_t_9, sizeof(__pyx_v_19_frequency_codec_cy__MD5_S[0]) * (64));
 
-  /* "_frequency_codec_cy.pyx":32
+  /* "_frequency_codec_cy.pyx":33
  * 
  * cdef uint32_t _MD5_K[64]
  * _MD5_K = [             # <<<<<<<<<<<<<<
@@ -19778,39 +19837,39 @@ __Pyx_RefNannySetupContext("PyInit__frequency_codec_cy", 0);
   __pyx_t_10[63] = 0xeb86d391;
   memcpy(&(__pyx_v_19_frequency_codec_cy__MD5_K[0]), __pyx_t_10, sizeof(__pyx_v_19_frequency_codec_cy__MD5_K[0]) * (64));
 
-  /* "_frequency_codec_cy.pyx":134
+  /* "_frequency_codec_cy.pyx":135
  * 
  * 
  * def _md5_int(bytes data) -> int:             # <<<<<<<<<<<<<<
  *     """
  *     C  MD5   128
 */
-  __pyx_t_4 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 134, __pyx_L1_error)
+  __pyx_t_4 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 135, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
-  if (PyDict_SetItem(__pyx_t_4, __pyx_mstate_global->__pyx_n_u_return, __pyx_mstate_global->__pyx_n_u_int) < (0)) __PYX_ERR(0, 134, __pyx_L1_error)
-  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_19_frequency_codec_cy_1_md5_int, 0, __pyx_mstate_global->__pyx_n_u_md5_int, NULL, __pyx_mstate_global->__pyx_n_u_frequency_codec_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[0])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 134, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_4, __pyx_mstate_global->__pyx_n_u_return, __pyx_mstate_global->__pyx_n_u_int) < (0)) __PYX_ERR(0, 135, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_19_frequency_codec_cy_1_md5_int, 0, __pyx_mstate_global->__pyx_n_u_md5_int, NULL, __pyx_mstate_global->__pyx_n_u_frequency_codec_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[0])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 135, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_5);
   #endif
   __Pyx_CyFunction_SetAnnotationsDict(__pyx_t_5, __pyx_t_4);
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_md5_int, __pyx_t_5) < (0)) __PYX_ERR(0, 134, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_md5_int, __pyx_t_5) < (0)) __PYX_ERR(0, 135, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
-  /* "_frequency_codec_cy.pyx":145
+  /* "_frequency_codec_cy.pyx":154
  * 
  * 
  * def encode_cy(value: str, keywords: list = None) -> float:             # <<<<<<<<<<<<<<
  *     """
  *     CythonPythonencode()
 */
-  __pyx_t_5 = __Pyx_PyDict_NewPresized(3); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 145, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_PyDict_NewPresized(3); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 154, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
-  if (PyDict_SetItem(__pyx_t_5, __pyx_mstate_global->__pyx_n_u_value, __pyx_mstate_global->__pyx_n_u_str) < (0)) __PYX_ERR(0, 145, __pyx_L1_error)
-  if (PyDict_SetItem(__pyx_t_5, __pyx_mstate_global->__pyx_n_u_keywords, __pyx_mstate_global->__pyx_n_u_list) < (0)) __PYX_ERR(0, 145, __pyx_L1_error)
-  if (PyDict_SetItem(__pyx_t_5, __pyx_mstate_global->__pyx_n_u_return, __pyx_mstate_global->__pyx_n_u_float) < (0)) __PYX_ERR(0, 145, __pyx_L1_error)
-  __pyx_t_4 = __Pyx_CyFunction_New(&__pyx_mdef_19_frequency_codec_cy_3encode_cy, 0, __pyx_mstate_global->__pyx_n_u_encode_cy, NULL, __pyx_mstate_global->__pyx_n_u_frequency_codec_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[1])); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 145, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_5, __pyx_mstate_global->__pyx_n_u_value, __pyx_mstate_global->__pyx_n_u_str) < (0)) __PYX_ERR(0, 154, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_5, __pyx_mstate_global->__pyx_n_u_keywords, __pyx_mstate_global->__pyx_n_u_list) < (0)) __PYX_ERR(0, 154, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_5, __pyx_mstate_global->__pyx_n_u_return, __pyx_mstate_global->__pyx_n_u_float) < (0)) __PYX_ERR(0, 154, __pyx_L1_error)
+  __pyx_t_4 = __Pyx_CyFunction_New(&__pyx_mdef_19_frequency_codec_cy_3encode_cy, 0, __pyx_mstate_global->__pyx_n_u_encode_cy, NULL, __pyx_mstate_global->__pyx_n_u_frequency_codec_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[1])); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 154, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_4);
@@ -19818,33 +19877,33 @@ __Pyx_RefNannySetupContext("PyInit__frequency_codec_cy", 0);
   __Pyx_CyFunction_SetDefaultsTuple(__pyx_t_4, __pyx_mstate_global->__pyx_tuple[1]);
   __Pyx_CyFunction_SetAnnotationsDict(__pyx_t_4, __pyx_t_5);
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
-  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_encode_cy, __pyx_t_4) < (0)) __PYX_ERR(0, 145, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_encode_cy, __pyx_t_4) < (0)) __PYX_ERR(0, 154, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
 
-  /* "_frequency_codec_cy.pyx":201
+  /* "_frequency_codec_cy.pyx":210
  * 
  * 
  * def encode_batch_cy(list nodes) -> list:             # <<<<<<<<<<<<<<
  *     """
  *     v23.0Python
 */
-  __pyx_t_4 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 201, __pyx_L1_error)
+  __pyx_t_4 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 210, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
-  if (PyDict_SetItem(__pyx_t_4, __pyx_mstate_global->__pyx_n_u_return, __pyx_mstate_global->__pyx_n_u_list) < (0)) __PYX_ERR(0, 201, __pyx_L1_error)
-  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_19_frequency_codec_cy_5encode_batch_cy, 0, __pyx_mstate_global->__pyx_n_u_encode_batch_cy, NULL, __pyx_mstate_global->__pyx_n_u_frequency_codec_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[2])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 201, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_4, __pyx_mstate_global->__pyx_n_u_return, __pyx_mstate_global->__pyx_n_u_list) < (0)) __PYX_ERR(0, 210, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_CyFunction_New(&__pyx_mdef_19_frequency_codec_cy_5encode_batch_cy, 0, __pyx_mstate_global->__pyx_n_u_encode_batch_cy, NULL, __pyx_mstate_global->__pyx_n_u_frequency_codec_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[2])); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 210, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_5);
   #endif
   __Pyx_CyFunction_SetAnnotationsDict(__pyx_t_5, __pyx_t_4);
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_encode_batch_cy, __pyx_t_5) < (0)) __PYX_ERR(0, 201, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_encode_batch_cy, __pyx_t_5) < (0)) __PYX_ERR(0, 210, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
 
   /* "_frequency_codec_cy.pyx":1
- * # _frequency_codec_cy.pyx             # <<<<<<<<<<<<<<
+ * # cython: freethreading_compatible=True             # <<<<<<<<<<<<<<
+ * # _frequency_codec_cy.pyx
  * # Cythonv18.0 + v23.0 nogil +  MD5 C
- * # P1-4PythonFrequencyCodec.encode()
 */
   __pyx_t_5 = __Pyx_PyDict_NewPresized(0); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 1, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
@@ -19888,8 +19947,8 @@ __Pyx_RefNannySetupContext("PyInit__frequency_codec_cy", 0);
 
 static int __Pyx_InitCachedBuiltins(__pyx_mstatetype *__pyx_mstate) {
   CYTHON_UNUSED_VAR(__pyx_mstate);
-  __pyx_builtin_sum = __Pyx_GetBuiltinName(__pyx_mstate->__pyx_n_u_sum); if (!__pyx_builtin_sum) __PYX_ERR(0, 183, __pyx_L1_error)
-  __pyx_builtin_round = __Pyx_GetBuiltinName(__pyx_mstate->__pyx_n_u_round); if (!__pyx_builtin_round) __PYX_ERR(0, 198, __pyx_L1_error)
+  __pyx_builtin_sum = __Pyx_GetBuiltinName(__pyx_mstate->__pyx_n_u_sum); if (!__pyx_builtin_sum) __PYX_ERR(0, 192, __pyx_L1_error)
+  __pyx_builtin_round = __Pyx_GetBuiltinName(__pyx_mstate->__pyx_n_u_round); if (!__pyx_builtin_round) __PYX_ERR(0, 207, __pyx_L1_error)
   __pyx_builtin___import__ = __Pyx_GetBuiltinName(__pyx_mstate->__pyx_n_u_import); if (!__pyx_builtin___import__) __PYX_ERR(1, 109, __pyx_L1_error)
   __pyx_builtin_enumerate = __Pyx_GetBuiltinName(__pyx_mstate->__pyx_n_u_enumerate); if (!__pyx_builtin_enumerate) __PYX_ERR(1, 165, __pyx_L1_error)
   __pyx_builtin_Ellipsis = __Pyx_GetBuiltinName(__pyx_mstate->__pyx_n_u_Ellipsis); if (!__pyx_builtin_Ellipsis) __PYX_ERR(1, 418, __pyx_L1_error)
@@ -19940,14 +19999,14 @@ static int __Pyx_InitCachedConstants(__pyx_mstatetype *__pyx_mstate) {
   __Pyx_GOTREF(__pyx_mstate_global->__pyx_slice[0]);
   __Pyx_GIVEREF(__pyx_mstate_global->__pyx_slice[0]);
 
-  /* "_frequency_codec_cy.pyx":145
+  /* "_frequency_codec_cy.pyx":154
  * 
  * 
  * def encode_cy(value: str, keywords: list = None) -> float:             # <<<<<<<<<<<<<<
  *     """
  *     CythonPythonencode()
 */
-  __pyx_mstate_global->__pyx_tuple[1] = PyTuple_Pack(1, Py_None); if (unlikely(!__pyx_mstate_global->__pyx_tuple[1])) __PYX_ERR(0, 145, __pyx_L1_error)
+  __pyx_mstate_global->__pyx_tuple[1] = PyTuple_Pack(1, Py_None); if (unlikely(!__pyx_mstate_global->__pyx_tuple[1])) __PYX_ERR(0, 154, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_mstate_global->__pyx_tuple[1]);
   __Pyx_GIVEREF(__pyx_mstate_global->__pyx_tuple[1]);
   #if CYTHON_IMMORTAL_CONSTANTS
@@ -20007,31 +20066,31 @@ static int __Pyx_InitCachedConstants(__pyx_mstatetype *__pyx_mstate) {
 static int __Pyx_InitConstants(__pyx_mstatetype *__pyx_mstate) {
   CYTHON_UNUSED_VAR(__pyx_mstate);
   {
-    const struct { const unsigned int length: 9; } index[] = {{2},{35},{54},{37},{60},{24},{52},{26},{34},{33},{45},{22},{15},{179},{37},{32},{0},{1},{1},{1},{1},{1},{3},{1},{3},{8},{5},{6},{15},{23},{25},{7},{6},{23},{2},{6},{35},{9},{30},{50},{8},{20},{32},{22},{30},{37},{5},{5},{8},{20},{8},{15},{3},{3},{15},{12},{18},{4},{3},{3},{1},{9},{8},{15},{9},{17},{18},{5},{4},{8},{15},{6},{15},{9},{9},{5},{5},{5},{6},{7},{4},{19},{10},{8},{3},{12},{8},{1},{2},{10},{5},{3},{13},{5},{8},{8},{2},{8},{8},{7},{12},{4},{5},{8},{4},{8},{7},{4},{10},{4},{8},{4},{7},{4},{5},{3},{3},{4},{3},{14},{11},{10},{19},{14},{12},{10},{7},{9},{10},{17},{13},{8},{7},{6},{5},{12},{10},{12},{19},{5},{4},{5},{4},{4},{3},{6},{3},{8},{4},{6},{6},{5},{6},{1},{1},{101},{54},{272},{1}};
+    const struct { const unsigned int length: 9; } index[] = {{2},{35},{54},{37},{60},{24},{52},{26},{34},{33},{45},{22},{15},{179},{37},{32},{0},{1},{1},{1},{1},{1},{3},{1},{3},{8},{5},{6},{15},{23},{25},{7},{6},{23},{2},{6},{35},{9},{30},{50},{8},{20},{32},{22},{30},{37},{5},{5},{8},{20},{8},{15},{3},{3},{15},{12},{18},{4},{3},{3},{1},{9},{8},{15},{9},{17},{18},{5},{4},{8},{15},{6},{6},{15},{9},{9},{5},{5},{5},{6},{7},{4},{19},{10},{8},{3},{12},{8},{1},{2},{10},{5},{3},{13},{5},{8},{8},{2},{8},{8},{7},{12},{4},{5},{8},{4},{8},{7},{4},{10},{4},{8},{4},{7},{4},{5},{3},{3},{4},{3},{14},{11},{10},{19},{14},{12},{10},{7},{9},{10},{17},{13},{8},{7},{6},{5},{12},{10},{12},{19},{5},{4},{5},{4},{4},{3},{6},{3},{8},{4},{6},{6},{5},{6},{1},{1},{101},{95},{272},{1}};
     #if (CYTHON_COMPRESS_STRINGS) == 2 /* compression: bz2 (1530 bytes) */
-const char* const cstring = "BZh91AY&SY\273U\324:\000\000\255\377\377\377\377\377\355~\367~\327\277c\377`\277\377\377\361TD@P@@@D@@@@H\200\300\000P\005[\333'n\004@SM\003\200\325<\251\351\2414\223\364\247\247\250=56\240\310M\251\372\246\023\3202\230\001\250\300#&\0232i\220hL\310\230\233\010E4\311OS\332\220\364\365\t\351\352\236\223&\214!\243\020\006\004\003!\221\223\023\020\003@\304\304\311\241\243@4\320D\214\"\236\223C@\375S\021\352\000\000\003@\000\000\000\000\0002i\223F\200p\000\000\000\000\000\000\0004\000\000\000\000\000\000\000\000%4\211\221\240\200&\232h\001L\201\210\365\r\031\001\240\000\000\000\000\000\323F\215\001l\357k+\251\317\345:\2502\363\006jg\025\317v}\021\242D\204\257\004\316\377\014XQ4I\222A-$f\365<$\330\344\030\241'\032\245\374\343v\204/\200X\260\334\222\026\267\277$\344\317\363\243\224\035>\311\363{R\211\260)\347\237;)\353B\354\256\016\022H\212l\000\234\266 \2279\256\305E\231\006\316\363\"\224<\214\315\2075\375\327\272\022\210{\241}\366R\032\245+%6\007\313\275q,Z\2568\271y\240}.E+H+@\235LU\231\004\342p\365\264\350\247\355,\032\026\246N\0348\357\267Q\220d\t\031\230U\257a\013\314\037\335\302\241Hm<\273gF\332\3500\367\013\256\260\205E\342\267\350h|\003_U\014\301\271\361 h\027\\\037\230\003j\"R\274\225\250\302\0168\007\026\037\311E\030i\243\025\255\014\240\243\251\266\"\207\222\225\216\230\300\256;\325~\271O\231\201\330L&\310\254\310\243\353\037p\310\014\030\261TJ\202\216\322\313hU\t\215T\317\005LT\026\304H\263p\301\031\265\014\200\260\302w&\305\335\354h\236J\317\031gq\300\242\334\325`U\264\276\221\245\223{\013\316\366EQ\256\241\326R\230W[\242\241j]\210\022Eb\212\371\256\205\221\025N\321M\204\335\213\004\005\310\301\322'\212\263w\264\362d\213*\315\327\316b!\332\352\351\354vK\r\256\257\337\023\000\332\347]\244\260\007\302!\036\3462\th3\346\213f\312\022\261D\333%vAX\016\255*\357\263\221\326[ \267\347v\345\343n>3\r\226q\233\206\312\261\204@\277\246\211\244s\272Q\334\332\335\240\364l\366\352\345\333\257\030UV\254U\tG\"\271G\251x\344\204.^\354\316G\203\263\002\214\305\242\022l%`\232""\241\017\020L}\022t\232\261j\273\351(\277\221@\305\t48\211)\026ph\025:\224 \241B7\364\254>\270J\000\210\267[^F\205a\216\275N;\023\205\223M\017\245\226$\211.\216\330\241\244\241\330\302\230\301,\001\210z&*t\032\005\t\232\315\226\344\223\002\304\001ua\376\352\202 \336hk\316\270\231\331]K\361?FP+\230B*\207\202\2168&\350\313\212\021\246\215W\232/%\226\017\r/\233\014\225\366\310I(B\255\326j\"\315\213a\372\251p\342n\2342\215nf\020[~\024'\317X\2614v\337\307\211g:-\265\204k:\034\260kK\365'\020X\316\320PL9\311N-\316\276\274\361-v$~\351&Uo]sn\352\252\324\330\262\264\262B\t\006\021/\305\223<\336\362I)\320bE\215\031\221\205\3624[\0334N\316\0022\203di+\335\004\243\305G\351d\3310\313@\337Z\024r9}dc\233\036\377RAt\232\250P\326\234\306\326\330\212\252hS2&\032\030\262a8g\221c5W\270R\310\272Bxi\204\"\016\222\2703\344(\026\027i\213U\002\200\032\201\030\352\003\032\310xT7P\204\241\350\225\360\204\223B\263\035m \256\312\242\317\034\025\244q\205\020J\373\213\266\240\334\206v+\034\3276\2162\310ky\270<<q\332A\256\372\265\nz\212Fdf@\271\231\315W\002\020\010@\203\263\250\271N\200\3035\232\306)\223*\350\010\034\t\024\221#s\030\370),\333\r5\320\007\344\016\212nC\230\346s\241\001\371!\nI2\004\264Q3\216j\341MQ\264k1\214H\300Q\336\t\347\256\321\255\340xg\231=\270\266\266\254\232\200B\016\315\232\230\024\021S\274\3507\342L\034\203\014\320\314CP5W^\005\227\222\375\262\016\216\261H\032\234d\250V_\007\230\310r\264\\\325\323\274d>W'\262p\205\233f}\270\031\363\246\324 \205\272c\033\023\201\261cQ\225z3F\204\371\365\024L\243)<\020\2235\2269[\020\245n\267\215\022W\2711db\246.l$Ue\352\204\253\001\345K\210\304n4Jt\261\247\013\353\216\207\246\323\277i\262s^H-Pk\2166\375\221\034\244\314isrp\334l\304\374\r\275\033\024[\255[\266\375\246\223c\340\372M\215\303\212`H\300\021I\220\215S\216\026\362H\251&=\024\364\023\034\\\273qFe\270o\365\252\201\006/\206\023cp\360\244\023k\254\340\033&\226\211\017tr\327\217[{\232\"\2047\350n\372\371\322\021IJ\372\3754\256\363\213_\257\207\252\2500R\374\373H\270;\224\210\371L\376""\362?\341r<\020G\372\225SoIs9n\312'ji\275\376w\3067g\221z{<7\261\347F\213;i\026%\305\273t8=\277\343\304\237/[[\026\302M\207\333lO\245\"=\tQ\357\257\241a\3549N\215\313\014cJ^]i6l\277\211V`~\322\314\350m\244\026\024\035&of\252\262\253.@\212\001\222\013~\377%*%\225\226?qw$S\205\t\013\265]C\240";
+const char* const cstring = "BZh91AY&SYF\360r\262\000\000\265\377\377\377\375\377\355~\367\177W\277c\377`\277\377\377\361TD@P@@@D@@@@H\200\300\000P\005mHx\014\224\000\001\206\032\231\023B5<\223S\305<4)\264\323\020\237\245\0323P\304\006\236\240d=G\251\246\232=4h2&j3S'\243A\300\000\000\000\000\000\000\000\000\000\000\000\000\000\000\014\201\246\202\"\237\251\246\244\364\236\247\250\006OQ\223@\000h\032\000\000\000\000\000\000\320=@\007\000\000\000\000\000\000\000\000\000\000\000\000\000\000\0002\004\246\223Bd\231L\230\023Bz\206\324\247\251\240\331G\250\014\200\320\000\000\000\000\000\364\324\310\365\000\344\346\235}\307T}\010\325@\344\276?\250\346#\300\244\253\010\302K\013\210\204su\211\014\030d\000\311\021$\002p#\315aZI\216\362\002\325(\005\202B\306\374c\252D=\256\005\014\357\310\201K7[ep\366w\277@\357p\355W\342Z\253\246\367\230\367!\256\352\232\206\3207\026DU\322\027\342n\021yV\252\364'@\254\3572(\207\207\362\313\344?\246\336\\\242\037\030/\252\355\003\\R\262St?\306\332\322\352\334\255\305v\264\017}qE\240+P\235\306*\314\202q8{\032uSBW\261l\362\200\247L\340\240(\025\021GK3/\246\201\214\212\237i,\004Dz{Q\316\344\211\241\271\377w\337mL\014\206))\340\350y\364\031\203\225\216@\324\204\277\257aZ\321YY+1w\034\022\245\001\261V\242\020\363\320\314t\233\244\223\204\236\010\315\313\023\226\271\022YH\205:\343\320K\205&\242\366\224\344\303\221\026\022m'm*\021\"<O\006\250\261N3qU*\356>QCa\300n\241\014;U!\tL\224\240\022E\"\357\023\247\235M\246rM\231G[@a\313\331y\tc|\257\027\265^\306G\277\2418\302c\256\222\371\341\203\242e\237\202\364ATXP\277Eeh\024\335\2416uv, 4#7H\257F\007o\245\350\311\026\236\277>\303\240\227\247\327\335\350\366\313\033\375\177\343\006a\277\307\243q`\0378\010\367q@\246\323f\270m}!K(:\212h\324+\003\254I\374\r\204q1\240c\372]\274]\301\334w6}\226\356:\316\311\351\010\003/\206\212\244x\374\261\327\277\266\343\335\266c\303\305\325\206\220\234\370tLJ5-\n=l\207(!x\275\351\260\216\377\267\"\354\306\"\022l\351a4\304uJ`\230\375Ut\245\231\311\342:m\253\303\201\270j\262\330\324\242\224\013\003(t\204""\024(F\362\213\017\224%\000Dd\344\331\207\025\201\216\271N\026'1\223\004>\216Y\022$\272;_\r%\016\306\024\305\351^\014C\3251q\320b(I\234\331\253\222^X\200\273\316=\016\304\346\272%6\310\363\211\266\311\237,s\322\376A\313P+\013\023\342#\234\223y)\335(\276\356\254\215\331\024\327'\226\367\331\236\254<hI)J}\254\327E\266\256\303\331T\303jg5\340\224\310@@\245\227q\204\366\006\333Q\364\313\305q^k\246\013\257P\332\345\262PY\245. \263;II0\347;\370z\374\374vA\213\261C\332I2\237{F\206\355\341<Stt\2655JI\006pe\321\253e_\"\211*\334b\205\232*D\262\241\267\030\266\332\333\276E$\332\232\213'AH\360\335\374\272\273*\0357\016Kj\215Ne\201\021\257O/Z\201\242\2159\\\342\234\322\330\331\023\233J\372\321P\332\305\252\025\226\312\026f\236N\305\355\016\220\236[\245(\007IX\366\250`f\242U9;\016\004\260'\340p\222\311\0217evCa\030SH\204\223K\003N\r@\302\323\206x\315bF\220\272\ne\240\321\276M\314\330\306\003\234j\321\244\264\270\275\\\036_(v\240q\312|\005^\005\342\244T\221\241\231\316\032\004\204\206\347\302\334o\301\244z\232\367j\276\252\337\213#\274\236o\035\272\265p\302{\272\362\251\305\217V\017*ng\220\3639\352\310~r\225\350\231\002[n\231\3078x\023L\336q4\214P\314Q\336\n\354\303\021\261\357\274\266T\257T7\026\300\252\220JN\315\256\371\227\0217z\340\264\316\222!\nr\224\345$K\003\256\3613>\206\323\312\2044<\361\016=M\240\311FoQ\220\346\010\320\330_\3372\037\245\312\366VR\267\247\217\031\0336&\352\020K\035\321\026N\007j\322\242\230m\215s\271_R\205\323(\245\036HI\232\266s\006/\204\327#m\026NTZ\230\233\032\033:\023\266J\3450\001\351}\004@\334\321J\336\315Ye\204m\036\373\335\3667_O\2332\241\241I\262;\233\373\2425\2255%\346\347\340\320vi~\373w\242\312\033\330\301\333\221\211\274\355|\337y\332\336\016\212\201C0E\352J'X\317\036e\t\244\307\324Oq1\307\305\325\010\326\272\316^\304\344I\246\2062\235R\004\301\344X\014\241\306\373\201\030\362\021\026%\204Z\352\311\351\263\033o\264\202\034\232\366-`\335D\302\035_\r\376\001\317\276\367\241CZ\366\315\350\2500Z&_\356\"-\217\332#@CK\216\324\027\345\213\344Eg?""\371\363\324d\315\375\031\271\344\370\324\235\203/\226o\0371s\341\234,\315\273\241n{\366\376F\254Z/\344M\036\251\203\240r\225R\347\217\213\2663F(\"\306\026\367\253enV\255F\213\231\332\262\270wd\266\336\205&\264\360\346\365\342\203:\r1\335\306\305j|v\331\007\232\337\343Isbr\235\362\tl\343\007\263\231\276\222N\341\234\333\376.\344\212p\241 \215\340\345d";
     PyObject *data = __Pyx_DecompressString(cstring, 1530, 2);
     if (unlikely(!data)) __PYX_ERR(0, 1, __pyx_L1_error)
     const char* const bytes = __Pyx_PyBytes_AsString(data);
     #if !CYTHON_ASSUME_SAFE_MACROS
     if (likely(bytes)); else { Py_DECREF(data); __PYX_ERR(0, 1, __pyx_L1_error) }
     #endif
-    #elif (CYTHON_COMPRESS_STRINGS) != 0 /* compression: zlib (1391 bytes) */
-const char* const cstring = "x\332}U\275o\0337\024\267\033\273q>\372\025\327I\212\006\005\235\017()b!N\0344(\\\027\212\355\240\036\362\035\007\311DP$%\261>\221\247#O\322e(\202\242\203\206\0167\036:\335\250Q\243\207\016\0313z\364h\240C\307\372O\350{\274\223\3554A\001\213|w\367>~\357\367~\244\277'w\343FCF\244\253d\217\010#-\321\306\021\331\017\215\225\304\272H\tiW\231&F\007\t\341\221dN\022F\352E\220k1G\224%\334h\247\232\261\211-Q\232\264e\333DI\025\2420\025\263V55q\206@\260X\360y\n\017,Y:\225\211{\221r\254\036\310\322\241\000\325\210L\373\377b\225\026\262Oz\312\265\210KBI*\345{\0271m}\033\207!\205\033D\250HrG\204jKm\225\321vml\221+\002;\302\004\205\323z;t\t\261-\006\251]\034\002\270\206\211\010O\\\313\350*\213\"\226l\274\237\316\307\3338\014M\344\244\330\320]\026(A\332F\310\353\310-8KA*\274B U\005\362!\326\312u\322\204\250\261sQ\021\350d}\300\263|\337\367\360\034{0\r\362\300\000[\236\375U\017\004!\013\031\250\272\214\200G`\t'\007E\374\2104y\264\376ha\351\316\022aZ\000\223?Cy\013\350\352<\200\341\300\304!a=V\201\203b\310\240\255\222\215\006ILL\264\004\2300\271\020\374\216\006\270\226\324\304J\207\006\251x\272\231\203\276)\204+\335\254\224\324\251\256\304\350{,\260\262\3720v\276\220\211\265\200\222z\254!\306\271\204\354W}\233\233\332\217\037\202@R]\031\301t\235l\343\263\251#\354\037\253+\225k\377\374\371;\371\353\365\257L\010\252\221\007\354\212\000\0257\372\334\004\001\326\205\tTY\235/\037\321%:\025\250V\376\373z,\207\025\241,\226\227\036\004mD\262\023K\315\023\312an\234\362\244\032&\375&'WqLM/\020\354\000\032\206\231:\251\235W\377\201\010`&E&\201=X\365J\222\345\037\310\215\367\344\243\r\214\256\301\342\300\021J#)b.)%\"\3664h\243\027`\224]\305\002\370\312\225V\016>\026d\254,\027\347S\274\323\334\373\357Pd\007=\276\363\375\340m|\300;\013\002\303\375!GlD0\307\252\037\370Z\250\023s\224wD5v\215\205;\265\247\253\033\033\353A\240B\253,\245\217\222>\374\326@\211\364\001P\364D6\236\026\234J\024r\365P\323\177\377\361\033\314k\234\235\026\322\240\264T\026\360\301l\242\2712Un\"\023\203P\245\2553+\353\252""\t\256\234\003\177~\\\336\210\230(\367\036$\340-\003\211\274p)\035\033M\351p&\370\010\251\250\002\341F\214\313:\343[\034\364\351\260kJ\005\342\246\002\217\004\205n\n\322\001<\250\241Xi\2359\336\002a\224\217h\304m\177\004e\024\231\250\021\260\246m\004\2069\230y\333\257x\320\021\351\007\324\205\367\034\255'N\002\320F\2549E\230~\261\005\007-f[\224u\233J\tJU\033\357\026\330\361\366S\332!\302\003r\n\301\225\252\333\222I\317D\302n\365\266zE~\330y \231\206\035s\226\033\r\224u\376gzH~\233\001/\260\272\026m\213\333P\310\301=\212\227(^c\360\301\210\030N\t\325\254}\270\202\370a\225=X\300\t\177\026h\003P!P\033\232\220R8B\224\267$\337\262q\273x*\273C\323S\355\255X\207\212oA\376u=\366\353\372\177\r8\304N\314\202\242\340\341\214\321\002H\270\371n\017\217\322\201U\034\272#/d\037\315&\264\014\343\222\026N\240\215\244\213#\035\341%E)\334pec`\225g\324\333%\344#\3668\267?\027\310:\274\216\340\233\014\2553\360\213\340/\206k\027\233\201\t8\\\373\016\272\004^\342\020\364&\341\326\217\213\305\366\372;\023\227\362\305\375o&\246\277\312&\367?\235\230>1\230\036l\246\363\351\255\224\245\235\335\231\317\006qZK\037\357\316|\236\036K\027\323\265l*\253e/s\266;3\233.\245\035x\\\313'\363\013\303g\243\331Q\r\335\223l2;\227O\242\331\303\024{S\247\006\213;\023\027\262\332\376\311\211\351K\371\374\336\324'\203\307\0036\260Pd)\265\331|\366]>\277\013^\267\006[\331\027\331\225\254\223\037\313o\346\317\207\0205\227nf\337\356\\^\032\325\366/NL\317\274v\203EL\334\331\377\370\310\023&\002\343K\0007\003X\346r1\274:\232\037\335\336\236\332\376\351M\355\315\346\333\313o\033;\3176\021\361bz7\025P\342\325pv\270:\354\214\216\215n\215\352\333\037m\003\250\343\230nof.}\n\r\314B\223/\362'9\026:q\036y8=\270\227\316\357\236>\227F\331\331\254\203F?\353\345,\007\363l\332\312\030\276;\237\035\007\360\223{P\010\331\373\005\022\330\341\374\020\262\236I\257e73`q.}\221=\311:\3733\236\n\330N\236\002\\;\263\227\240\343\227\303\372h\022\373X\005^O\346\027\363\365\341\031\010\006fn\247\223\351\327Y\355\341\277\001,\226\343";
-    PyObject *data = __Pyx_DecompressString(cstring, 1391, 1);
+    #elif (CYTHON_COMPRESS_STRINGS) != 0 /* compression: zlib (1421 bytes) */
+const char* const cstring = "x\332}U\317o\023G\024NJR\314\017\321\2064@UTM\370!CE,B\002BU\232*$A\315\241@\201 8\215\306\263c{\232\365\214\2753\033\333\034*T\365\340C\017{\\\365\344\243\217>\346\320\003G\2169\346\030\251\207\036\233?\241\337\333\265\223PP\245x\366\355\354{\337{\337\367\336L\276e\017\342JEEl[\253\026\013\254r\314X\317T\273a\235b\316G:PnU\030fM\330a2R\302+&X9\017\3625\341\231vLZ\343u5\266\261c\332\260\272\252\333\250SB\024A\t\347t\3250o\031\202\203\271\014'\367\240\224C\247!p+\322^\224C5t\310\213\252D\266\376\177\261\332\004\252\315Z\332\327\230\3574\024+\016\367}$\214\313h\034\205\344n\210\320\221\222\236\005\272\256\214\323\326\270\265\221\305\256\007\304\210\000r\247\365z\303w\230\253\t@\373\270\201\342*6b\262\343k\326\224D\024\211\316\306\207pY\274\213\033\r\033y\025l\230m\021\352\200\325m\240n\221\266pV\001+\312\"\003T\021xTk\361\026\253\"j\344\234g\204\234\242\215z\226~\3148\274 \016\266\302\036Y\250\225\251\277\232\025B%\007*\324e\025AG\250D\235C\222\254E\206=Y\1772\267x\177\221\t\023@\311\237\221\336\241\272\262\014\321\034t\034\200\345X\207\036\311HAWb\033\025\326\26113\ne\242s\r\370\035\017\3605e\230S\236\014V\314\344\026\036\2749\302\265\251\026\207\322\351mE\321\017E\350T\351q\354\263D66\001R\232\321\014\t)\025\320od47M\326~\004a\244\266U\204\356zU\247w[\246\262\277/-\027o\376\363\347\357\354\2577\277\212 \340\206t V\014R\334nK\033\206\224\027\035(\211\262\\:6\227\344\224W\265\374\337\355\3218,\007\332Qz\225\025\301+\221j\306\312\310\016\227\350\233\344\262Sjt\332U\311nP\233\252\331\200\020\003\020FO\2752>\233\376\303!@Or\244\20088\375Z\261\245\357\330\355\017\306\307X\264\256\"\342\3203\316#\025\304Rq\316\2028\223\301X3\207Vnk\021\342\253\324F{|\314\305X^\312\317g\360\036\271\017\367h\310\0169\276\367\375p7>\324]\204\241\225\331!\247\332X \274(}\344k>\235\2041\274#J\261\257\314\335_y\266\272\261\261\036\206\272\341\264\343\374I\247\215\337\032&\221?\202DOU\345Y\256\251\242A.\035\315\364\337\177\374\206~\215\320y>\032\234\017'\013z\010\3271R\333\222\264\221\2151\250""\312\225\205Se]\205\253\224\320/kWfD\"\030>[\000\2205\013\240lp9\037\031U\345\251'\364\n(\2561\270\221\220\252,\344\226\304|zb\315y@u\363\200\216\004\007\233\\t\256\350>\000\005\314D\276\362\262\360\262\206\361\030\276\222\021\327\263\203\250\242\310F\225PT]%\264\302\243\363\365l\245\343N\365~d\306\350\266\343\345\216W(\267\022\033\311\251\330lq\271\0225\341j\\lW\265\0168\327u\272a\360\244;P\033Ou\036J\224\217\335p\366\266T\247e\243\300m\265\266Z9>\2362T\302\340I\230\303\007\017\265\363\331\317\266\250\005u\001u\260\372\032\257\007w\221\310\3436\245\253\224.3|\260A\214\263\302\215\250\037\2558\002XU\013\013\234\350\347 \036\212j@\340\206mp\216\203\304eM\311-\027\327\363\267!;23\3013+6\r-\267\200\277nF~\333\331?\010je3\026a\236\360\250\323d\241$zdl\217\016\324\241\225\037\275c\033\252Mf\025\224\321.\345p\016]\244|\034\231\210\256*\316q\317\r\211\301\032\236\324\314\036\226|\314\036ag\247\203T\307v\204o\252\341\274\305/\302_\214\313\227\310\240\003\236\326\266\007K\350\02270u\nw\177\234/\256\325\336\035\273\332\233?\370zl\362\313t\374\340\334\330\344\251\356dw3\231M\026\022\2214\367\n\237u\343d%\371i\257\360yr\"\231O\326\322\211t%}\325\023{\205\351d1i\342u\2557\336\273\334\177>\230\036\254\220{'\035O/\366\306\311l\021\304\376\304\231\356\374\356\330\345t\345\340\364\330\344\325\336\354\301\331\261\311\302\033\327\235\355\336K\246\023\304\234\353\nJ\262W\230J\246\220\370^:\225^Keoj\177\270A\225\370t!\025i\013y\001\267\320\335\202\317\365\264\331;\321\273\323{\321\007\374L\262\231~\263{mq\260rp\205\340}w\236*h\036|z\354\315\001\014\306\027`Q@\3213\275\240\177c0;\270\2733\261\363\303\333\225\267\233\357\256\275\253\354>\337$j\363\311\203$@\212\327\375\351\376j\277981X\030\224w>\331\231\335\2378Ip\373\205\231\344\031\230NC\215\227\275\247=Jt\352\022\tv\266\3730\231\335;{1\211\322\013i\223\2146\325\335\203y!\251\201\004\214K\351I\024?\276\217DD\356\027\000\270\376l\037\250\347\223\233\351\235\024r\317$/\323\247i\363\240\220kV\030;}\006u\355N_\005\343W\375\362`\234x\254""\242\001\247{Wz\353\375\363\010\2062w\223\361\344\253t\345\361\277\241\322\250o";
+    PyObject *data = __Pyx_DecompressString(cstring, 1421, 1);
     if (unlikely(!data)) __PYX_ERR(0, 1, __pyx_L1_error)
     const char* const bytes = __Pyx_PyBytes_AsString(data);
     #if !CYTHON_ASSUME_SAFE_MACROS
     if (likely(bytes)); else { Py_DECREF(data); __PYX_ERR(0, 1, __pyx_L1_error) }
     #endif
-    #else /* compression: none (2371 bytes) */
-const char* const bytes = ": Buffer view does not expose stridesCan only create a buffer that is contiguous in memory.Cannot assign to read-only memoryviewCannot create writable memory view from read-only memoryviewCannot index with type 'Cannot transpose memoryview with indirect dimensionsDimension %d is not directEmpty shape tuple for cython.arrayIndirect dimensions not supportedInvalid mode, expected 'c' or 'fortran', got Invalid shape in axis <MemoryView of Note that Cython is deliberately stricter than PEP-484 and rejects subclasses of builtin types. If you need to pass subclasses then set the 'annotation_typing' directive to False.Out of bounds on buffer access (axis Unable to convert item to object?.>')\357\274\214 \343\200\202add_note and  at 0xcollections.abc<contiguous and direct><contiguous and indirect>disableenable_frequency_codec_cy.pyxgc (got got differing extents in dimension isenableditemsize <= 0 for cython.arrayno default __reduce__ due to non-trivial __cinit__ object><strided and direct><strided and direct or indirect><strided and indirect>unable to allocate array data.unable to allocate shape and strides.utf-8ASCIIEllipsis__Pyx_PyDict_NextRefSequenceView.MemoryView\347\232\204abcallocate_buffer__annotate__asyncio.coroutinesbasebigbufccdef_freqcdef_radcdef_raw_anchor__class____class_getitem__cline_in_tracebackcountdata__dict__dtype_is_objectencodeencode_batch_cyencode_cyenumerateerrorflagsfloatformatfortranfreq_frequency_codec_cyfrom_bytes__func__get__getstate__hash_avgiid__import__indexint_is_coroutineitemsitemsizekeywordskwkw_byteskw_cleankw_hashkw_hash_listlistlower__main__math_md5_intmemviewmode__module__name__name__ndim__new__nodenodesobjoutpackpop__pyx_checksum__pyx_state__pyx_type__pyx_unpickle_Enum__pyx_vtable____qualname__raw_anchorraw_modraw_words__reduce____reduce_cython____reduce_ex__registerresultsreturnround__set_name__setdefault__setstate____setstate_cython__shapesizestartstepstopstrstructsum__test__textunpackupdatevaluevalueswx\320\000#\2401\360\036\000""\005\031\230\001\360\016\000\005\t\210\005\210U\220!\2203\220a\220q\330\010\017\210u\220A\220Q\330\010\020\220\003\2201\220D\230\004\230A\230Y\240a\330\010\023\2204\220q\230\004\230D\240\001\240\034\250T\260\023\260A\330\010\017\210y\230\001\230\027\240\001\330\010\017\210w\220a\220q\340\004\013\2101\320\000\034\230A\360\n\000\005#\240!\340\004\r\210Q\210a\210s\220!\2204\220s\230!\2307\240!\330\004\013\2103\210k\230\021\230%\230q\240\003\2402\240V\2501\320\000\025\220U\230*\320$4\260A\360\"\000\005\010\200t\2101\330\010\017\210q\360\006\000\005\010\200t\2101\330\010\017\210s\220!\2201\330\010\024\220D\230\010\240\001\240\025\240d\250(\260!\2605\270\004\270H\300A\300U\310$\310f\320TU\330\010\023\2201\220B\220d\230%\230z\250\023\250C\250q\260\003\2603\260b\270\002\270!\340\004\007\200t\2101\340\010\025\220S\230\001\230\023\230A\230X\240R\240q\360\006\000\t\030\220q\330\010\014\210F\220!\330\014\027\220r\230\026\230q\330\014\027\220x\230w\240a\240q\330\014\026\220h\230a\230q\330\014\030\230\007\230q\240\001\340\010\023\2203\220a\220~\240R\240s\250!\2501\340\010\022\220)\2302\230Q\330\010\025\220X\230R\230q\360\010\000\005#\240!\360\010\000\n\013\330\010\023\320\023#\2402\240Y\250b\260\001\330\010\024\220C\220q\230\n\240\"\240E\250\022\2501\340\004\013\2105\220\001\220\033\230AO";
+    #else /* compression: none (2418 bytes) */
+const char* const bytes = ": Buffer view does not expose stridesCan only create a buffer that is contiguous in memory.Cannot assign to read-only memoryviewCannot create writable memory view from read-only memoryviewCannot index with type 'Cannot transpose memoryview with indirect dimensionsDimension %d is not directEmpty shape tuple for cython.arrayIndirect dimensions not supportedInvalid mode, expected 'c' or 'fortran', got Invalid shape in axis <MemoryView of Note that Cython is deliberately stricter than PEP-484 and rejects subclasses of builtin types. If you need to pass subclasses then set the 'annotation_typing' directive to False.Out of bounds on buffer access (axis Unable to convert item to object?.>')\357\274\214 \343\200\202add_note and  at 0xcollections.abc<contiguous and direct><contiguous and indirect>disableenable_frequency_codec_cy.pyxgc (got got differing extents in dimension isenableditemsize <= 0 for cython.arrayno default __reduce__ due to non-trivial __cinit__ object><strided and direct><strided and direct or indirect><strided and indirect>unable to allocate array data.unable to allocate shape and strides.utf-8ASCIIEllipsis__Pyx_PyDict_NextRefSequenceView.MemoryView\347\232\204abcallocate_buffer__annotate__asyncio.coroutinesbasebigbufccdef_freqcdef_radcdef_raw_anchor__class____class_getitem__cline_in_tracebackcountdata__dict__dtype_is_object_emptyencodeencode_batch_cyencode_cyenumerateerrorflagsfloatformatfortranfreq_frequency_codec_cyfrom_bytes__func__get__getstate__hash_avgiid__import__indexint_is_coroutineitemsitemsizekeywordskwkw_byteskw_cleankw_hashkw_hash_listlistlower__main__math_md5_intmemviewmode__module__name__name__ndim__new__nodenodesobjoutpackpop__pyx_checksum__pyx_state__pyx_type__pyx_unpickle_Enum__pyx_vtable____qualname__raw_anchorraw_modraw_words__reduce____reduce_cython____reduce_ex__registerresultsreturnround__set_name__setdefault__setstate____setstate_cython__shapesizestartstepstopstrstructsum__test__textunpackupdatevaluevalueswx\320\000#\2401\360\036""\000\005\031\230\001\360\016\000\005\t\210\005\210U\220!\2203\220a\220q\330\010\017\210u\220A\220Q\330\010\020\220\003\2201\220D\230\004\230A\230Y\240a\330\010\023\2204\220q\230\004\230D\240\001\240\034\250T\260\023\260A\330\010\017\210y\230\001\230\027\240\001\330\010\017\210w\220a\220q\340\004\013\2101\320\000\034\230A\360\n\000\005#\240!\360\014\000\005\010\200s\210!\2106\220\023\220A\330\010\016\210a\210u\220A\330\010\021\220\021\220!\2206\230\021\230$\230c\240\021\340\010\021\220\021\220!\2203\220a\220t\2303\230a\230w\240a\330\004\013\2103\210k\230\021\230%\230q\240\003\2402\240V\2501\320\000\025\220U\230*\320$4\260A\360\"\000\005\010\200t\2101\330\010\017\210q\360\006\000\005\010\200t\2101\330\010\017\210s\220!\2201\330\010\024\220D\230\010\240\001\240\025\240d\250(\260!\2605\270\004\270H\300A\300U\310$\310f\320TU\330\010\023\2201\220B\220d\230%\230z\250\023\250C\250q\260\003\2603\260b\270\002\270!\340\004\007\200t\2101\340\010\025\220S\230\001\230\023\230A\230X\240R\240q\360\006\000\t\030\220q\330\010\014\210F\220!\330\014\027\220r\230\026\230q\330\014\027\220x\230w\240a\240q\330\014\026\220h\230a\230q\330\014\030\230\007\230q\240\001\340\010\023\2203\220a\220~\240R\240s\250!\2501\340\010\022\220)\2302\230Q\330\010\025\220X\230R\230q\360\010\000\005#\240!\360\010\000\n\013\330\010\023\320\023#\2402\240Y\250b\260\001\330\010\024\220C\220q\230\n\240\"\240E\250\022\2501\340\004\013\2105\220\001\220\033\230AO";
     PyObject *data = NULL;
     CYTHON_UNUSED_VAR(__Pyx_DecompressString);
     #endif
     PyObject **stringtab = __pyx_mstate->__pyx_string_tab;
     Py_ssize_t pos = 0;
-    for (int i = 0; i < 155; i++) {
+    for (int i = 0; i < 156; i++) {
       Py_ssize_t bytes_length = index[i].length;
       PyObject *string = PyUnicode_DecodeUTF8(bytes + pos, bytes_length, NULL);
       if (likely(string) && i >= 47) PyUnicode_InternInPlace(&string);
@@ -20042,7 +20101,7 @@ const char* const bytes = ": Buffer view does not expose stridesCan only create 
       stringtab[i] = string;
       pos += bytes_length;
     }
-    for (int i = 155; i < 159; i++) {
+    for (int i = 156; i < 160; i++) {
       Py_ssize_t bytes_length = index[i].length;
       PyObject *string = PyBytes_FromStringAndSize(bytes + pos, bytes_length);
       stringtab[i] = string;
@@ -20053,14 +20112,14 @@ const char* const bytes = ": Buffer view does not expose stridesCan only create 
       }
     }
     Py_XDECREF(data);
-    for (Py_ssize_t i = 0; i < 159; i++) {
+    for (Py_ssize_t i = 0; i < 160; i++) {
       if (unlikely(PyObject_Hash(stringtab[i]) == -1)) {
         __PYX_ERR(0, 1, __pyx_L1_error)
       }
     }
     #if CYTHON_IMMORTAL_CONSTANTS
     {
-      PyObject **table = stringtab + 155;
+      PyObject **table = stringtab + 156;
       for (Py_ssize_t i=0; i<4; ++i) {
         #if PY_VERSION_HEX >= 0x030F0000
         PyUnstable_SetImmortal(table[i]);
@@ -20150,17 +20209,17 @@ static int __Pyx_CreateCodeObjects(__pyx_mstatetype *__pyx_mstate) {
   PyObject* tuple_dedup_map = PyDict_New();
   if (unlikely(!tuple_dedup_map)) return -1;
   {
-    const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 3, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 134};
-    PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_data, __pyx_mstate->__pyx_n_u_buf, __pyx_mstate->__pyx_n_u_out};
-    __pyx_mstate_global->__pyx_codeobj_tab[0] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_frequency_codec_cy_pyx, __pyx_mstate->__pyx_n_u_md5_int, __pyx_mstate->__pyx_kp_b_iso88591_A_Qas_4s_7_3k_q_2V1, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[0])) goto bad;
+    const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 4, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 135};
+    PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_data, __pyx_mstate->__pyx_n_u_buf, __pyx_mstate->__pyx_n_u_out, __pyx_mstate->__pyx_n_u_empty};
+    __pyx_mstate_global->__pyx_codeobj_tab[0] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_frequency_codec_cy_pyx, __pyx_mstate->__pyx_n_u_md5_int, __pyx_mstate->__pyx_kp_b_iso88591_A_s_6_A_auA_6_c_3at3awa_3k_q_2V, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[0])) goto bad;
   }
   {
-    const __Pyx_PyCode_New_function_description descr = {2, 0, 0, 16, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 145};
+    const __Pyx_PyCode_New_function_description descr = {2, 0, 0, 16, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 154};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_value, __pyx_mstate->__pyx_n_u_keywords, __pyx_mstate->__pyx_n_u_text, __pyx_mstate->__pyx_n_u_raw_words, __pyx_mstate->__pyx_n_u_raw_anchor, __pyx_mstate->__pyx_n_u_kw_hash_list, __pyx_mstate->__pyx_n_u_kw, __pyx_mstate->__pyx_n_u_kw_clean, __pyx_mstate->__pyx_n_u_kw_bytes, __pyx_mstate->__pyx_n_u_kw_hash, __pyx_mstate->__pyx_n_u_hash_avg, __pyx_mstate->__pyx_n_u_raw_mod, __pyx_mstate->__pyx_n_u_cdef_raw_anchor, __pyx_mstate->__pyx_n_u_cdef_rad, __pyx_mstate->__pyx_n_u_cdef_freq, __pyx_mstate->__pyx_n_u_w};
     __pyx_mstate_global->__pyx_codeobj_tab[1] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_frequency_codec_cy_pyx, __pyx_mstate->__pyx_n_u_encode_cy, __pyx_mstate->__pyx_kp_b_iso88591_U_4A_t1_q_t1_s_1_D_d_5_HAU_fTU, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[1])) goto bad;
   }
   {
-    const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 7, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 201};
+    const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 7, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 210};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_nodes, __pyx_mstate->__pyx_n_u_results, __pyx_mstate->__pyx_n_u_node, __pyx_mstate->__pyx_n_u_value, __pyx_mstate->__pyx_n_u_keywords, __pyx_mstate->__pyx_n_u_freq, __pyx_mstate->__pyx_n_u_i};
     __pyx_mstate_global->__pyx_codeobj_tab[2] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_frequency_codec_cy_pyx, __pyx_mstate->__pyx_n_u_encode_batch_cy, __pyx_mstate->__pyx_kp_b_iso88591_1_U_3aq_uAQ_1D_AYa_4q_D_T_A_y_w, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[2])) goto bad;
   }
@@ -22993,6 +23052,16 @@ static CYTHON_INLINE long __Pyx_div_long(long a, long b, int b_is_constant) {
     return q - adapt_python;
 }
 
+/* ModInt[long] */
+static CYTHON_INLINE long __Pyx_mod_long(long a, long b, int b_is_constant) {
+    long r = a % b;
+    long adapt_python = (b_is_constant ?
+        ((r != 0) & ((r < 0) ^ (b < 0))) :
+        ((r != 0) & ((r ^ b) < 0))
+    );
+    return r + adapt_python * b;
+}
+
 /* ErrOccurredWithGIL */
 static CYTHON_INLINE int __Pyx_ErrOccurredWithGIL(void) {
   int err;
@@ -23000,6 +23069,12 @@ static CYTHON_INLINE int __Pyx_ErrOccurredWithGIL(void) {
   err = !!PyErr_Occurred();
   PyGILState_Release(_save);
   return err;
+}
+
+/* BufferIndexError */
+static void __Pyx_RaiseBufferIndexError(int axis) {
+  PyErr_Format(PyExc_IndexError,
+     "Out of bounds on buffer access (axis %d)", axis);
 }
 
 /* pybuiltin_invalid (used by pyint_simplify) */

@@ -1,0 +1,95 @@
+# requirements-314t.txt —— Python 3.14 free-threaded（python3.14t / GIL 默认关闭）专用基线
+#
+# 为什么不能直接用 requirements-ci.txt
+# ------------------------------------
+# 既有三份清单的上界钉写于 3.12 时代（numpy<2.0 / pyarrow<13 / cryptography<42 /
+# Pillow<10 / setuptools<69）。在 3.14 下这些钉子会把**已装好的新版本强制降级**到
+# 没有 cp314t 轮子的老版本，pip 退化为源码编译并失败——473 批实测 numpy 1.26.4：
+#   meson: Could not find Python3 library ...python314.dll
+#   ERROR: Python dependency not found
+#
+# 故本文件是**独立基线**：不改动 requirements.txt / requirements-ci.txt / requirements.lock，
+# 因而也不影响 3.12 侧 CI 的可复现性（tools/ci 两个 requirements 门禁只认那三个固定文件名）。
+#
+# ★判定口径（473 批踩过两次坑，务必照此执行）
+# --------------------------------------------------
+# 1) free-threaded 解释器只接受 `cp314t` ABI 轮子或纯 Python 轮子；
+#    普通 `cp314` 轮子**不兼容** ⇒「包支持 3.14」不等于「包支持 3.14t」。
+# 2) 判定必须用：
+#        python3.14t -m pip install --dry-run --only-binary=:all: --no-deps <pkg>
+#    不能用 `pip index versions`：该命令**不按 ABI 过滤**，会把「只有 sdist」的包
+#    误报成可用（473 批首轮探测因此把 29/29 全报成可装，实测只有 22 个真有轮子）。
+# 3) 已安装的包 pip 输出 "Requirement already satisfied"，判据要同时认，
+#    否则会把「装好的」误判成「无轮子」。
+#
+# 安装：
+#   python3.14t -m pip install -r requirements-314t.txt
+#
+# 首次落地：2026-11-06（473 批），全部版本号为本机 python3.14t 实测安装结果。
+
+# ============ [核心必需] ============
+requests==2.34.2
+psutil==7.2.2
+numpy==2.5.4                     # 1.x 无 cp314t 轮子，必须 2.x
+pyarrow==26.0.1
+cryptography==50.0.2
+faiss-cpu==1.12.0
+urllib3==2.8.0
+
+# ============ [功能必需 · 已实测恢复] ============
+feedparser==6.0.14               # RSS/Atom 解析（nucleus/knowledge/RssCollector.py，硬缺口无降级）
+Pillow==13.0.0                   # 图像处理（9.x/10.x 无 cp314t 轮子，需 13.x）
+chardet==7.7.0
+jieba==0.42.1                    # 纯 Python，从 sdist 构建（无轮子但可装）
+GPUtil==1.4.0                    # 纯 Python，从 sdist 构建
+sounddevice==0.5.6               # 音频采集（耳朵）
+vosk==0.3.45                     # 离线语音识别（模型：models/vosk-model-small-cn-0.22 已在仓）
+neo4j==6.4.1                     # 图存储（ENABLE_NEO4J 默认关闭）
+influxdb-client==1.50.0          # 时序存储（ENABLE_INFLUXDB 默认关闭）
+playwright==1.64.1               # 浏览器自动化（另需 `playwright install` 下载内核）
+
+# ============ [编译专用] ============
+Cython==3.3.1                    # 3.1+ 才支持 freethreading_compatible 指令
+setuptools==84.2.1
+
+# ============ [开发/巡检] ============
+pytest==9.2.0
+radon==6.0.1
+
+# ============================================================================
+# 以下为**3.14t 下确认不可用**的依赖，一律注释保留以留证据，不要贸然放开。
+# ============================================================================
+#
+# opencv-python / opencv-contrib-python
+#   无 cp314t 轮子；4.14 的 sdist 需 CMake + 长时间编译，实测失败。
+#   ⇒ 视觉引擎（眼睛）在 3.14t 上不可用。
+#
+# onnxruntime
+#   无 cp314t 轮子（`No matching distribution found`）。
+#   ⇒ 连带 fastembed 不可装：fastembed 0.9.1 声明 onnxruntime>=1.24.2 于 py>=3.14。
+#   ⇒ 语义内核（nucleus/semantic/VectorEncoder.py）只能走关键词回退，**永久降级**。
+#
+# pywin32
+#   无 cp314t 轮子 ⇒ 连带 pyttsx3 不可用 ⇒ TTS（嘴巴）在 3.14t 上不可用。
+#
+# pyaudio
+#   无轮子；sdist 构建期 setuptools/pkg_resources 调用已移除的 pkgutil.ImpImporter，
+#   `AttributeError: module 'pkgutil' has no attribute 'ImpImporter'` ⇒ 音频输出不可用。
+#
+# orjson
+#   无轮子，源码构建需 Rust 工具链（本机未装）⇒ 保持 JSON 标准库回退。
+#
+# PyMuPDF
+#   无轮子，C 扩展需本地编译 ⇒ PDF 解析（fitz）暂不可用。
+#
+# mediapipe
+#   自身有轮子，但硬依赖 opencv-contrib-python（无 cp314t 轮子）⇒ 全链不可装。
+#
+# face_recognition
+#   自身有轮子，但运行期硬依赖 dlib（需 CMake + MSVC 现场编译）⇒ 实际不可用。
+#
+# ============================================================================
+# 未纳入本基线（可选、体积大或需额外系统组件），需要时单独安装：
+#   torch==2.15.0        —— 有 cp314t 轮子，但体积约数 GB；仅影响 device_router 实测
+#   pytesseract          —— 有轮子，另需系统级 tesseract 可执行文件
+# ============================================================================

@@ -4,12 +4,9 @@
 {
     "distutils": {
         "depends": [],
-        "extra_compile_args": [
-            "/O2"
-        ],
         "name": "_oscillon_cy",
         "sources": [
-            "nucleus/field/_oscillon_cy.pyx"
+            "D:\\xinrenlei\\tongtong-pulse-v9\\nucleus/field/_oscillon_cy.pyx"
         ]
     },
     "module_name": "_oscillon_cy"
@@ -1160,7 +1157,7 @@ static int __Pyx_init_co_variables(void) {
 #define __Pyx_FREETHREADING_COMPATIBLE Py_MOD_GIL_USED
 #endif
 #else
-#define __Pyx_FREETHREADING_COMPATIBLE Py_MOD_GIL_USED
+#define __Pyx_FREETHREADING_COMPATIBLE Py_MOD_GIL_NOT_USED
 #endif
 #define __PYX_DEFAULT_STRING_ENCODING_IS_ASCII 0
 #define __PYX_DEFAULT_STRING_ENCODING_IS_UTF8 0
@@ -1537,13 +1534,13 @@ static const char* const __pyx_f[] = {
 #define __Pyx_FastGIL_Forget()
 #define __Pyx_FastGilFuncInit()
 
-/* IncludeStructmemberH.proto (used by FixUpExtensionType) */
-#include <structmember.h>
-
 /* ForceInitThreads.proto */
 #ifndef __PYX_FORCE_INIT_THREADS
   #define __PYX_FORCE_INIT_THREADS 0
 #endif
+
+/* IncludeStructmemberH.proto (used by FixUpExtensionType) */
+#include <structmember.h>
 
 /* #### Code section: numeric_typedefs ### */
 /* #### Code section: complex_type_declarations ### */
@@ -2386,7 +2383,7 @@ return 0;
 #endif
 /* #### Code section: module_code ### */
 
-/* "_oscillon_cy.pyx":10
+/* "_oscillon_cy.pyx":11
  * 
  * 
  * def calculate_resonance_cy(double source_freq, double target_freq,             # <<<<<<<<<<<<<<
@@ -2436,46 +2433,46 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   {
     PyObject ** const __pyx_pyargnames[] = {&__pyx_mstate_global->__pyx_n_u_source_freq,&__pyx_mstate_global->__pyx_n_u_target_freq,&__pyx_mstate_global->__pyx_n_u_coupling_strength,0};
     const Py_ssize_t __pyx_kwds_len = (__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
-    if (unlikely(__pyx_kwds_len < 0)) __PYX_ERR(0, 10, __pyx_L3_error)
+    if (unlikely(__pyx_kwds_len < 0)) __PYX_ERR(0, 11, __pyx_L3_error)
     if (__pyx_kwds_len > 0) {
       switch (__pyx_nargs) {
         case  3:
         values[2] = __Pyx_ArgRef_FASTCALL(__pyx_args, 2);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[2])) __PYX_ERR(0, 10, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[2])) __PYX_ERR(0, 11, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  2:
         values[1] = __Pyx_ArgRef_FASTCALL(__pyx_args, 1);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 10, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 11, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  1:
         values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 10, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 11, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  0: break;
         default: goto __pyx_L5_argtuple_error;
       }
       const Py_ssize_t kwd_pos_args = __pyx_nargs;
-      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "calculate_resonance_cy", 0) < (0)) __PYX_ERR(0, 10, __pyx_L3_error)
+      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "calculate_resonance_cy", 0) < (0)) __PYX_ERR(0, 11, __pyx_L3_error)
       for (Py_ssize_t i = __pyx_nargs; i < 3; i++) {
-        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("calculate_resonance_cy", 1, 3, 3, i); __PYX_ERR(0, 10, __pyx_L3_error) }
+        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("calculate_resonance_cy", 1, 3, 3, i); __PYX_ERR(0, 11, __pyx_L3_error) }
       }
     } else if (unlikely(__pyx_nargs != 3)) {
       goto __pyx_L5_argtuple_error;
     } else {
       values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 10, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 11, __pyx_L3_error)
       values[1] = __Pyx_ArgRef_FASTCALL(__pyx_args, 1);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 10, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 11, __pyx_L3_error)
       values[2] = __Pyx_ArgRef_FASTCALL(__pyx_args, 2);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[2])) __PYX_ERR(0, 10, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[2])) __PYX_ERR(0, 11, __pyx_L3_error)
     }
-    __pyx_v_source_freq = __Pyx_PyFloat_AsDouble(values[0]); if (unlikely((__pyx_v_source_freq == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 10, __pyx_L3_error)
-    __pyx_v_target_freq = __Pyx_PyFloat_AsDouble(values[1]); if (unlikely((__pyx_v_target_freq == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 10, __pyx_L3_error)
-    __pyx_v_coupling_strength = __Pyx_PyFloat_AsDouble(values[2]); if (unlikely((__pyx_v_coupling_strength == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 11, __pyx_L3_error)
+    __pyx_v_source_freq = __Pyx_PyFloat_AsDouble(values[0]); if (unlikely((__pyx_v_source_freq == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 11, __pyx_L3_error)
+    __pyx_v_target_freq = __Pyx_PyFloat_AsDouble(values[1]); if (unlikely((__pyx_v_target_freq == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 11, __pyx_L3_error)
+    __pyx_v_coupling_strength = __Pyx_PyFloat_AsDouble(values[2]); if (unlikely((__pyx_v_coupling_strength == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 12, __pyx_L3_error)
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("calculate_resonance_cy", 1, 3, 3, __pyx_nargs); __PYX_ERR(0, 10, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("calculate_resonance_cy", 1, 3, 3, __pyx_nargs); __PYX_ERR(0, 11, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
@@ -2501,14 +2498,15 @@ static PyObject *__pyx_pf_12_oscillon_cy_calculate_resonance_cy(CYTHON_UNUSED Py
   double __pyx_v_freq_diff;
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
-  int __pyx_t_1;
-  PyObject *__pyx_t_2 = NULL;
+  double __pyx_t_1;
+  int __pyx_t_2;
+  PyObject *__pyx_t_3 = NULL;
   int __pyx_lineno = 0;
   const char *__pyx_filename = NULL;
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("calculate_resonance_cy", 0);
 
-  /* "_oscillon_cy.pyx":17
+  /* "_oscillon_cy.pyx":18
  *     R = coupling_strength / sqrt(1 + (source_freq - target_freq)^2)
  *     """
  *     cdef double resonance = 0.0             # <<<<<<<<<<<<<<
@@ -2517,7 +2515,7 @@ static PyObject *__pyx_pf_12_oscillon_cy_calculate_resonance_cy(CYTHON_UNUSED Py
 */
   __pyx_v_resonance = 0.0;
 
-  /* "_oscillon_cy.pyx":18
+  /* "_oscillon_cy.pyx":19
  *     """
  *     cdef double resonance = 0.0
  *     cdef double freq_diff = 0.0             # <<<<<<<<<<<<<<
@@ -2526,7 +2524,7 @@ static PyObject *__pyx_pf_12_oscillon_cy_calculate_resonance_cy(CYTHON_UNUSED Py
 */
   __pyx_v_freq_diff = 0.0;
 
-  /* "_oscillon_cy.pyx":20
+  /* "_oscillon_cy.pyx":21
  *     cdef double freq_diff = 0.0
  * 
  *     with nogil:             # <<<<<<<<<<<<<<
@@ -2539,7 +2537,7 @@ static PyObject *__pyx_pf_12_oscillon_cy_calculate_resonance_cy(CYTHON_UNUSED Py
       __Pyx_FastGIL_Remember();
       /*try:*/ {
 
-        /* "_oscillon_cy.pyx":21
+        /* "_oscillon_cy.pyx":22
  * 
  *     with nogil:
  *         freq_diff = fabs(source_freq - target_freq)             # <<<<<<<<<<<<<<
@@ -2548,26 +2546,33 @@ static PyObject *__pyx_pf_12_oscillon_cy_calculate_resonance_cy(CYTHON_UNUSED Py
 */
         __pyx_v_freq_diff = fabs((__pyx_v_source_freq - __pyx_v_target_freq));
 
-        /* "_oscillon_cy.pyx":22
+        /* "_oscillon_cy.pyx":23
  *     with nogil:
  *         freq_diff = fabs(source_freq - target_freq)
  *         resonance = coupling_strength / sqrt(1.0 + freq_diff * freq_diff)             # <<<<<<<<<<<<<<
  *         if resonance > 1.0:
  *             resonance = 1.0
 */
-        __pyx_v_resonance = (__pyx_v_coupling_strength / sqrt((1.0 + (__pyx_v_freq_diff * __pyx_v_freq_diff))));
+        __pyx_t_1 = sqrt((1.0 + (__pyx_v_freq_diff * __pyx_v_freq_diff)));
+        if (unlikely(__pyx_t_1 == 0)) {
+          PyGILState_STATE __pyx_gilstate_save = __Pyx_PyGILState_Ensure();
+          PyErr_SetString(PyExc_ZeroDivisionError, "float division");
+          __Pyx_PyGILState_Release(__pyx_gilstate_save);
+          __PYX_ERR(0, 23, __pyx_L4_error)
+        }
+        __pyx_v_resonance = (__pyx_v_coupling_strength / __pyx_t_1);
 
-        /* "_oscillon_cy.pyx":23
+        /* "_oscillon_cy.pyx":24
  *         freq_diff = fabs(source_freq - target_freq)
  *         resonance = coupling_strength / sqrt(1.0 + freq_diff * freq_diff)
  *         if resonance > 1.0:             # <<<<<<<<<<<<<<
  *             resonance = 1.0
  *         if resonance < 0.0:
 */
-        __pyx_t_1 = (__pyx_v_resonance > 1.0);
-        if (__pyx_t_1) {
+        __pyx_t_2 = (__pyx_v_resonance > 1.0);
+        if (__pyx_t_2) {
 
-          /* "_oscillon_cy.pyx":24
+          /* "_oscillon_cy.pyx":25
  *         resonance = coupling_strength / sqrt(1.0 + freq_diff * freq_diff)
  *         if resonance > 1.0:
  *             resonance = 1.0             # <<<<<<<<<<<<<<
@@ -2576,7 +2581,7 @@ static PyObject *__pyx_pf_12_oscillon_cy_calculate_resonance_cy(CYTHON_UNUSED Py
 */
           __pyx_v_resonance = 1.0;
 
-          /* "_oscillon_cy.pyx":23
+          /* "_oscillon_cy.pyx":24
  *         freq_diff = fabs(source_freq - target_freq)
  *         resonance = coupling_strength / sqrt(1.0 + freq_diff * freq_diff)
  *         if resonance > 1.0:             # <<<<<<<<<<<<<<
@@ -2585,17 +2590,17 @@ static PyObject *__pyx_pf_12_oscillon_cy_calculate_resonance_cy(CYTHON_UNUSED Py
 */
         }
 
-        /* "_oscillon_cy.pyx":25
+        /* "_oscillon_cy.pyx":26
  *         if resonance > 1.0:
  *             resonance = 1.0
  *         if resonance < 0.0:             # <<<<<<<<<<<<<<
  *             resonance = 0.0
  * 
 */
-        __pyx_t_1 = (__pyx_v_resonance < 0.0);
-        if (__pyx_t_1) {
+        __pyx_t_2 = (__pyx_v_resonance < 0.0);
+        if (__pyx_t_2) {
 
-          /* "_oscillon_cy.pyx":26
+          /* "_oscillon_cy.pyx":27
  *             resonance = 1.0
  *         if resonance < 0.0:
  *             resonance = 0.0             # <<<<<<<<<<<<<<
@@ -2604,7 +2609,7 @@ static PyObject *__pyx_pf_12_oscillon_cy_calculate_resonance_cy(CYTHON_UNUSED Py
 */
           __pyx_v_resonance = 0.0;
 
-          /* "_oscillon_cy.pyx":25
+          /* "_oscillon_cy.pyx":26
  *         if resonance > 1.0:
  *             resonance = 1.0
  *         if resonance < 0.0:             # <<<<<<<<<<<<<<
@@ -2614,7 +2619,7 @@ static PyObject *__pyx_pf_12_oscillon_cy_calculate_resonance_cy(CYTHON_UNUSED Py
         }
       }
 
-      /* "_oscillon_cy.pyx":20
+      /* "_oscillon_cy.pyx":21
  *     cdef double freq_diff = 0.0
  * 
  *     with nogil:             # <<<<<<<<<<<<<<
@@ -2627,11 +2632,16 @@ static PyObject *__pyx_pf_12_oscillon_cy_calculate_resonance_cy(CYTHON_UNUSED Py
           PyEval_RestoreThread(_save);
           goto __pyx_L5;
         }
+        __pyx_L4_error: {
+          __Pyx_FastGIL_Forget();
+          PyEval_RestoreThread(_save);
+          goto __pyx_L1_error;
+        }
         __pyx_L5:;
       }
   }
 
-  /* "_oscillon_cy.pyx":28
+  /* "_oscillon_cy.pyx":29
  *             resonance = 0.0
  * 
  *     return resonance             # <<<<<<<<<<<<<<
@@ -2639,13 +2649,13 @@ static PyObject *__pyx_pf_12_oscillon_cy_calculate_resonance_cy(CYTHON_UNUSED Py
  * 
 */
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_2 = PyFloat_FromDouble(__pyx_v_resonance); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 28, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_2);
-  __pyx_r = __pyx_t_2;
-  __pyx_t_2 = 0;
+  __pyx_t_3 = PyFloat_FromDouble(__pyx_v_resonance); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 29, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
+  __pyx_r = __pyx_t_3;
+  __pyx_t_3 = 0;
   goto __pyx_L0;
 
-  /* "_oscillon_cy.pyx":10
+  /* "_oscillon_cy.pyx":11
  * 
  * 
  * def calculate_resonance_cy(double source_freq, double target_freq,             # <<<<<<<<<<<<<<
@@ -2655,7 +2665,7 @@ static PyObject *__pyx_pf_12_oscillon_cy_calculate_resonance_cy(CYTHON_UNUSED Py
 
   /* function exit code */
   __pyx_L1_error:;
-  __Pyx_XDECREF(__pyx_t_2);
+  __Pyx_XDECREF(__pyx_t_3);
   __Pyx_AddTraceback("_oscillon_cy.calculate_resonance_cy", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
@@ -2664,7 +2674,7 @@ static PyObject *__pyx_pf_12_oscillon_cy_calculate_resonance_cy(CYTHON_UNUSED Py
   return __pyx_r;
 }
 
-/* "_oscillon_cy.pyx":31
+/* "_oscillon_cy.pyx":32
  * 
  * 
  * def try_lock_frequency_cy(double source_freq, double target_freq,             # <<<<<<<<<<<<<<
@@ -2714,46 +2724,46 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   {
     PyObject ** const __pyx_pyargnames[] = {&__pyx_mstate_global->__pyx_n_u_source_freq,&__pyx_mstate_global->__pyx_n_u_target_freq,&__pyx_mstate_global->__pyx_n_u_lock_threshold,0};
     const Py_ssize_t __pyx_kwds_len = (__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
-    if (unlikely(__pyx_kwds_len < 0)) __PYX_ERR(0, 31, __pyx_L3_error)
+    if (unlikely(__pyx_kwds_len < 0)) __PYX_ERR(0, 32, __pyx_L3_error)
     if (__pyx_kwds_len > 0) {
       switch (__pyx_nargs) {
         case  3:
         values[2] = __Pyx_ArgRef_FASTCALL(__pyx_args, 2);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[2])) __PYX_ERR(0, 31, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[2])) __PYX_ERR(0, 32, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  2:
         values[1] = __Pyx_ArgRef_FASTCALL(__pyx_args, 1);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 31, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 32, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  1:
         values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 31, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 32, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  0: break;
         default: goto __pyx_L5_argtuple_error;
       }
       const Py_ssize_t kwd_pos_args = __pyx_nargs;
-      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "try_lock_frequency_cy", 0) < (0)) __PYX_ERR(0, 31, __pyx_L3_error)
+      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "try_lock_frequency_cy", 0) < (0)) __PYX_ERR(0, 32, __pyx_L3_error)
       for (Py_ssize_t i = __pyx_nargs; i < 3; i++) {
-        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("try_lock_frequency_cy", 1, 3, 3, i); __PYX_ERR(0, 31, __pyx_L3_error) }
+        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("try_lock_frequency_cy", 1, 3, 3, i); __PYX_ERR(0, 32, __pyx_L3_error) }
       }
     } else if (unlikely(__pyx_nargs != 3)) {
       goto __pyx_L5_argtuple_error;
     } else {
       values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 31, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 32, __pyx_L3_error)
       values[1] = __Pyx_ArgRef_FASTCALL(__pyx_args, 1);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 31, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 32, __pyx_L3_error)
       values[2] = __Pyx_ArgRef_FASTCALL(__pyx_args, 2);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[2])) __PYX_ERR(0, 31, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[2])) __PYX_ERR(0, 32, __pyx_L3_error)
     }
-    __pyx_v_source_freq = __Pyx_PyFloat_AsDouble(values[0]); if (unlikely((__pyx_v_source_freq == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 31, __pyx_L3_error)
-    __pyx_v_target_freq = __Pyx_PyFloat_AsDouble(values[1]); if (unlikely((__pyx_v_target_freq == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 31, __pyx_L3_error)
-    __pyx_v_lock_threshold = __Pyx_PyFloat_AsDouble(values[2]); if (unlikely((__pyx_v_lock_threshold == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 32, __pyx_L3_error)
+    __pyx_v_source_freq = __Pyx_PyFloat_AsDouble(values[0]); if (unlikely((__pyx_v_source_freq == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 32, __pyx_L3_error)
+    __pyx_v_target_freq = __Pyx_PyFloat_AsDouble(values[1]); if (unlikely((__pyx_v_target_freq == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 32, __pyx_L3_error)
+    __pyx_v_lock_threshold = __Pyx_PyFloat_AsDouble(values[2]); if (unlikely((__pyx_v_lock_threshold == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 33, __pyx_L3_error)
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("try_lock_frequency_cy", 1, 3, 3, __pyx_nargs); __PYX_ERR(0, 31, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("try_lock_frequency_cy", 1, 3, 3, __pyx_nargs); __PYX_ERR(0, 32, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
@@ -2781,13 +2791,14 @@ static PyObject *__pyx_pf_12_oscillon_cy_2try_lock_frequency_cy(CYTHON_UNUSED Py
   __Pyx_RefNannyDeclarations
   int __pyx_t_1;
   int __pyx_t_2;
-  PyObject *__pyx_t_3 = NULL;
+  double __pyx_t_3;
+  PyObject *__pyx_t_4 = NULL;
   int __pyx_lineno = 0;
   const char *__pyx_filename = NULL;
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("try_lock_frequency_cy", 0);
 
-  /* "_oscillon_cy.pyx":39
+  /* "_oscillon_cy.pyx":40
  *     freq_diff_ratio = |source_freq - target_freq| / max(source_freq, target_freq)
  *     """
  *     cdef double freq_diff_ratio = 0.0             # <<<<<<<<<<<<<<
@@ -2796,7 +2807,7 @@ static PyObject *__pyx_pf_12_oscillon_cy_2try_lock_frequency_cy(CYTHON_UNUSED Py
 */
   __pyx_v_freq_diff_ratio = 0.0;
 
-  /* "_oscillon_cy.pyx":40
+  /* "_oscillon_cy.pyx":41
  *     """
  *     cdef double freq_diff_ratio = 0.0
  *     cdef double max_freq = 0.0             # <<<<<<<<<<<<<<
@@ -2805,7 +2816,7 @@ static PyObject *__pyx_pf_12_oscillon_cy_2try_lock_frequency_cy(CYTHON_UNUSED Py
 */
   __pyx_v_max_freq = 0.0;
 
-  /* "_oscillon_cy.pyx":42
+  /* "_oscillon_cy.pyx":43
  *     cdef double max_freq = 0.0
  * 
  *     with nogil:             # <<<<<<<<<<<<<<
@@ -2818,7 +2829,7 @@ static PyObject *__pyx_pf_12_oscillon_cy_2try_lock_frequency_cy(CYTHON_UNUSED Py
       __Pyx_FastGIL_Remember();
       /*try:*/ {
 
-        /* "_oscillon_cy.pyx":43
+        /* "_oscillon_cy.pyx":44
  * 
  *     with nogil:
  *         if source_freq <= 0 or target_freq <= 0:             # <<<<<<<<<<<<<<
@@ -2836,7 +2847,7 @@ static PyObject *__pyx_pf_12_oscillon_cy_2try_lock_frequency_cy(CYTHON_UNUSED Py
         __pyx_L7_bool_binop_done:;
         if (__pyx_t_1) {
 
-          /* "_oscillon_cy.pyx":44
+          /* "_oscillon_cy.pyx":45
  *     with nogil:
  *         if source_freq <= 0 or target_freq <= 0:
  *             freq_diff_ratio = 1.0  #             # <<<<<<<<<<<<<<
@@ -2845,7 +2856,7 @@ static PyObject *__pyx_pf_12_oscillon_cy_2try_lock_frequency_cy(CYTHON_UNUSED Py
 */
           __pyx_v_freq_diff_ratio = 1.0;
 
-          /* "_oscillon_cy.pyx":43
+          /* "_oscillon_cy.pyx":44
  * 
  *     with nogil:
  *         if source_freq <= 0 or target_freq <= 0:             # <<<<<<<<<<<<<<
@@ -2855,7 +2866,7 @@ static PyObject *__pyx_pf_12_oscillon_cy_2try_lock_frequency_cy(CYTHON_UNUSED Py
           goto __pyx_L6;
         }
 
-        /* "_oscillon_cy.pyx":46
+        /* "_oscillon_cy.pyx":47
  *             freq_diff_ratio = 1.0  #
  *         else:
  *             if source_freq > target_freq:             # <<<<<<<<<<<<<<
@@ -2866,7 +2877,7 @@ static PyObject *__pyx_pf_12_oscillon_cy_2try_lock_frequency_cy(CYTHON_UNUSED Py
           __pyx_t_1 = (__pyx_v_source_freq > __pyx_v_target_freq);
           if (__pyx_t_1) {
 
-            /* "_oscillon_cy.pyx":47
+            /* "_oscillon_cy.pyx":48
  *         else:
  *             if source_freq > target_freq:
  *                 max_freq = source_freq             # <<<<<<<<<<<<<<
@@ -2875,7 +2886,7 @@ static PyObject *__pyx_pf_12_oscillon_cy_2try_lock_frequency_cy(CYTHON_UNUSED Py
 */
             __pyx_v_max_freq = __pyx_v_source_freq;
 
-            /* "_oscillon_cy.pyx":46
+            /* "_oscillon_cy.pyx":47
  *             freq_diff_ratio = 1.0  #
  *         else:
  *             if source_freq > target_freq:             # <<<<<<<<<<<<<<
@@ -2885,7 +2896,7 @@ static PyObject *__pyx_pf_12_oscillon_cy_2try_lock_frequency_cy(CYTHON_UNUSED Py
             goto __pyx_L9;
           }
 
-          /* "_oscillon_cy.pyx":49
+          /* "_oscillon_cy.pyx":50
  *                 max_freq = source_freq
  *             else:
  *                 max_freq = target_freq             # <<<<<<<<<<<<<<
@@ -2897,19 +2908,26 @@ static PyObject *__pyx_pf_12_oscillon_cy_2try_lock_frequency_cy(CYTHON_UNUSED Py
           }
           __pyx_L9:;
 
-          /* "_oscillon_cy.pyx":50
+          /* "_oscillon_cy.pyx":51
  *             else:
  *                 max_freq = target_freq
  *             freq_diff_ratio = fabs(source_freq - target_freq) / max_freq             # <<<<<<<<<<<<<<
  * 
  *     return freq_diff_ratio
 */
-          __pyx_v_freq_diff_ratio = (fabs((__pyx_v_source_freq - __pyx_v_target_freq)) / __pyx_v_max_freq);
+          __pyx_t_3 = fabs((__pyx_v_source_freq - __pyx_v_target_freq));
+          if (unlikely(__pyx_v_max_freq == 0)) {
+            PyGILState_STATE __pyx_gilstate_save = __Pyx_PyGILState_Ensure();
+            PyErr_SetString(PyExc_ZeroDivisionError, "float division");
+            __Pyx_PyGILState_Release(__pyx_gilstate_save);
+            __PYX_ERR(0, 51, __pyx_L4_error)
+          }
+          __pyx_v_freq_diff_ratio = (__pyx_t_3 / __pyx_v_max_freq);
         }
         __pyx_L6:;
       }
 
-      /* "_oscillon_cy.pyx":42
+      /* "_oscillon_cy.pyx":43
  *     cdef double max_freq = 0.0
  * 
  *     with nogil:             # <<<<<<<<<<<<<<
@@ -2922,23 +2940,28 @@ static PyObject *__pyx_pf_12_oscillon_cy_2try_lock_frequency_cy(CYTHON_UNUSED Py
           PyEval_RestoreThread(_save);
           goto __pyx_L5;
         }
+        __pyx_L4_error: {
+          __Pyx_FastGIL_Forget();
+          PyEval_RestoreThread(_save);
+          goto __pyx_L1_error;
+        }
         __pyx_L5:;
       }
   }
 
-  /* "_oscillon_cy.pyx":52
+  /* "_oscillon_cy.pyx":53
  *             freq_diff_ratio = fabs(source_freq - target_freq) / max_freq
  * 
  *     return freq_diff_ratio             # <<<<<<<<<<<<<<
 */
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_3 = PyFloat_FromDouble(__pyx_v_freq_diff_ratio); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 52, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_3);
-  __pyx_r = __pyx_t_3;
-  __pyx_t_3 = 0;
+  __pyx_t_4 = PyFloat_FromDouble(__pyx_v_freq_diff_ratio); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 53, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_4);
+  __pyx_r = __pyx_t_4;
+  __pyx_t_4 = 0;
   goto __pyx_L0;
 
-  /* "_oscillon_cy.pyx":31
+  /* "_oscillon_cy.pyx":32
  * 
  * 
  * def try_lock_frequency_cy(double source_freq, double target_freq,             # <<<<<<<<<<<<<<
@@ -2948,7 +2971,7 @@ static PyObject *__pyx_pf_12_oscillon_cy_2try_lock_frequency_cy(CYTHON_UNUSED Py
 
   /* function exit code */
   __pyx_L1_error:;
-  __Pyx_XDECREF(__pyx_t_3);
+  __Pyx_XDECREF(__pyx_t_4);
   __Pyx_AddTraceback("_oscillon_cy.try_lock_frequency_cy", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = NULL;
   __pyx_L0:;
@@ -3251,7 +3274,7 @@ static CYTHON_SMALL_CODE int __pyx_pymod_exec__oscillon_cy(PyObject *__pyx_pyini
   __pyx_m = __pyx_t_1;
   #endif
   #if CYTHON_COMPILING_IN_CPYTHON_FREETHREADING
-  PyUnstable_Module_SetGIL(__pyx_m, Py_MOD_GIL_USED);
+  PyUnstable_Module_SetGIL(__pyx_m, Py_MOD_GIL_NOT_USED);
   #endif
   __pyx_mstate = __pyx_mstate_global;
   CYTHON_UNUSED_VAR(__pyx_t_1);
@@ -3306,50 +3329,50 @@ __Pyx_RefNannySetupContext("PyInit__oscillon_cy", 0);
   (void)__Pyx_modinit_function_import_code(__pyx_mstate);
   /*--- Execution code ---*/
 
-  /* "_oscillon_cy.pyx":10
+  /* "_oscillon_cy.pyx":11
  * 
  * 
  * def calculate_resonance_cy(double source_freq, double target_freq,             # <<<<<<<<<<<<<<
  *                             double coupling_strength) -> float:
  *     """
 */
-  __pyx_t_2 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 10, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 11, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
-  if (PyDict_SetItem(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_return, __pyx_mstate_global->__pyx_n_u_float) < (0)) __PYX_ERR(0, 10, __pyx_L1_error)
-  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_12_oscillon_cy_1calculate_resonance_cy, 0, __pyx_mstate_global->__pyx_n_u_calculate_resonance_cy, NULL, __pyx_mstate_global->__pyx_n_u_oscillon_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[0])); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 10, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_return, __pyx_mstate_global->__pyx_n_u_float) < (0)) __PYX_ERR(0, 11, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_CyFunction_New(&__pyx_mdef_12_oscillon_cy_1calculate_resonance_cy, 0, __pyx_mstate_global->__pyx_n_u_calculate_resonance_cy, NULL, __pyx_mstate_global->__pyx_n_u_oscillon_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[0])); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 11, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_3);
   #endif
   __Pyx_CyFunction_SetAnnotationsDict(__pyx_t_3, __pyx_t_2);
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_calculate_resonance_cy, __pyx_t_3) < (0)) __PYX_ERR(0, 10, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_calculate_resonance_cy, __pyx_t_3) < (0)) __PYX_ERR(0, 11, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-  /* "_oscillon_cy.pyx":31
+  /* "_oscillon_cy.pyx":32
  * 
  * 
  * def try_lock_frequency_cy(double source_freq, double target_freq,             # <<<<<<<<<<<<<<
  *                            double lock_threshold) -> float:
  *     """
 */
-  __pyx_t_3 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 31, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 32, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
-  if (PyDict_SetItem(__pyx_t_3, __pyx_mstate_global->__pyx_n_u_return, __pyx_mstate_global->__pyx_n_u_float) < (0)) __PYX_ERR(0, 31, __pyx_L1_error)
-  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_12_oscillon_cy_3try_lock_frequency_cy, 0, __pyx_mstate_global->__pyx_n_u_try_lock_frequency_cy, NULL, __pyx_mstate_global->__pyx_n_u_oscillon_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[1])); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 31, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_3, __pyx_mstate_global->__pyx_n_u_return, __pyx_mstate_global->__pyx_n_u_float) < (0)) __PYX_ERR(0, 32, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_CyFunction_New(&__pyx_mdef_12_oscillon_cy_3try_lock_frequency_cy, 0, __pyx_mstate_global->__pyx_n_u_try_lock_frequency_cy, NULL, __pyx_mstate_global->__pyx_n_u_oscillon_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[1])); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 32, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   #if CYTHON_COMPILING_IN_CPYTHON && PY_VERSION_HEX >= 0x030E0000
   PyUnstable_Object_EnableDeferredRefcount(__pyx_t_2);
   #endif
   __Pyx_CyFunction_SetAnnotationsDict(__pyx_t_2, __pyx_t_3);
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_try_lock_frequency_cy, __pyx_t_2) < (0)) __PYX_ERR(0, 31, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_try_lock_frequency_cy, __pyx_t_2) < (0)) __PYX_ERR(0, 32, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
   /* "_oscillon_cy.pyx":1
- * # _oscillon_cy.pyx             # <<<<<<<<<<<<<<
+ * # cython: freethreading_compatible=True             # <<<<<<<<<<<<<<
+ * # _oscillon_cy.pyx
  * # v23.0Cython
- * # Python
 */
   __pyx_t_2 = __Pyx_PyDict_NewPresized(0); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 1, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
@@ -3503,7 +3526,7 @@ typedef struct {
     unsigned int num_kwonly_args : 1;
     unsigned int nlocals : 3;
     unsigned int flags : 10;
-    unsigned int first_line : 5;
+    unsigned int first_line : 6;
 } __Pyx_PyCode_New_function_description;
 /* NewCodeObj.proto */
 static PyObject* __Pyx_PyCode_New(
@@ -3520,12 +3543,12 @@ static int __Pyx_CreateCodeObjects(__pyx_mstatetype *__pyx_mstate) {
   PyObject* tuple_dedup_map = PyDict_New();
   if (unlikely(!tuple_dedup_map)) return -1;
   {
-    const __Pyx_PyCode_New_function_description descr = {3, 0, 0, 5, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 10};
+    const __Pyx_PyCode_New_function_description descr = {3, 0, 0, 5, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 11};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_source_freq, __pyx_mstate->__pyx_n_u_target_freq, __pyx_mstate->__pyx_n_u_coupling_strength, __pyx_mstate->__pyx_n_u_resonance, __pyx_mstate->__pyx_n_u_freq_diff};
     __pyx_mstate_global->__pyx_codeobj_tab[0] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_oscillon_cy_pyx, __pyx_mstate->__pyx_n_u_calculate_resonance_cy, __pyx_mstate->__pyx_kp_b_iso88591_9_A_A_D_Rq_b_AT_Rq_Rq_Rq_1, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[0])) goto bad;
   }
   {
-    const __Pyx_PyCode_New_function_description descr = {3, 0, 0, 5, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 31};
+    const __Pyx_PyCode_New_function_description descr = {3, 0, 0, 5, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 32};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_source_freq, __pyx_mstate->__pyx_n_u_target_freq, __pyx_mstate->__pyx_n_u_lock_threshold, __pyx_mstate->__pyx_n_u_freq_diff_ratio, __pyx_mstate->__pyx_n_u_max_freq};
     __pyx_mstate_global->__pyx_codeobj_tab[1] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_oscillon_cy_pyx, __pyx_mstate->__pyx_n_u_try_lock_frequency_cy, __pyx_mstate->__pyx_kp_b_iso88591_56_1_s_C_3a_a_2Q_1_1_d_r_b_1, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[1])) goto bad;
   }

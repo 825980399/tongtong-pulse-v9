@@ -1,3 +1,4 @@
+# cython: freethreading_compatible=True
 # _frequency_codec_cy.pyx
 # Cython加速版频率编解码器（v18.0修复版 + v23.0 nogil优化 + ★五期 MD5 C 化）
 # ★P1-4修复：与Python版FrequencyCodec.encode()算法完全一致
@@ -138,7 +139,15 @@ def _md5_int(bytes data) -> int:
     """
     cdef const uint8_t[::1] buf = data
     cdef uint8_t out[16]
-    _md5_full(&buf[0], len(data), out)
+    cdef uint8_t _empty[1]
+    # ★473：空输入时 `&buf[0]` 会越界（Cython boundscheck 抛 IndexError）。
+    #   `_md5_full` 在 length=0 时压根不读 data（range(0) 不进循环），
+    #   只需给一个**合法非空指针**即可 ⇒ 用 1 字节哑缓冲兜底。
+    if len(data) == 0:
+        _empty[0] = 0
+        _md5_full(&_empty[0], 0, out)
+    else:
+        _md5_full(&buf[0], len(data), out)
     return int.from_bytes(bytes(out[:16]), 'big')
 
 
