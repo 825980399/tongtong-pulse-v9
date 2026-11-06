@@ -1163,6 +1163,42 @@ def _m473_should_demote_align_log(how: str) -> bool:
     return bool(_m470_align_strict_on())
 
 
+def _m473_align_should_warn(how: str, patch: dict) -> tuple:
+    """★473刀11：470刀1 两类诊断日志的连击限流（按 how + 文件名）。
+
+    实测（近两天 pulse.log + pulse.log.1，即 2026-11-06 ~ 11-07）：
+      `[470刀1] modified 指向别的方法名（不对齐）`            69 条
+      `[470刀1] 拒绝对齐(orig_mismatch / orig_fragment)`      65 条
+    合计 134 条 —— 是整个「安全演化执行」里最大的一坨 WARNING。而它们描述的
+    是**同一个可预期现象**：LLM 产出的补丁不合格（改名 / original 与 body 不等），
+    判据正确拦住了，系统没有任何故障。逐条 WARNING 只会把真故障淹掉。
+    （刀9 已把 469 那条重复告警降 INFO；本条是它的上游大头。）
+
+    判据（与 451 刀4 同型，复用 alert_dedup 的全局连击计数）：
+      · 同一个 (how, 文件名) 连续 3 次才 WARNING，前两次 DEBUG（带连击数）；
+      · 过阈值后每 600s 再报一次 —— 「只报一次」会让真正持续的产出缺陷
+        在日志里彻底消失，比刷屏更糟。
+
+    ★为什么按**文件**而不是按方法名分组：实测 69 条集中在 PulseInnerWorld /
+      PulseSpiritualCore / config 等少数文件上。按方法名分组会让每个方法各自
+      从 1 开始计数 ⇒ 一旦分散就全部只到 DEBUG，等于关掉了这条可见性；
+      按文件分组既压得住噪声，又保留「哪个文件反复被 LLM 改错」这个信息。
+
+    Returns: ``(是否 WARNING, 连续第几次)``。判据异常一律回 WARNING（不静默）。
+    """
+    try:
+        from nucleus import alert_dedup as _ad473a
+        _f = os.path.basename(str((patch or {}).get("file") or "").strip())
+        return _ad473a.should_warn_streak(
+            f"m470_align:{how}:{_f}",
+            threshold=_ad473a.cfg_int("M473_ALIGN_STREAK_THRESHOLD", 3),
+            renotify_sec=_ad473a.cfg_num("M473_ALIGN_RENOTIFY_SEC", 600.0))
+    except Exception as _e473a:
+        silent_exc(_e473a, where="SafeEvolutionExecutor::_m473_align_should_warn",
+                   level="debug")
+        return True, 1
+
+
 def _m470_body_span(lines: list, method: str):
     """★470刀1：按 ``self_inspector._read_method_body`` 的**同一规则**定位方法体区间。
 
@@ -1300,11 +1336,13 @@ def _m469_align_method_patch(patch: dict) -> dict:
     _mname470 = str(patch.get("method") or "").strip()
     if _mm470 and _mname470 and _mm470.group(1) != _mname470:
         if _m470_align_strict_on():
-            _module_logger.warning(
+            _m473_emit, _m473_n = _m473_align_should_warn(
+                "modified_other_method", patch)
+            (_module_logger.warning if _m473_emit else _module_logger.debug)(
                 "[470刀1] modified 指向别的方法名（不对齐）: id=%s file=%s "
-                "期望=%s 实际=%s",
+                "期望=%s 实际=%s（同文件连续第 %d 次）",
                 patch.get("id"), patch.get("file"),
-                _mname470, _mm470.group(1))
+                _mname470, _mm470.group(1), _m473_n)
             return {"ok": False, "how": "modified_other_method",
                     "detail": (f"modified 定义的是另一个方法 {_mm470.group(1)}"
                                f"（补丁目标是 {_mname470}），"
@@ -1377,12 +1415,16 @@ def _m469_align_method_patch(patch: dict) -> dict:
                    (f"original 与目标方法体内容不等（orig {len(_o470)} 字"
                     f" / body {len(_b470)} 字）："
                     "源码已变或素材取错，拒绝按整方法替换"))
-        _module_logger.warning(
-            "[470刀1] 拒绝对齐(%s): id=%s file=%s method=%s orig=%d body=%d",
-            "orig_fragment" if _is_frag else "orig_mismatch",
-            patch.get("id"), patch.get("file"), _method, len(_o470), len(_b470))
+        _m473_how = "orig_fragment" if _is_frag else "orig_mismatch"
+        _m473_emit2, _m473_n2 = _m473_align_should_warn(_m473_how, patch)
+        (_module_logger.warning if _m473_emit2 else _module_logger.debug)(
+            "[470刀1] 拒绝对齐(%s): id=%s file=%s method=%s orig=%d body=%d"
+            "（同文件连续第 %d 次）",
+            _m473_how,
+            patch.get("id"), patch.get("file"), _method, len(_o470), len(_b470),
+            _m473_n2)
         return {"ok": False,
-                "how": "orig_fragment" if _is_frag else "orig_mismatch",
+                "how": _m473_how,
                 "detail": _why470,
                 "indent": 0, "orig_before_len": len(_orig)}
     import textwrap as _tw469
