@@ -9184,6 +9184,49 @@ def _m340_severity_pass(entry: object, min_severity: str = "medium",
     return False, ("action_closed" if _is_dc else "below_min_severity")
 
 
+def _m473_format_severity_rejects(detail: list) -> tuple:
+    """★473刀16：把 [340判死] severity 档拒收的明细聚合成一行文本。
+
+    现场（2026-11-07 12:25:37 启动后）：1474 行日志里 462 行是同一句
+    ``[340判死] severity 档拒收: ... 原因=action_closed（行动面开=False）``
+    ⇒ 占 31% 的日志量在重复描述「行动面关着，判死候选全被拒」这一件事，
+    真正的告警被淹没。
+
+    ★这不是故障：`action_closed` 是**配置状态**（行动面未开），
+      462 个候选共用一个原因，一次说清即可；级别仍保持 INFO 不变，
+      拒收集合与 `_rejected["severity"]` 计数一字不动（只改形态）。
+
+    排序按「次数降序、原因升序」—— 刷得最多的先看到；只展示前 4 组、
+    每组前 3 个样本，避免一个大池把日志行撑爆。
+
+    Returns: ``(文本, 组数)``。文本形如
+        ``action_closed（行动面开=False） x462 ｜样本: a.py::m1, b.py::m2, c.py::m3``
+    """
+    _agg: dict = {}
+    for _item in (detail or []):
+        if not isinstance(_item, (tuple, list)) or len(_item) < 3:
+            continue
+        _why = str(_item[2] or "?")
+        _slots = _agg.setdefault(_why, [])
+        _f473 = str(_item[0] or "?")
+        _n473 = str(_item[1] or "?")
+        _slots.append(f"{_f473}::{_n473}")
+    if not _agg:
+        return "", 0
+    _items = sorted(_agg.items(), key=lambda kv: (-len(kv[1]), kv[0]))
+    _show = 4
+    _parts = []
+    for _why, _names in _items[:_show]:
+        _sample = ", ".join(_names[:3])
+        if len(_names) > 3:
+            _sample += " 等"
+        _parts.append(f"{_why} x{len(_names)} ｜样本: {_sample}")
+    _txt = " ；".join(_parts)
+    if len(_items) > _show:
+        _txt += f" ；…共{len(_items)}组"
+    return _txt, len(_items)
+
+
 def _m340_judge_action_open(mode: str | None = None, sample: object = None,
                             misjudge: float | None = None,
                             tick_id: object = None) -> dict:
@@ -9299,6 +9342,8 @@ def _m335_o3_intake_candidates(items: list | None = None,
                 "reason": "限额为 0 ⇒ 关闭（配置驱动，非本函数决定）"}
     _seen: set = set()
     _out: list = []
+    # ★473刀16：severity 拒收明细（循环外聚合，避免 462 条同因日志刷屏）
+    _m473_sev_detail: list = []
     for _it in _pool:
         if not isinstance(_it, dict):
             _rejected["shape"] += 1
@@ -9316,9 +9361,8 @@ def _m335_o3_intake_candidates(items: list | None = None,
             default_severity=(_M340_DEAD_CODE_HARD_SEVERITY if _pool_is_dc else None))
         if not _m340_ok:
             _rejected["severity"] += 1
-            _module_logger.info(
-                "[340判死] severity 档拒收: file=%s method=%s 原因=%s（行动面开=%s）",
-                _file, _name, _m340_why, _m340_action_open)
+            # ★473刀16：只登记明细，循环外聚合成一条（原为逐条 INFO）
+            _m473_sev_detail.append((_file, _name, _m340_why))
             continue
         # ★339刀3：判据域显式排除 `tests/` / `test_`（图域外不判已有，
         #   但候选仍会产生 ⇒ 在这里补一道过滤）。
@@ -9354,6 +9398,16 @@ def _m335_o3_intake_candidates(items: list | None = None,
     #   而 `_lim` 恒为 1（`_O3_INTAKE_MAX_PER_DAY`），于是第一条命中即跳出，
     #   后面的条目根本没被分类 ⇒ `rejected` 恒为 0，拒收原因不可审计
     #   （且"__init__ 被拒"这类断言在只取 1 条时必然成立＝空转判据）。
+    # ★473刀16：severity 拒收**聚合**成一条（同因 462 条 → 1 行；级别仍 INFO）
+    if _m473_sev_detail:
+        try:
+            _m473_sev_txt, _m473_sev_n = _m473_format_severity_rejects(_m473_sev_detail)
+            _module_logger.info(
+                "[340判死] severity 档拒收 %d 条（%d 组）：%s",
+                len(_m473_sev_detail), _m473_sev_n, _m473_sev_txt)
+        except Exception as _e473s:
+            silent_exc(_e473s, where="self_inspector::_m473_severity_reject_log",
+                       level="warning")
     _out = _out[:_lim]
     return {"candidates": _out, "rejected": _rejected,
             "pool": len(_pool), "pool_strict": _strict_n,
