@@ -50,6 +50,28 @@ _lg = get_module_logger("graceful_apply")
 #: 一次请求被消费后若 apply 落地为 0，不应在同一窗口里反复重写。
 M473_RETRY_MIN_SEC = 900.0
 
+#: 落地侧（`PatchManager.apply_all_pending(only_approved=True)`）唯一认的状态。
+M473_APPLIABLE_STATUS = "approved"
+
+
+def m473_appliable_patches(pending) -> list:
+    """从待处理补丁里挑出「落地侧真的会应用」的那些。
+
+    口径必须与 `PatchManager.apply_all_pending(only_approved=True)` 一致：它只认
+    `status == "approved"`。而 `verified` 的真实含义是**自动批准被拒**
+    （信任分不足 / 审美 D 级 / 核心文件强制人工），不会有任何代码把它提升为
+    approved ⇒ 把 verified 算进「可应用」＝触发维护窗口并声明「即将应用并重启」，
+    实际 apply 恒为 0，是**假闭环**（`SafeEvolutionExecutor.py:6189` 已记过同一坑）。
+
+    返回新列表，不改入参。
+    """
+    _out = []
+    for _p in pending or ():
+        if isinstance(_p, dict) and _p.get("status") == M473_APPLIABLE_STATUS:
+            _out.append(_p)
+    return _out
+
+
 #: 进程内状态（重启后自然重置，不落盘）
 _M473_STATE = {"last_ts": 0.0, "last_count": -1}
 

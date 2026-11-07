@@ -13546,6 +13546,7 @@ class PulseInnerWorld(
         try:
             import os
 
+            from nucleus.evolution.graceful_apply import m473_appliable_patches
             from nucleus.reasoning.PatchManager import PatchManager
             from nucleus.reasoning.UpgradeWindow import UpgradeWindow
 
@@ -13564,12 +13565,15 @@ class PulseInnerWorld(
                 _auto_apply = getattr(config, 'EVOLUTION_CONFIG', {}).get("auto_apply_enabled", False)
             except Exception as e:
                 self._log(LogLevel.WARNING, f"异常已忽略（需关注）: {type(e).__name__}: {e}")
-            _approvable = [p for p in _pending
-                           if p.get("status") == "approved"
-                           or (_auto_apply and p.get("status") == "verified")]
+            # ★473刀14：上面这条注释（v25.0 BRAIN-8）本来就是「别把 verified 算进来」，
+            #   但旧代码 `or (_auto_apply and status=="verified")` 把注释推翻了 ——
+            #   落地侧 apply_all_pending(only_approved=True) 只认 approved ⇒ 窗口触发后
+            #   apply 恒为 0（声明了「即将应用并重启」却什么也不做）。口径收进纯函数。
+            _approvable = m473_appliable_patches(_pending)
             if not _approvable:
                 self._log(LogLevel.INFO,
-                         f"自动升级窗口: 共{len(_pending)}个待审补丁，但无可自动应用项(需人工审批)，跳过重启")
+                         f"自动升级窗口: 共{len(_pending)}个待审补丁，但无可自动应用项"
+                         f"(需人工审批；auto_apply={_auto_apply})，跳过重启")
                 return
 
             _window = UpgradeWindow(framework=self._framework_ref if hasattr(self, '_framework_ref') else None)
