@@ -4234,6 +4234,17 @@ M474_AUTONOMY_PULSE_MAX_BATCH = 200
 #   读取点：nucleus/evolution/PeriodicTestScheduler.py::_periodic_test_python
 PERIODIC_TEST_PYTHON_EXE = r"D:\Program Files\Python312\python.exe"
 
+# ★474 批刀24：分层背压「降级放行」的绝对硬顶（堵无界积压漏口）。
+#   现状：`_admit_layer_task` 对 priority<=3 的脉冲在队列超限后**无上限放行**，
+#   连 L2/L3 也放行 ⇒ 实测 L2 深度 2588/上限 300、放行 2300 次、仅拒绝 11 次，
+#   总队列 19:20=1413 → 19:59=5050 单调增长（3.14t 真并行放大了生产者投递速率）。
+#   True ⇒ 队列达「上限 × 倍数」后，即使高优先级也拒绝，把增长钉死在硬顶；
+#   False ⇒ 逐字回滚刀24 之前的行为（可一键关）。L0 生命线不受任何影响。
+#   ★不调整队列上限数字：调大只是让内存涨更多，不解决生产>消费的失衡。
+#   读取点：nucleus/field/InfoField.py::_m474_hard_cap_multiplier
+ENABLE_M474_OVERFLOW_HARD_CAP = True
+M474_OVERFLOW_HARD_MULTIPLIER = 4
+
 # ★主线第42批 T1（P0-272）：日志留存治理
 #   背景（实测证据链）：logs/pulse.log 的 ctime 未变（09-03）却只含当日 11:30 起的内容，
 #   实验证明「truncate 不改 ctime、delete+重建会改」→ 属**原地截断**；框架代码全库

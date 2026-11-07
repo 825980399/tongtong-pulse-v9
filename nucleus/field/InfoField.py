@@ -183,6 +183,29 @@ def _trace_route_matched(pulse_id, real_matched, universal_matched, dispatched, 
         _module_logger.debug(f"[路由打点忽略] type={type(_e).__name__} {_e}")
 
 
+def _m474_hard_cap_multiplier() -> int:
+    """★474刀24：分层背压「降级放行」的绝对硬顶倍数；0 = 关闭（逐字回滚旧行为）。
+
+    ``_admit_layer_task`` 的 P2-31 降级放行对 priority<=3 的脉冲**无上限放行**，
+    对 L2/L3 也生效，与其 docstring「L2/L3 达到上限即拒绝」矛盾；L1「达 2 倍
+    才拒绝」同样被架空。实测 L2 深度 2588/上限 300、放行 2300 次、仅拒绝 11 次，
+    总队列 19:20=1413 → 19:59=5050 单调增长。3.14t 真并行后生产者并发投递，
+    这个漏口被显著放大。硬顶只作用于「上限 × N」之外的极端区间，日常不触发。
+
+    ★只有 None 才算缺省；0/False 是显式关。读配置失败 ⇒ 返回 0（fail-open），
+    宁可退回旧行为也不猜一个会改变业务判定的值。
+    """
+    try:
+        import config as _c474
+        if not getattr(_c474, "ENABLE_M474_OVERFLOW_HARD_CAP", True):
+            return 0
+        _v = getattr(_c474, "M474_OVERFLOW_HARD_MULTIPLIER", 4)
+        return max(2, int(4 if _v is None else _v))
+    except Exception as _e474:
+        silent_exc(_e474, where="InfoField::_m474_hard_cap_multiplier", level="debug")
+        return 0
+
+
 class InfoField(SilentLogMixin):
     """
     全局信息场（v9.5 分层异步调度 · 终极完整版）
@@ -2093,6 +2116,22 @@ class InfoField(SilentLogMixin):
                     f"[背压] {layer}层队列已达软上限({_depth}/{_limit})，"
                     f"限流告警（仍放行，达{_limit * 2}才拒绝）")
             return True
+
+        # ★474刀24：降级放行的**绝对硬顶** —— 堵住无界积压漏口。
+        #   L0（limit=0）在本方法开头已 return True，生命线永不受影响。
+        #   硬顶只拦「上限×N」之外的极端深度；未达硬顶时完整保留原有降级放行语义。
+        _hard_mult = _m474_hard_cap_multiplier()
+        if _hard_mult and _depth >= _limit * _hard_mult:
+            self._layer_rejected_count[layer] = (
+                self._layer_rejected_count.get(layer, 0) + 1)
+            _hard_rejected = self._layer_rejected_count[layer]
+            if _hard_rejected == 1 or _hard_rejected % 100 == 0:
+                _module_logger.warning(
+                    f"[背压·硬顶] {layer}层队列深度 {_depth}/{_limit} "
+                    f"已达硬顶({_limit * _hard_mult})，即使优先级={priority} 也拒绝"
+                    f"（累计拒绝={_hard_rejected}）"
+                    + (f" 器官={organ_name}" if organ_name else ""))
+            return False
 
         # ★P2-31 降级放行：队列满时不再一刀切拒绝。
         #   高优先级脉冲（priority 数值越小越优先）仍放行，仅低优先级被丢弃，
