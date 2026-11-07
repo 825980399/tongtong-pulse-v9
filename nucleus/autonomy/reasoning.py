@@ -30,24 +30,40 @@ DOMAIN_REASONING = "reasoning"
 def classify_hub_entry(entry: dict) -> dict:
     """把 hub 一条记录归一成自主性信号。**纯函数**，不改入参、不外联。
 
-    判据（不猜、不编造）：
+    ★474刀25：hub 是**多器官共用的通用终身学习枢纽**，不是推理专用台账。
+    实测（20:29 首拍）114 条记录里 0 条含 ``local_result.solved``，全是
+    ``code_review / local_analysis_* / exploration_audit / growth_hypothesis``
+    等形态（``local_result`` 装的是 issue_type/file/line/method）。旧判据把它们
+    全部当成「一次推理尝试」计入分母，且把 ``needs_verification`` 误当「已用外部模型」
+    ⇒ 自给率恒 0.0、外部依赖率 0.9714，是**假数**，直接污染铁律 304 的核心度量。
+
+    现在按**写入契约**识别，不猜：
+      * 只有 ``_detect_symbolic_reason`` 写的推理记录才带
+        ``local_result.solved`` 或以 ``symbolic`` 开头的 ``task_type``；
+      * 其它记录标 ``record_kind=other / decidable=False``，
+        **不进自给率分母、不判外部依赖**，但仍写台账（不丢观测）。
+
+    对推理类记录，第二期判据逐字保留：
       * ``solved_locally`` 只认 ``local_result.solved is True``（显式真值）；
-      * ``external_used`` = ``api_better`` 为真，或「本地没解出且需要外部验证」；
-      * 两者都不成立 ⇒ 视为本地可判定的一次尝试（不算外部依赖）。
+      * ``external_used`` = ``api_better`` 为真，或「本地没解出且需要外部验证」。
     """
     _e = entry if isinstance(entry, dict) else {}
     _local = _e.get("local_result")
     _local = _local if isinstance(_local, dict) else {}
+    _task_type = str(_e.get("task_type") or "unknown")
+    _decidable = ("solved" in _local) or _task_type.startswith("symbolic")
     _solved = _local.get("solved") is True
     _api_better = bool(_e.get("api_better"))
     _needs_verify = bool(_e.get("needs_verification"))
     _external = _api_better or (not _solved and _needs_verify)
     return {
         "entry_id": str(_e.get("id") or ""),
-        "task_type": str(_e.get("task_type") or "unknown"),
+        "task_type": _task_type,
         "organ": str(_e.get("organ") or "unknown"),
-        "solved_locally": _solved,
-        "external_used": _external,
+        "record_kind": "reasoning" if _decidable else "other",
+        "decidable": _decidable,
+        "solved_locally": _solved if _decidable else False,
+        "external_used": _external if _decidable else False,
         "api_better": _api_better,
     }
 
@@ -66,6 +82,8 @@ class ReasoningObserver:
         self._total = 0
         self._local = 0
         self._external = 0
+        # ★474刀25：通用 hub 记录数（留痕但**不进**自给率分母）
+        self._non_reasoning = 0
 
     def observe(self, entries: Iterable) -> dict:
         """批量消化。**只读** entries，不修改 hub、不修改任何传入对象。"""
@@ -81,16 +99,21 @@ class ReasoningObserver:
             if len(self._seen) > self._max_seen:
                 self._seen.clear()
                 self._seen.add(_key)
-            self._total += 1
-            if _sig["solved_locally"]:
-                self._local += 1
-            if _sig["external_used"]:
-                self._external += 1
-            _t = self._by_task.setdefault(
-                _sig["task_type"], {"total": 0, "local": 0, "external": 0})
-            _t["total"] += 1
-            _t["local"] += int(_sig["solved_locally"])
-            _t["external"] += int(_sig["external_used"])
+            # ★474刀25：只有「可判定的推理记录」进指标；其它记录仍留痕，
+            #   但绝不假扮成「一次依赖外部的推理尝试」。
+            if _sig["decidable"]:
+                self._total += 1
+                if _sig["solved_locally"]:
+                    self._local += 1
+                if _sig["external_used"]:
+                    self._external += 1
+                _t = self._by_task.setdefault(
+                    _sig["task_type"], {"total": 0, "local": 0, "external": 0})
+                _t["total"] += 1
+                _t["local"] += int(_sig["solved_locally"])
+                _t["external"] += int(_sig["external_used"])
+            else:
+                self._non_reasoning += 1
             self._kernel.note_experience({
                 "kind": "reasoning_observation",
                 "domain": DOMAIN_REASONING,
@@ -98,6 +121,8 @@ class ReasoningObserver:
                 "entry_id": _sig["entry_id"],
                 "task_type": _sig["task_type"],
                 "organ": _sig["organ"],
+                "record_kind": _sig["record_kind"],
+                "decidable": _sig["decidable"],
                 "solved_locally": _sig["solved_locally"],
                 "external_used": _sig["external_used"],
                 "api_better": _sig["api_better"],
@@ -106,6 +131,8 @@ class ReasoningObserver:
         return {"new": _new, **self.snapshot()}
 
     def snapshot(self) -> dict:
+        # ★474刀25：没有可判定样本时返回 None（「无数据」），绝不返回 0.0
+        #   （「完全依赖外部」）—— 后者会把空样本误读成能力为零。
         _n = self._total or 1
         return {
             "schema": "autonomy_reasoning/474.v2",
@@ -113,8 +140,11 @@ class ReasoningObserver:
             "total": self._total,
             "solved_locally": self._local,
             "external": self._external,
-            "reasoning_self_sufficiency_rate": round(self._local / _n, 4),
-            "external_dependency_rate": round(self._external / _n, 4),
+            "non_reasoning_total": self._non_reasoning,
+            "reasoning_self_sufficiency_rate": (
+                round(self._local / _n, 4) if self._total else None),
+            "external_dependency_rate": (
+                round(self._external / _n, 4) if self._total else None),
             "by_task_type": {k: dict(v) for k, v in self._by_task.items()},
             "kernel": self._kernel.snapshot(),
         }
