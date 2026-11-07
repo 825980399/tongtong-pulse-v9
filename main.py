@@ -5474,6 +5474,14 @@ def main():
                             sys.exit(0)
                 except Exception as _apply_check_e:
                     logging.getLogger("pulse").warning(f"[进化] 应用请求检测异常(忽略): {_apply_check_e}")
+                # ★474批刀3：自主性观测节拍（影子只读；内部按墙钟 300s 自节流）。
+                #   不改任何生产对象、不调外部模型；异常一律吞掉，绝不影响主循环。
+                try:
+                    from nucleus.autonomy.pulse import autonomy_observe_tick
+                    autonomy_observe_tick()
+                except Exception as _m474_ae:
+                    silent_exc(_m474_ae, "main.py:474刀3 autonomy_observe_tick",
+                               level="debug")
                 # ★422批刀3：周期 apply（内部按墙钟 300s 自节流，本块 ~10s 一拍）
                 try:
                     _m422_ar = _m422_periodic_apply_tick(framework)

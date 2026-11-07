@@ -4213,6 +4213,17 @@ ENABLE_M473_CONSOLE_EXIT_CMD = True
 ENABLE_M474_AUTONOMY_KERNEL = False
 ENABLE_M474_AUTONOMY_LEDGER = True
 
+# ★474 批第三期：自主性观测节拍接线（影子只读，缺省开）。
+#   True ⇒ 每 300s 读一次验证学习枢纽的**既有**记录，转成结构化经验与推理自给率；
+#   只写 data/autonomy/experience.jsonl（自有台账，/data/ 已 ignore），
+#   不新增/不修改 hub 记录、不改任何生产判定、不调用外部 LLM。
+#   False ⇒ 逐字回滚第三期之前的行为（不装配、不采样、不打印、不写台账）。
+#   ★只有 None 才算缺省；0/False 是显式关，读取点不得写成 or True。
+#   读取点：nucleus/autonomy/pulse.py
+ENABLE_M474_AUTONOMY_PULSE = True
+M474_AUTONOMY_PULSE_INTERVAL_SEC = 300
+M474_AUTONOMY_PULSE_MAX_BATCH = 200
+
 # ★主线第42批 T1（P0-272）：日志留存治理
 #   背景（实测证据链）：logs/pulse.log 的 ctime 未变（09-03）却只含当日 11:30 起的内容，
 #   实验证明「truncate 不改 ctime、delete+重建会改」→ 属**原地截断**；框架代码全库
