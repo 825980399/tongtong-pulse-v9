@@ -4224,6 +4224,16 @@ ENABLE_M474_AUTONOMY_PULSE = True
 M474_AUTONOMY_PULSE_INTERVAL_SEC = 300
 M474_AUTONOMY_PULSE_MAX_BATCH = 200
 
+# ★474 批刀23：定期测试子进程的解释器（**桥接期显式指定，不跟 PATH 漂移**）。
+#   主程序用 3.14t（free-threading）；但 tools/verify_semantic_kernel.py 依赖的
+#   本地句向量后端 fastembed + onnxruntime 目前只装在 3.12。PATH 切换后该脚本
+#   三路加载全失败 ⇒ 编码器 disabled ⇒ 空等 120s 被 60s 超时杀 ⇒ 假回归 WARNING
+#   （11-07 15:13 起 9 次；12:44/13:06 切 PATH 前均 rc=0）。
+#   置 None 或删掉本项 ⇒ 回落 sys.executable（与父进程一致）。
+#   ★退出条件：3.14t 具备 fastembed + onnxruntime 后删除本项，两处统一。
+#   读取点：nucleus/evolution/PeriodicTestScheduler.py::_periodic_test_python
+PERIODIC_TEST_PYTHON_EXE = r"D:\Program Files\Python312\python.exe"
+
 # ★主线第42批 T1（P0-272）：日志留存治理
 #   背景（实测证据链）：logs/pulse.log 的 ctime 未变（09-03）却只含当日 11:30 起的内容，
 #   实验证明「truncate 不改 ctime、delete+重建会改」→ 属**原地截断**；框架代码全库

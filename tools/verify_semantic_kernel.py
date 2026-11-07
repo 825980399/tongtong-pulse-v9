@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -447,6 +448,30 @@ def _current_threshold():
         return "?"
 
 
+def wait_encoder_ready(enc, timeout: float = 120.0, clock=None, sleeper=None):
+    """等待编码器就绪；**一旦判定 disabled 立即返回**，不空等满 timeout。
+
+    ★474刀23：VectorEncoder 三路加载全失败会置 `state=disabled`，此时
+    `is_available()` 恒 False。旧实现仍空等 120s，而定期测试调度器只给 60s
+    ⇒ 必然被杀成「超时(60s)」，把真实原因（缺 fastembed）掩盖成假回归。
+    `clock`/`sleeper` 可注入，便于单测在不真实等待的前提下验证判别力。
+    Returns: (available: bool, waited_sec: float, sleep_calls: int)
+    """
+    _now = clock or time.time
+    _sleep = sleeper or time.sleep
+    _start = _now()
+    _calls = 0
+    while not enc.is_available():
+        _st = enc.status().get("state", "?")
+        if _st == "disabled":
+            break
+        if _now() - _start >= timeout:
+            break
+        _sleep(1)
+        _calls += 1
+    return bool(enc.is_available()), _now() - _start, _calls
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="语义内核黄金评测集")
     ap.add_argument("--selftest", action="store_true",
@@ -477,14 +502,9 @@ def main() -> int:
         CFG.SEMANTIC_KERNEL_CONFIG["enable_semantic_kernel"] = True
         from nucleus.semantic.VectorEncoder import get_vector_encoder
         enc = get_vector_encoder()
-        # 等待编码器后台加载完成（模型已缓存，通常几秒内就绪）
-        import time as _time
-        _wait_start = _time.time()
-        while not enc.is_available() and _time.time() - _wait_start < 120:
-            _st = enc.status().get("state", "?")
-            print(f"  等待编码器就绪…（当前状态：{_st}，已等 {int(_time.time()-_wait_start)}s）", end="\r")
-            _time.sleep(1)
-        print()
+        # ★474刀23：等编码器就绪；disabled 立即返回，不再空等 120s 撞 60s 超时
+        _ready, _waited, _nap = wait_encoder_ready(enc)
+        print(f"  编码器等待结束：ready={_ready} 耗时={_waited:.1f}s 轮询={_nap} 次")
         if not enc.is_available():
             print("  ⚠ 真实编码器不可用：")
             st = enc.status()

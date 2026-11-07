@@ -36,6 +36,26 @@ except Exception:  # pragma: no cover - 探针不可用时降级为「不在跑�
         return False
 
 
+def _periodic_test_python() -> str:
+    """★474刀23：定期测试子进程的解释器 —— **不跟系统 PATH 漂移**。
+
+    旧实现硬编码 ``["python", script]``。把机器级 PATH 的 `python` 指向
+    3.14t 后，子进程立刻失去 `fastembed`/`onnxruntime`（只装在 3.12），
+    VectorEncoder 恒 disabled ⇒ 脚本空等 120s ⇒ 60s 超时被杀 ⇒ 每 22 分钟
+    一条「定期测试失败」假回归 WARNING（11-07 15:13 起实测 9 次）。
+    现在显式可配：config.PERIODIC_TEST_PYTHON_EXE 优先，未配/异常则回落
+    `sys.executable`（与父进程一致），绝不吞异常、绝不猜路径。
+    """
+    try:
+        import config as _cfg
+        _v = getattr(_cfg, "PERIODIC_TEST_PYTHON_EXE", None)
+        if _v:
+            return str(_v)
+    except Exception as _e:
+        silent_exc(_e, where="PeriodicTestScheduler::_periodic_test_python", level="debug")
+    return sys.executable
+
+
 class PeriodicTestScheduler:
     """定期测试调度器。"""
 
@@ -304,7 +324,7 @@ class PeriodicTestScheduler:
             try:
                 _proc = subprocess.run(  # 有意不检查子进程退出码
 
-                    ["python", _script],
+                    [_periodic_test_python(), _script],
                     capture_output=True, text=True, timeout=timeout,
                     encoding="utf-8", errors="replace",
                     cwd=self._project_root,
