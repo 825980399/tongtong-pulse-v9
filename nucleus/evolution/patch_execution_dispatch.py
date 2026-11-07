@@ -239,6 +239,25 @@ def _m365_o3_review_items(cand: dict, gate_report: dict | None) -> dict:
             "god_file": _god}
 
 
+def _m473_terminal_statuses() -> tuple:
+    """★473刀19：人工终态集合 —— **以 `patch_dedup.TERMINAL_STATUSES` 为唯一源**。
+
+    为什么不在这里另立一套：终态的定义散成两份必然漂移（新增一种终态时漏改一处，
+    就会把"已裁决"误判成"在办"）。单测 `test_04` 钉住两者**逐字相同**。
+
+    导入失败 ⇒ 用本地兜底：宁可少判一次"已裁决"（退化成旧文案），
+    也绝不能把"在办"误判成"已裁决"。
+    """
+    try:
+        from nucleus.evolution.patch_dedup import TERMINAL_STATUSES as _ts
+        return tuple(_ts)
+    except Exception as _e:
+        silent_exc(_e, where="patch_execution_dispatch::_m473_terminal_statuses",
+                   level="debug")
+        return ("wont_fix", "wontfix", "cancelled", "revoked",
+                "rejected", "rolled_back")
+
+
 def _m335_o3_consume(now: float | None = None, project_root: str | None = None,
                      pending_path: str | None = None,
                      gate_report: dict | None = None) -> dict:
@@ -427,15 +446,38 @@ def _m335_o3_consume(now: float | None = None, project_root: str | None = None,
     if _shape == "bad" or _shape == "dict:empty":
         return {"status": "unavailable", "gate": _verdict,
                 "reason": "待修池结构不可判定 ⇒ 本轮不写（不覆盖他方账）"}
+    # ★473刀19：同题判据原来只按 (file, method) 匹配、**完全不看 status** ⇒
+    #   一条已被人裁决 `wont_fix` 的死条会把同题通道永久堵住，而日志写
+    #   「已存在同题候选」暗示"有人在办"，与实际（"人已裁决不修"）完全相反。
+    #   现按 status 分档：终态 ⇒ 明说"已被裁决"并带上裁决原因；
+    #   非终态 ⇒ 连 status 一起打（verified 与 pending 也是两回事）。
+    #   ★行为不变：两种情况都**不重复入池** —— 尊重人工裁决，也不重复打扰。
     _dup = [x for x in _rows
-            if str(x.get("file") or "") == str(_entry["file"])
+            if isinstance(x, dict)
+            and str(x.get("file") or "") == str(_entry["file"])
             and str(x.get("method") or "") == str(_entry["method"])]
     if _dup:
+        _d0 = _dup[0]
+        _d0_id = _d0.get("id")
+        _d0_st = str(_d0.get("status") or "").strip().lower()
+        if _d0_st in _m473_terminal_statuses():
+            _d0_why = str(_d0.get("wont_fix_reason")
+                          or _d0.get("decision_reason") or "")
+            _d0_by = str(_d0.get("wont_fix_by") or "")
+            _module_logger.info(
+                "[335刀1][O3消费] 同题已被裁决为 %s%s ⇒ 不重复入池"
+                "（id=%s｜裁决原因：%.120s）",
+                _d0_st, ("（" + _d0_by + "）") if _d0_by else "",
+                _d0_id, _d0_why or "无记录")
+            return {"status": "no_candidate", "gate": _verdict,
+                    "reason": "同题已被裁决为 " + _d0_st,
+                    "existing_id": _d0_id, "existing_status": _d0_st}
         _module_logger.info(
-            "[335刀1][O3消费] 已存在同题候选（id=%s）⇒ 不重复入池",
-            (_dup[0] or {}).get("id"))
+            "[335刀1][O3消费] 已存在同题候选（id=%s status=%s）⇒ 不重复入池",
+            _d0_id, _d0_st or "?")
         return {"status": "no_candidate", "gate": _verdict,
-                "reason": "同题已在池", "existing_id": (_dup[0] or {}).get("id")}
+                "reason": "同题已在池", "existing_id": _d0_id,
+                "existing_status": _d0_st}
     _rows.append(_entry)
     if _shape == "list" or _shape == "missing" or _shape == "dict:empty":
         _payload: Any = _rows
