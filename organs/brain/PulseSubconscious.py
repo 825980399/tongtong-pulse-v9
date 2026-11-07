@@ -317,16 +317,27 @@ class PulseSubconscious(BasePulseOrgan):
         """注入闭环间洞察共享黑板"""
         self._insight_board = board
     def set_self_awareness(self, self_awareness):
-        """注入自我认知引用（供主动探索驱动使用）"""
-        self._self_awareness = self_awareness
-        # ★P3-1：同步注入 provider 回调（替代 getter 直调）
-        if self_awareness is not None:
-            if hasattr(self_awareness, 'get_existential_state'):
-                self._existential_state_provider = self_awareness.get_existential_state
-            if hasattr(self_awareness, 'get_user_schedule'):
-                self._user_schedule_provider = self_awareness.get_user_schedule
-            if hasattr(self_awareness, 'get_knowledge_profile'):
-                self._knowledge_profile_provider = self_awareness.get_knowledge_profile
+        """注入自我认知引用（供主动探索驱动使用）。
+
+        ★473 落地补丁（issue_type=periodic_task_no_reentry）：加重入保护，
+        上一轮同步/周期扫描未结束时跳过本轮，避免未完成的工作堆积。
+        """
+        # Reentry guard: 上一轮还在跑就跳过本轮。
+        if getattr(self, '_self_awareness_sync_busy', False):
+            return
+        self._self_awareness_sync_busy = True
+        try:
+            self._self_awareness = self_awareness
+            # ★P3-1：同步注入 provider 回调（替代 getter 直调）
+            if self_awareness is not None:
+                if hasattr(self_awareness, 'get_existential_state'):
+                    self._existential_state_provider = self_awareness.get_existential_state
+                if hasattr(self_awareness, 'get_user_schedule'):
+                    self._user_schedule_provider = self_awareness.get_user_schedule
+                if hasattr(self_awareness, 'get_knowledge_profile'):
+                    self._knowledge_profile_provider = self_awareness.get_knowledge_profile
+        finally:
+            self._self_awareness_sync_busy = False
     def _load_life_state_config(self) -> dict:
         """从config加载生命状态配置，失败时使用默认值"""
         try:
