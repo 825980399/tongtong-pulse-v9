@@ -4185,6 +4185,16 @@ ENABLE_M473_HTTP_TIMEOUT_AS_RESULT = True
 # False：逐字回退旧的整控制台 Ctrl+C（仅用于 A/B 对照/应急）。
 ENABLE_M473_UPGRADE_APPLY_NOW = True
 
+# ★473 刀15：入队时把「完整方法」对齐回原文基础缩进（修自主进化闭环断点）
+#   病灶：`PatchManager._m323_reindent` 只做「剥公共缩进」，对含 def 的完整方法
+#   也照剥（4 格 def → 0 格），而入队前 original_code 仍是文件里的 4/8 格
+#   ⇒ 存盘后 base 不等 ⇒ 验证/应用两侧的 `_m92_base_indent_guard` 必拒
+#   ⇒ approved 也 applied=False（实测 patch_history 里 4 条 approved 全部如此，
+#   其中 3 条报「基础缩进不一致 original=8/4 modified=0」）。
+# True（默认）：左移后按 original_code 的 base 平移回来（片段/无 def 不处理）。
+# False：逐字回退 473 刀15 之前的行为（仅用于 A/B 对照/应急）。
+ENABLE_M473_REINDENT_REALIGN = True
+
 # ★主线第42批 T1（P0-272）：日志留存治理
 #   背景（实测证据链）：logs/pulse.log 的 ctime 未变（09-03）却只含当日 11:30 起的内容，
 #   实验证明「truncate 不改 ctime、delete+重建会改」→ 属**原地截断**；框架代码全库

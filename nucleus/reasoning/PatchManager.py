@@ -3666,6 +3666,109 @@ class PatchManager:
                 "mode": PatchManager._m445_wrap_mode()}
 
     @staticmethod
+    def _m473_realign_on() -> bool:
+        """★473刀15 灰度开关：入队时把整方法对齐回原文基础缩进（默认开）。
+
+        关闭 ⇒ 逐字回到 473 刀15 之前的行为（只左移、不对齐）。
+        """
+        try:
+            import config as _c
+            return bool(getattr(_c, "ENABLE_M473_REINDENT_REALIGN", True))
+        except Exception as _e:
+            silent_exc(_e, where="PatchManager::_m473_realign_on", level="debug")
+            return True
+
+    @staticmethod
+    def _m473_shift_indent(code: str, delta: int) -> str:
+        """整体平移代码块的基础缩进（正=右移，负=左移），保持相对层级不变。
+
+        ★三引号字符串的**内部续行不平移**：那里是字符串内容，平移等于改语义；
+          不平移也不影响语法（字符串续行的缩进属于值，不属于语句层级）。
+        tokenize 失败 ⇒ **原样返回**（宁可不补偿，也不猜）。
+        """
+        if not code or not delta:
+            return code
+        _lines = code.replace("\r\n", "\n").split("\n")
+        _skip: set[int] = set()
+        try:
+            import io as _io
+            import tokenize as _tk
+            for _t in _tk.generate_tokens(_io.StringIO(code).readline):
+                if _t.type == _tk.STRING and _t.end[0] > _t.start[0]:
+                    _skip.update(range(_t.start[0] + 1, _t.end[0] + 1))
+        except Exception as _e:
+            silent_exc(_e, where="PatchManager::_m473_shift_indent tokenize", level="debug")
+            return code
+        _out = []
+        for _i, _ln in enumerate(_lines, start=1):
+            if _i in _skip:
+                _out.append(_ln)
+                continue
+            if not _ln.strip():
+                _out.append("")
+                continue
+            if delta > 0:
+                _out.append(" " * delta + _ln)
+            else:
+                _cut = -delta
+                _w = len(_ln) - len(_ln.lstrip(" \t"))
+                _out.append(_ln[_cut:] if _w >= _cut else _ln.lstrip(" \t"))
+        return "\n".join(_out)
+
+    @staticmethod
+    def _m473_realign_indent(patch: dict) -> dict:
+        """把**完整方法**的 modified_code 对齐回 original_code 的基础缩进。
+
+        病灶（2026-11-07 实测）：`_m323_reindent` 只做「剥公共缩进」，对含 def 的
+        完整方法也照剥（4 格 def → 0 格），而入队前 original_code 仍是文件里的
+        4/8 格 ⇒ 存盘后 base 不等 ⇒ 验证/应用两侧的 `_m92_base_indent_guard` 必拒
+        ⇒ approved 也 applied=False。patch_history 里 4 条 approved 全部如此，
+        其中 3 条报「基础缩进不一致 original=8/4 modified=0」。
+
+        只处理「两侧都含 def」的整方法替换：片段（无 def）交给 445 包裹，
+        原文无 def（O3 删除类候选）不适用。
+        """
+        _out = {"changed": False, "reason": ""}
+        if not PatchManager._m473_realign_on():
+            _out["reason"] = "switch_off"
+            return _out
+        _orig = str(patch.get("original_code") or "")
+        _mod = str(patch.get("modified_code") or "")
+        if not _orig.strip() or not _mod.strip():
+            _out["reason"] = "empty"
+            return _out
+        if not (PatchManager._m280_extract_def_name(_orig)
+                and PatchManager._m280_extract_def_name(_mod)):
+            _out["reason"] = "not_full_method"
+            return _out
+        _bo = _m92_base_indent(_orig)
+        _bm = _m92_base_indent(_mod)
+        _out["base_before"] = _bm
+        _out["base_target"] = _bo
+        if _bo < 0 or _bm < 0:
+            _out["reason"] = "no_indent_info"
+            return _out
+        if _bm == _bo:
+            _out["reason"] = "already_aligned"
+            return _out
+        _new = PatchManager._m473_shift_indent(_mod, _bo - _bm)
+        if not _new.strip():
+            _out["reason"] = "shift_empty"
+            return _out
+        # 壳只用于校验（4 格 def 单独 parse 必 "unexpected indent"），不写进补丁
+        try:
+            ast.parse("class _M473Shim:" + chr(10) + _new)
+        except (SyntaxError, ValueError) as _e:
+            silent_exc(_e, where="PatchManager::_m473_realign_indent ast", level="warning")
+            _out["reason"] = "shift_parse_failed"
+            return _out
+        patch["modified_code"] = _new
+        _out["changed"] = True
+        _out["reason"] = "realigned"
+        _out["base_after"] = _m92_base_indent(_new)
+        return _out
+
+    @staticmethod
     def _m323_normalize_patch(patch: dict) -> dict:
         """以 AST enclosing def 为唯一真值回填 method（★323批刀2）。
 
@@ -3689,6 +3792,14 @@ class PatchManager:
             silent_exc(_e, where="nucleus.reasoning.PatchManager::_m323_normalize_patch 语法校验",
                        level="warning")
             _info["parse_ok"] = False
+        # ★473刀15：左移补偿 —— 完整方法必须对齐回原文基础缩进。
+        #   不补偿 ⇒ base(modified)=0 ≠ base(original)=4/8 ⇒ 验证/应用两侧的
+        #   `_m92_base_indent_guard` 必拒 ⇒ approved 也 applied=False（实测 4/4）。
+        _m473_rl = PatchManager._m473_realign_indent(patch)
+        if _m473_rl.get("changed"):
+            # _code 故意不更新：它只用于 _m323_ast_def_name 取 def 名，
+            # 保持左移后的 0 缩进可直接 parse；存盘走 patch["modified_code"]。
+            _info["realigned"] = _m473_rl
         # ★445刀1：片段 → 完整方法 包裹（影子模式只留痕）。放在取 def **之前**：
         #   否则 284 刀5 看到的仍是"无 def"，作废判定不变。
         try:
