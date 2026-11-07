@@ -4136,6 +4136,24 @@ _M422_DONE_STATUS = frozenset({
 })
 
 
+def _m473_apply_thr_on() -> bool:
+    """★473刀18：`approved=0` 告警连击限流的灰度开关（缺省开）。
+
+    ★`0` 与 `None` 必须是**两个意思**：`None` = 没配（按缺省开），
+      `0`/`False` = 显式关（逐字回滚 442/444 的原有行为）。
+      所以这里**不用** ``getattr(cfg, X, True) or True`` —— 那会把 0 吞成 True。
+    """
+    try:
+        import config as _cfg473
+        _v = getattr(_cfg473, "ENABLE_M473_APPLY_NOAPPROVED_THROTTLE", None)
+        if _v is None:
+            return True
+        return bool(_v)
+    except Exception as _e:
+        silent_exc(_e, "main.py:_m473_apply_thr_on", level="debug")
+        return True
+
+
 def _m422_count_approved_pending() -> dict:
     """待落地 approved 件统计（**只读**：走 PatchManager 的读口，不写任何文件）。
 
@@ -4249,18 +4267,53 @@ def _m422_periodic_apply_tick(framework, now: float | None = None) -> dict:
         _pend_n = int(_cnt.get("pending", 0) or 0)
         _appr_n = int(_cnt.get("approved", 0) or 0)
         _last_appr = _cnt.get("last_approved_at") or 0
-        _age_h = ((time.time() - float(_last_appr)) / 3600.0) if _last_appr else -1.0
+        # ★473刀18：`_last_appr` 为 0（从未批准过）时**不再算小时数** ——
+        #   原实现赋 -1.0 后照打，日志成了「从未（-1.0 小时前）」，读数自相矛盾。
+        _age_h = ((time.time() - float(_last_appr)) / 3600.0) if _last_appr else None
+        _age_txt = f"（{_age_h:.1f} 小时前）" if _age_h is not None else ""
+        # ★473刀18：pending>0 会**永久**每 5 分钟刷一条 WARNING（实测 12:36~13:01
+        #   已 6 条 ⇒ 一天 288 条）。而「队列里有件等着人工批」是**稳定状态**，
+        #   不是持续故障 ⇒ 复用 alert_dedup 的连击限流：连续 3 次（≈15 分钟）
+        #   才 WARNING，之后每 1800s 再报一次（消息带连续次数，能看出等了多久）。
+        #   ★判据自身异常 ⇒ 照常告警（`_emit=True`），绝不因限流失效而静默丢日志。
+        _emit422, _streak422 = True, 0
+        if _pend_n > 0:
+            try:
+                from nucleus import alert_dedup as _ad422
+                if _m473_apply_thr_on():
+                    _emit422, _streak422 = _ad422.should_warn_streak(
+                        "m422_apply_no_approved", threshold=3, renotify_sec=1800.0)
+                else:
+                    _emit422, _streak422 = True, 0   # 灰度关 ⇒ 逐字回滚旧行为
+            except Exception as _e422d:
+                silent_exc(_e422d,
+                           "main.py:_m422_periodic_apply_tick 473刀18 限流",
+                           level="debug")
+                _emit422, _streak422 = True, 0
+        else:
+            try:
+                from nucleus import alert_dedup as _ad422r
+                _ad422r.reset_streak("m422_apply_no_approved")
+            except Exception as _e422r:
+                silent_exc(_e422r,
+                           "main.py:_m422_periodic_apply_tick 473刀18 reset",
+                           level="debug")
         # ★444刀4：**分级**——「队列里本来就没东西」和「有东西却批不出来」是两件事。
         #   442 一律打 WARNING ⇒ 夜间 10 小时 106 条，其中绝大多数是 pending=0 的空转。
         #   pending==0 ⇒ DEBUG（无事可做不是告警）；pending>0 ⇒ WARNING（真卡住了）。
-        _log444 = _logger.warning if _pend_n > 0 else _logger.debug
+        # ★473刀18：`verified` 不会自动转 approved（信任分/核心文件闸），
+        #   所以「有 pending 却无 approved」最常见的原因是**在等人批**，
+        #   不是审批桥故障 —— 文案把这条放最前，避免把人引向错误方向。
+        _log444 = (_logger.warning
+                   if (_pend_n > 0 and _emit422) else _logger.debug)
         _log444(
             "[422刀3][周期apply] approved=0 ⇒ 本轮不应用：pending=%d approved=%d "
-            "最近一条 approved=%s（%.1f 小时前）｜建议：检查审批桥是否放行、"
+            "最近一条 approved=%s%s｜连续第 %d 次｜建议：先确认队列里是否有**需人工批准**的件"
+            "（verified/pending 不会自动转 approved），再查审批桥是否放行、"
             "pending 是否全被判 stale、或基线闸门 baseline_positive 是否拦住了",
             _pend_n, _appr_n,
             (time.strftime("%m-%d %H:%M", time.localtime(_last_appr)) if _last_appr else "从未"),
-            _age_h)
+            _age_txt, _streak422)
         return {"status": "idle", "count": _cnt}
     if int(_cnt.get("live", 0)) <= 0:
         # 有 approved 件但**全部**已 dead ⇒ 重启只会空转，明确拒绝（防无限重启末闸）

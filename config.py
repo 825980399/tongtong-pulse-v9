@@ -4195,6 +4195,11 @@ ENABLE_M473_UPGRADE_APPLY_NOW = True
 # False：逐字回退 473 刀15 之前的行为（仅用于 A/B 对照/应急）。
 ENABLE_M473_REINDENT_REALIGN = True
 
+# ★473刀18：周期 apply 的 `approved=0` 告警连击限流（pending>0 时连续 3 次才 WARNING，
+#   之后每 1800s 再报；False ⇒ 逐字回滚 442/444「每 5 分钟一条 WARNING」的旧行为）。
+#   读取点：main.py::_m473_apply_thr_on
+ENABLE_M473_APPLY_NOAPPROVED_THROTTLE = True
+
 # ★主线第42批 T1（P0-272）：日志留存治理
 #   背景（实测证据链）：logs/pulse.log 的 ctime 未变（09-03）却只含当日 11:30 起的内容，
 #   实验证明「truncate 不改 ctime、delete+重建会改」→ 属**原地截断**；框架代码全库
