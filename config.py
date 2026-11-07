@@ -4256,6 +4256,15 @@ M474_OVERFLOW_HARD_MULTIPLIER = 4
 #   挂点：nucleus/reasoning/PatchManager.py::save_pending_patch
 ENABLE_M475_PATCH_DRAFT_SHADOW = True
 
+# ★475 批刀27：离线消费存量补丁（补 475 旁路缺失的消费端）。
+#   实盘「462 条自检视产出 → 当日入池 0/1 → LLM 通道熔断」⇒ 无新补丁入池，
+#   挂在 save_pending_patch() 的影子旁路空转、台账长期为空。
+#   True ⇒ 随 474 观测节拍（300s）把 pending_patches / patch_history 的存量
+#   真实补丁转成 A/B 对照，按 patch_id 去重后写自有台账；不依赖新产出、
+#   不改任何生产判据。False ⇒ 逐字回滚（不消费、不写台账）。
+#   读取点：nucleus/autonomy/pulse.py::autonomy_observe_tick
+ENABLE_M475_PATCH_BACKFILL = True
+
 # ★主线第42批 T1（P0-272）：日志留存治理
 #   背景（实测证据链）：logs/pulse.log 的 ctime 未变（09-03）却只含当日 11:30 起的内容，
 #   实验证明「truncate 不改 ctime、delete+重建会改」→ 属**原地截断**；框架代码全库

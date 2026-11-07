@@ -236,6 +236,14 @@ def normalize_snippet(code: Any) -> tuple[str, bool]:
     """
     if not isinstance(code, str) or not code.strip():
         return str(code or ""), False
+    # ★475刀26：已有 def 的完整方法片段**先返回，不要再试 ast.parse**。
+    #   旧实现对「带类缩进的完整方法」（刀15 把 modified_code 抬回 4 格后的常态）
+    #   先 parse ⇒ 必然 IndentationError ⇒ 每次自裁决白留一条静默异常 DEBUG，
+    #   随后又因「已有 def」原样返回。那次 parse 纯属白撞。
+    #   ★逐字保持原有正则与返回值：只把判定提前，不 dedent、不改包装逻辑、
+    #     不碰任何下游判据（与 473 批「dedent 会触发 462 A/B 门」的结论无关）。
+    if re.search(r"^\s*def\s", code, re.MULTILINE):
+        return code, False
     try:
         ast.parse(code)
         return code, False
@@ -243,8 +251,6 @@ def normalize_snippet(code: Any) -> tuple[str, bool]:
         silent_exc(_e, where="self_verdict::normalize_snippet parse", level="debug")
     except Exception as _e:
         silent_exc(_e, where="self_verdict::normalize_snippet other", level="debug")
-        return code, False
-    if re.search(r"^\s*def\s", code, re.MULTILINE):
         return code, False
     _body = "\n".join(("    " + _ln if _ln.strip() else "")
                        for _ln in code.splitlines())

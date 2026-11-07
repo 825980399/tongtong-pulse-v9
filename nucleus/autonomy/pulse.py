@@ -130,6 +130,17 @@ def autonomy_observe_tick(now: float | None = None, hub: Any = None,
                               _DEFAULT_MAX_BATCH, 1, 2000)
         _entries = read_hub_entries(hub, max_batch=_max_batch)
         _res = _get_observer().observe(_entries)
+        # ★475刀27：补消费端 —— 把「有产出但没人消费」的存量补丁转成 A/B 对照。
+        #   随 300s 观测节拍走，内部按 patch_id 去重；异常一律吞掉，不影响观测。
+        _backfill = {"status": "disabled"}
+        if _cfg_bool("ENABLE_M475_PATCH_BACKFILL", True):
+            try:
+                from .patch_draft import consume_existing_patches
+                _backfill = consume_existing_patches()
+            except Exception as _be:
+                silent_exc(_be, where="autonomy.pulse::patch_backfill", level="debug")
+                _backfill = {"status": "error",
+                             "error_type": type(_be).__name__}
         _snap = _res.get("kernel") or {}
         _reason_domain = (_snap.get("by_domain") or {}).get("reasoning") or {}
         _out = {
@@ -143,6 +154,8 @@ def autonomy_observe_tick(now: float | None = None, hub: Any = None,
             "kernel_runs": _snap.get("runs"),
             "domain_external_rate": _reason_domain.get("external_dependency_rate"),
             "runs": _STATE["runs"],
+            "backfill": _backfill.get("status"),
+            "backfill_new": _backfill.get("new", 0),
         }
     except Exception as _e:
         silent_exc(_e, where="autonomy.pulse::autonomy_observe_tick", level="debug")

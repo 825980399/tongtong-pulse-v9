@@ -272,6 +272,76 @@ def note_patch_draft_shadow(patch: dict, ledger_path: str | None = None) -> dict
         return {"status": "error", "error_type": type(_e).__name__}
 
 
+def consume_existing_patches(max_patches: int = 200,
+                             ledger_path: str | None = None,
+                             root: str | None = None) -> dict:
+    """★475刀27：**补上消费端** —— 离线消费存量补丁，产出 A/B 对照。
+
+    475 刀1 的影子旁路挂在 `save_pending_patch()`（链路最末端），而实盘
+    「自检视 462 条 → 当日入池 0/1 → LLM 通道熔断」导致**没有新补丁入池**
+    ⇒ 旁路空转、台账一直是空的。这正是用户指出的「有产出但消费端薄弱」。
+
+    本函数把 `pending_patches.json` + `patch_history.json` 里 91 条真实补丁
+    批量转成 A/B 对照，去重后写台账；不依赖新产出、不改任何生产判据。
+
+    ★pytest 走默认路径时直接跳过（与 kernel `_note` 同口径）：
+      既避免灌假数据，也避免单测里空跑 91 次算子。
+    """
+    _ledger = ledger_path or SHADOW_LEDGER_REL
+    if ledger_path is None and "pytest" in sys.modules:
+        return {"status": "skipped_test"}
+    _root = root or os.getcwd()
+    _seen: set = set()
+    try:
+        with open(_ledger, encoding="utf-8") as _f:
+            for _ln in _f:
+                if not _ln.strip():
+                    continue
+                try:
+                    _r = json.loads(_ln)
+                    if isinstance(_r, dict) and _r.get("patch_id"):
+                        _seen.add(str(_r["patch_id"]))
+                except (ValueError, TypeError) as _e:
+                    silent_exc(_e, where="autonomy.patch_draft::backfill row", level="debug")
+    except OSError as _e:
+        silent_exc(_e, where="autonomy.patch_draft::backfill ledger open", level="debug")
+
+    _rows: list = []
+    for _name in ("pending_patches.json", "patch_history.json"):
+        _p = os.path.join(_root, "data", "patches", _name)
+        try:
+            with open(_p, encoding="utf-8") as _f:
+                _d = json.load(_f)
+            _part = _d if isinstance(_d, list) else (
+                _d.get("patches") or _d.get("history") or [])
+            _rows.extend(_r for _r in _part if isinstance(_r, dict))
+        except (OSError, ValueError, TypeError) as _e:
+            silent_exc(_e, where="autonomy.patch_draft::backfill read " + _name,
+                       level="debug")
+
+    _new = 0
+    _skipped = 0
+    _scanned = 0
+    for _r in _rows:
+        _pid = str(_r.get("id") or "")
+        if (not _pid or _pid in _seen or not _r.get("original_code")
+                or not _r.get("modified_code")):
+            _skipped += 1
+            continue
+        if _scanned >= max(1, int(max_patches)):
+            break
+        _scanned += 1
+        _rec = draft_from_patch(_r)
+        if _rec.get("status") != "ok":
+            continue
+        _rec["source"] = "offline_backfill"   # 与运行时旁路留痕区分
+        _note(_rec, ledger_path=_ledger)
+        _seen.add(_pid)
+        _new += 1
+    return {"status": "ok", "scanned": _scanned, "new": _new,
+            "skipped_dup": _skipped, "stats": shadow_stats(_ledger)}
+
+
 def shadow_stats(ledger_path: str | None = None) -> dict:
     """读台账产出 A/B 对照表：按 issue_type 分桶，看哪类题曈曈已能主笔。"""
     _path = ledger_path or SHADOW_LEDGER_REL
