@@ -4691,6 +4691,82 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
+    # ★473刀20：控制台退出命令（exit / quit / q / 退出）
+    #   背景：`exit_requested` 原本**只由 SIGINT/SIGTERM 置位**（signal_handler）。
+    #   在 cmd 窗口里敲 exit 只是把字符留在控制台输入缓冲区，没人读 ⇒ 看起来像
+    #   "退不出框架"。而 start_tongtong.bat 的注释写着「在对话里输入 quit / exit」——
+    #   那句承诺从来没实现过（全库只有一处 input()，在退出确认里）。
+    #
+    #   ★为什么用 msvcrt 轮询而不是 readline 线程：
+    #   `_confirm_apply_pending_on_quit` 在退出时会 `input()` 读 y/n。阻塞式
+    #   readline 线程会与它抢 stdin（谁先读到谁吃掉）⇒ 确认框收不到输入。
+    #   轮询以 `exit_requested` 为循环条件 ⇒ 主循环一退，监听器当拍就停，
+    #   确认框拿到的是干净的 stdin。
+    def _m473_console_exit_worker():
+        """轮询控制台按键，凑出 exit/quit 就优雅停机。Windows 专用，失败即静默退出。"""
+        try:
+            import msvcrt
+        except Exception as _e0:
+            silent_exc(_e0, "main.py:_m473_console_exit_worker import", level="debug")
+            return
+        _buf = ""
+        while not exit_requested:
+            try:
+                if not msvcrt.kbhit():
+                    time.sleep(0.15)
+                    continue
+                _ch = msvcrt.getwch()
+            except Exception as _e1:
+                silent_exc(_e1, "main.py:_m473_console_exit_worker 读键", level="debug")
+                return
+            # 方向键/功能键是两字节前缀（\x00 / \xe0），把尾字节吃掉，别当命令
+            if _ch in ("\x00", "\xe0"):
+                try:
+                    msvcrt.getwch()
+                except Exception as _e2:
+                    silent_exc(_e2, "main.py:_m473_console_exit_worker 特殊键",
+                               level="debug")
+                continue
+            if _ch == "\x08":
+                _buf = _buf[:-1]
+                continue
+            if _ch in ("\r", "\n"):
+                _cmd = _buf.strip().lower()
+                _buf = ""
+                if _cmd in ("exit", "quit", "q", "退出"):
+                    print("\n[框架] 收到退出命令 ⇒ 正在优雅停机（等同 Ctrl+C）…")
+                    try:
+                        _logger.info("[控制台] 退出命令 %r ⇒ exit_requested=True", _cmd)
+                    except Exception as _e3:
+                        silent_exc(_e3, "main.py:_m473_console_exit_worker 留痕",
+                                   level="debug")
+                    signal_handler(None, None)
+                    return
+                continue
+            # 只留尾部 32 字符：无回车乱敲也不会把内存涨上去
+            _buf = (_buf + _ch)[-32:]
+
+    # 灰度开关：False ⇒ 逐字回滚（不启监听、不打印提示）
+    _m473_exit_cmd_on = True
+    try:
+        _v473c = getattr(config, "ENABLE_M473_CONSOLE_EXIT_CMD", None)
+        _m473_exit_cmd_on = True if _v473c is None else bool(_v473c)
+    except Exception as _e4:
+        silent_exc(_e4, "main.py:_m473 console 开关", level="debug")
+    if _m473_exit_cmd_on:
+        try:
+            _m473_is_tty = bool(sys.stdin is not None and sys.stdin.isatty())
+        except Exception as _e5:
+            silent_exc(_e5, "main.py:_m473 console isatty", level="debug")
+            _m473_is_tty = False
+        if _m473_is_tty:
+            try:
+                threading.Thread(target=_m473_console_exit_worker,
+                                 name="m473-console-exit", daemon=True).start()
+                print("[框架] 控制台输入 exit 或 quit 可优雅退出（等同 Ctrl+C）")
+            except Exception as _e6:
+                silent_exc(_e6, "main.py:_m473 console 启动", level="debug")
+
     # P1修复：全局异常钩子——任何线程（含守护线程）抛出的未捕获异常都写入崩溃日志，
     # 避免"静默退出"无迹可寻（此前框架在 flaky 硬件上卡死后被外部杀掉，无任何日志）。
     # --- 406 刀2 未捕获异常接免疫系统 ---

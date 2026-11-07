@@ -4200,6 +4200,12 @@ ENABLE_M473_REINDENT_REALIGN = True
 #   读取点：main.py::_m473_apply_thr_on
 ENABLE_M473_APPLY_NOAPPROVED_THROTTLE = True
 
+# ★473刀20：控制台退出命令（exit / quit / q / 退出）—— 缺省开。
+#   背景：`exit_requested` 只由 SIGINT/SIGTERM 置位，cmd 窗口里敲 exit 没人接，
+#   看起来像"退不出框架"。本开关置 False ⇒ 逐字回滚（不启轮询线程、不打印提示）。
+#   读取点：main.py 里 signal_handler 之后的开关块
+ENABLE_M473_CONSOLE_EXIT_CMD = True
+
 # ★主线第42批 T1（P0-272）：日志留存治理
 #   背景（实测证据链）：logs/pulse.log 的 ctime 未变（09-03）却只含当日 11:30 起的内容，
 #   实验证明「truncate 不改 ctime、delete+重建会改」→ 属**原地截断**；框架代码全库
