@@ -15,8 +15,11 @@ REM    3) PIP_CACHE_DIR 指向 D 盘 —— 已写进 pip.ini，这里再兜一�
 REM    4) 自重启不经过本脚本
 REM       曈曈自重启是另开一个 python 窗口（CREATE_NEW_CONSOLE），
 REM       不重进本脚本；启动后关掉本窗口不影响运行中的曈曈。
-REM    5) 停曈曈请在对话里输入 quit / exit，或直接关窗口。
-REM       不要用 Ctrl+C：cmd 会额外追问「终止批处理操作吗(Y/N)」。
+REM    5) 停曈曈：在这个窗口直接敲 exit 或 quit 回车（473刀20 起已实现），
+REM       或直接关窗口。Ctrl+C 也能停，但 cmd 会额外追问
+REM       「终止批处理操作吗(Y/N)」—— 那是 cmd 对 .bat 的提示，不是曈曈的。
+REM    6) 想彻底避开那个 y/n：不用本脚本，直接在本目录执行
+REM       python main.py（PATH 已把 D 盘 3.14t 排最前，效果等同本脚本）
 REM ===================================================================
 setlocal
 
