@@ -4172,6 +4172,19 @@ LOG_QUEUE_MAXSIZE = 20000
 # 判据提示：本开关**只影响超时的返回形态**，不改任何 URL 安全判定。
 ENABLE_M473_HTTP_TIMEOUT_AS_RESULT = True
 
+# ★473刀13：自动升级窗口的「应用补丁并重启」是否改走 apply_now 通道
+# 病灶（2026-11-07 03:09 现场）：PulseInnerWorld 的 Windows 分支用
+#   `GenerateConsoleCtrlEvent(0, 0)` 向**整个控制台进程组**发 Ctrl+C，于是
+#   ① `cmd.exe`（start_tongtong.bat 那一层）也收到 ⇒ 弹「终止批处理操作吗(Y/N)?」；
+#   ② Python 侧 `user_quit_requested` 被置 True ⇒ 退出路径改走
+#      `_confirm_apply_pending_on_quit` ⇒ 再弹「是否应用并重启验证？(Y/n)」。
+#   两处都要人工按键；实测当晚日志在「停止指令已发出」处断流、
+#   `data/restart_notice.txt` 停在 11-01 ⇒ 接班进程从未被拉起。
+# True（默认）：写 `data/evolution/apply_now.json`，由主循环执行
+#   apply→stop→spawn（472 刀1 的顺序），全程不发控制台信号。
+# False：逐字回退旧的整控制台 Ctrl+C（仅用于 A/B 对照/应急）。
+ENABLE_M473_UPGRADE_APPLY_NOW = True
+
 # ★主线第42批 T1（P0-272）：日志留存治理
 #   背景（实测证据链）：logs/pulse.log 的 ctime 未变（09-03）却只含当日 11:30 起的内容，
 #   实验证明「truncate 不改 ctime、delete+重建会改」→ 属**原地截断**；框架代码全库

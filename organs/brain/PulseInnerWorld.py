@@ -13602,8 +13602,12 @@ class PulseInnerWorld(
                         import sys as _sys_sd
                         if _sys_sd.platform == 'win32':
                             try:
-                                import ctypes
-                                ctypes.windll.kernel32.GenerateConsoleCtrlEvent(0, 0)
+                                from nucleus.evolution.graceful_apply import request_upgrade_apply
+                                # ★473刀13：整控制台 Ctrl+C 会连 cmd.exe 一起打中 ⇒
+                                #   「终止批处理操作吗(Y/N)」；Python 侧还被判成用户主动退出 ⇒
+                                #   再弹「是否应用并重启验证」。改走 apply_now，由主循环
+                                #   apply→stop→spawn（472 刀1 的顺序），全程不惊动控制台。
+                                request_upgrade_apply(_project_root, len(_approvable))
                                 return
                             except Exception as e:
                                 self._log(LogLevel.DEBUG, f"清理异常已忽略: {type(e).__name__}: {e}")
