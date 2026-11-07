@@ -1785,6 +1785,8 @@ class PulseMetricsCollector(BasePulseOrgan):
         「释放路径不 import 新模块（顶部只导 gc/tracemalloc/time）」——
         统计口径进得去，IO 只能出到已经有 os/json 的调用方。
 
+        ★473刀21 落地补丁：改成「临时文件 + fsync + os.replace」原子写，
+        避免写一半被读到半个 JSON（原 issue_type=non_atomic_write）。
         Returns: 实际路径；节流中或失败返回空串。
         """
         try:
@@ -1800,8 +1802,23 @@ class PulseMetricsCollector(BasePulseOrgan):
             _dir = os.path.dirname(_p)
             if _dir:
                 os.makedirs(_dir, exist_ok=True)
-            with open(_p, "w", encoding="utf-8", newline="\n") as _f:
-                json.dump(_body, _f, ensure_ascii=False, indent=2)
+            _tmp = _p + ".tmp"
+            try:
+                with open(_tmp, "w", encoding="utf-8", newline="\n") as _f:
+                    json.dump(_body, _f, ensure_ascii=False, indent=2)
+                    _f.flush()
+                    os.fsync(_f.fileno())
+                os.replace(_tmp, _p)
+            except Exception:
+                try:
+                    os.remove(_tmp)
+                except OSError as _e473rm:
+                    silent_exc(
+                        _e473rm,
+                        where="PulseMetricsCollector::_m383_dump_tier_distribution rm_tmp",
+                        level="debug",
+                    )
+                raise
             return _p
         except Exception as _e:
             silent_exc(_e, where="PulseMetricsCollector::_m383_dump_tier_distribution",

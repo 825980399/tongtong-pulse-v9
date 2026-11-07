@@ -20,6 +20,38 @@ _NATIVE_CAP_RESULT = _apply_native_caps()
 import os
 import sys
 
+
+# ★473刀22：自重启接班进程的 stdout 交接（闭环最后一环）。
+#   现场（15:34:55 实测）：补丁落地成功、applied=True，但接班进程
+#   framework.start() 第一行 print() 抛 OSError [WinError 233]
+#   「管道的另一端上无任何进程」⇒ 启动期崩溃 ⇒ 系统还是死了。
+#   根因：`_spawn_self_restart` 的 Popen 不给 stdin/stdout/stderr ⇒ 即使
+#   CREATE_NEW_CONSOLE 新建了控制台，子进程仍**继承父进程的 stdout 管道**；
+#   父进程一退出，管道另一端消失。
+#   spawn 侧已改成显式文件句柄（不会抛 233）；这里再把接班进程的输出
+#   重绑回它自己的新控制台，保证用户仍能在窗口里看到启动横幅。
+#   重绑失败 ⇒ 继续用 spawn 给的文件句柄（绝不因为"打印"拖死框架）。
+def _m473_rebind_restart_stdout() -> None:
+    """仅在接班进程内生效；正常手动启动一字不改。"""
+    try:
+        import os as _os473
+        import sys as _sys473
+        if _os473.environ.get("PULSE_SELF_RESTART_CHILD") != "1":
+            return
+        if _sys473.platform != "win32":
+            return
+        # SIM115 豁免（理由）：这是要交给 sys.stdout 的**长期句柄**，
+        #   用 with 会在函数返回前就把它关掉，之后所有 print 都会写进已关闭的文件。
+        _con473 = open("CONOUT$", "w", encoding="utf-8", buffering=1)  # noqa: SIM115
+        _sys473.stdout = _con473
+        _sys473.stderr = _con473
+    except Exception as _e473:
+        silent_exc(_e473, where="main.py::_m473_rebind_restart_stdout",
+                   level="debug")
+
+
+_m473_rebind_restart_stdout()
+
 # ===== 第三方库弃用警告抑制（不影响功能，仅净化启动日志）=====
 import warnings
 from typing import Any
@@ -3879,12 +3911,23 @@ def _spawn_self_restart(reason: str = "self_restart") -> bool:
             silent_exc(e, "main:_spawn_self_restart:boot_crash.log打开失败", level="warning")
             _boot_log_fh = None
         if _sys.platform == 'win32':
-            # ★修复自动重启无控制台：stdout/stderr不再重定向到文件，让新窗口正常显示输出
-            #   启动崩溃留痕改由main.py顶层try-except写boot_crash.log（不再靠重定向）
+            # ★473刀22：见 main.py 顶部 `_m473_rebind_restart_stdout` 的现场说明。
+            #   Popen 不给标准句柄 ⇒ 子进程继承父进程的 stdout **管道**，
+            #   父进程一退出就 WinError 233 ⇒ 启动期崩溃。这里显式给：
+            #     stdout/stderr = 文件句柄（进程内独立有效，不是管道）
+            #     stdin        = DEVNULL（接班进程不等键盘；它有自己的控制台）
+            #   再打一个标记，让子进程把输出重绑回自己的新控制台。
+            _env473 = dict(_os.environ)
+            _env473["PULSE_SELF_RESTART_CHILD"] = "1"
+            _out473 = _boot_log_fh if _boot_log_fh is not None else subprocess.DEVNULL
             _proc = subprocess.Popen(
                 [_sys.executable, __file__],
                 creationflags=subprocess.CREATE_NEW_CONSOLE,
                 cwd=_project_root,
+                stdin=subprocess.DEVNULL,
+                stdout=_out473,
+                stderr=_out473,
+                env=_env473,
             )
         else:
             _proc = subprocess.Popen(
