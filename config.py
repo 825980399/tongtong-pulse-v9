@@ -4245,6 +4245,17 @@ PERIODIC_TEST_PYTHON_EXE = r"D:\Program Files\Python312\python.exe"
 ENABLE_M474_OVERFLOW_HARD_CAP = True
 M474_OVERFLOW_HARD_MULTIPLIER = 4
 
+# ★475 批刀1：曈曈主笔草稿的**影子旁路**（角色翻转第一步，缺省开）。
+#   True ⇒ 每次补丁入池前，曈曈用自有确定性算子从 original_code 独立出一份草稿，
+#   与 LLM 的 modified_code 做结构化 A/B 对照，结果只写
+#   data/autonomy/patch_draft_shadow.jsonl（/data/ 已 ignore）。
+#   ★绝不替换、绝不改 patch、绝不碰八闸/审批/apply/自重启等任何判据。
+#   算子覆盖不了就诚实登记 external_needed=True，不假装会写。
+#   False ⇒ 逐字回滚刀1 之前的行为（不旁路、不写台账）。
+#   读取点：nucleus/autonomy/patch_draft.py::_cfg_on；
+#   挂点：nucleus/reasoning/PatchManager.py::save_pending_patch
+ENABLE_M475_PATCH_DRAFT_SHADOW = True
+
 # ★主线第42批 T1（P0-272）：日志留存治理
 #   背景（实测证据链）：logs/pulse.log 的 ctime 未变（09-03）却只含当日 11:30 起的内容，
 #   实验证明「truncate 不改 ctime、delete+重建会改」→ 属**原地截断**；框架代码全库

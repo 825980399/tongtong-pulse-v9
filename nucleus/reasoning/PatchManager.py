@@ -3916,6 +3916,14 @@ class PatchManager:
         保存待应用的补丁到队列。
         ★v23.0增强：自动补齐元数据 + 去重检查。
         """
+        # ★475刀1：曈曈主笔草稿的**影子旁路**（角色翻转第一步）。
+        #   只读 patch（内部深拷贝）、只写自有台账，不改任何字段/状态/判据；
+        #   不替换 LLM 产物、不碰审批与应用；异常一律吞掉，绝不阻断入池。
+        try:
+            from nucleus.autonomy.patch_draft import note_patch_draft_shadow
+            note_patch_draft_shadow(patch)
+        except Exception as _m475e:
+            silent_exc(_m475e, "PatchManager::save_pending_patch 475刀1", level="debug")
         # ★343刀1②：自主修复通道**显式标记**（生产唯一调用方 =
         #   `SafeEvolutionExecutor` 的 5 处 `save_pending_patch`，均不写 source）。
         #   标在 `entry_source` 而不是覆盖 `source`：`source` 有既有消费者
