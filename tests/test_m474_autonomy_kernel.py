@@ -282,21 +282,42 @@ class TestAutonomyIronLaw(unittest.TestCase):
                                      f"{_name} 引入了外部模型/HTTP: {_names}")
 
     def test_20_kernel_never_calls_external(self):
+        """★判据要挑有判别力的量：`get` 是 dict.get，禁它会把正常代码顶红。
+
+        真正的外部调用特征 = 明确的 HTTP/模型方法名，或接收者本身就是
+        外部客户端对象；import 层面另由 test_19 的 AST 扫描硬守。
+        """
         with open(os.path.join(_MOD_DIR, "kernel.py"), encoding="utf-8") as _fh:
             _src = _fh.read()
         _tree = ast.parse(_src)
+        _bad_calls = ("urlopen", "urlretrieve", "chatcompletion", "acomplete",
+                      "generate_content", "invoke_model", "post_json")
+        _bad_receivers = ("requests", "httpx", "aiohttp", "client", "session")
         for _n in ast.walk(_tree):
             if not isinstance(_n, ast.Call):
                 continue
             _fn = _n.func
             _txt = ""
+            _recv = ""
             if isinstance(_fn, ast.Name):
                 _txt = _fn.id
             elif isinstance(_fn, ast.Attribute):
                 _txt = _fn.attr
-            self.assertNotIn(_txt.lower(),
-                             ("urlopen", "post", "get", "chatcompletion", "generate"),
-                             "内核出现外部调用")
+                if isinstance(_fn.value, ast.Name):
+                    _recv = _fn.value.id
+            self.assertNotIn(_txt.lower(), _bad_calls, "内核出现外部调用")
+            self.assertNotIn(_recv.lower(), _bad_receivers, "内核出现外部客户端")
+
+    def test_21_note_experience_is_structured_and_domain_agnostic(self):
+        """第二期新增口：任意域都能写结构化经验，且不改变传入对象。"""
+        import copy
+        _k = CapabilityKernel(ledger_enabled=False)
+        _rec = {"kind": "reasoning_observation", "external_used": True}
+        _before = copy.deepcopy(_rec)
+        _s = _k.note_experience(_rec, domain="reasoning")
+        self.assertEqual(_before, _rec)
+        self.assertIn("reasoning", _s["by_domain"])
+        self.assertEqual(1.0, _s["by_domain"]["reasoning"]["external_dependency_rate"])
 
 
 if __name__ == "__main__":

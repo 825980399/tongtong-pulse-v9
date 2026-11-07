@@ -226,6 +226,27 @@ class CapabilityKernel:
             }
         return _out
 
+    def note_experience(self, rec: dict, domain: str | None = None) -> dict:
+        """对外统一的**结构化经验**写入口，任意 domain 复用（474 批第二期）。
+
+        与 ``run()`` 的区别：这里消费的是**已经在别处发生过的观测**
+        （如验证学习枢纽的推理对错记录），不执行任何能力、不生成任何对象。
+        这样补丁修复、内在世界推理、认知反思可以共用同一套台账与指标。
+
+        ★留痕绝不改变传入对象；★不算一次"能力执行"，但算一次观测（影响自给率分母）。
+        """
+        _d = str(domain or rec.get("domain") or "unspecified")
+        _r = dict(rec)
+        _r.setdefault("domain", _d)
+        _bucket = self._bucket(_d)
+        self._stats["runs"] += 1
+        _bucket["runs"] += 1
+        if bool(_r.get("external_used")):
+            self._stats["external"] += 1
+            _bucket["external"] += 1
+        self._note(_r)
+        return self.snapshot()
+
     def _note(self, rec: dict) -> None:
         """结构化经验台账（append-only）。★留痕绝不改变任何返回值。"""
         if not self._ledger_enabled:
