@@ -4206,6 +4206,13 @@ ENABLE_M473_APPLY_NOAPPROVED_THROTTLE = True
 #   读取点：main.py 里 signal_handler 之后的开关块
 ENABLE_M473_CONSOLE_EXIT_CMD = True
 
+# ★474 批：通用自主能力基座（铁律 304 的第一期实现）。
+#   缺省 False = 影子模式，绝不改动任何生产对象；只有显式 enforce=True 或
+#   打开本开关才允许真实改写。经验台账缺省开，但 pytest 走默认生产路径时不写。
+#   读取点：nucleus/autonomy/kernel.py::_cfg
+ENABLE_M474_AUTONOMY_KERNEL = False
+ENABLE_M474_AUTONOMY_LEDGER = True
+
 # ★主线第42批 T1（P0-272）：日志留存治理
 #   背景（实测证据链）：logs/pulse.log 的 ctime 未变（09-03）却只含当日 11:30 起的内容，
 #   实验证明「truncate 不改 ctime、delete+重建会改」→ 属**原地截断**；框架代码全库
