@@ -9344,6 +9344,9 @@ def _m335_o3_intake_candidates(items: list | None = None,
     _out: list = []
     # ★473刀16：severity 拒收明细（循环外聚合，避免 462 条同因日志刷屏）
     _m473_sev_detail: list = []
+    # ★473刀17：339域 两条拒收明细（同型聚合，与 severity 各打一条）
+    _m473_dom_detail: list = []
+    _m473_wl_detail: list = []
     for _it in _pool:
         if not isinstance(_it, dict):
             _rejected["shape"] += 1
@@ -9368,16 +9371,14 @@ def _m335_o3_intake_candidates(items: list | None = None,
         #   但候选仍会产生 ⇒ 在这里补一道过滤）。
         if not _m339_in_domain(_file):
             _rejected["domain"] += 1
-            _module_logger.info(
-                "[339域] 判据域外 ⇒ 不入池: file=%s method=%s"
-                "（tests/ 或 test_ 前缀）", _file, _name)
+            # ★473刀17：只登记明细，循环外聚合成一条（原为逐条 INFO）
+            _m473_dom_detail.append((_file, _name, "判据域外（tests/ 或 test_ 前缀）"))
             continue
         if not _m339_intake_whitelisted(_file):
             _rejected["whitelist"] += 1
-            _module_logger.info(
-                "[339域] 白名单外 ⇒ 不入池: file=%s method=%s"
-                "（仅放 nucleus/ tools/ organs/ config.py main.py scripts/）",
-                _file, _name)
+            # ★473刀17：只登记明细，循环外聚合成一条（原为逐条 INFO）
+            _m473_wl_detail.append(
+                (_file, _name, "白名单外（仅放 nucleus/ tools/ organs/ config.py main.py scripts/）"))
             continue
         if _name in _INTAKE_LIFECYCLE_NAMES:
             _rejected["lifecycle"] += 1
@@ -9407,6 +9408,20 @@ def _m335_o3_intake_candidates(items: list | None = None,
                 len(_m473_sev_detail), _m473_sev_n, _m473_sev_txt)
         except Exception as _e473s:
             silent_exc(_e473s, where="self_inspector::_m473_severity_reject_log",
+                       level="warning")
+    # ★473刀17：339域 两条拒收也**聚合**（同因 N 条 → 1 行；级别仍 INFO）
+    for _m473_tag, _m473_bag in (
+            ("[339域] 判据域外 ⇒ 不入池", _m473_dom_detail),
+            ("[339域] 白名单外 ⇒ 不入池", _m473_wl_detail)):
+        if not _m473_bag:
+            continue
+        try:
+            _m473_d_txt, _m473_d_n = _m473_format_severity_rejects(_m473_bag)
+            _module_logger.info(
+                "%s %d 条（%d 组）：%s",
+                _m473_tag, len(_m473_bag), _m473_d_n, _m473_d_txt)
+        except Exception as _e473d:
+            silent_exc(_e473d, where="self_inspector::_m473_domain_reject_log",
                        level="warning")
     _out = _out[:_lim]
     return {"candidates": _out, "rejected": _rejected,
