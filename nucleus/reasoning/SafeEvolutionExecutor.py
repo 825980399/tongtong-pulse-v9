@@ -284,6 +284,12 @@ def _m422_clip_statement_blocks(text: str, max_lines: int = 40,
 # 边界：只统计、只留痕；不参与入队/分诊/动机决策。
 _OUTPUT_STATS = {"runs": 0, "productive": 0, "zero_output": 0}
 
+# ★479 收尾：重复送 LLM 探针的记账容器。
+#   key=(file, method) → [次数, 窗口起点 ts, 是否已告警]
+#   容量上限 800：超了直接清空（粗粒度但绝不让它无界膨胀）。
+_M479_REPEAT: dict = {}
+_M479_REPEAT_MAX_KEYS = 800
+
 # ★333批刀3（判据固化 · 2026-10-21）：**K1 判据 = 同一进程代次内累计 20 拍 ≥15/20
 #   且三列同报**（productive / reviewed / report）。
 #   为什么写死代次：K1 已被重启清零两次（22:48 / 00:20），"跨进程不得拼接"是
@@ -2702,6 +2708,8 @@ class SafeEvolutionExecutor:
         # ★465刀3：同轮熔断 —— 连续失败达阈值后，本轮后续问题不再调 LLM。
         #   病因（465 T0 实测）：13:06 那一轮里连打 9 次、每次 0.30~0.54s 秒失败
         #   （HTTP 429 code=1305「该模型当前访问量过大」），空烧配额且无任何早停。
+        # ★479 收尾：重复送 LLM 探针（纯记账，绝不影响返回值）
+        self._m479_note_repeat(issue)
         if self._m465_circuit_open():
             return None
         try:
@@ -2871,7 +2879,12 @@ class SafeEvolutionExecutor:
                 "patch_id": str(_issue.get("id") or ""),
                 "file": str(_issue.get("file") or ""),
                 "method": _method,
-                "issue_type": str(_issue.get("issue_type") or ""),
+                # ★479 收尾：`type` 是上游 `_issue` 的真实键名（见 L3263
+                #   `_type = _issue.get("type", "")`），原实现只读 `issue_type`
+                #   ⇒ 台账 22 轮 issue_type 全空，无法按类型分析。
+                #   两种键都兼容：issue_type 优先（兼容补丁字典），回落 type。
+                "issue_type": str(_issue.get("issue_type")
+                                  or _issue.get("type") or ""),
                 "baseline_score": _bl,
                 "baseline_detail": _base,
             }
@@ -2936,6 +2949,55 @@ class SafeEvolutionExecutor:
             silent_exc(_e479, where="SafeEvolutionExecutor::479ALL协作",
                        level="debug")
             return answer
+    # ===== ★479 收尾：重复送 LLM 探针（纯记账，不改任何判据）=====
+    def _m479_note_repeat(self, issue: Any) -> None:
+        """记「同一 (file, method) 被反复送进 LLM」并超阈值告警一次。
+
+        ★为什么需要：22 轮台账里 `_m374_schedule_ahead` 被送了 4 次、
+        `_schedule_next_beat` 4 次……每轮 4 条候选 ⇒ 单个方法白烧 16 次调用。
+        根因是「产物不合格 ⇒ 不入池 ⇒ 问题仍在 ⇒ 下轮再送」的闭环，
+        但此前**没有任何信号**把这件事暴露出来 —— 只看"本轮调了几次"
+        永远发现不了"同一个位置被调了几十次"。
+
+        ★只读不写：不改 issue、不改返回值、不参与任何准入判断。
+        ★异常一律吞掉（level=debug）：探针绝不能影响修复主路径。
+        """
+        try:
+            import config as _cfg479r
+            if not getattr(_cfg479r, "ENABLE_M479_REPEAT_PROBE", True):
+                return
+            _win = float(getattr(_cfg479r, "M479_REPEAT_WINDOW_SEC", 1800) or 1800)
+            _thr = int(getattr(_cfg479r, "M479_REPEAT_THRESHOLD", 3) or 3)
+        except (ImportError, AttributeError, TypeError, ValueError) as _e:
+            silent_exc(_e, where="SafeEvolutionExecutor::479重复探针 config",
+                       level="debug")
+            return
+        try:
+            _iss = issue if isinstance(issue, dict) else {}
+            _f = str(_iss.get("file") or "")
+            _m = str(_iss.get("method") or "")
+            if not _f or not _m:
+                return
+            _key = (_f, _m)
+            _now = time.time()
+            if len(_M479_REPEAT) > _M479_REPEAT_MAX_KEYS:
+                _M479_REPEAT.clear()
+            _rec = _M479_REPEAT.get(_key)
+            if _rec is None or (_now - float(_rec[1])) > _win:
+                _M479_REPEAT[_key] = [1, _now, False]
+                return
+            _rec[0] = int(_rec[0]) + 1
+            if int(_rec[0]) > _thr and not _rec[2]:
+                _rec[2] = True
+                _module_logger.warning(
+                    "[479][重复送LLM] %s::%s 在 %.0f 分钟内已第 %d 次送进 LLM"
+                    "（阈值 %d）。若长期无落地，说明该位置产物始终不合格 ——"
+                    "该查输入质量/粒度对齐，而不是继续重试。",
+                    os.path.basename(_f), _m, _win / 60.0, int(_rec[0]), _thr)
+        except (KeyError, TypeError, ValueError, AttributeError, OSError) as _e:
+            silent_exc(_e, where="SafeEvolutionExecutor::479重复探针", level="debug")
+
+
 
 
     def _aesthetic_guidance(self) -> str:

@@ -4441,6 +4441,16 @@ M479_ALL_COLLAB_SKIP_DEAD = True
 M479_ALL_COLLAB_DEAD_WINDOW = 200      # 只看最近 200 轮台账
 M479_ALL_COLLAB_DEAD_MIN_TRIES = 10    # 至少 10 次调用才判死（避免小样本误杀）
 
+# ★479 收尾：「同一 (file, method) 被反复送进 LLM」探针（纯记账、只告警）。
+#   实测 22 轮台账：_m374_schedule_ahead 被送 4 次、_schedule_next_beat 4 次、
+#   _schedule_next_exploration 3 次……每轮 4 条候选 ⇒ 单个方法白烧 16 次调用。
+#   根因是「产物不合格 ⇒ 不入池 ⇒ 问题仍在 ⇒ 下轮再送」的闭环，而此前
+#   **没有任何信号**暴露它（只看"本轮调了几次"永远发现不了"同一位置被调几十次"）。
+#   判据：窗口内超过阈值 ⇒ 记一条 WARNING（每位置每窗口只记一次）。
+ENABLE_M479_REPEAT_PROBE = True
+M479_REPEAT_WINDOW_SEC = 1800          # 30 分钟窗口
+M479_REPEAT_THRESHOLD = 3              # 第 4 次起告警
+
 # ★479 批：语义桥 —— 用 3.12 sidecar 跑 bge-small-zh-v1.5，补 3.14t 缺 fastembed 的坑。
 #   背景：3.14t 是自由线程构建，fastembed / onnxruntime 没有 cp314t wheel ⇒
 #   VectorEncoder 只能走关键词通道 ⇒ 语义缓存（相同问题重复调 LLM）、知识检索
