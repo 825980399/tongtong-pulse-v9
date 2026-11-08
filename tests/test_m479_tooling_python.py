@@ -131,5 +131,44 @@ class TestEndToEnd:
         assert "ruff" in _flags
 
 
+class TestLogVisibility:
+    """★479：让 `[342tool]` 进 pulse.log（用户实测「控制台有、日志搜不到」）。
+
+    `ToolingRunner` 走 `SilentLogMixin._log` ⇒ logger 名是
+    `{module}.{ClassName}` = `nucleus.tooling_runner.ToolingRunner`。
+    该名字此前不在 `_TREE_OUTSIDE_LOGGER_NAMES` ⇒ 只到控制台。
+    """
+
+    def test_30_registered(self):
+        from nucleus.logger import _TREE_OUTSIDE_LOGGER_NAMES as _N
+        assert "nucleus.tooling_runner.ToolingRunner" in _N
+        assert "pulse.module.tooling_runner" in _N
+
+    def test_31_pytest_env_skips_attach_and_guard_exists(self):
+        """pytest 内**刻意跳过**挂载（避免每次跑测试都往生产 pulse.log 灌垃圾）。
+
+        所以这里守的不是「pytest 里也挂上」，而是：
+          ① pytest 内确实**没挂**（证明保护生效）；
+          ② 保护代码本身还在（防有人为了「让测试变绿」把它删掉 —— 那会污染生产日志）。
+        非测试环境的真实挂载能力已在开发时用 `python -c` 手工验证：
+            handler 数 = 1 | propagate = False
+        """
+        import logging
+
+        from nucleus.logger import install_tree_outside_logger_bridges
+        install_tree_outside_logger_bridges()
+        _lg = logging.getLogger("nucleus.tooling_runner.ToolingRunner")
+        assert len(_lg.handlers) == 0, "pytest 内不应挂生产 handler（会污染 pulse.log）"
+        from pathlib import Path
+        _src = (Path(ROOT) / "nucleus" / "logger.py").read_text(
+            encoding="utf-8", errors="replace")
+        assert "_log_in_test_env()" in _src, "测试环境保护被删了"
+
+    def test_32_list_not_hardcoded_16(self):
+        """★反证：名单数量不得被锁死（原注释写「16 个」，加条目不该炸）。"""
+        from nucleus.logger import _TREE_OUTSIDE_LOGGER_NAMES as _N
+        assert len(_N) >= 18
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

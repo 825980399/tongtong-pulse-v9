@@ -1019,6 +1019,12 @@ _TREE_OUTSIDE_LOGGER_NAMES = (
     "EvolutionLoop", "rt", "compat", "PollutionTagger", "IndexStore",
     "subagent_runner", "ReportPublishers", "rule_engine", "self_inspector",
     "PulseCodeLearner", "import_nodes_to_neo4j", "tools.measure_baseline",
+    # ★479：`ToolingRunner` 走 `SilentLogMixin._log` ⇒ logger 名是
+    #   `{module}.{ClassName}` = `nucleus.tooling_runner.ToolingRunner`。
+    #   此前不在名单 ⇒ 那些 `[342tool] ...` 只到控制台、**不进 pulse.log**
+    #   （用户实测：日志里搜不到，只在控制台看到）。补进来后可查。
+    #   `pulse.module.tooling_runner` 是 479 新代码里显式用的名字（同一模块两处口径）。
+    "nucleus.tooling_runner.ToolingRunner", "pulse.module.tooling_runner",
 )
 _OUTSIDE_BRIDGE_INSTALLED = False
 _OUTSIDE_BRIDGE_LOCK = threading.Lock()
