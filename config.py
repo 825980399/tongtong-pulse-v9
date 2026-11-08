@@ -4378,6 +4378,41 @@ ENABLE_M475_PATCH_DRAFT_SHADOW = True
 #   读取点：nucleus/autonomy/pulse.py::autonomy_observe_tick
 ENABLE_M475_PATCH_BACKFILL = True
 
+# ★479 批：ALL 协作 —— 多渠道并行出草稿，曈曈用自有判据择优。
+#   分工：ALL（外部渠道）只负责「出草稿」，不参与评判；
+#         曈曈（nucleus/autonomy/all_collab.py::score_code）用自己的 AST + 最小改动
+#         相似度判据打分择优，全程不问任何模型「哪个好」。
+#   动机：477 已把「曈曈修订」接进补丁链，但修复率仍 0 —— 根因是单模型一次命中
+#         「完整方法 + 最小改动」的概率太低（换成更贵的模型也没用，这是格式契约）。
+#         N 个渠道并行，命中概率从 p 提到 1-(1-p)^N。
+#   True ⇒ 在 _call_llm_for_repair 拿到首个 answer 后，额外并行调 N 条渠道出草稿、
+#          打分、写 data/autonomy/all_collab.jsonl。**默认不改写 answer**（纯影子）。
+#   False ⇒ 逐字回滚（不并发生成、不写台账）。
+#   读取点：nucleus/autonomy/all_collab.py + SafeEvolutionExecutor::_m479_all_collab
+ENABLE_M479_ALL_COLLAB = False
+
+# 并行渠道数（含首个渠道之外再补几条）。4 = 命中率与配额消耗的折中。
+M479_ALL_COLLAB_CHANNELS = 4
+
+# True ⇒ 择优结果**真的替换** answer（再走 477 修订 + 469 粒度对齐 + 全部验证闸门）。
+# False ⇒ 纯影子：只打分写台账，answer 一字不改（首期先跑影子攒数据）。
+# ★注意：即使 True 也不会绕过任何闸门 —— 替换只发生在「进闸门之前」，
+#   不合格的候选照样会被 469/470/八闸拦下，属于纯增益。
+ENABLE_M479_ALL_COLLAB_PICK = False
+
+# 单个候选的超时（秒）与 max_tokens。并行调用，总耗时 ≈ 最慢那条。
+M479_ALL_COLLAB_TIMEOUT = 60.0
+M479_ALL_COLLAB_MAX_TOKENS = 2048
+
+# ★按需触发阈值：首个渠道的 answer 打分 **低于** 此值才启动并行协作。
+#   实测（2026-11-08 真机 2 样本）：并行 3 条要 23~39s，且 2/3 渠道失败
+#   （智谱 429、推理模型空内容）。若每次都并行，等于给主链路加 30s 延迟换
+#   一个「本来就已经 100 分」的补丁 ⇒ 纯亏。
+#   85 的含义：parse(35)+full(20)+no_bare(10)+minimal(25) = 90 是理想满配；
+#   低于 85 说明至少缺一项（多半是「不是完整方法」或「改动过大」）⇒ 值得救场。
+#   设为 0 则每次都并行（不推荐，仅供对照实验）。
+M479_ALL_COLLAB_TRIGGER_BELOW = 85
+
 # ★主线第42批 T1（P0-272）：日志留存治理
 #   背景（实测证据链）：logs/pulse.log 的 ctime 未变（09-03）却只含当日 11:30 起的内容，
 #   实验证明「truncate 不改 ctime、delete+重建会改」→ 属**原地截断**；框架代码全库

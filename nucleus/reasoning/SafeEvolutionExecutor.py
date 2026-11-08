@@ -2818,7 +2818,8 @@ class SafeEvolutionExecutor:
                     if _better and len(_better) > len(_answer):
                         _answer = _better
 
-            return _answer
+            # ★479：ALL 协作（多模型并行出草稿 + 曈曈判据择优）。默认纯影子、不改写答案。
+            return self._m479_all_collab(_prompt, _answer, issue, code_snippet)
         except Exception as e:
             # ★第86批 T-86a：原为裸 `except Exception: return None`——任何底层异常
             #   （配置缺失/JSON 解析/prompt 组装/HTTP 封装）都被吞成 None，表现为
@@ -2827,6 +2828,103 @@ class SafeEvolutionExecutor:
                 f"[LLM修复] 修复建议生成异常，本轮 LLM 通道降级返回 None: "
                 f"{type(e).__name__}: {e}")
             return None
+
+
+    # ========== ★479批：ALL 协作（多模型并行出草稿 + 曈曈判据择优）==========
+    #   分工：外部渠道只「出草稿」，曈曈用自己的 AST + 最小改动相似度判据打分择优，
+    #   全程不问任何模型「哪个好」——这就是「曈曈为主、ALL 为辅」的落地形态。
+    #   默认纯影子：只打分写台账，答案一字不改（ENABLE_M479_ALL_COLLAB_PICK=False）。
+    #   即使开启择优，替换也只发生在「进 469 粒度对齐 / 470 复验 / 八闸之前」，
+    #   不合格候选照样被拦下 ⇒ 纯增益，不放宽任何判据。
+    #   ★按需触发：首个渠道已达标（>= M479_ALL_COLLAB_TRIGGER_BELOW）就不并发生成，
+    #     避免给主链路白加 20~40s 延迟。
+    def _m479_all_collab(self, prompt: str, answer: str,
+                         issue: Any, code_snippet: str) -> str:
+        """返回（可能被择优替换后的）answer。任何异常都原样返回 answer。"""
+        try:
+            import config as _cfg479
+            if not getattr(_cfg479, "ENABLE_M479_ALL_COLLAB", False):
+                return answer
+            from nucleus.autonomy.all_collab import (
+                generate_candidates,
+                note_round,
+                score_code,
+            )
+        except Exception as _e479imp:
+            silent_exc(_e479imp, where="SafeEvolutionExecutor::479ALL协作 import",
+                       level="debug")
+            return answer
+        try:
+            _issue = issue if isinstance(issue, dict) else {}
+            _method = str(_issue.get("method") or "")
+            _orig = str(code_snippet or "")
+            _base = score_code(answer, original=_orig, method=_method)
+            _bl = int(_base.get("score") or 0)
+            _trig = int(getattr(_cfg479, "M479_ALL_COLLAB_TRIGGER_BELOW", 85) or 0)
+            _row = {
+                "schema": "479.all_collab.v1",
+                "ts": time.time(),
+                "patch_id": str(_issue.get("id") or ""),
+                "file": str(_issue.get("file") or ""),
+                "method": _method,
+                "issue_type": str(_issue.get("issue_type") or ""),
+                "baseline_score": _bl,
+                "baseline_detail": _base,
+            }
+            if _bl >= _trig:
+                # 按需触发门：已达标，不烧配额也不加延迟
+                _row.update({"best_channel": "", "best_score": 0, "picked": False,
+                             "skipped": "baseline_ok", "candidates": []})
+                note_round(_row)
+                return answer
+
+            _n = int(getattr(_cfg479, "M479_ALL_COLLAB_CHANNELS", 4) or 4)
+            _to = float(getattr(_cfg479, "M479_ALL_COLLAB_TIMEOUT", 60.0) or 60.0)
+            _mt = int(getattr(_cfg479, "M479_ALL_COLLAB_MAX_TOKENS", 2048) or 2048)
+            _res = generate_candidates(
+                prompt, original=_orig, method=_method, n=_n,
+                timeout=_to, max_tokens=_mt,
+            )
+            _best = _res.get("best") if isinstance(_res, dict) else None
+            _bs = int(_best.get("score") or 0) if isinstance(_best, dict) else 0
+            _pick = bool(getattr(_cfg479, "ENABLE_M479_ALL_COLLAB_PICK", False))
+            _chosen = ""
+            if _pick and isinstance(_best, dict) and _bs > _bl:
+                _chosen = str(_best.get("code") or "").strip()
+                if _chosen:
+                    _module_logger.info(
+                        "[479ALL协作] 择优替换：%s(%s) %d 分 > 首个渠道 %d 分（%d 条候选）",
+                        _best.get("channel"), _best.get("model"), _bs, _bl,
+                        len(_res.get("candidates") or []))
+            elif isinstance(_best, dict):
+                _module_logger.info(
+                    "[479ALL协作] 影子：最优 %s(%s) %d 分 vs 首个渠道 %d 分（%d 条候选，未替换）",
+                    _best.get("channel"), _best.get("model"), _bs, _bl,
+                    len(_res.get("candidates") or []))
+            _row.update({
+                "best_channel": (str(_best.get("channel") or "")
+                                 if isinstance(_best, dict) else ""),
+                "best_score": _bs,
+                "picked": bool(_chosen),
+                "elapsed": (_res.get("elapsed") if isinstance(_res, dict) else 0),
+                "candidates": [
+                    {"channel": _c.get("channel"), "model": _c.get("model"),
+                     "ok": _c.get("ok"), "score": _c.get("score"),
+                     "elapsed": _c.get("elapsed"),
+                     "error": str(_c.get("error") or "")[:120],
+                     "detail": _c.get("score_detail")}
+                    for _c in ((_res.get("candidates") or [])
+                               if isinstance(_res, dict) else [])
+                    if isinstance(_c, dict)
+                ],
+            })
+            note_round(_row)
+            return _chosen or answer
+        except Exception as _e479:
+            silent_exc(_e479, where="SafeEvolutionExecutor::479ALL协作",
+                       level="debug")
+            return answer
+
 
     def _aesthetic_guidance(self) -> str:
         """获取框架审美偏好指引（生成回流），异常降级为空串（不阻断生成）。"""
