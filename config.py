@@ -1991,6 +1991,14 @@ ENABLE_SENSORY_BRIDGE = os.environ.get("PULSE_SENSORY_BRIDGE", "1") == "1"
 SENSORY_BRIDGE_PYTHON = os.environ.get("PULSE_BRIDGE_PYTHON", r"D:\Program Files\Python312\python.exe")
 SENSORY_BRIDGE_TIMEOUT = float(os.environ.get("PULSE_BRIDGE_TIMEOUT", "30"))
 
+# ★477批：以曈曈为主、LLM 为辅 —— LLM 产物先过「曈曈修订」再进粒度对齐与全部验证闸门。
+#   背景：LLM 补丁高频死于结构缺陷（方法体多缩 4 格 / 裸 except:pass），
+#   475 影子算子在 93 条真实补丁上修订覆盖 14 条、主笔覆盖 56 条。
+#   语义：True = 仅在「曈曈真的改了 + 修订后语法通过 + 无裸 except:pass」时替换
+#   `modified_code`；**只改输入，不放宽任何判据**（m469 对齐、缩进关、验证关照跑）。
+#   False = 完全退回改造前行为（LLM 原样进闸门）。
+ENABLE_M477_TONGTONG_PRIMARY = os.environ.get("PULSE_M477_TONGTONG_PRIMARY", "1") == "1"
+
 # ★主线第58批 T2（P2-393延伸）：ark-seed 深度思考渠道优化。
 #   背景：ark-seed 系列为 Doubao-Seed 深度思考模型，默认开启 thinking，
 #   导致简单请求也走完整思考链路、生成慢且费 token（星轨已将 max_tokens_override 降至 1024 止血）。

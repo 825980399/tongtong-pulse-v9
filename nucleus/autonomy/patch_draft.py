@@ -222,6 +222,9 @@ def draft_from_patch(patch: dict, kernel: Any = None) -> dict:
         "llm": _llm_m,
         "origin": _orig_m,
         "revision": _rev_m,
+        # ★477：修订后的**代码本体**（此前只回指标，调用方拿不到可用产物）。
+        #   仅当 revision_covered=True 且修订后语法干净时才可被下游采用。
+        "revision_code": _revision,
         "quality": {
             "self_parse_ok": _self_m["parse_ok"],
             "llm_parse_ok": _llm_m["parse_ok"],

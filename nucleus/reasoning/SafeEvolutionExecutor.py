@@ -1306,6 +1306,42 @@ def _m469_method_exists(patch: dict) -> str:
     return "absent"
 
 
+def _m477_tongtong_revise(patch: dict) -> dict:
+    """★477：曈曈为主 —— 用 475 影子算子修订 LLM 产物（只修结构缺陷，不改语义）。
+
+    返回 {"applied": bool, "code": str, "why": str}。
+    只在「曈曈真的改了 + 修订后语法通过 + 无裸 except:pass」时 applied=True；
+    修订后的代码仍要过 `_m469_align_method_patch`、缩进关、验证关等**全部既有闸门**。
+    """
+    try:
+        import config as _cfg477
+        if not bool(getattr(_cfg477, "ENABLE_M477_TONGTONG_PRIMARY", True)):
+            return {"applied": False, "code": "", "why": "disabled"}
+    except Exception as _e477cfg:
+        silent_exc(_e477cfg, where="SafeEvolutionExecutor::_m477_tongtong_revise cfg",
+                   level="debug")
+        return {"applied": False, "code": "", "why": "cfg_error"}
+    if not isinstance(patch, dict):
+        return {"applied": False, "code": "", "why": "bad_patch"}
+    try:
+        from nucleus.autonomy.patch_draft import draft_from_patch
+        _rec = draft_from_patch(patch)
+    except Exception as _e477:
+        silent_exc(_e477, where="SafeEvolutionExecutor::_m477_tongtong_revise",
+                   level="debug")
+        return {"applied": False, "code": "", "why": "kernel_error"}
+    if not _rec.get("revision_covered"):
+        return {"applied": False, "code": "", "why": "no_revision"}
+    _q = _rec.get("quality") or {}
+    if not _q.get("revision_parse_ok") or _q.get("revision_bare_except_pass"):
+        return {"applied": False, "code": "", "why": "revision_not_clean"}
+    _code = str(_rec.get("revision_code") or "")
+    if not _code or _code == str(patch.get("modified_code") or ""):
+        return {"applied": False, "code": "", "why": "no_change"}
+    return {"applied": True, "code": _code, "why": "revision_applied",
+            "changes": _rec.get("revision_changes") or []}
+
+
 def _m469_align_method_patch(patch: dict) -> dict:
     """★469刀2：把补丁的 original/modified **粒度对齐**，并记录源码指纹。
 
@@ -3449,6 +3485,14 @@ class SafeEvolutionExecutor:
                         #   方法体里插入嵌套 def，缩进关必然拒绝（实测 12 条里 11 条）。
                         #   这里把 original 换成整段方法、modified 回填到方法真实缩进；
                         #   取不到唯一整段 ⇒ 不构造，避免产出注定失败的补丁。
+                        # ★477：曈曈为主 —— LLM 产物先过曈曈修订（修方法体缩进 / 裸
+                        #   except:pass 等结构缺陷），再进粒度对齐与全部验证闸门。
+                        #   只改输入、不放宽判据；修订不成立则原样透传。
+                        _m477_rv = _m477_tongtong_revise(_llm_patch)
+                        if _m477_rv.get("applied"):
+                            _llm_patch["modified_code"] = _m477_rv["code"]
+                            _llm_patch["m477_tongtong_revised"] = True
+                            _llm_patch["m477_revision_changes"] = _m477_rv.get("changes") or []
                         _m469_al = _m469_align_method_patch(_llm_patch)
                         if not _m469_al.get("ok"):
                             # ★473刀9：`modified_other_method` 这一档**已由 470刀1 在
