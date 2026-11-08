@@ -553,6 +553,25 @@ def maybe_approve_scoped(patch: dict, patch_manager: Any, *,
         _m460_prep = {}
         _m460_patch = patch
 
+    # ★479：`problem_gone` 静态判据（解审批死锁第一层）。
+    #   死锁：第五闸要 `problem_gone is True`，而它的语义是「应用后问题真的消失了」
+    #   ⇒ 要拿它必须先应用，要应用必须先批准。实测 3 条 verified 补丁全部卡这里。
+    #   事实：`problem_gone` 问的是「问题还在不在」，而多数 issue_type 的「问题」
+    #   本身就是代码形态（有没有原子写 / 有没有重入守卫 / 方法是否超 200 行 /
+    #   有没有裸 except）⇒ AST 即可精确判定，无需真跑。
+    #   ★只**回填证据**：不改 decision() 判据、不改闸门、不改原 patch 对象。
+    #     探针判 False 或不支持时，`backfill` 返回逐字副本 ⇒ 行为与改前完全一致。
+    try:
+        from nucleus.evolution.problem_gone_probe import backfill as _m479_backfill
+        _m479_p = _m479_backfill(_m460_patch)
+        if (_m479_p.get("problem_gone") is True
+                and _m460_patch.get("problem_gone") is not True):
+            _log_debug("[479] problem_gone 静态判据通过 pid=%s why=%s",
+                       _m479_p.get("id"), _m479_p.get("problem_gone_why"))
+        _m460_patch = _m479_p
+    except Exception as _e479:
+        silent_exc(_e479, where="approval_bridge::479 problem_gone", level="debug")
+
     _r = maybe_approve(_m460_patch, patch_manager, by=by, root=root)
     _out["reason"] = _r.get("reason", "")
     _out["gates"] = _r.get("gates", {})

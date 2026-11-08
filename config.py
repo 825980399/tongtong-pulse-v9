@@ -4472,6 +4472,19 @@ ENABLE_M479_BACKPRESSURE_ATTRIB = True
 #   判读：某器官占总等待绝对多数 ⇒ 改串行粒度；分布均匀 ⇒ 加 worker 有效。
 ENABLE_M479_LOCK_WAIT_PROBE = True
 
+# ★479：`problem_gone` 静态判据探针 —— 解审批死锁的第一层。
+#   死锁：`approval_bridge.decision()` 第五闸要 `patch["problem_gone"] is True`，
+#   它的语义是「应用后问题真的消失了」⇒ 要拿它必须先应用，要应用必须先批准。
+#   实测 2026-11-08：pending 里 3 条 verified 补丁**全部**卡在这一项。
+#   事实：`problem_gone` 问的是「问题还在不在」，而绝大多数 issue_type 的「问题」
+#   本身就是**代码形态**（有没有原子写、有没有重入守卫、方法多长、有没有裸 except）
+#   ⇒ AST/文本即可精确判定，无需真跑。
+#   纪律：**宁可 False，不要假 True**；拿不准的类别（Traceback 等）返回 supported=False，
+#   仍走人工或沙箱预演，绝不放宽判据。
+#   读取点：nucleus/evolution/problem_gone_probe.py::probe / backfill
+#   离线体检：python -m nucleus.evolution.problem_gone_probe
+ENABLE_M479_PROBLEM_GONE_PROBE = True
+
 # ★主线第42批 T1（P0-272）：日志留存治理
 #   背景（实测证据链）：logs/pulse.log 的 ctime 未变（09-03）却只含当日 11:30 起的内容，
 #   实验证明「truncate 不改 ctime、delete+重建会改」→ 属**原地截断**；框架代码全库
