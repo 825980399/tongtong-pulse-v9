@@ -1543,12 +1543,23 @@ M418_THREAD_CAPS = {
     # —— 418 刀3② 已接入 ——
     "l0": 1,          # 生命线（原 1）
     "l1": 6,          # 实时层（原 max(4, cpu//2) = 8）
-    "l2": 6,          # 认知层（原 max(4, cpu//2) = 8）
+    # ★479：l2 6 → 10。依据（2026-11-08 实测）：L2 队列深度 1200/上限 300 **已达硬顶**
+    #   （「[背压·硬顶] 即使优先级=1 也拒绝」），而 16 核 CPU 仅用 3.4%、主进程 87 线程
+    #   ⇒ 算力闲置，是消费出口不够，不是线程爆炸。
+    #   ★真正生效的是**本表**（utils/thread_budget.caps() 优先读 config，缺键才用 DEFAULT_CAPS）；
+    #     DEFAULT_CAPS 里的 l2 已同步为 10，避免两处漂移。
+    #   电流值：l2_threads=8 → cap(8)=8 ⇒ L2 实际 worker 6→8（+33%）。
+    #   回滚：把本行改回 6。
+    "l2": 10,          # 认知层（原 max(4, cpu//2) = 8）
     "l3": 4,          # 自主层（原 max(2, cpu//4) = 4）
     "adaptive": 4,    # 自适应池（原 max(4, cpu//2) = 8）
     "hybrid_io": 8,   # 混合调度 IO 池（原 min(64, cpu*2) = 32）
     # —— 426 刀1 新接入 ——
-    "ext_op": 8,          # 外部操作执行池（原 32；外层并发闸门只有 2）
+    # ★479：8 → 4。与 l2 6→10 对调额度，保持 budget_total() < 60 的既有判据
+    #   （test_m418_k3_soft_injuries::test_20_budget_total_below_60）。
+    #   依据：本行原注释「外层 _SCHEDULER_EXECUTOR 只有 2 并发、_max_concurrent 默认 2
+    #   ⇒ 内层并发物理上限≈2，8 已是 4 倍余量」⇒ 4 仍是 2 倍余量，安全。
+    "ext_op": 4,          # 外部操作执行池（原 32；外层并发闸门只有 2）
     "ext_sched": 2,       # 外部操作调度池（原 2，持平）
     "struct_parallel": 6,  # 任务组扇出池（原硬编码 16）
     "cortex_parallel": 8,  # 思维并行池（原 9，自适应可翻倍到 18）
@@ -4446,6 +4457,20 @@ SEMANTIC_BRIDGE_SCRIPT = os.path.join("tools", "semantic", "encoder_sidecar.py")
 #   False ⇒ 逐字回到改前（告警内容完全一致）。
 #   读取点：nucleus/field/InfoField.py::_m479_inflight_hint
 ENABLE_M479_BACKPRESSURE_ATTRIB = True
+
+# ★479 收尾：器官锁等待探针 —— 回答「436刀2 同器官串行那把锁是不是真瓶颈」。
+#   背景（用户提问「3.14t 没 GIL 了能不能去掉一些锁」）：
+#     那把锁**不是 GIL 补偿**，原注释写明「原模型对同器官无任何限制 ⇒ 重入竞态
+#     （器官内部状态/队列非线程安全）」，是为修真实 bug 加的，删了直接退回已知问题。
+#     因果方向也是反的：GIL 时代 `dict[k]=v` 这类单操作靠 GIL 免费原子，
+#     3.14t 自由线程下真的并发了 ⇒ 这类锁不但不能去，还得补。
+#   但「它把 worker 串行化了」这个观察成立 ⇒ 所以要**量**：
+#     在 `_dispatch_handler` 里把 `with lock:` 换成 `acquire()+计时+finally release`
+#     （语义完全等价），只统计等待 ≥1ms 的样本，接进背压告警：
+#       ← 在途归因: 合计=24, top3=[心脏=12, ...] | 锁等待top3=[心脏=180ms/9次(最大45), ...]
+#   True ⇒ 采集（无竞争路径几乎零开销）；False ⇒ 不采集（告警里少了锁等待那段）。
+#   判读：某器官占总等待绝对多数 ⇒ 改串行粒度；分布均匀 ⇒ 加 worker 有效。
+ENABLE_M479_LOCK_WAIT_PROBE = True
 
 # ★主线第42批 T1（P0-272）：日志留存治理
 #   背景（实测证据链）：logs/pulse.log 的 ctime 未变（09-03）却只含当日 11:30 起的内容，

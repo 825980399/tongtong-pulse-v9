@@ -348,6 +348,11 @@ class InfoField(SilentLogMixin):
         #   注意这是**排队**不是**拒收**（`_check_organ_concurrency` 超限是拒收，会丢脉冲）。
         self._organ_exec_locks: dict = {}
         self._organ_exec_locks_guard = threading.Lock()
+        # ★479：器官执行锁的**等待统计** —— 诊断「锁竞争是不是真瓶颈」。
+        #   结构 {器官: [次数, 累计ms, 最大ms]}；只在等待 >=1ms 时记账，
+        #   无竞争路径几乎零开销。读取点 _m479_inflight_hint。
+        self._m479_lock_wait: dict[str, list] = {}
+        self._m479_lw_lock = threading.Lock()
         # ★主线第13批 P2-87：按层·按器官的在途任务计数。
         #   publish 提交任务时 +1，_dispatch_handler 完成/兜底时 -1。
         #   池重建时据此精确算出「被 cancel_futures 取消的数量」，
@@ -1203,8 +1208,20 @@ class InfoField(SilentLogMixin):
             # ★436刀2：同器官串行（每器官 RLock 排队）、跨器官并行。
             #   关 ENABLE_M436_ORGAN_SERIAL ⇒ 逐字回到改前（直接调，无锁）。
             if self._m436_organ_serial_on():
-                with self._m436_organ_lock(organ_name):
+                # ★479：改成 acquire+计时+finally release —— 与 `with` 语义完全等价
+                #   （同样无限等待、同样 finally 释放），只多出「等待了多久」这个观测值。
+                #   ★锁本身**不能删**：436刀2 原注释写明它是为修「同器官重入竞态」加
+                #   （器官内部状态/队列非线程安全），删了直接退回已知 bug。
+                _lk = self._m436_organ_lock(organ_name)
+                _wt0 = time.perf_counter()
+                _lk.acquire()
+                _wait_ms = (time.perf_counter() - _wt0) * 1000.0
+                if _wait_ms >= 1.0:
+                    self._m479_note_lock_wait(organ_name, _wait_ms)
+                try:
                     self._call_handler_safe(pulse, handler)
+                finally:
+                    _lk.release()
             else:
                 self._call_handler_safe(pulse, handler)
         finally:
@@ -2479,6 +2496,59 @@ class InfoField(SilentLogMixin):
             else:
                 _d[organ_name] = _v
 
+    def _m479_lock_wait_hint(self, top: int = 3) -> str:
+        """★479：锁等待归因 —— 「累计等待最久」的 top N 器官。
+
+        与「在途归因」互补：在途看**积压量**，本方法看**阻塞位置**。
+        若某器官累计等待占绝对多数 ⇒ 瓶颈是那把锁（同器官串行化），
+        加 worker 无效，应改串行粒度；若分布均匀 ⇒ 瓶颈是整体吞吐，
+        加 worker 有效。
+        """
+        try:
+            import config as _cfg479
+            if not getattr(_cfg479, "ENABLE_M479_LOCK_WAIT_PROBE", False):
+                return ""
+            if not self._m479_lock_wait:
+                return ""
+            with self._m479_lw_lock:
+                _snap = {k: list(v) for k, v in self._m479_lock_wait.items()}
+        except Exception as _e479:
+            silent_exc(_e479, where="InfoField::_m479_lock_wait_hint", level="debug")
+            return ""
+        if not _snap:
+            return ""
+        try:
+            _s = sorted(_snap.items(), key=lambda kv: -float(kv[1][1]))[:max(1, int(top))]
+            _txt = ", ".join(
+                f"{k}={v[1]:.0f}ms/{int(v[0])}次(最大{v[2]:.0f})" for k, v in _s)
+            return f" | 锁等待top{len(_s)}=[{_txt}]"
+        except Exception as _e479s:
+            silent_exc(_e479s, where="InfoField::_m479_lock_wait_hint sort", level="debug")
+            return ""
+
+    def _m479_note_lock_wait(self, organ_name: str, ms: float) -> None:
+        """★479：记一次器官锁等待（只统计 >=1ms 的等待，避免计数器自己成热点）。"""
+        try:
+            import config as _cfg479
+            if not getattr(_cfg479, "ENABLE_M479_LOCK_WAIT_PROBE", False):
+                return
+        except Exception as _e479c:
+            silent_exc(_e479c, where="InfoField::_m479_note_lock_wait cfg", level="debug")
+            return
+        _k = str(organ_name or "<unknown>")
+        try:
+            with self._m479_lw_lock:
+                _r = self._m479_lock_wait.get(_k)
+                if _r is None:
+                    self._m479_lock_wait[_k] = [1, float(ms), float(ms)]
+                else:
+                    _r[0] += 1
+                    _r[1] += float(ms)
+                    if ms > _r[2]:
+                        _r[2] = float(ms)
+        except Exception as _e479:
+            silent_exc(_e479, where="InfoField::_m479_note_lock_wait", level="debug")
+
     def _m479_inflight_hint(self, layer: str, top: int = 3) -> str:
         """★479收尾：背压归因 —— 把「该层在途任务 top N 器官」拼进告警。
 
@@ -2505,13 +2575,15 @@ class InfoField(SilentLogMixin):
         except Exception as _e479:
             silent_exc(_e479, where="InfoField::_m479_inflight_hint", level="debug")
             return ""
+        _lw = self._m479_lock_wait_hint(top)
         if not _d:
-            return ""
+            return _lw
         try:
             _top = sorted(_d.items(), key=lambda kv: -int(kv[1]))[:max(1, int(top))]
             _total = sum(int(v) for v in _d.values())
             _pairs = ", ".join(f"{_k}={_v}" for _k, _v in _top)
-            return f"  ← 在途归因: 合计={_total}, top{len(_top)}=[{_pairs}]"
+            return (f"  ← 在途归因: 合计={_total}, top{len(_top)}=[{_pairs}]"
+                    + _lw)
         except Exception as _e479s:
             silent_exc(_e479s, where="InfoField::_m479_inflight_hint sort", level="debug")
             return ""

@@ -104,3 +104,110 @@ class TestWiring:
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+class TestLockWaitProbe:
+    """★479：锁等待探针 —— 量清「等锁」是不是瓶颈。
+
+    ★历史背景（必须记住）：`ENABLE_M436_ORGAN_SERIAL` 那把锁**不是 GIL 补偿**，
+    它的原始注释写明「原模型对同器官无任何限制 ⇒ 重入竞态（器官内部状态/队列非线程安全）」，
+    是为修真实 bug 加的。3.14t 去掉 GIL 后这类竞态**更容易**发生 ⇒ 锁绝不能删。
+    本探针只量等待、不改语义。
+    """
+
+    def _inst(self, inflight=None):
+        import threading as _th
+        _o = InfoField.__new__(InfoField)
+        _o._organ_concurrent_lock = _th.RLock()
+        _o._m479_lw_lock = _th.Lock()
+        _o._m479_lock_wait = {}
+        _o._layer_organ_inflight = inflight or {}
+        return _o
+
+    def test_10_accumulates_count_sum_max(self, monkeypatch):
+        import config
+        monkeypatch.setattr(config, "ENABLE_M479_LOCK_WAIT_PROBE", True)
+        _o = self._inst()
+        _o._m479_note_lock_wait("心脏", 12.5)
+        _o._m479_note_lock_wait("心脏", 8.0)
+        _o._m479_note_lock_wait("胃", 3.2)
+        _r = _o._m479_lock_wait
+        assert _r["心脏"][0] == 2
+        assert abs(_r["心脏"][1] - 20.5) < 1e-6
+        assert abs(_r["心脏"][2] - 12.5) < 1e-6      # 最大，不是最后
+        assert _r["胃"][0] == 1
+
+    def test_11_switch_off_no_record(self, monkeypatch):
+        """★反证：探针关 ⇒ 一条都不记（零开销路径）。"""
+        import config
+        monkeypatch.setattr(config, "ENABLE_M479_LOCK_WAIT_PROBE", False)
+        _o = self._inst()
+        _o._m479_note_lock_wait("心脏", 99.0)
+        assert _o._m479_lock_wait == {}
+
+    def test_12_hint_sorted_by_sum_desc(self, monkeypatch):
+        import config
+        monkeypatch.setattr(config, "ENABLE_M479_LOCK_WAIT_PROBE", True)
+        _o = self._inst()
+        for _ms in (5.0, 5.0, 5.0):        # 心脏 15ms/3次
+            _o._m479_note_lock_wait("心脏", _ms)
+        _o._m479_note_lock_wait("胃", 9.0)  # 胃 9ms/1次
+        _s = _o._m479_lock_wait_hint()
+        assert "锁等待" in _s
+        assert _s.index("心脏=15ms/3次") < _s.index("胃=9ms/1次")
+
+    def test_13_hint_off_when_switch_off(self, monkeypatch):
+        import config
+        monkeypatch.setattr(config, "ENABLE_M479_LOCK_WAIT_PROBE", True)
+        _o = self._inst()
+        _o._m479_note_lock_wait("心脏", 20.0)
+        monkeypatch.setattr(config, "ENABLE_M479_LOCK_WAIT_PROBE", False)
+        assert _o._m479_lock_wait_hint() == ""
+
+    def test_14_combined_hint_has_both_sections(self, monkeypatch):
+        """在途 + 锁等待 必须同时出现在同一条告警里。"""
+        import config
+        monkeypatch.setattr(config, "ENABLE_M479_LOCK_WAIT_PROBE", True)
+        monkeypatch.setattr(config, "ENABLE_M479_BACKPRESSURE_ATTRIB", True)
+        _o = self._inst({"L1": {"心脏": 7}})
+        _o._m479_note_lock_wait("心脏", 33.0)
+        _s = _o._m479_inflight_hint("L1")
+        assert "在途归因" in _s and "锁等待" in _s
+
+    def test_15_no_lock_wait_still_has_inflight(self, monkeypatch):
+        """只有在途、没有锁等待时，告警仍要出现在途部分（不许整段变空）。"""
+        import config
+        monkeypatch.setattr(config, "ENABLE_M479_LOCK_WAIT_PROBE", True)
+        monkeypatch.setattr(config, "ENABLE_M479_BACKPRESSURE_ATTRIB", True)
+        _o = self._inst({"L1": {"心脏": 7}})
+        _s = _o._m479_inflight_hint("L1")
+        assert "在途归因" in _s
+        assert "锁等待" not in _s
+
+
+class TestLockMustStay:
+    """★反证（防回潮）：器官锁**必须还在**，不能被「提速」为名删掉。"""
+
+    def test_20_organ_lock_code_present(self):
+        from pathlib import Path
+        _p = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) \
+            / "nucleus" / "field" / "InfoField.py"
+        _src = _p.read_text(encoding="utf-8", errors="replace")
+        assert "_m436_organ_lock(organ_name)" in _src, "同器官锁被删了！"
+        assert "_lk.acquire()" in _src and "_lk.release()" in _src, \
+            "锁的 acquire/release 被删了！"
+        assert "def _m436_organ_serial_on" in _src
+
+    def test_21_serial_switch_still_default_on(self):
+        """默认必须是「同器官串行」——关掉就退回重入竞态。"""
+        import config
+        assert bool(getattr(config, "ENABLE_M436_ORGAN_SERIAL", True)) is True
+
+    def test_22_budget_total_still_below_60(self):
+        """预算合计判据（test_m418_k3 也有，这里再守一次，防对调时漏算）。"""
+        from utils.thread_budget import budget_total
+        assert budget_total() < 60, budget_total()
+
+    def test_23_l2_budget_raised_to_10(self):
+        from utils.thread_budget import cap
+        assert cap("l2", 8) == 8, "L2 应能从 6 提到 8（预算已调 10）"
