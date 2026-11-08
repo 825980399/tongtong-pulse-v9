@@ -280,6 +280,80 @@ def score_code(code: str, original: str = "", method: str = "") -> dict:
 # ────────────────────────── 渠道挑选与并发生成 ──────────────────────────
 
 _DEAD_LOGGED: set = set()
+_LOWRATE_LOGGED: set = set()
+
+
+def _channel_stats(window: int = 200) -> dict:
+    """从台账最近 window 轮统计各渠道 [tried, ok]（死渠道与低效渠道共用一份口径）。"""
+    _stat: dict = {}
+    _p = _ledger_path()
+    if not os.path.isfile(_p):
+        return _stat
+    try:
+        with open(_p, encoding="utf-8", errors="replace") as _f:
+            _lines = [x for x in _f if x.strip()]
+        for _ln in _lines[-max(1, int(window)):]:
+            try:
+                _r = json.loads(_ln)
+            except (json.JSONDecodeError, ValueError) as _e:
+                silent_exc(_e, where="autonomy.all_collab::_channel_stats row",
+                           level="debug")
+                continue
+            for _c in (_r.get("candidates") or []):
+                if not isinstance(_c, dict):
+                    continue
+                _n = str(_c.get("channel") or "")
+                if not _n:
+                    continue
+                _b = _stat.setdefault(_n, [0, 0])
+                _b[0] += 1
+                _b[1] += int(bool(_c.get("ok")))
+    except OSError as _e:
+        silent_exc(_e, where="autonomy.all_collab::_channel_stats open", level="debug")
+    return _stat
+
+
+def _low_rate_channels(window: int = 200, min_tries: int = 10,
+                       min_rate: float = 0.20) -> set:
+    """★479 收尾①：成功率过低的渠道（近 WINDOW 轮 tried >= MIN 且 ok/tried < MIN_RATE）。
+
+    实测依据（44 轮）：zhipu 4.1%（429×36）、qwen37-plus 5.6%（timeout×17）、
+    modelscope 0%（timeout×10）—— 28 次读超时里 27 次来自后两者（96%）。
+    这类渠道占了并行名额却几乎不产出，**降路数会把好渠道一起砍掉**（见模块 docstring），
+    所以正确做法是按成功率**换掉坏名额**，而不是减少名额。
+
+    只看最近窗口 ⇒ 额度恢复/换模型后自动复活（与死渠道同一机制，不会永久拉黑）。
+    """
+    _out: set = set()
+    try:
+        import config as _cfg
+        if not getattr(_cfg, "M479_ALL_COLLAB_SKIP_LOW_RATE", True):
+            return _out
+        _win = int(getattr(_cfg, "M479_ALL_COLLAB_RATE_WINDOW", window) or window)
+        _min = int(getattr(_cfg, "M479_ALL_COLLAB_RATE_MIN_TRIES", min_tries) or min_tries)
+        _rate = float(getattr(_cfg, "M479_ALL_COLLAB_MIN_OK_RATE", min_rate) or min_rate)
+    except (ImportError, AttributeError, TypeError, ValueError) as _e:
+        silent_exc(_e, where="autonomy.all_collab::_low_rate_channels config",
+                   level="debug")
+        _win, _min, _rate = window, min_tries, min_rate
+
+    for _n, (_tried, _ok) in _channel_stats(_win).items():
+        if _tried < _min:
+            continue
+        if (_ok / float(_tried)) >= _rate:
+            continue
+        _out.add(_n)
+        if _n not in _LOWRATE_LOGGED:
+            _LOWRATE_LOGGED.add(_n)
+            try:
+                from nucleus.logger import get_logger as _gl
+                _gl("autonomy.all_collab").info(
+                    "[479ALL协作] 跳过低成功率渠道 %s（近 %d 轮 %d 次成功 %d 次 = %.1f%%，门槛 %.0f%%）",
+                    _n, _win, _tried, _ok, 100.0 * _ok / max(1, _tried), _rate * 100)
+            except (ImportError, AttributeError, TypeError, ValueError) as _e:
+                silent_exc(_e, where="autonomy.all_collab::_low_rate_channels log",
+                           level="debug")
+    return _out
 
 
 def _dead_channels(window: int = 200, min_tries: int = 10) -> set:
@@ -303,30 +377,9 @@ def _dead_channels(window: int = 200, min_tries: int = 10) -> set:
         silent_exc(_e, where="autonomy.all_collab::_dead_channels config", level="debug")
         _win, _min = window, min_tries
 
-    _p = _ledger_path()
-    if not os.path.isfile(_p):
-        return _out
-    _stat: dict = {}
-    try:
-        with open(_p, encoding="utf-8", errors="replace") as _f:
-            _lines = [x for x in _f if x.strip()]
-        for _ln in _lines[-max(1, _win):]:
-            try:
-                _r = json.loads(_ln)
-            except (json.JSONDecodeError, ValueError) as _e:
-                silent_exc(_e, where="autonomy.all_collab::_dead_channels row", level="debug")
-                continue
-            for _c in (_r.get("candidates") or []):
-                if not isinstance(_c, dict):
-                    continue
-                _n = str(_c.get("channel") or "")
-                if not _n:
-                    continue
-                _b = _stat.setdefault(_n, [0, 0])
-                _b[0] += 1
-                _b[1] += int(bool(_c.get("ok")))
-    except OSError as _e:
-        silent_exc(_e, where="autonomy.all_collab::_dead_channels open", level="debug")
+    # ★479 收尾①：统计逻辑抽到 _channel_stats（与低效渠道过滤共用一份口径）
+    _stat = _channel_stats(_win)
+    if not _stat:
         return _out
 
     for _n, (_tried, _ok) in _stat.items():
@@ -363,25 +416,46 @@ def pick_channels(n: int = 3, exclude: str = "") -> list[dict]:
         silent_exc(_e, where="autonomy.all_collab::pick_channels import", level="debug")
         return []
 
-    _out: list[dict] = []
     _ex = str(exclude or "")
     _dead = _dead_channels()
-    for _c in _chs:
-        if not isinstance(_c, dict):
-            continue
-        if _ex and str(_c.get("name") or "") == _ex:
-            continue
-        if _dead and str(_c.get("name") or "") in _dead:
-            continue
-        try:
-            if not _rak(_c):
+    _lowrate = _low_rate_channels()
+
+    def _collect(_skip: set) -> list[dict]:
+        _acc: list[dict] = []
+        for _c in _chs:
+            if not isinstance(_c, dict):
                 continue
-        except (KeyError, TypeError, ValueError, AttributeError) as _e:
-            silent_exc(_e, where="autonomy.all_collab::pick_channels key", level="debug")
-            continue
-        _out.append(_c)
-        if len(_out) >= max(1, int(n)):
-            break
+            if _ex and str(_c.get("name") or "") == _ex:
+                continue
+            if _skip and str(_c.get("name") or "") in _skip:
+                continue
+            try:
+                if not _rak(_c):
+                    continue
+            except (KeyError, TypeError, ValueError, AttributeError) as _e:
+                silent_exc(_e, where="autonomy.all_collab::pick_channels key",
+                           level="debug")
+                continue
+            _acc.append(_c)
+            if len(_acc) >= max(1, int(n)):
+                break
+        return _acc
+
+    _out = _collect(_dead | _lowrate)
+    if _out:
+        return _out
+    # ★安全回落：若「零产出 + 低成功率」一起筛之后一个都不剩，退回只排除零产出。
+    #   理由：统计口径不能把渠道池全关死（那会让 ALL 协作永久失效，比低效更糟）。
+    _out = _collect(_dead)
+    if _out:
+        try:
+            from nucleus.logger import get_logger as _gl
+            _gl("autonomy.all_collab").warning(
+                "[479ALL协作] 低成功率过滤后无渠道可用 ⇒ 回落为只排除零产出渠道（%d 条）",
+                len(_out))
+        except (ImportError, AttributeError, TypeError, ValueError) as _e:
+            silent_exc(_e, where="autonomy.all_collab::pick_channels 回落日志",
+                       level="debug")
     return _out
 
 

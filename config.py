@@ -4454,6 +4454,23 @@ M479_ALL_COLLAB_SKIP_DEAD = True
 M479_ALL_COLLAB_DEAD_WINDOW = 200      # 只看最近 200 轮台账
 M479_ALL_COLLAB_DEAD_MIN_TRIES = 10    # 至少 10 次调用才判死（避免小样本误杀）
 
+# ★479 收尾①：按成功率过滤「低效渠道」（比死渠道更宽一档）。
+#   实测 44 轮各渠道成功率：
+#     bailian-glm53 (glm-5.2)             49/49 = **100%**   ← 唯一满成功
+#     bailian-qwen38-flash (qwen3.7-flash) 27/49 = 55.1%    ← 能出 100 分
+#     zhipu-47-flash                        2/49 =  4.1%    ← 429×36
+#     bailian-qwen37-plus                   1/18 =  5.6%    ← **timeout×17**
+#     modelscope                            0/10 =    0%    ← **timeout×10**
+#     bailian-deepseek-v41-flash            0/21 =    0%    ← empty×21
+#   28 次读超时里 27 次来自 qwen37-plus(17) + modelscope(10)，占 **96%**。
+#   而这些低效渠道是按 priority 抢到并行名额的（zhipu p1、modelscope p5）——
+#   所以「降路数」会把好渠道一起砍掉，正解是**换掉坏名额**。
+#   ★安全回落：若过滤后一个不剩，退回只排除零产出渠道（绝不把池子关死）。
+M479_ALL_COLLAB_SKIP_LOW_RATE = True
+M479_ALL_COLLAB_RATE_WINDOW = 200      # 与死渠道同一窗口口径
+M479_ALL_COLLAB_RATE_MIN_TRIES = 10    # 至少 10 次才有统计意义
+M479_ALL_COLLAB_MIN_OK_RATE = 0.20     # 成功率 < 20% 判为低效
+
 # ★479 收尾：「同一 (file, method) 被反复送进 LLM」探针（纯记账、只告警）。
 #   实测 22 轮台账：_m374_schedule_ahead 被送 4 次、_schedule_next_beat 4 次、
 #   _schedule_next_exploration 3 次……每轮 4 条候选 ⇒ 单个方法白烧 16 次调用。
@@ -8093,12 +8110,26 @@ ENABLE_M446_EFFECT_STRICT = True
 ENABLE_M447_APPROVAL_BRIDGE = True
 #
 # M447_APPROVE_DAILY_CAP
-#   默认值：1（小林拍板：每天最多自动批准 1 条）
+#   默认值：3（★479 收尾调整，原 1 —— 见下）
 #   语义：<=0 ⇒ 关闭自动批准（只留痕不写状态）。
 #   计数口径：数 `data/patches/approval_trace.jsonl` 里**当天 approved=True 的行**，
 #            不数 auto_approved.json（那份含人工批准，混在一起就说不清"本层放了几条"）。
 #   读取点：nucleus/evolution/approval_bridge.py::daily_cap()
-M447_APPROVE_DAILY_CAP = 1
+#
+#   ★479 收尾为什么 1 → 3（不是放宽闸门，是让流水线能流起来）：
+#     原值 1 是「小林拍板：每天最多自动批准 1 条」的保守设计，原则保留：
+#     **八闸一道不改**，scope_ok（risk=低+非核心+单文件+blast≤1）也不改。
+#     但实测发现 1 会让队列**永远清不完**：
+#       · 22:41 实测 pending=3 条 verified，其中 3274（periodic_task_no_reentry）
+#         已通过全部八闸（problem_gone 由 479 探针静态判定为真），
+#         却卡在 `blocked=daily_cap（今日已批准 1 / 1）`；
+#       · 一天只放 1 条，而进化每轮还在产生新问题 ⇒ 积压单调上升；
+#       · 补丁链长期 degraded（apply=0）的直接原因之一。
+#     3 的风险边界：即使全部命中，也只是「每天最多 3 个**低风险单文件非核心**
+#     补丁自动落地」，每笔都有 apply_trace 全文留痕 + 自动回滚路径。
+#     再往上（>3）建议先看一周的 approval_trace 成功率再谈。
+#   ★回滚：改回 1 即逐字回到 446/447 的原始保守口径。
+M447_APPROVE_DAILY_CAP = 3
 #
 # ENABLE_M447_APPLY_TRACE / M447_APPLY_TRACE_PATH / M447_APPLY_TRACE_MAX_CHARS
 #   默认值：True / "data/patches/apply_trace.jsonl" / 0（0 = 不截断）

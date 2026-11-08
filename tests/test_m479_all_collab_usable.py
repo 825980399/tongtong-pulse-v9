@@ -230,12 +230,20 @@ class TestDeadChannelFilter:
             assert "bailian-qwen38-flash" in _names
 
     def test_17_pick_channels_unchanged_when_switch_off(self, monkeypatch):
+        """两个过滤器都关 ⇒ 逐字回到「按 priority 取前 N」。
+
+        ★479 收尾① 追加：这里必须**同时**关掉 `M479_ALL_COLLAB_SKIP_LOW_RATE`。
+        因为 deepseek 既是零产出（死渠道）又是 0% 成功率（低效渠道），
+        只关死渠道开关时它仍会被低成功率过滤拦下 —— 那不是回归，
+        是「另一个开关还在生效」。完整回滚 = 两个开关一起关。
+        """
         import config
         with _TmpLedger() as p:
             _TmpLedger.write(p, [_row([("bailian-deepseek-v41-flash", False, 0, False)])
                                  for _ in range(20)])
             monkeypatch.setattr(AC, "_ledger_path", lambda: p)
             monkeypatch.setattr(config, "M479_ALL_COLLAB_SKIP_DEAD", False)
+            monkeypatch.setattr(config, "M479_ALL_COLLAB_SKIP_LOW_RATE", False)
             _names = [c.get("name") for c in AC.pick_channels(4)]
             assert "bailian-deepseek-v41-flash" in _names, "开关关闭应逐字回滚"
 
@@ -468,6 +476,118 @@ class TestAsyncShadow:
         # 必须显式排除 PICK=True，否则择优会失效
         _i = _src.index("_async_shadow = bool(getattr(")
         assert "_pick_shadow479" in _src[_i:_i + 400]
+
+
+class TestLowRateFilter:
+    """★479 收尾①：按成功率过滤低效渠道（替代「并行数 4→2」的误判方案）。
+
+    实测依据：28 次读超时里 27 次来自 qwen37-plus(17)+modelscope(10)，占 96%；
+    zhipu 49 次里 36 次 429。而 pick_channels 按 priority 取前 N 恰好把这些
+    低效渠道装进来（zhipu p1、modelscope p5）⇒ 降路数会把好渠道一起砍掉。
+    """
+
+    def test_50_low_rate_detected(self, monkeypatch):
+        import config
+        with _TmpLedger() as p:
+            _rows = []
+            for _ in range(12):
+                _rows.append(_row([("bad-ch", False, 0, False),
+                                   ("good-ch", True, 90, True)]))
+            _TmpLedger.write(p, _rows)
+            monkeypatch.setattr(AC, "_ledger_path", lambda: p)
+            monkeypatch.setattr(config, "M479_ALL_COLLAB_SKIP_LOW_RATE", True)
+            monkeypatch.setattr(config, "M479_ALL_COLLAB_RATE_MIN_TRIES", 10)
+            monkeypatch.setattr(config, "M479_ALL_COLLAB_MIN_OK_RATE", 0.20)
+            assert "bad-ch" in AC._low_rate_channels()
+            assert "good-ch" not in AC._low_rate_channels()
+
+    def test_51_low_but_nonzero_still_filtered(self, monkeypatch):
+        """成功率 8.3%（1/12）也判低效 —— zhipu 4.1% 就是这么被挑出来的。"""
+        import config
+        with _TmpLedger() as p:
+            _rows = [_row([("meh-ch", False, 0, False)]) for _ in range(11)]
+            _rows.append(_row([("meh-ch", True, 80, True)]))
+            _TmpLedger.write(p, _rows)
+            monkeypatch.setattr(AC, "_ledger_path", lambda: p)
+            monkeypatch.setattr(config, "M479_ALL_COLLAB_SKIP_LOW_RATE", True)
+            monkeypatch.setattr(config, "M479_ALL_COLLAB_RATE_MIN_TRIES", 10)
+            assert "meh-ch" in AC._low_rate_channels()
+
+    def test_52_small_sample_not_filtered(self, monkeypatch):
+        """样本 < MIN_TRIES 不判低效（避免新渠道一上来就被误杀）。"""
+        import config
+        with _TmpLedger() as p:
+            _TmpLedger.write(p, [_row([("new-ch", False, 0, False)])
+                                 for _ in range(3)])
+            monkeypatch.setattr(AC, "_ledger_path", lambda: p)
+            monkeypatch.setattr(config, "M479_ALL_COLLAB_SKIP_LOW_RATE", True)
+            monkeypatch.setattr(config, "M479_ALL_COLLAB_RATE_MIN_TRIES", 10)
+            assert AC._low_rate_channels() == set()
+
+    def test_53_switch_off_returns_empty(self, monkeypatch):
+        import config
+        with _TmpLedger() as p:
+            _TmpLedger.write(p, [_row([("bad-ch", False, 0, False)])
+                                 for _ in range(20)])
+            monkeypatch.setattr(AC, "_ledger_path", lambda: p)
+            monkeypatch.setattr(config, "M479_ALL_COLLAB_SKIP_LOW_RATE", False)
+            assert AC._low_rate_channels() == set()
+
+    def test_54_safe_fallback_never_empties_pool(self, monkeypatch):
+        """★安全红线：全部渠道都被判低效时，必须回落成「只排除零产出」，
+        绝不能让 ALL 协作永久没有渠道可用（那比低效更糟）。"""
+        import config
+        with _TmpLedger() as p:
+            # 所有渠道都 1 次成功 / 20 次 ⇒ 全部 <20%
+            _rows = []
+            for _i in range(19):
+                _rows.append(_row([("ch-a", False, 0, False),
+                                   ("ch-b", False, 0, False)]))
+            _rows.append(_row([("ch-a", True, 70, True),
+                               ("ch-b", True, 70, True)]))
+            _TmpLedger.write(p, _rows)
+            monkeypatch.setattr(AC, "_ledger_path", lambda: p)
+            monkeypatch.setattr(config, "M479_ALL_COLLAB_SKIP_LOW_RATE", True)
+            monkeypatch.setattr(config, "M479_ALL_COLLAB_RATE_MIN_TRIES", 10)
+            monkeypatch.setattr(config, "M479_ALL_COLLAB_SKIP_DEAD", True)
+            _names = [c.get("name") for c in AC.pick_channels(4)]
+            assert _names, "池子被过滤空了 —— 安全回落失效"
+
+    def test_55_pick_channels_skips_low_rate(self, monkeypatch):
+        import config
+        with _TmpLedger() as p:
+            _rows = []
+            for _ in range(12):
+                _rows.append(_row([
+                    ("bailian-glm53", True, 90, True),
+                    ("bailian-qwen38-flash", True, 70, True),
+                    ("zhipu-47-flash", False, 0, False),
+                ]))
+            _TmpLedger.write(p, _rows)
+            monkeypatch.setattr(AC, "_ledger_path", lambda: p)
+            monkeypatch.setattr(config, "M479_ALL_COLLAB_SKIP_LOW_RATE", True)
+            monkeypatch.setattr(config, "M479_ALL_COLLAB_RATE_MIN_TRIES", 10)
+            _names = [c.get("name") for c in AC.pick_channels(4)]
+            assert "zhipu-47-flash" not in _names, "低效渠道仍在候选池里"
+            assert "bailian-glm53" in _names
+            assert "bailian-qwen38-flash" in _names
+
+    def test_56_stats_shared_between_two_filters(self, monkeypatch):
+        """口径一致：两份过滤器必须用同一份统计（否则会互相矛盾）。"""
+        with _TmpLedger() as p:
+            _TmpLedger.write(p, [_row([("x", False, 0, False)]) for _ in range(12)])
+            monkeypatch.setattr(AC, "_ledger_path", lambda: p)
+            _st = AC._channel_stats(200)
+            assert _st.get("x") == [12, 0]
+
+    def test_57_source_has_fallback(self):
+        with open(os.path.join(ROOT, "nucleus", "autonomy", "all_collab.py"),
+                  encoding="utf-8", errors="replace") as _f:
+            _src = _f.read()
+        assert "def _low_rate_channels(" in _src
+        assert "def _channel_stats(" in _src
+        # 安全回落必须存在
+        assert "_collect(_dead)" in _src, "缺少安全回落"
 
 
 if __name__ == "__main__":

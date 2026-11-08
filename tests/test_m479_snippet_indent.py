@@ -176,5 +176,55 @@ class TestReadSnippetEndToEnd(unittest.TestCase):
         self.assertIn(".rstrip().lstrip(", _body, "两条返回路径都应保留首行缩进")
 
 
+class TestPathBoundary:
+    """★479 收尾③：越界判据必须用路径语义，不能用字符串前缀。
+
+    旧写法 `_p.startswith(_root)` 会把 `project-root-other/x.py` 判成「在根内」
+    （前缀字符串相同）⇒ 能读到项目外的文件。改为 `os.path.relpath` + 检查 `..`。
+    """
+
+    def _inst(self):
+        _o = SafeEvolutionExecutor.__new__(SafeEvolutionExecutor)
+        _o._project_root = ROOT
+        return _o
+
+    def test_20_inside_readable(self):
+        _sn = self._inst()._read_snippet_from_file(
+            os.path.join(ROOT, "organs", "core", "PulseSystemManager.py"), "")
+        assert _sn, "项目内文件应可读"
+
+    def test_21_prefix_sibling_rejected(self):
+        """★核心：同前缀兄弟目录必须拒绝（旧实现会放行）。"""
+        _sn = self._inst()._read_snippet_from_file(ROOT + "-other/x.py", "")
+        assert _sn == "", "同前缀兄弟目录被放行 ⇒ 能读项目外文件"
+
+    def test_22_parent_escape_rejected(self):
+        _sn = self._inst()._read_snippet_from_file(
+            os.path.join(ROOT, "..", "..", "Windows", "win.ini"), "")
+        assert _sn == ""
+
+    def test_23_cross_drive_rejected(self):
+        _sn = self._inst()._read_snippet_from_file(r"C:\Windows\win.ini", "")
+        assert _sn == ""
+
+    def test_24_dotdot_inside_root_allowed(self):
+        """经 `..` 再回来、归一后仍在根内 ⇒ 应允许（不许因噎废食）。"""
+        _p = os.path.join(ROOT, "..", os.path.basename(ROOT),
+                          "organs", "core", "PulseSystemManager.py")
+        _sn = self._inst()._read_snippet_from_file(_p, "")
+        assert _sn, "归一后在根内的路径应可读"
+
+    def test_25_source_uses_relpath(self):
+        with open(os.path.join(ROOT, "nucleus", "reasoning",
+                               "SafeEvolutionExecutor.py"),
+                  encoding="utf-8", errors="replace") as _f:
+            _src = _f.read()
+        assert 'os.path.relpath(_p, _root)' in _src
+        assert "os.pardir" in _src
+        # 旧写法不许回来
+        assert "if not _p.startswith(_root):" not in _src, \
+            "字符串前缀判据回来了 ⇒ 同前缀兄弟目录又能绕过"
+
+
 if __name__ == "__main__":
     unittest.main()

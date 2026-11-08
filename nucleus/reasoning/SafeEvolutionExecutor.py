@@ -2171,7 +2171,18 @@ class SafeEvolutionExecutor:
                 _p = os.path.join(self._project_root, _p)
             _p = os.path.normpath(_p)
             _root = os.path.normpath(self._project_root)
-            if not _p.startswith(_root):
+            # ★479 收尾③：越界判据从「字符串前缀」改为「相对路径不含 ..」。
+            #   旧写法 _p.startswith(_root) 会把同前缀的兄弟目录
+            #   （如 project-root-other/x.py）判成「在根内」⇒ 读到项目外的文件。
+            #   大小写/分隔符差异在不同调用下也不可靠。
+            #   relpath 是路径语义，不是字符串语义。
+            #   ★跨盘不用 try/except 兜：先比盘符（同盘 relpath 不会 ValueError），
+            #     这样「跨盘」这条正常分支不会进静默异常指标（不是异常，是判据）。
+            if (os.path.splitdrive(_p)[0].lower()
+                    != os.path.splitdrive(_root)[0].lower()):
+                return ""
+            _rel = os.path.relpath(_p, _root)
+            if _rel == os.pardir or _rel.startswith(os.pardir + os.sep):
                 return ""
             if not os.path.isfile(_p):
                 _module_logger.debug(
@@ -3034,6 +3045,8 @@ class SafeEvolutionExecutor:
         try:
             from nucleus.autonomy.all_collab import (
                 generate_candidates as _gc479,
+            )
+            from nucleus.autonomy.all_collab import (
                 note_round as _nr479,
             )
             _res = _gc479(prompt, original=original, method=method, n=n,
