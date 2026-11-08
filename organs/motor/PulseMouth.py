@@ -285,6 +285,16 @@ class PulseMouth(BasePulseOrgan):
         """启动嘴巴，初始化语音引擎（多层容错）"""
         super().start()
         if self._tts_enabled:
+            # ★477：优先确认 3.12 感官桥可用（3.14t 自由线程里 pyttsx3/COM 不可用）
+            try:
+                from nucleus.senses.sensory_bridge import caps as _m477_caps
+                _m477c = _m477_caps()
+                if _m477c.get("ok") and (_m477c.get("caps") or {}).get("tts"):
+                    self._tts_engine = "sensory_bridge"
+                    self._log(LogLevel.INFO, "语音输出已就绪 (3.12 感官桥 / Windows SAPI)")
+                    return
+            except Exception as _m477e:
+                silent_exc(_m477e, where="organs.motor.PulseMouth::start bridge", level="debug")
             # 第一层：pyttsx3
             try:
                 import pyttsx3
@@ -344,14 +354,28 @@ class PulseMouth(BasePulseOrgan):
         def _do_speak():
             result = {"status": "unknown", "text": text[:80]}
             try:
-                import pyttsx3
-                engine = pyttsx3.init(driverName='sapi5')
-                engine.setProperty('rate', 180)
-                engine.setProperty('volume', 0.9)
-                engine.say(text)
-                engine.runAndWait()
-                result["status"] = "success"
-                self._tts_fail_count = 0
+                # ★477：优先走 3.12 感官桥（3.14t 里 pyttsx3/COM 不可用，
+                #   sounddevice 蜂鸣兜底还会原生崩溃）。桥成功即止，失败再回退老路径。
+                _m477br = None
+                try:
+                    from nucleus.senses.sensory_bridge import speak as _m477_speak
+                    _m477br = _m477_speak(text)
+                except Exception as _m477be:
+                    silent_exc(_m477be, where="organs.motor.PulseMouth::_do_speak bridge",
+                               level="debug")
+                if _m477br and _m477br.get("ok"):
+                    result["status"] = "success"
+                    result["via"] = "sensory_bridge"
+                    self._tts_fail_count = 0
+                else:
+                    import pyttsx3
+                    engine = pyttsx3.init(driverName='sapi5')
+                    engine.setProperty('rate', 180)
+                    engine.setProperty('volume', 0.9)
+                    engine.say(text)
+                    engine.runAndWait()
+                    result["status"] = "success"
+                    self._tts_fail_count = 0
             except Exception as e:
                 result["status"] = "failed"
                 result["error"] = str(e)[:50]

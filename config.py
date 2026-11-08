@@ -1982,6 +1982,15 @@ ENABLE_M471_CORE_HUMAN_OVERRIDE = True
 #   该功能本来就不可用）；需要语音输入时设环境变量 PULSE_VOICE_LISTEN=1 显式开启。
 ENABLE_VOICE_LISTEN = os.environ.get("PULSE_VOICE_LISTEN", "0") == "1"
 
+# ★477批：感官桥（3.12 sidecar）—— 把 cv2 / sounddevice(PortAudio) / pyttsx3(COM)
+#   这些 C 扩展的脏活隔离到 **Python 3.12** 子进程，主进程（3.14t 自由线程）只做
+#   子进程 + JSON 通信，避免 0xC0000005 原生崩溃。眼睛=cv2+Haar 本地模型，
+#   耳朵=Vosk 离线中文小模型，嘴巴=Windows SAPI。
+#   关闭时所有感官桥接口直接返回 {"ok": False, "error": "disabled"}（零副作用回退）。
+ENABLE_SENSORY_BRIDGE = os.environ.get("PULSE_SENSORY_BRIDGE", "1") == "1"
+SENSORY_BRIDGE_PYTHON = os.environ.get("PULSE_BRIDGE_PYTHON", r"D:\Program Files\Python312\python.exe")
+SENSORY_BRIDGE_TIMEOUT = float(os.environ.get("PULSE_BRIDGE_TIMEOUT", "30"))
+
 # ★主线第58批 T2（P2-393延伸）：ark-seed 深度思考渠道优化。
 #   背景：ark-seed 系列为 Doubao-Seed 深度思考模型，默认开启 thinking，
 #   导致简单请求也走完整思考链路、生成慢且费 token（星轨已将 max_tokens_override 降至 1024 止血）。

@@ -9,6 +9,8 @@ import os
 import sys
 
 from config import ENABLE_VOICE_LISTEN, TIMEOUT_CONFIG
+from nucleus.senses.sensory_bridge import enabled as _m477_bridge_enabled
+from nucleus.senses.sensory_bridge import listen as _m477_bridge_listen
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -258,6 +260,37 @@ class PulseEars(BasePulseOrgan):
             self._voice_thread = threading.Thread(target=self._voice_listen_loop, daemon=True)
             self._voice_thread.start()
             self._log(LogLevel.INFO, "语音监听已启动")
+        elif _m477_bridge_enabled():
+            # ★477：3.14t 里 sounddevice/PortAudio 必崩 ⇒ 改走 3.12 感官桥做 STT
+            self._voice_running = True
+            self._voice_thread = threading.Thread(target=self._bridge_listen_loop, daemon=True)
+            self._voice_thread.start()
+            self._log(LogLevel.INFO, "语音监听已启动（3.12 感官桥 / Vosk）")
+
+    def _bridge_listen_loop(self):
+        """★477：走 3.12 感官桥做 STT（3.14t 里 sounddevice 录音必崩，改子进程隔离）。"""
+        import time as _m477t
+        _fails = 0
+        while self._voice_running and self.is_running:
+            _r = {}
+            try:
+                _r = _m477_bridge_listen(seconds=5)
+                if _r.get("ok"):
+                    _fails = 0
+                    _text = str(_r.get("text") or "").strip()
+                    if _text and self._is_valid_speech(_text):
+                        self._log(LogLevel.INFO, f"语音识别(桥): {_text}")
+                        self._emit_voice_message(_text)
+                else:
+                    _fails += 1
+                    if _fails == 1:
+                        self._log(LogLevel.WARNING,
+                                  "感官桥语音暂不可用（%s），持续重试" % _r.get("error"))
+            except Exception as _m477e:
+                silent_exc(_m477e, where="organs.senses.PulseEars::_bridge_listen_loop",
+                           level="debug")
+            if not _r.get("ok"):
+                _m477t.sleep(3.0)
 
     def stop(self):
         """停止耳朵"""

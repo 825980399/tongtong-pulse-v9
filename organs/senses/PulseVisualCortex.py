@@ -272,6 +272,17 @@ class PulseVisualCortex(BasePulseOrgan):
             self._has_ocr = True
         except ImportError:
             self._log(LogLevel.DEBUG, f"[主线10批] 静默异常已记录: {exc_location()}")
+
+        # ★477：3.14t 无 cv2 ⇒ 眼睛改由 3.12 感官桥提供（本地 Haar + 亮度分析）
+        self._has_bridge_vision = False
+        try:
+            from nucleus.senses.sensory_bridge import caps as _m477_caps
+            _m477bc = _m477_caps()
+            self._has_bridge_vision = bool(
+                _m477bc.get("ok") and (_m477bc.get("caps") or {}).get("camera"))
+        except Exception as _m477e:
+            silent_exc(_m477e, where="PulseVisualCortex::_detect_capabilities bridge",
+                       level="debug")
     # ========== 视觉引擎管理 ==========
 
     def _init_engines(self):
@@ -299,7 +310,27 @@ class PulseVisualCortex(BasePulseOrgan):
             self._log(LogLevel.DEBUG, f"[主线10批] 静默异常已记录: {exc_location()}")
 
         if not self._engines:
-            self._log(LogLevel.WARNING, "无可用视觉引擎，人脸检测不可用")
+            if getattr(self, "_has_bridge_vision", False):
+                self._log(LogLevel.INFO,
+                          "视觉引擎改由 3.12 感官桥提供（Haar/亮度，本地）")
+            else:
+                self._log(LogLevel.WARNING, "无可用视觉引擎，人脸检测不可用")
+
+    def m477_look(self, save: str | None = None) -> dict[str, Any]:
+        """★477：经 3.12 感官桥实时取景（3.14t 无 cv2，不能本地抓帧）。
+
+        返回 bridge 的原始 dict：ok/desc/width/height/brightness/faces/...
+        """
+        try:
+            from nucleus.senses.sensory_bridge import look as _m477_look
+            _r = _m477_look(save)
+        except Exception as _e:
+            silent_exc(_e, where="PulseVisualCortex::m477_look", level="debug")
+            return {"ok": False, "error": type(_e).__name__}
+        if _r.get("ok"):
+            self._frame_count += 1
+            self._log(LogLevel.INFO, f"[477] 感官桥取景: {_r.get('desc')}")
+        return _r
 
     def _detect_face(self, frame) -> tuple:
         """使用最佳可用引擎检测人脸，失败自动降级"""
@@ -491,7 +522,8 @@ class PulseVisualCortex(BasePulseOrgan):
         self._log(LogLevel.INFO,
                   f"已启动，OpenCV={'有' if self._has_opencv else '无'}, "
                   f"人脸识别={'有' if self._has_face_recognition else '无'}, "
-                  f"OCR={'有' if self._has_ocr else '无'}")
+                  f"OCR={'有' if self._has_ocr else '无'}, "
+                  f"感官桥视觉={'有' if getattr(self, '_has_bridge_vision', False) else '无'}")
         self._start_log_writer()
     def stop(self):
         self._camera_running = False
@@ -512,6 +544,9 @@ class PulseVisualCortex(BasePulseOrgan):
 
         # ★v23.0修复：优先检查task_type，确保OCR/PDF请求不被分辨率分析拦截
         _task_type = payload.get("task_type", "")
+        # ★477：task_type="look" ⇒ 走 3.12 感官桥实时取景（3.14t 无 cv2）
+        if _task_type == "look":
+            return self.m477_look(payload.get("save"))
         if _task_type in ("ocr", "pdf"):
             return self._on_visual_query(payload)
 
