@@ -382,7 +382,7 @@ def test_刀9_三新增渠道齐备():
     #   回滚点：466 回退时本块需退回 bailian-qwen-plus(2, qwen-plus) /
     #   bailian-qwen-max(5, qwen-max) 旧表。
     for n, pri, model in (("zhipu-47-flash", 1, "glm-4.7-flash"),
-                          ("bailian-qwen38-flash", 2, "qwen3.8-flash"),
+                          ("bailian-qwen38-flash", 2, "qwen3.7-flash"),
                           # ★352追补项1：Qwen2-7B 已下架（403）⇒ 改 zai-org/GLM-5.3-Flash
                           #   ★466：priority 3→5（百炼插队后往后挪）
                           ("siliconflow-qwen2-7b", 5, "zai-org/GLM-5.3-Flash"),

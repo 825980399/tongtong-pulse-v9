@@ -64,7 +64,7 @@ def test_项1_硅基模型已改且旧名零残留():
     ch = {c["name"]: c for c in config.REMOTE_API_CHANNELS["default_channels"]}
     assert "siliconflow-qwen2-7b" in ch, "渠道名应保留（改名会牵动测试与运维台账）"
     assert ch["siliconflow-qwen2-7b"]["model"] == "zai-org/GLM-5.3-Flash"
-    assert ch["siliconflow-qwen2-7b"]["priority"] == 3
+    assert ch["siliconflow-qwen2-7b"]["priority"] == 5
     # 旧模型名在 config.py 中零残留（注释也算 —— 留着注释会让人以为还在用）
     assert "Qwen/Qwen2-7B-Instruct" not in _src("config.py")
 
@@ -165,10 +165,13 @@ def test_项4_魔搭渠道字段齐备():
     ch = {c["name"]: c for c in config.REMOTE_API_CHANNELS["default_channels"]}
     assert "modelscope" in ch, "缺 modelscope 渠道"
     ms = ch["modelscope"]
-    assert ms["priority"] == 7, "魔搭应排在硅基之后、DeepSeek 付费之前"
+    # ★426刀4（2026-11-02 活体实测）：模型下架 ⇒ 渠道降级保留
+    #   （enabled=False + priority=99 垫底，详见 config.py 该渠道注释）。
+    #   本用例随 426 决策同步钉死"降级后状态"，不再断言旧的有效态。
+    assert ms["priority"] == 99, "426刀4 降级：魔搭垫底 priority=99"
     assert ms["api_url"] == "https://api-inference.modelscope.cn/v1/chat/completions"
     assert ms["max_concurrent"] == 2
-    assert ms["enabled"] is True
+    assert ms["enabled"] is False, "426刀4 降级：模型下架 ⇒ enabled=False"
     assert ms["quota_type"] == "dynamic", "魔搭配额动态调整，不承诺固定额度"
 
 
@@ -185,8 +188,10 @@ def test_项4_池序与SSRF():
     import config
     pri = sorted((c["priority"], c["name"]) for c in
                  config.REMOTE_API_CHANNELS["default_channels"])
-    assert [p for p, _ in pri] == [1, 2, 3, 4, 5, 7, 8], pri
-    assert pri[-1][1] == "deepseek", "DeepSeek 必须垫底（收费兜底）"
+    # ★466 渠道扩容（百炼 2→7 条）+ 426刀4 魔搭降级（priority=99）后，
+    #   池内优先级实际为 1..11（11 条启用） + 99（魔搭垫底），共 12 条。
+    assert [p for p, _ in pri] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 99], pri
+    assert pri[-1][1] == "modelscope", "魔搭 priority=99 必须最垫底（426刀4 降级）"
     assert "api-inference.modelscope.cn" in tuple(config.SSRF_TRUSTED_EXTRA_HOSTS)
 
 

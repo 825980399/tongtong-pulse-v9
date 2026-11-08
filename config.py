@@ -1601,9 +1601,18 @@ REMOTE_API_CHANNELS = {
         },
         {
             # ★466批（2026-11-06 小林裁决）：百炼渠道从2个扩到7个，全用独立免费额度
-            #   原qwen-plus额度耗尽403，替换为最新qwen3.8-flash（同档位升级版）
+            #   原qwen-plus额度耗尽403，替换为qwen3.8-flash（同档位升级版）。
+            # ★476批（2026-11-08 路灯）：qwen3.8-flash 免费额度于 2026-11-07 20:40 实测耗尽
+            #   （HTTP 403 insufficient_quota: Free quota exhausted，日志可查）；百炼控制台
+            #   （2026-11-08 用户贴图）已无 qwen3.8-flash 这一档 ⇒ 同闪速档位升级为
+            #   qwen3.7-flash（控制台显示剩 1M/共 1M，免费额度满额、状态已开启）。
+            #   渠道名与 priority=2 / enabled 全部保留不变：测试按 name+priority 钉死
+            #   （铁律：改名/改优先级会炸 test_m352/test_m426/test_m96 的精确顺序契约），
+            #   故只换 model。CHANNEL_REQUEST_FIELD_POLICY["bailian-qwen38-flash"] 仍按
+            #   渠道名生效（qwen3.7-flash 同为 Qwen3 闪速档，reasoning_effort_when_off
+            #   约束一致）；额度恢复后只需把 model 改回 qwen3.8-flash 即可。
             "name": "bailian-qwen38-flash",
-            "model": "qwen3.8-flash",
+            "model": "qwen3.7-flash",
             "quota_type": "monthly_free",
             "quota_limit": 1000000,
             "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",

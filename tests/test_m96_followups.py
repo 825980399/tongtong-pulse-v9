@@ -568,7 +568,7 @@ class TestM96ChannelPriority(unittest.TestCase):
         #   守的仍是「阶梯与配置表逐条一致」。
         want = [
             (1, "zhipu-47-flash", "glm-4.7-flash"),
-            (2, "bailian-qwen38-flash", "qwen3.8-flash"),
+            (2, "bailian-qwen38-flash", "qwen3.7-flash"),
             (3, "bailian-deepseek-v41-flash", "deepseek-v4.1-flash"),
             (4, "bailian-glm53", "glm-5.3"),
             (5, "siliconflow-qwen2-7b", "zai-org/GLM-5.3-Flash"),
