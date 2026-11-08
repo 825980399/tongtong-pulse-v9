@@ -2143,7 +2143,8 @@ class InfoField(SilentLogMixin):
                 _module_logger.warning(
                     f"[背压·超限放行] {layer}层队列已满，但脉冲优先级={priority} "
                     f"<={self._overflow_priority_allow}，放行（累计{_allowed}次）"
-                    + (f" 器官={organ_name}" if organ_name else ""))
+                    + (f" 器官={organ_name}" if organ_name else "")
+                    + self._m479_inflight_hint(layer))
             return True
 
         # —— 拒绝 ——
@@ -2155,6 +2156,7 @@ class InfoField(SilentLogMixin):
                 f"[背压] {layer}层队列已满(深度={_depth}, 上限={_limit})，"
                 f"拒绝本次分发以保护内存（累计拒绝={_rejected}）"
                 f"{'' if not organ_name else f'，器官={organ_name}'}。"
+                f"{self._m479_inflight_hint(layer)}"
                 f"提示：若频繁出现，请调高 config.PULSE_LAYER 对应层上限，"
                 f"或排查该层处理器是否阻塞")
         return False
@@ -2476,6 +2478,43 @@ class InfoField(SilentLogMixin):
                 _d.pop(organ_name, None)
             else:
                 _d[organ_name] = _v
+
+    def _m479_inflight_hint(self, layer: str, top: int = 3) -> str:
+        """★479收尾：背压归因 —— 把「该层在途任务 top N 器官」拼进告警。
+
+        `_layer_organ_inflight`（P2-87 按层·按器官在途计数）一直在采集，
+        但**从未被输出**（只用于 `_check_concurrency_consistency`）。
+        于是出现背压时，日志只说「队列满了」，说不出「谁堵的」。
+
+        这里只读已有计数，**不新增任何采集开销**；返回值直接拼在告警行后面。
+        开关：config.ENABLE_M479_BACKPRESSURE_ATTRIB（False ⇒ 返回空串，逐字回滚）。
+        """
+        try:
+            import config as _cfg479
+            if not getattr(_cfg479, "ENABLE_M479_BACKPRESSURE_ATTRIB", False):
+                return ""
+        except Exception as _e479c:
+            silent_exc(_e479c, where="InfoField::_m479_inflight_hint cfg", level="debug")
+            return ""
+        try:
+            _lock = getattr(self, "_organ_concurrent_lock", None)
+            if _lock is None:
+                return ""
+            with _lock:
+                _d = dict((self._layer_organ_inflight or {}).get(layer) or {})
+        except Exception as _e479:
+            silent_exc(_e479, where="InfoField::_m479_inflight_hint", level="debug")
+            return ""
+        if not _d:
+            return ""
+        try:
+            _top = sorted(_d.items(), key=lambda kv: -int(kv[1]))[:max(1, int(top))]
+            _total = sum(int(v) for v in _d.values())
+            _pairs = ", ".join(f"{_k}={_v}" for _k, _v in _top)
+            return f"  ← 在途归因: 合计={_total}, top{len(_top)}=[{_pairs}]"
+        except Exception as _e479s:
+            silent_exc(_e479s, where="InfoField::_m479_inflight_hint sort", level="debug")
+            return ""
 
     def _check_concurrency_consistency(self, layer_tag: str | None = None) -> dict:
         """★P2-87：并发计数一致性校验。

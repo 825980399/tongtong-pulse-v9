@@ -616,7 +616,12 @@ PULSE_LAYER = {
     "l0_processor_timeout": 8.0,      # ★T-112c：L0 看门狗单次处理器最大允许执行时长（秒），消除硬编码 8.0s 漂移
 
     # ── L1 实时交互层：高优先级，多线程并行 ──
-    "l1_threads": 4,                # 默认4线程，可按CPU核心数调整
+    # ★479：4 → 6（用满 utils/thread_budget 的 l1 上限 6）。
+    #   依据：实测 L1 队列深度 1788/上限 500、累计拒绝 2400 次，
+    #   而 16 核 CPU 仅用 3.4%、主进程 87 线程 ⇒ 不是算力不足，是并发出口太窄。
+    #   ★注意：L1/L2/L3 的最终线程数还会被 utils/thread_budget.cap() 收敛，
+    #   当前预算表 l1=6 / l2=6 / l3=4；要再往上必须改预算表（需论证线程爆炸风险）。
+    "l1_threads": 6,
     "l1_queue_soft_limit": 500,     # 软上限，超限限流不丢包
     "l1_enabled": True,
 
@@ -4430,6 +4435,17 @@ ENABLE_M479_SEMANTIC_BRIDGE = True
 SEMANTIC_BRIDGE_PYTHON = os.environ.get(
     "PULSE_SEMANTIC_BRIDGE_PYTHON", r"D:\Program Files\Python312\python.exe")
 SEMANTIC_BRIDGE_SCRIPT = os.path.join("tools", "semantic", "encoder_sidecar.py")
+
+# ★479 收尾：背压归因探针 —— 把「谁堵住了队列」打进告警。
+#   背景：实测 L1 队列 1788/500、L2 达硬顶 1200/300，累计拒绝 2400 次，
+#   但日志只说「满了」，看不出是哪个器官在途堆积 ⇒ 运维只能靠猜。
+#   而 `InfoField._layer_organ_inflight`（P2-87 按层·按器官在途计数）
+#   **早就在采集，却从未被输出**（只用于一致性校验）。本开关把它接进告警：
+#   拒绝/超限放行时追加「在途归因: 合计=N, top3=[心脏=12, 动机循环=8, ...]」。
+#   True ⇒ 只在告警行里追加文字（每 100 次一条，零额外开销、只读已有计数）。
+#   False ⇒ 逐字回到改前（告警内容完全一致）。
+#   读取点：nucleus/field/InfoField.py::_m479_inflight_hint
+ENABLE_M479_BACKPRESSURE_ATTRIB = True
 
 # ★主线第42批 T1（P0-272）：日志留存治理
 #   背景（实测证据链）：logs/pulse.log 的 ctime 未变（09-03）却只含当日 11:30 起的内容，
