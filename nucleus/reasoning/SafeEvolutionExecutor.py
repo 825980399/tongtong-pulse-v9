@@ -2885,6 +2885,11 @@ class SafeEvolutionExecutor:
                 #   两种键都兼容：issue_type 优先（兼容补丁字典），回落 type。
                 "issue_type": str(_issue.get("issue_type")
                                   or _issue.get("type") or ""),
+                # ★479 收尾：把 issue 的真实键名记进台账。
+                #   动机：修了 `type` 回落之后仍观察到 issue_type 为空，
+                #   说明该调用点的 issue 可能用的是第三种键名。**不再猜**——
+                #   记录事实，一轮影子就能定案（14 个键名，体积可忽略）。
+                "issue_keys": sorted(str(_k) for _k in _issue)[:14],
                 "baseline_score": _bl,
                 "baseline_detail": _base,
             }

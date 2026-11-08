@@ -177,6 +177,22 @@ class TestIssueTypeKeyCompat(_Base):
         self.assertIn('_issue.get("issue_type")', _seg)
         self.assertIn('_issue.get("type")', _seg, "丢了 type 回落 ⇒ 台账又会全空")
 
+    def test_23_issue_keys_diagnostic_present(self):
+        """★诊断字段：台账必须记录 issue 的真实键名。
+
+        为什么需要：修了 `type` 回落之后仍观察到 issue_type 为空 ——
+        实测 `discover_all_issues` 返回的 issue 里，`type` 被**日志级别**
+        （'ERROR'/'WARNING'）占用，真实类型在 `error_type`；而 self_inspector
+        来源又可能是第三套键名。**不再猜**：把键名记进台账，一轮影子即定案。
+        """
+        _p = os.path.join(ROOT, "nucleus", "reasoning", "SafeEvolutionExecutor.py")
+        with open(_p, encoding="utf-8", errors="replace") as _f:
+            _src = _f.read()
+        self.assertIn('"issue_keys": sorted(', _src)
+        # 必须限长，否则一条 issue 带一堆内部键会把台账撑大
+        _i = _src.index('"issue_keys": sorted(')
+        self.assertIn("[:14]", _src[_i:_i + 120])
+
 
 if __name__ == "__main__":
     unittest.main()
