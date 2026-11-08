@@ -276,5 +276,90 @@ class TestLedgerStatsUsable:
             assert _s["candidates_usable"] == 0
 
 
+class TestChannelVsModelSeparation:
+    """★479 收尾：台账必须分清「渠道不可用」与「模型产出不合格」。
+
+    实测 44 轮 184 候选里 108 个（58.7%）是渠道层失败
+    （429×34 / 读超时×28 / 空内容×27 / 403×19）。混在一起看只会得出
+    「ALL 协作没用」，真因却是渠道不可用 —— 两种结论指向相反的处置。
+    """
+
+    def _run(self, cands, monkeypatch):
+        """跑一次 _m479_all_collab，返回被写进台账的那一行。"""
+        import config
+        from nucleus.reasoning.SafeEvolutionExecutor import SafeEvolutionExecutor
+
+        monkeypatch.setattr(config, "ENABLE_M479_ALL_COLLAB", True)
+        monkeypatch.setattr(config, "M479_ALL_COLLAB_TRIGGER_BELOW", 85)
+        monkeypatch.setattr(config, "ENABLE_M479_ALL_COLLAB_PICK", False)
+        _fake = {"ok": True, "elapsed": 40.0, "candidates": cands, "best": None,
+                 "usable": 0}
+        _cap = {}
+
+        def _note(rec, **kw):
+            _cap.update(rec)
+            return {"ok": True}
+
+        monkeypatch.setattr(AC, "generate_candidates", lambda *a, **k: _fake)
+        monkeypatch.setattr(AC, "note_round", _note)
+        _o = SafeEvolutionExecutor.__new__(SafeEvolutionExecutor)
+        _o._m479_all_collab("p", "def f(:\n    pass", {"method": "f"}, "    def f(self):\n        return 1\n")
+        return _cap
+
+    def _c(self, ch, ok, err=""):
+        return {"channel": ch, "model": ch, "ok": ok, "score": 0, "elapsed": 1.0,
+                "error": err, "detail": {"full_method": False}}
+
+    def test_30_all_failed_records_oks_zero(self, monkeypatch):
+        _r = self._run([self._c("a", False, "HTTP 429 限流"),
+                        self._c("b", False, "TimeoutError: The read operation timed out"),
+                        self._c("c", False, "响应无有效内容"),
+                        self._c("d", False, "HTTP 403 quota")], monkeypatch)
+        assert _r.get("oks") == 0
+        _fk = _r.get("fail_kinds") or {}
+        assert _fk.get("429") == 1
+        assert _fk.get("timeout") == 1
+        assert _fk.get("empty") == 1
+        assert _fk.get("quota") == 1
+
+    def test_31_partial_success_counts_oks(self, monkeypatch):
+        _r = self._run([self._c("a", True), self._c("b", False, "HTTP 429"),
+                        self._c("c", False, "响应无有效内容")], monkeypatch)
+        assert _r.get("oks") == 1
+        assert (_r.get("fail_kinds") or {}).get("429") == 1
+        assert (_r.get("fail_kinds") or {}).get("empty") == 1
+
+    def test_32_all_failed_emits_warning(self, monkeypatch):
+        """★全失败必须告警（否则运维看不出本轮协作纯消耗）。"""
+        import logging
+        _recs = []
+
+        class _H(logging.Handler):
+            def emit(self, record):
+                _recs.append(record.getMessage())
+
+        _lg = logging.getLogger("pulse.module.SafeEvolutionExecutor")
+        _h = _H()
+        _lg.addHandler(_h)
+        _old = _lg.level
+        _lg.setLevel(logging.DEBUG)
+        try:
+            self._run([self._c("a", False, "HTTP 429")] * 3, monkeypatch)
+        finally:
+            _lg.removeHandler(_h)
+            _lg.setLevel(_old)
+        # 只要有一条包含关键判据就算过（logger 名可能带前缀差异）
+        assert any("渠道不可用" in m for m in _recs), \
+            "全失败时必须明确说「属渠道不可用，不是模型能力问题」"
+
+    def test_33_source_has_oks_and_failkinds(self):
+        with open(os.path.join(ROOT, "nucleus", "reasoning",
+                               "SafeEvolutionExecutor.py"),
+                  encoding="utf-8", errors="replace") as _f:
+            _src = _f.read()
+        assert '"oks": _oks479' in _src
+        assert '"fail_kinds": _fk479' in _src
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

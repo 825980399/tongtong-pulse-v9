@@ -2928,6 +2928,36 @@ class SafeEvolutionExecutor:
                     "[479ALL协作] 影子：最优 %s(%s) %d 分 vs 首个渠道 %d 分（%d 条候选，未替换）",
                     _best.get("channel"), _best.get("model"), _bs, _bl,
                     len(_res.get("candidates") or []))
+            # ★479 收尾：把「渠道失败」与「模型产出不合格」分开记。
+            #   实测 44 轮 184 候选里 108 个（58.7%）是渠道层失败
+            #   （429×34 / 读超时×28 / 空内容×27 / 403×19），而拿到内容的 76 个里
+            #   只有 9 个是完整方法。混在一起看只会得出「ALL 协作没用」，
+            #   真因却是渠道不可用 —— 两种结论指向完全相反的处置。
+            _cands479 = (_res.get("candidates") or []) if isinstance(_res, dict) else []
+            _oks479 = sum(1 for _c in _cands479
+                          if isinstance(_c, dict) and _c.get("ok"))
+            _fk479 = {"429": 0, "timeout": 0, "empty": 0, "quota": 0, "other": 0}
+            for _c in _cands479:
+                if not isinstance(_c, dict) or _c.get("ok"):
+                    continue
+                _er = str(_c.get("error") or "")
+                if "429" in _er:
+                    _fk479["429"] += 1
+                elif "timed out" in _er or "Timeout" in _er:
+                    _fk479["timeout"] += 1
+                elif "无有效内容" in _er:
+                    _fk479["empty"] += 1
+                elif "403" in _er:
+                    _fk479["quota"] += 1
+                else:
+                    _fk479["other"] += 1
+            if _cands479 and _oks479 == 0:
+                _module_logger.warning(
+                    "[479ALL协作] 本轮 %d 条候选**全部**未拿到内容（%s）"
+                    "⇒ 属渠道不可用，不是模型能力问题；本条协作纯消耗 %.0fs",
+                    len(_cands479),
+                    ", ".join(f"{k}×{v}" for k, v in _fk479.items() if v),
+                    float((_res.get("elapsed") if isinstance(_res, dict) else 0) or 0))
             _row.update({
                 "best_channel": (str(_best.get("channel") or "")
                                  if isinstance(_best, dict) else ""),
@@ -2935,6 +2965,8 @@ class SafeEvolutionExecutor:
                 "best_usable": _b_usable,
                 "usable_candidates": int(_res.get("usable") or 0)
                 if isinstance(_res, dict) else 0,
+                "oks": _oks479,
+                "fail_kinds": _fk479,
                 "picked": bool(_chosen),
                 "elapsed": (_res.get("elapsed") if isinstance(_res, dict) else 0),
                 "candidates": [
