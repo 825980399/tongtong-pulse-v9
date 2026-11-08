@@ -4485,6 +4485,18 @@ ENABLE_M479_LOCK_WAIT_PROBE = True
 #   离线体检：python -m nucleus.evolution.problem_gone_probe
 ENABLE_M479_PROBLEM_GONE_PROBE = True
 
+# ★479：静态检查工具（ruff/mypy/bandit）的解释器选择。
+#   病因（用户控制台实测）：`tooling_runner` 里命令写成裸 "python"，PATH 解析到 3.14t，
+#   而 3.14t 当时没装这些工具 ⇒ 三个通道**永远 0 条**（还白花扫描时间）。
+#   现状：3.14t 已装上（ruff 0.17.4 / bandit 1.9.4 / mypy 2.4.1，含 cp314-cp314t wheel），
+#   所以默认走「优先当前解释器」。
+#   TOOLING_PYTHON：显式强制（空=自动）。非空且文件存在时最高优先级。
+#   TOOLING_PYTHON_FALLBACK：当前解释器没工具时的回落（默认 3.12，那里一直都有）。
+#   读取点：nucleus/tooling_runner.py::_m479_resolve_tool_python
+TOOLING_PYTHON = os.environ.get("PULSE_TOOLING_PYTHON", "")
+TOOLING_PYTHON_FALLBACK = os.environ.get(
+    "PULSE_TOOLING_PYTHON_FALLBACK", r"D:\Program Files\Python312\python.exe")
+
 # ★主线第42批 T1（P0-272）：日志留存治理
 #   背景（实测证据链）：logs/pulse.log 的 ctime 未变（09-03）却只含当日 11:30 起的内容，
 #   实验证明「truncate 不改 ctime、delete+重建会改」→ 属**原地截断**；框架代码全库

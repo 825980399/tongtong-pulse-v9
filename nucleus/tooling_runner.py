@@ -15,6 +15,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import threading
 from typing import Any
 
@@ -22,7 +23,6 @@ from config import TIMEOUT_CONFIG
 from nucleus._silent_except import silent_exc
 from nucleus.const import LogLevel
 from nucleus.logging.SilentLogMixin import SilentLogMixin  # ★P0-1: 幽灵_log兜底
-
 
 #: ★342刀2：内建默认扫描域（`config.TOOL_SCAN_ROOTS` 缺失/为空时用）。
 #: 与「全库 `.`」的区别只在**不进入** data/ tmp/ docs/ docker/ models/ logs/ tests/ ——
@@ -33,15 +33,102 @@ _TOOL_SCAN_ROOTS_DEFAULT = (
 )
 
 
+#: 静态分析工具名（这些与解释器版本无关，但只有装了它们的解释器能跑）
+_M479_STATIC_TOOLS = ("ruff", "mypy", "bandit")
+
+
+def _m479_probe_static_tools(py: str) -> bool:
+    """探测某解释器是否装了静态分析工具（至少一个）。
+
+    用 subprocess 而非 import：①避免污染当前进程 sys.modules；
+    ②工具本身可能是 console_script；③冷启动 10~20s（首次）可接受。
+    """
+    if not py:
+        return False
+    try:
+        _r = subprocess.run(
+            [py, "-c", (
+                "import importlib.util as u,sys;"
+                "sys.exit(0 if any(u.find_spec(m) for m in "
+                "('ruff','mypy','bandit')) else 1)"
+            )],
+            capture_output=True, timeout=30, check=False)
+        return _r.returncode == 0
+    except (OSError, subprocess.SubprocessError) as _e:
+        silent_exc(_e, where="tooling_runner::479 probe", level="debug")
+        return False
+
+
+def _m479_resolve_tool_python() -> str:
+    """静态检查工具（ruff/mypy/bandit）该用哪个解释器。
+
+    ★为什么需要它：实测 2026-11-08 控制台
+        实测 2026-11-08 控制台出现「ruff stderr: ... python.exe: No module named ruff」，
+      即裸 `"python"` 解析到 3.14t，而当时 3.14t 没装这些工具 ⇒ 三个通道**永远 0 条**。
+
+    ★优先顺序（用户要求「主用 3.14t」）：
+      ① config.TOOLING_PYTHON 显式指定且存在  → 用它（可强制指定，最高优先级）
+      ② **当前解释器已装工具**              → 用 sys.executable（3.14t 装上后就走这条）
+      ③ config.TOOLING_PYTHON_FALLBACK 存在 → 用它（默认 3.12，那里一直有）
+      ④ 都不行                              → sys.executable + WARNING（不静默降级）
+    """
+    import config as _c
+
+    def _cfg(key: str, default: str = "") -> str:
+        try:
+            return str(getattr(_c, key, default) or "")
+        except (AttributeError, TypeError) as _e:
+            silent_exc(_e, where=f"tooling_runner::479 cfg({key})", level="debug")
+            return default
+
+    _explicit = _cfg("TOOLING_PYTHON")
+    try:
+        if _explicit and os.path.isfile(_explicit):
+            return _explicit
+    except OSError as _e:
+        silent_exc(_e, where="tooling_runner::479 explicit", level="debug")
+
+    if _m479_probe_static_tools(sys.executable):
+        return sys.executable
+
+    _fb = _cfg("TOOLING_PYTHON_FALLBACK")
+    try:
+        if _fb and os.path.isfile(_fb) and _m479_probe_static_tools(_fb):
+            return _fb
+    except OSError as _e:
+        silent_exc(_e, where="tooling_runner::479 fallback", level="debug")
+
+    try:
+        import logging as _lg
+        _lg.getLogger("pulse.module.tooling_runner").warning(
+            "[342tool] 当前解释器与回落解释器都没有 ruff/mypy/bandit "
+            "（current=%s fallback=%r）⇒ 静态检查通道将持续 0 条。"
+            "装法：pip install -i https://pypi.tuna.tsinghua.edu.cn/simple ruff bandit mypy",
+            sys.executable, _fb)
+    except (ImportError, AttributeError) as _e:
+        silent_exc(_e, where="tooling_runner::479 warn", level="debug")
+    return sys.executable
+
+
 class ToolingRunner(SilentLogMixin):
     """调度外部代码检查工具，返回结构化问题列表。"""
 
     def __init__(self, project_root: str):
         self._project_root = project_root
+        # ★479：静态分析工具用一个解释器、语法编译用另一个（语义不同，见 _m479_resolve_tool_python）。
+        self._py = _m479_resolve_tool_python()
+        self._runtime_py = sys.executable
         # ★342刀2：每通道记账槽。`{tool: {degraded, reason, rc, stdout_bytes,
         #   stderr_bytes, targets, domain, ...}}` —— 用它把「本通道 0 条」与
         #   「本通道没跑到」分开（340刀5 的归零点就是这两件事被读成同一件事）。
         self._tool_flags: dict[str, dict[str, Any]] = {}
+        try:
+            import logging as _lg
+            _lg.getLogger("pulse.module.tooling_runner").info(
+                "[342tool] 解释器分工：静态分析(ruff/mypy/bandit)=%s，语法编译(compileall)=%s",
+                self._py, self._runtime_py)
+        except Exception as _e:
+            silent_exc(_e, where="tooling_runner::479 init log", level="debug")
 
         # ★363刀B3：登记到诊断桥（弱引用）。诊断方法此前**只有测试在调**，
         #   生产主循环无调用点 ⇒ static_verified 而 live 不可见（评审扫进 dead_code）。
@@ -115,7 +202,7 @@ class ToolingRunner(SilentLogMixin):
             _rec["timeout"] = True
             self._log(LogLevel.WARNING,
                       f"[360tool] 命令超时 cmd={' '.join(cmd)} timeout={timeout}s")
-        except Exception as _e:  # noqa: BLE001 - 执行失败必须显式记账（不静默归一为「0 条」）
+        except Exception as _e:
             _rec["err"] = f"{type(_e).__name__}: {_e}"
             self._log(LogLevel.WARNING,
                       f"[342tool] 命令执行失败 cmd={' '.join(cmd)} err={_rec['err']}")
@@ -148,7 +235,7 @@ class ToolingRunner(SilentLogMixin):
         try:
             import config as _cfg342
             _roots = getattr(_cfg342, "TOOL_SCAN_ROOTS", None)
-        except Exception as _e342:  # noqa: BLE001 - 配置读不到要留痕，不能静默换域
+        except Exception as _e342:
             self._log(LogLevel.WARNING,
                       f"[342tool] 读 config.TOOL_SCAN_ROOTS 失败，改用内建默认域: "
                       f"{type(_e342).__name__}: {_e342}")
@@ -231,7 +318,7 @@ class ToolingRunner(SilentLogMixin):
         issues = []
         try:
             _out = self._run_cmd([
-                "python", "-m", "compileall", "-q", "-f",
+                self._runtime_py, "-m", "compileall", "-q", "-f",
                 "-x", r"\.venv|__pycache__|\.git",
                 self._project_root,
             ], tool="compileall")
@@ -277,7 +364,7 @@ class ToolingRunner(SilentLogMixin):
             #   加 `--no-cache` 后：rc=1、stderr 0 字节、1346 条稳定产出。
             #   一次性通道本来就用不上跨进程缓存，关掉它换确定性。
             _rec = self._run_cmd_split([
-                "python", "-m", "ruff", "check", "--no-cache",
+                self._py, "-m", "ruff", "check", "--no-cache",
                 "--output-format", "json",
                 "--exclude", ".venv,__pycache__",
                 *_targets,
@@ -304,7 +391,7 @@ class ToolingRunner(SilentLogMixin):
         issues = []
         try:
             _out = self._run_cmd([
-                "python", "-m", "mypy", "--ignore-missing-imports", "--no-error-summary",
+                self._py, "-m", "mypy", "--ignore-missing-imports", "--no-error-summary",
                 "--exclude", "\\.venv",
                 self._project_root,
             ], tool="mypy")
@@ -330,7 +417,7 @@ class ToolingRunner(SilentLogMixin):
         try:
             _targets, _domain = self._scan_targets(files)
             _rec = self._run_cmd_split([
-                "python", "-m", "bandit", "-r", "-q", "-f", "json",
+                self._py, "-m", "bandit", "-r", "-q", "-f", "json",
                 "-x", ".venv,__pycache__",
                 *_targets,
             ])
