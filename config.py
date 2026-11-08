@@ -1795,32 +1795,44 @@ REMOTE_API_CHANNELS = {
             "quota_limit": -1,
             "api_url": "https://qianfan.baidubce.com/v2/chat/completions",
             "api_key": os.environ.get("QIANFAN_API_KEY", ""),
-            # priority 11：排在付费官方 deepseek(12) 之前（先烧已有额度，再烧现金）
+            # priority 11：排在付费官方 deepseek(13) 之前（先烧已有额度，再烧现金）
             "priority": 11,
             "enabled": True,
             "adapter": "openai_compatible",
             "max_concurrent": 2,
         },
-        # ── ★478：待启用模板（key 未设，暂不激活）。设好环境变量后把整段取消注释即可：
-        #    · 腾讯混元：HUNYUAN_API_KEY=<TokenHub 的 sk- Key（不是 CAM 密钥）>
-        #    · 腾讯云 TokenHub：TOKENHUB_API_KEY=<同一个 sk- Key>
+        {
+            # ★479批新增：腾讯云 TokenHub（OpenAI 兼容，一把 key 通吃 32 个模型）。
+            #   2026-11-08 真机批量探测（tmp/_probe_tokenhub_all.py，125 个候选中逐个 1-token 试）：
+            #   32 个可调 —— deepseek-v4-pro/v4.1-flash-1017、glm-5.2/5.3/5.3-flash、
+            #   hy3/hy4、kimi-k2.6/k3/k3.1-pro、mimo-v2.6、minimax-m3.1、step-5-preview。
+            #   选 glm-5.3：百炼同名档已耗尽（478 换成 glm-5.2），这里额度满，正好补回该能力档。
+            #   ★鉴权坑：key 必须用 TokenHub 控制台的 sk- Key，不是腾讯云 CAM SecretId/SecretKey；
+            #   环境变量两个名字都认（老机器上可能是 TENCENT_TOKENHUB_API_KEY）。
+            "name": "tokenhub-glm53",
+            "model": "glm-5.3",
+            "quota_type": "dynamic",
+            "quota_limit": -1,
+            "api_url": "https://tokenhub.tencentmaas.com/v1/chat/completions",
+            "api_key": (os.environ.get("TOKENHUB_API_KEY")
+                        or os.environ.get("TENCENT_TOKENHUB_API_KEY", "")),
+            # priority 12：有免费额度 ⇒ 排在付费官方 deepseek(13) 之前
+            "priority": 12,
+            "enabled": True,
+            "adapter": "openai_compatible",
+            "max_concurrent": 2,
+        },
+        # ── ★478/479：待启用模板（HUNYUAN_API_KEY 未设，暂不激活）。
+        #    混元的 OpenAI 兼容接口要的是 TokenHub 的 sk- Key（不是 CAM SecretId/SecretKey），
+        #    与上面 tokenhub-glm53 用的是同一把 key。设好环境变量后取消注释即可：
         # {
         #     "name": "hunyuan-lite",          # 永久免费档（并发 5）
         #     "model": "hunyuan-lite",
         #     "quota_type": "dynamic", "quota_limit": -1,
         #     "api_url": "https://api.hunyuan.cloud.tencent.com/v1/chat/completions",
         #     "api_key": os.environ.get("HUNYUAN_API_KEY", ""),
-        #     "priority": 13, "enabled": True,
-        #     "adapter": "openai_compatible", "max_concurrent": 1,
-        # },
-        # {
-        #     "name": "tokenhub",              # 一个 Key 调 DeepSeek/GLM/Kimi/MiniMax
-        #     "model": "<先用 GET https://tokenhub.tencentcloudmaas.com/v1/models 查>",
-        #     "quota_type": "dynamic", "quota_limit": -1,
-        #     "api_url": "https://tokenhub.tencentcloudmaas.com/v1/chat/completions",
-        #     "api_key": os.environ.get("TOKENHUB_API_KEY", ""),
         #     "priority": 14, "enabled": True,
-        #     "adapter": "openai_compatible", "max_concurrent": 2,
+        #     "adapter": "openai_compatible", "max_concurrent": 1,
         # },
         {
             "name": "deepseek",
@@ -1831,7 +1843,8 @@ REMOTE_API_CHANNELS = {
             # ★352刀9：7→8（收费兜底继续垫底；免费渠道从 1 条变 4 条，它更应该靠后）
             # ★466批：8→11，百炼7渠道插进来后继续垫底
             # ★478批：11→12（千帆 ernie-5.1 插到 11；付费官方仍是全池末位兜底）
-            "priority": 12,
+            # ★479批：12→13（TokenHub glm-5.3 插到 12；付费官方仍是全池末位兜底）
+            "priority": 13,
             "enabled": True,
             "adapter": "openai_compatible",
             "max_concurrent": 10,  # DeepSeek 付费渠道，给更大初始并发

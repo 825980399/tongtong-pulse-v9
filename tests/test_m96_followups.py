@@ -578,7 +578,8 @@ class TestM96ChannelPriority(unittest.TestCase):
             (9, "bailian-deepseek-v4-pro", "deepseek-v4-pro-0813"),
             (10, "bailian-qwen38-max", "qwen3.8-max"),
             (11, "qianfan-ernie51", "ernie-5.1"),
-            (12, "deepseek", "deepseek-v4-flash"),
+            (12, "tokenhub-glm53", "glm-5.3"),
+            (13, "deepseek", "deepseek-v4-flash"),
         ]
         by_name = {c[0]: c for c in self.ch}
         for prio, name, model in want:

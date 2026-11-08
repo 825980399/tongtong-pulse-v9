@@ -192,7 +192,7 @@ def test_项4_池序与SSRF():
                  config.REMOTE_API_CHANNELS["default_channels"])
     # ★466 渠道扩容（百炼 2→7 条）+ 426刀4 魔搭降级（priority=99）后，
     #   池内优先级实际为 1..11（11 条启用） + 99（魔搭垫底），共 12 条。
-    assert [p for p, _ in pri] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 99], pri
+    assert [p for p, _ in pri] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 99], pri
     # ★478：垫底哨兵换成余额耗尽的 siliconflow（魔搭已恢复启用）
     assert pri[-1][1] == "siliconflow-qwen2-7b", "p99 垫底哨兵应为 siliconflow"
     assert "api-inference.modelscope.cn" in tuple(config.SSRF_TRUSTED_EXTRA_HOSTS)

@@ -59,7 +59,8 @@ def test_30_other_six_channels_order_untouched():
         ("bailian-deepseek-v4-pro", 9),
         ("bailian-qwen38-max", 10),
         ("qianfan-ernie51", 11),
-        ("deepseek", 12),
+        ("tokenhub-glm53", 12),
+        ("deepseek", 13),
     ], _order
 
 
@@ -71,12 +72,12 @@ def test_40_load_balance_never_returns_it():
     _names = [c["name"] for c in _ordered]
     # ★478：402 余额耗尽的 siliconflow 不得入池（魔搭已恢复启用）。
     assert "siliconflow-qwen2-7b" not in _names
-    # ★466：6 条 ⇒ 11 条；★478：魔搭恢复 + 千帆新增 ⇒ 12 条。
-    assert len(_names) == 12
+    # ★466：6 条 ⇒ 11 条；★478：魔搭恢复 + 千帆新增 ⇒ 12 条；★479：TokenHub 新增 ⇒ 13 条。
+    assert len(_names) == 13
     assert set(_names) == {n for n, _ in [
         ("zhipu-47-flash", 1), ("bailian-qwen38-flash", 2),
         ("bailian-deepseek-v41-flash", 3), ("bailian-glm53", 4),
         ("modelscope", 5), ("bailian-qwen37-plus", 6),
         ("bailian-kimi-k3", 7), ("zhipu", 8),
         ("bailian-deepseek-v4-pro", 9), ("bailian-qwen38-max", 10),
-        ("qianfan-ernie51", 11), ("deepseek", 12)]}
+        ("qianfan-ernie51", 11), ("tokenhub-glm53", 12), ("deepseek", 13)]}

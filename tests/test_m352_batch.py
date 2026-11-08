@@ -411,7 +411,7 @@ def test_刀9_优先级与ark已移除():
     assert ch["zhipu"]["priority"] == 8
     # ★478：千帆 p11（先烧额度）⇒ 付费官方 deepseek 降到 p12，仍为全池末位兜底
     assert ch["qianfan-ernie51"]["priority"] == 11
-    assert ch["deepseek"]["priority"] == 12
+    assert ch["deepseek"]["priority"] == 13
     # ★任务书 277d465 改口径：ark-* 从 default_channels **移除**，不再留 enabled=False 的挂起条目。
     #   实测现场是 10 条（任务书写 8，方案表漏列 ark-seed-21-turbo），10 条全删。
     ark = [c for c in ch.values() if str(c["name"]).startswith("ark-")]
@@ -419,7 +419,7 @@ def test_刀9_优先级与ark已移除():
     # 移除 10 条 ark 后为 5 条；追加 bailian-qwen-max 备选后为 6 条；
     # ★352追补项4 再加 modelscope(p7) ⇒ 7 条
     # ★466：百炼 2→7 条（净 +5）⇒ 12 条；modelscope 保留配置但不入池
-    assert len(ch) == 13, "池内应为 13 条，实际 %d 条" % len(ch)
+    assert len(ch) == 14, "池内应为 14 条，实际 %d 条" % len(ch)
     # ★存量红修复（2026-11-06 路灯）：426刀4 已把 modelscope 降级为
     #   priority=99 / enabled=False（模型下架 HTTP 400），352 此处 `== 7` 自 426 起即红。
     #   A/B 已证与 466 无关（退回 HEAD 版 config 仍红）⇒ 按 426 的新规格改钉。

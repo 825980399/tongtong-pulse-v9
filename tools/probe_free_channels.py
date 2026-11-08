@@ -58,7 +58,7 @@ _PROVIDERS: dict[str, dict] = {
     },
     "tokenhub": {
         "env": "TOKENHUB_API_KEY",
-        "base": "https://tokenhub.tencentcloudmaas.com/v1",
+        "base": "https://tokenhub.tencentmaas.com/v1",
         "default_model": "",   # 需先 --list 探明
         "note": "腾讯云 TokenHub（广州节点）；Key 形如 sk-",
     },
