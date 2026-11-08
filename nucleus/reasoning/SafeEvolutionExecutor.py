@@ -231,9 +231,12 @@ def _m422_clip_statement_blocks(text: str, max_lines: int = 40,
     _lim = max(1, int(max_lines or 1))
     _cmax = max(1, int(max_chars or 1))
 
-    # ── 快路径：整段放得下 ⇒ 逐字原样（改造前后完全一致）──
+    # ── 快路径：整段放得下 ⇒ 逐字原样 ──
+    # ★479：只 rstrip + 去开头空行，**绝不 lstrip 空格** —— 首行可能是
+    #   `    def f(self):`（类方法），剥掉 4 格就变成「def 顶格 + 体 8 格」，
+    #   ast.parse 必报 unindent 不匹配。这是 LLM 补丁通道输入残缺的根因。
     if _n <= _lim and len(_t) <= _cmax:
-        return _t.strip()
+        return _t.rstrip().lstrip("\r\n")
 
     def _span(i: int) -> int:
         return _m422_block_end(_lines, i, _n) if _m422_is_block_head(_lines[i]) else i + 1
@@ -270,7 +273,8 @@ def _m422_clip_statement_blocks(text: str, max_lines: int = 40,
             _out.extend(_chunk)
             _chars += _cch
             _k = _m
-    return "".join(_out).strip()
+    # ★479：同上 —— 保留首行缩进，只去尾部空白与开头空行。
+    return "".join(_out).rstrip().lstrip("\r\n")
 
 
 # ===== ★317批刀3（G-8）：子进程产出率计数 =====
