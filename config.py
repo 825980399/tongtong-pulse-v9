@@ -7313,7 +7313,6 @@ SEARCH_COOLDOWN_SECONDS = 15
 _ASSISTANT_NAME_DOC = "nucleus/field/active_memory_dual.py：默认助手名（空=未配置）"
 ASSISTANT_NAME = ""
 DIALOG_CRISIS_GUARD_ENABLED = True          # functions/chat/chat_service.py：对话危机拦截总闸
-ENABLE_M88_MATERIAL_FROM_RESOLVED_FILE = True   # SafeEvolutionExecutor：已解析文件回灌 M88 素材
 ENABLE_OSCILLON_STARTUP_REPORT = True       # nucleus/field/OscillonField.py：启动报告开关
 ENABLE_REPORT_DWELL_AUDIT = True            # tools/report_dwell_audit.py：滞留审计开关
 ENABLE_REPORT_EXPECTED_CONSUMERS = True     # nucleus/reporting/report_bus.py：期望消费者校验
