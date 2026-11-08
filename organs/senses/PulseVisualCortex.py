@@ -276,10 +276,13 @@ class PulseVisualCortex(BasePulseOrgan):
         # ★477：3.14t 无 cv2 ⇒ 眼睛改由 3.12 感官桥提供（本地 Haar + 亮度分析）
         self._has_bridge_vision = False
         try:
-            from nucleus.senses.sensory_bridge import caps as _m477_caps
-            _m477bc = _m477_caps()
+            from nucleus.senses.sensory_bridge import bridge_python as _m477_py
+            from nucleus.senses.sensory_bridge import enabled as _m477_on
+            # ★478 追补：这里**不 spawn sidecar** —— caps() 会开摄像头 + 初始化 COM，
+            #   放在器官 __init__ 会拖慢启动（实测启动期多等数秒）。只判断「桥可用性」，
+            #   真正取景在首次 m477_look() 时再做（失败会 graceful 返回 ok=false）。
             self._has_bridge_vision = bool(
-                _m477bc.get("ok") and (_m477bc.get("caps") or {}).get("camera"))
+                _m477_on() and _m477_py() and os.path.isfile(_m477_py()))
         except Exception as _m477e:
             silent_exc(_m477e, where="PulseVisualCortex::_detect_capabilities bridge",
                        level="debug")
