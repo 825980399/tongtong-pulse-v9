@@ -4,63 +4,70 @@
 
 3.14t 是自由线程构建，`fastembed` / `onnxruntime` 没有 cp314t wheel ⇒
 `VectorEncoder` 只能走关键词通道 ⇒ 语义缓存、知识检索、经验召回全部退化。
-而 3.12 里模型、ONNX、tokenizer 全都齐备（`data/models/fast-bge-small-zh-v1.5/`），
-实测：加载 1.56s、编码 **0.004s**、维度 512，
-与存量向量库 `data/knowledge/vectors.npz`（14899×512）最高相似 0.6525
+而 3.12 里模型齐备（`data/models/fast-bge-small-zh-v1.5/`，94MB ONNX），实测：
+加载 0.11s(热)/1.56s(冷)、编码 0.004~0.006s、维度 512，
+与存量 `data/knowledge/vectors.npz`（14899×512）最高相似 0.6525
 ⇒ **同一语义空间，存量向量无需重建**。
 
-所以把「编码」这个脏活隔离到 3.12 子进程，主进程只做 IPC。
+## 为什么用 localhost HTTP 而不是管道（★踩坑后的结论）
 
-## 协议（按行 JSON，长驻）
+第一版用「长驻 + stdin/stdout 管道」，在 3.14t 下会死：
+主进程退出时报 `OSError: [WinError 6] 句柄无效`（`Popen.__del__` 里），
+生产里 sidecar 崩掉后再起不来，`VectorEncoder` 一直拿到空向量
+⇒ 刷 `维度异常: 期望 (200,512)，实际 (0,)`。
 
-请求（stdin，每行一个）::
+**自由线程构建下长期持有 Popen 管道句柄不可靠。**
+所以改成：管道**只用一次**（读端口号），之后全走 `127.0.0.1:<随机端口>` 的 HTTP。
+HTTP 天然支持超时、不受句柄失效影响、进程死了立刻连接失败可重启。
 
-    {"texts": ["文本1", "文本2"], "batch_size": 32}
+## 协议
 
-响应（stdout，每行一个）::
+启动后在 stdout 打**一行**握手（随后不再用管道）::
 
-    {"ok": true, "dim": 512, "vectors": [[...], [...]], "elapsed": 0.004}
-    {"ok": false, "error": "...", "dim": 512, "vectors": []}
+    {"ok": true, "ready": true, "port": 51234, "dim": 512, "model": "...", "load_cost": 0.11}
 
-## 为什么长驻而不是每次 spawn
+之后：
 
-模型加载 1.56s，spawn 一次就白烧 1.5s。长驻后每批只花毫秒级。
-`nucleus/semantic/bridge_encoder.py` 负责保活与超时重启。
+    POST http://127.0.0.1:<port>/embed
+      {"texts": ["文本1","文本2"], "batch_size": 32}
+    → {"ok": true, "dim": 512, "vectors": [[...]], "count": N, "elapsed": 0.004}
+
+    GET  http://127.0.0.1:<port>/ping
+    → {"ok": true, "ready": true, "dim": 512}
 
 ## 用法
 
-    python tools/semantic/encoder_sidecar.py            # 长驻，读 stdin
-    python tools/semantic/encoder_sidecar.py --selftest # 自检一次就退出
+    python tools/semantic/encoder_sidecar.py              # HTTP 服务（长驻）
+    python tools/semantic/encoder_sidecar.py --selftest   # 自检一次就退出
+    python tools/semantic/encoder_sidecar.py --stdio      # 旧的管道模式（仅调试用）
 """
 from __future__ import annotations
 
 import json
 import os
 import sys
+import threading
 import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(os.path.dirname(_HERE))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-try:
-    from nucleus._silent_except import silent_exc
-except Exception:
-    def silent_exc(e, where: str = "", level: str = "debug") -> None:  # type: ignore[misc]
-        """独立运行（仓外/未装包）时的兜底：写 stderr，绝不静默。"""
-        sys.stderr.write(f"[silent:{where}] {type(e).__name__}: {e}\n")
-
+from nucleus._silent_except import silent_exc
 
 DEFAULT_MODEL = "BAAI/bge-small-zh-v1.5"
 DEFAULT_CACHE = "data/models"
 EXPECT_DIM = 512
+MAX_TEXTS = 512          # 单请求上限，防一次塞爆
+_ENC_LOCK = threading.Lock()   # fastembed 的 embed 不保证线程安全
 
 
 def _load_model(model_name: str = DEFAULT_MODEL, cache_dir: str = DEFAULT_CACHE):
-    """加载本地模型。**只读本地缓存**，不联网（镜像设了也不下载）。"""
+    """加载本地模型。**只读本地缓存**，不联网。"""
     os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
-    # 关闭 HF 的联网校验：本地已有模型时别去探远端（否则代理 502 会拖死启动）
+    # ★关键：本地已有模型时绝不探远端（否则代理 502 会把启动拖死）
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
     from fastembed import TextEmbedding
     _t0 = time.time()
@@ -70,7 +77,12 @@ def _load_model(model_name: str = DEFAULT_MODEL, cache_dir: str = DEFAULT_CACHE)
 
 def _encode(model, texts: list[str], batch_size: int = 32) -> dict:
     _t0 = time.time()
-    _vecs = [list(map(float, v)) for v in model.embed(texts, batch_size=batch_size)]
+    if len(texts) > MAX_TEXTS:
+        return {"ok": False, "dim": EXPECT_DIM, "vectors": [],
+                "error": f"单请求文本数上限 {MAX_TEXTS}，收到 {len(texts)}"}
+    with _ENC_LOCK:
+        _vecs = [list(map(float, v))
+                 for v in model.embed(texts, batch_size=batch_size)]
     return {
         "ok": True,
         "dim": len(_vecs[0]) if _vecs else EXPECT_DIM,
@@ -80,7 +92,63 @@ def _encode(model, texts: list[str], batch_size: int = 32) -> dict:
     }
 
 
-def _serve() -> int:
+class _Handler(BaseHTTPRequestHandler):
+    """极简 JSON 服务。模型句柄挂在类属性上（由 main 注入）。"""
+
+    model = None
+    protocol_version = "HTTP/1.1"
+
+    def log_message(self, fmt, *args):
+        """★静音默认日志（它会往 stderr 打，既是噪音也可能撑爆缓冲区）。"""
+        return
+
+    def _send(self, obj: dict, code: int = 200) -> None:
+        try:
+            _b = json.dumps(obj, ensure_ascii=False).encode("utf-8")
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(_b)))
+            self.end_headers()
+            self.wfile.write(_b)
+        except (OSError, ValueError) as _e:
+            silent_exc(_e, where="encoder_sidecar::_send", level="debug")
+
+    def do_GET(self) -> None:
+        if self.path.rstrip("/") == "/ping":
+            self._send({"ok": True, "ready": self.model is not None,
+                        "dim": EXPECT_DIM, "model": DEFAULT_MODEL})
+        else:
+            self._send({"ok": False, "error": "unknown path"}, 404)
+
+    def do_POST(self) -> None:
+        if self.path.rstrip("/") != "/embed":
+            self._send({"ok": False, "error": "unknown path"}, 404)
+            return
+        try:
+            _n = int(self.headers.get("Content-Length") or 0)
+            _body = self.rfile.read(_n) if _n > 0 else b"{}"
+            _req = json.loads(_body.decode("utf-8", "replace") or "{}")
+        except (ValueError, OSError) as _e:
+            silent_exc(_e, where="encoder_sidecar::do_POST read", level="warning")
+            self._send({"ok": False, "dim": EXPECT_DIM, "vectors": [],
+                        "error": f"请求解析失败: {type(_e).__name__}"}, 400)
+            return
+        _texts = _req.get("texts") or []
+        if not isinstance(_texts, list) or not _texts:
+            self._send({"ok": False, "dim": EXPECT_DIM, "vectors": [],
+                        "error": "texts 为空或非数组"}, 400)
+            return
+        try:
+            _resp = _encode(self.model, [str(t) for t in _texts],
+                            int(_req.get("batch_size") or 32))
+        except Exception as _e:
+            silent_exc(_e, where="encoder_sidecar::do_POST encode", level="warning")
+            _resp = {"ok": False, "dim": EXPECT_DIM, "vectors": [],
+                     "error": f"{type(_e).__name__}: {str(_e)[:200]}"}
+        self._send(_resp)
+
+
+def _serve_http() -> int:
     try:
         _model, _cost = _load_model()
     except Exception as _e:
@@ -92,40 +160,64 @@ def _serve() -> int:
         sys.stdout.flush()
         return 1
 
-    # 首行是 ready 握手（客户端据此判断是否可用）
+    _Handler.model = _model
+    try:
+        _srv = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    except OSError as _e:
+        silent_exc(_e, where="encoder_sidecar::bind", level="error")
+        sys.stdout.write(json.dumps({
+            "ok": False, "ready": False, "dim": EXPECT_DIM,
+            "error": f"端口绑定失败: {str(_e)[:150]}",
+        }, ensure_ascii=False) + "\n")
+        sys.stdout.flush()
+        return 1
+    _srv.daemon_threads = True
+    _port = int(_srv.server_address[1])
+
+    # ★唯一的管道用途：把端口告诉父进程。之后父进程不再依赖管道。
     sys.stdout.write(json.dumps({
-        "ok": True, "ready": True, "dim": EXPECT_DIM,
-        "model": DEFAULT_MODEL, "load_cost": _cost,
+        "ok": True, "ready": True, "port": _port, "dim": EXPECT_DIM,
+        "model": DEFAULT_MODEL, "load_cost": _cost, "mode": "http",
     }, ensure_ascii=False) + "\n")
     sys.stdout.flush()
-    sys.stderr.write(f"[encoder_sidecar] ready model={DEFAULT_MODEL} "
-                     f"load={_cost}s dim={EXPECT_DIM}\n")
 
+    try:
+        _srv.serve_forever(poll_interval=0.5)
+    except (KeyboardInterrupt, OSError) as _e:
+        silent_exc(_e, where="encoder_sidecar::serve_forever", level="warning")
+    finally:
+        try:
+            _srv.server_close()
+        except OSError as _e:
+            silent_exc(_e, where="encoder_sidecar::server_close", level="debug")
+    return 0
+
+
+def _serve_stdio() -> int:
+    """旧的管道模式（仅调试用；生产已改 HTTP）。"""
+    try:
+        _model, _cost = _load_model()
+    except Exception as _e:
+        silent_exc(_e, where="encoder_sidecar::load(stdio)", level="error")
+        return 1
+    sys.stdout.write(json.dumps({"ok": True, "ready": True, "dim": EXPECT_DIM,
+                                 "model": DEFAULT_MODEL, "load_cost": _cost,
+                                 "mode": "stdio"}, ensure_ascii=False) + "\n")
+    sys.stdout.flush()
     for _line in sys.stdin:
         _line = _line.strip()
         if not _line:
             continue
-        if _line in ('{"cmd":"exit"}', "exit"):
-            break
         try:
             _req = json.loads(_line)
-            _texts = _req.get("texts") or []
-            _bs = int(_req.get("batch_size") or 32)
-            if not isinstance(_texts, list) or not _texts:
-                _resp = {"ok": False, "dim": EXPECT_DIM, "vectors": [],
-                         "error": "texts 为空或非数组"}
-            else:
-                _resp = _encode(_model, [str(t) for t in _texts], _bs)
+            _resp = _encode(_model, [str(t) for t in (_req.get("texts") or [])],
+                            int(_req.get("batch_size") or 32))
         except Exception as _e:
-            silent_exc(_e, where="encoder_sidecar::handle", level="warning")
+            silent_exc(_e, where="encoder_sidecar::stdio handle", level="warning")
             _resp = {"ok": False, "dim": EXPECT_DIM, "vectors": [],
                      "error": f"{type(_e).__name__}: {str(_e)[:200]}"}
-        try:
-            sys.stdout.write(json.dumps(_resp, ensure_ascii=False) + "\n")
-            sys.stdout.flush()
-        except Exception as _e:
-            silent_exc(_e, where="encoder_sidecar::write", level="error")
-            return 1
+        sys.stdout.write(json.dumps(_resp, ensure_ascii=False) + "\n")
+        sys.stdout.flush()
     return 0
 
 
@@ -138,17 +230,18 @@ def _selftest() -> int:
         print(json.dumps({"ok": False, "error": f"{type(_e).__name__}: {str(_e)[:200]}"},
                          ensure_ascii=False))
         return 1
-    print(json.dumps({
-        "ok": _r["ok"], "dim": _r["dim"], "count": _r["count"],
-        "load_cost": _cost, "encode_cost": _r["elapsed"],
-    }, ensure_ascii=False))
+    print(json.dumps({"ok": _r["ok"], "dim": _r["dim"], "count": _r["count"],
+                      "load_cost": _cost, "encode_cost": _r["elapsed"]},
+                     ensure_ascii=False))
     return 0 if _r["ok"] else 1
 
 
 def main(argv: list[str]) -> int:
     if "--selftest" in argv:
         return _selftest()
-    return _serve()
+    if "--stdio" in argv:
+        return _serve_stdio()
+    return _serve_http()
 
 
 if __name__ == "__main__":
