@@ -186,8 +186,41 @@ class PulseEyes(BasePulseOrgan):
                 self._log(LogLevel.INFO, "实时视觉流已启动（主动推流模式）")
                 self._camera_initialized = True
             except Exception as e:
-                self._log(LogLevel.WARNING, f"打开摄像头失败: {type(e).__name__}: {e}")
+                # ★479收尾：本机 3.14t 没有 cv2（自由线程构建无 wheel），但「眼睛」并未失明 ——
+                #   477 批的感官桥（3.12 sidecar：cv2 + Haar）能按需真取景。
+                #   所以这里不再一律 WARNING（每次启动刷一条「失败」会被误读成故障）：
+                #   桥可用 ⇒ INFO 说明改走按需取景；桥不可用 ⇒ 才 WARNING。
+                if self._m479_bridge_available():
+                    self._log(LogLevel.INFO,
+                              f"本地 cv2 不可用（{type(e).__name__}），"
+                              "视觉改走感官桥按需取景（3.12 sidecar，非连续推流）")
+                else:
+                    self._log(LogLevel.WARNING,
+                              f"打开摄像头失败: {type(e).__name__}: {e}")
                 self._camera_cap = None
+
+    def _m479_bridge_available(self) -> bool:
+        """感官桥是否可用（只查开关与解释器路径，**不 spawn、不开摄像头**）。"""
+        try:
+            from nucleus.senses.sensory_bridge import enabled as _bridge_on
+            return bool(_bridge_on())
+        except Exception as _e:
+            silent_exc(_e, where="PulseEyes::_m479_bridge_available", level="debug")
+            return False
+
+    def m479_look(self, save: str | None = None) -> dict:
+        """按需取景（走感官桥单次调用）。
+
+        与 `PulseVisualCortex.m477_look()` 同源，互不依赖 —— 两条视觉路径都可单独用。
+        返回桥的原始结构：{"ok": bool, "desc": str, "faces": int, "save": path, ...}。
+        """
+        try:
+            from nucleus.senses.sensory_bridge import look as _bridge_look
+            return _bridge_look(save)
+        except Exception as _e:
+            silent_exc(_e, where="PulseEyes::m479_look", level="debug")
+            return {"ok": False, "error": f"{type(_e).__name__}: {str(_e)[:120]}"}
+
     def stop(self):
         """停止眼睛"""
         self._stream_running = False

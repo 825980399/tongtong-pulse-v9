@@ -107,6 +107,33 @@ def _load_config() -> dict[str, Any]:
         return {}
 
 
+def _m479_try_bridge(cache_dir: str):
+    """尝试取语义桥；不可用/开关关/依赖缺失一律返回 None（绝不抛）。"""
+    try:
+        from nucleus.semantic.bridge_encoder import get_bridge
+        _b = get_bridge(cache_dir)
+    except Exception as _e:
+        silent_exc(_e, where="VectorEncoder::479语义桥 import", level="debug")
+        return None
+    if _b is None:
+        return None
+    try:
+        return _b if bool(getattr(_b, "available", False)) else None
+    except Exception as _e:
+        silent_exc(_e, where="VectorEncoder::479语义桥 available", level="debug")
+        return None
+
+
+def _m479_bridge_reason(bridge) -> str:
+    """取桥的状态说明（失败就给固定文案，绝不抛）。"""
+    try:
+        _st = bridge.status() or {}
+        return str(_st.get("reason") or "已由语义桥(3.12 sidecar)接管")
+    except Exception as _e:
+        silent_exc(_e, where="VectorEncoder::479语义桥 status", level="debug")
+        return "已由语义桥(3.12 sidecar)接管"
+
+
 class VectorEncoder:
     """本地中文语义编码器（单例、懒加载、零风险降级）。"""
 
@@ -231,6 +258,21 @@ class VectorEncoder:
                 last_err = f"{type(_e).__name__}: {_e}"
                 _module_logger.debug(f"[语义内核] 镜像 {mirror} 加载失败: {last_err}")
                 continue
+
+        # ★479：全镜像失败 ⇒ 先试语义桥（3.12 sidecar 跑同一个 bge-small-zh-v1.5，
+        #   512 维、与存量 vectors.npz 同语义空间 ⇒ 存量向量无需重建）。
+        #   桥客户端与 fastembed 同构（.embed(texts, batch_size=N)），所以下面
+        #   `self._model = _bridge` 之后 encode() 一行都不用改。
+        _bridge = _m479_try_bridge(cache_dir)
+        if _bridge is not None:
+            with self._lock_self:
+                self._model = _bridge
+                self._state = "ready"
+                self._state_reason = _m479_bridge_reason(_bridge)
+            _module_logger.info(
+                "[语义内核] 本地 fastembed 不可用（%s），已切换到语义桥："
+                "3.12 sidecar / bge-small-zh-v1.5 / 512 维（与存量向量库同空间）", last_err)
+            return
 
         with self._lock_self:
             self._state = "disabled"

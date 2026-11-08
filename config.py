@@ -4389,7 +4389,9 @@ ENABLE_M475_PATCH_BACKFILL = True
 #          打分、写 data/autonomy/all_collab.jsonl。**默认不改写 answer**（纯影子）。
 #   False ⇒ 逐字回滚（不并发生成、不写台账）。
 #   读取点：nucleus/autonomy/all_collab.py + SafeEvolutionExecutor::_m479_all_collab
-ENABLE_M479_ALL_COLLAB = False
+#   ★479 收尾：已改为 True 开始跑影子（PICK 仍 False ⇒ 只打分写台账，答案一字不改）。
+#     按需触发门保证只在首个渠道 <85 分时才并行，不拖慢主链路。
+ENABLE_M479_ALL_COLLAB = True
 
 # 并行渠道数（含首个渠道之外再补几条）。4 = 命中率与配额消耗的折中。
 M479_ALL_COLLAB_CHANNELS = 4
@@ -4412,6 +4414,22 @@ M479_ALL_COLLAB_MAX_TOKENS = 2048
 #   低于 85 说明至少缺一项（多半是「不是完整方法」或「改动过大」）⇒ 值得救场。
 #   设为 0 则每次都并行（不推荐，仅供对照实验）。
 M479_ALL_COLLAB_TRIGGER_BELOW = 85
+
+# ★479 批：语义桥 —— 用 3.12 sidecar 跑 bge-small-zh-v1.5，补 3.14t 缺 fastembed 的坑。
+#   背景：3.14t 是自由线程构建，fastembed / onnxruntime 没有 cp314t wheel ⇒
+#   VectorEncoder 只能走关键词通道 ⇒ 语义缓存（相同问题重复调 LLM）、知识检索
+#   （vectors.npz 14899 条）、修复经验召回全部退化。
+#   3.12 里模型齐备（data/models/fast-bge-small-zh-v1.5/，94MB ONNX），实测：
+#     加载 0.11~1.56s、编码 0.004~0.006s、维度 512、
+#     与存量向量库最高相似 0.6525 ⇒ **同一语义空间，存量向量无需重建**。
+#   True ⇒ 本地 fastembed 全镜像失败后，自动回落到语义桥；桥也不可用才走关键词。
+#   False ⇒ 逐字回滚（不尝试桥，行为与 478 之前完全一致）。
+#   读取点：nucleus/semantic/bridge_encoder.py::get_bridge
+#           + nucleus/semantic/VectorEncoder.py::_load_model
+ENABLE_M479_SEMANTIC_BRIDGE = True
+SEMANTIC_BRIDGE_PYTHON = os.environ.get(
+    "PULSE_SEMANTIC_BRIDGE_PYTHON", r"D:\Program Files\Python312\python.exe")
+SEMANTIC_BRIDGE_SCRIPT = os.path.join("tools", "semantic", "encoder_sidecar.py")
 
 # ★主线第42批 T1（P0-272）：日志留存治理
 #   背景（实测证据链）：logs/pulse.log 的 ctime 未变（09-03）却只含当日 11:30 起的内容，
