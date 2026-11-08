@@ -2034,6 +2034,19 @@ CHANNEL_REQUEST_FIELD_POLICY = {
     "bailian-kimi-k3": {
         "omit_temperature": True,
     },
+    # ★479 收尾（2026-11-08 重启实测）：modelscope 渠道同 Qwen3 系，同样要求
+    #   「关思考时 reasoning_effort 必须为 none」。原文见 logs/pulse.log
+    #   21:30:02 / 22:41:20（pid=21468/43552）：
+    #     "'reasoning_effort' must be 'none' when 'enable_thinking' is false"
+    #   三组实测（tmp/_m479_mscope.py）：
+    #     ① thinking={"type":"disabled"} + effort=low   ⇒ HTTP 400（生产现状）
+    #     ② thinking={"type":"disabled"} + effort=none  ⇒ HTTP 200 'OK' ✓
+    #     ③ 只给 thinking、不带 effort                  ⇒ HTTP 200 'OK'
+    #   即 478 批恢复 modelscope 时漏了配套字段策略 ⇒ 每次轮到它必 400，
+    #   等于「恢复了但用不了」。这里补齐（与 bailian-qwen38-flash 同一口径）。
+    "modelscope": {
+        "reasoning_effort_when_off": "none",
+    },
 }
 
 # ★主线第25批 T2/P2-162：渠道请求字段白名单总开关。

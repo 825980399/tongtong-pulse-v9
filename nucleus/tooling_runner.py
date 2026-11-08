@@ -306,7 +306,18 @@ class ToolingRunner(SilentLogMixin):
             _flag["degraded"] = True
             _flag["reason"] = f"rc_{rec.get('rc')}"
         self._tool_flags[tool] = _flag
-        _cnt = len(_data) if isinstance(_data, list) else "obj"
+        # ★479：dict 输出必须报**真实条数**，不许只写 "obj"。
+        #   bandit 的 stdout 是 {"results": [...], "metrics": {...}}，
+        #   旧实现一律显示 items=obj ⇒ 看不出扫出 0 条还是 20 条，
+        #   这条日志等于没提供信息（而 results 是被真正消费的）。
+        if isinstance(_data, list):
+            _cnt = len(_data)
+        elif isinstance(_data, dict):
+            _res = _data.get("results")
+            _cnt = (len(_res) if isinstance(_res, list)
+                    else f"dict[{len(_data)}键]")
+        else:
+            _cnt = type(_data).__name__
         self._log(LogLevel.INFO,
                   f"[342tool] {tool} ok items={_cnt} rc={rec.get('rc')} "
                   f"stdout={len(_out)}B stderr={len(_err)}B domain={domain} "
