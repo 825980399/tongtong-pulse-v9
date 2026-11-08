@@ -160,6 +160,7 @@ def _serve_http() -> int:
         sys.stdout.flush()
         return 1
 
+    _watch_parent()
     _Handler.model = _model
     try:
         _srv = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
@@ -191,6 +192,79 @@ def _serve_http() -> int:
         except OSError as _e:
             silent_exc(_e, where="encoder_sidecar::server_close", level="debug")
     return 0
+
+
+# 防御性分支的「同类只记一次」容器（避免每次探活都刷同一条）
+_SEEN_DEFER: set = set()
+
+# 看护间隔（秒）。生产 30s 足够；单测/调试可用环境变量调小以便验证。
+try:
+    _PPID_WATCH_SEC = float(os.environ.get("PULSE_SIDECAR_PPID_WATCH_SEC") or 30.0)
+except (TypeError, ValueError) as _e:
+    if "watch_sec" not in _SEEN_DEFER:
+        _SEEN_DEFER.add("watch_sec")
+        silent_exc(_e, where="encoder_sidecar::ppid_watch_sec 回落 30s",
+                   level="debug")
+    _PPID_WATCH_SEC = 30.0
+
+
+def _pid_alive(pid: int) -> bool:
+    """父进程是否还活着。**判不了就返回 True**（安全侧：绝不误杀）。"""
+    if pid <= 0:
+        return True
+    try:
+        import ctypes
+        _k = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        _h = _k.OpenProcess(0x1000, False, int(pid))  # QUERY_LIMITED_INFORMATION
+        if not _h:
+            return False
+        try:
+            # ★必须再查退出码：Windows 上「已退出但句柄未释放」的僵尸进程
+            #   仍能被 OpenProcess 打开 ⇒ 只看句柄会把死进程判成活的。
+            _code = ctypes.c_ulong(0)
+            if not _k.GetExitCodeProcess(_h, ctypes.byref(_code)):
+                return True          # 查不到 ⇒ 当活着（安全侧）
+            return _code.value == 259  # STILL_ACTIVE
+        finally:
+            _k.CloseHandle(_h)
+    except (AttributeError, OSError, ValueError) as _e:
+        # 判不了就当活着（安全侧：绝不误杀）。同类只记一次，否则跨平台
+        # 场景（无 windll）会每次探活刷一条。
+        if "pid_alive" not in _SEEN_DEFER:
+            _SEEN_DEFER.add("pid_alive")
+            silent_exc(_e, where="encoder_sidecar::_pid_alive 判不了 ⇒ 视为存活",
+                       level="debug")
+        return True
+
+
+def _watch_parent() -> None:
+    """★479：父进程退出则自杀 —— 防止每次重启留下一个 200~400MB 的孤儿。
+
+    实测：三个残留 sidecar 合计 699MB（父进程分别是已死/已死/测试进程）。
+    只在 `PULSE_SIDECAR_PPID` 被显式设置时启用；手工直接跑不启用（行为不变）。
+    """
+    try:
+        _ppid = int(os.environ.get("PULSE_SIDECAR_PPID") or 0)
+    except (TypeError, ValueError) as _e:
+        if "ppid_parse" not in _SEEN_DEFER:
+            _SEEN_DEFER.add("ppid_parse")
+            silent_exc(_e, where="encoder_sidecar::PULSE_SIDECAR_PPID 非法 ⇒ 不启用看护",
+                       level="debug")
+        _ppid = 0
+    if _ppid <= 0:
+        return
+    import threading
+
+    def _loop() -> None:
+        while True:
+            time.sleep(_PPID_WATCH_SEC)
+            if not _pid_alive(_ppid):
+                sys.stderr.write(
+                    f"[encoder_sidecar] 父进程 {_ppid} 已退出 ⇒ 自行结束\n")
+                sys.stderr.flush()
+                os._exit(0)
+
+    threading.Thread(target=_loop, name="ppid-watch", daemon=True).start()
 
 
 def _serve_stdio() -> int:

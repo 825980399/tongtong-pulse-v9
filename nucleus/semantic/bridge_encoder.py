@@ -122,10 +122,15 @@ class BridgeEncoder:
             self._err_fh = None
 
         try:
+            # ★479：把本进程 PID 传给 sidecar，让它在我们退出后自杀
+            #   （否则每次重启留一个 200~400MB 的孤儿，实测累积 699MB）。
+            _env = dict(os.environ)
+            _env["PULSE_SIDECAR_PPID"] = str(os.getpid())
             self._proc = subprocess.Popen(
                 [self._py, self._script],
                 stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                 stderr=(self._err_fh or subprocess.DEVNULL),
+                env=_env,
                 text=True, encoding="utf-8", errors="replace", bufsize=1,
             )
         except (OSError, ValueError) as _e:
