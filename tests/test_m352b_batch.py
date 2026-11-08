@@ -64,7 +64,8 @@ def test_项1_硅基模型已改且旧名零残留():
     ch = {c["name"]: c for c in config.REMOTE_API_CHANNELS["default_channels"]}
     assert "siliconflow-qwen2-7b" in ch, "渠道名应保留（改名会牵动测试与运维台账）"
     assert ch["siliconflow-qwen2-7b"]["model"] == "zai-org/GLM-5.3-Flash"
-    assert ch["siliconflow-qwen2-7b"]["priority"] == 5
+    # ★478：siliconflow 402 余额耗尽 ⇒ 降级 p99（原 p5 让给恢复启用的魔搭）
+    assert ch["siliconflow-qwen2-7b"]["priority"] == 99
     # 旧模型名在 config.py 中零残留（注释也算 —— 留着注释会让人以为还在用）
     assert "Qwen/Qwen2-7B-Instruct" not in _src("config.py")
 
@@ -168,10 +169,11 @@ def test_项4_魔搭渠道字段齐备():
     # ★426刀4（2026-11-02 活体实测）：模型下架 ⇒ 渠道降级保留
     #   （enabled=False + priority=99 垫底，详见 config.py 该渠道注释）。
     #   本用例随 426 决策同步钉死"降级后状态"，不再断言旧的有效态。
-    assert ms["priority"] == 99, "426刀4 降级：魔搭垫底 priority=99"
+    # ★478（真机探针验证）：模型换 Qwen/Qwen3.8-Flash-Next 并恢复启用（p5）
+    assert ms["priority"] == 5, "478：魔搭恢复启用，顶替 siliconflow 的 p5 槽位"
     assert ms["api_url"] == "https://api-inference.modelscope.cn/v1/chat/completions"
     assert ms["max_concurrent"] == 2
-    assert ms["enabled"] is False, "426刀4 降级：模型下架 ⇒ enabled=False"
+    assert ms["enabled"] is True, "478：探针 chat 200 ⇒ 恢复启用"
     assert ms["quota_type"] == "dynamic", "魔搭配额动态调整，不承诺固定额度"
 
 
@@ -190,8 +192,9 @@ def test_项4_池序与SSRF():
                  config.REMOTE_API_CHANNELS["default_channels"])
     # ★466 渠道扩容（百炼 2→7 条）+ 426刀4 魔搭降级（priority=99）后，
     #   池内优先级实际为 1..11（11 条启用） + 99（魔搭垫底），共 12 条。
-    assert [p for p, _ in pri] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 99], pri
-    assert pri[-1][1] == "modelscope", "魔搭 priority=99 必须最垫底（426刀4 降级）"
+    assert [p for p, _ in pri] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 99], pri
+    # ★478：垫底哨兵换成余额耗尽的 siliconflow（魔搭已恢复启用）
+    assert pri[-1][1] == "siliconflow-qwen2-7b", "p99 垫底哨兵应为 siliconflow"
     assert "api-inference.modelscope.cn" in tuple(config.SSRF_TRUSTED_EXTRA_HOSTS)
 
 

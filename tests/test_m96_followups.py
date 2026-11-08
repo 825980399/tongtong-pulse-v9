@@ -571,13 +571,14 @@ class TestM96ChannelPriority(unittest.TestCase):
             (2, "bailian-qwen38-flash", "qwen3.7-flash"),
             (3, "bailian-deepseek-v41-flash", "deepseek-v4.1-flash-1017"),
             (4, "bailian-glm53", "glm-5.2"),
-            (5, "siliconflow-qwen2-7b", "zai-org/GLM-5.3-Flash"),
+            (5, "modelscope", "Qwen/Qwen3.8-Flash-Next"),
             (6, "bailian-qwen37-plus", "qwen3.7-plus-2026-05-26"),
             (7, "bailian-kimi-k3", "kimi-k3"),
             (8, "zhipu", "glm-4-flash"),
             (9, "bailian-deepseek-v4-pro", "deepseek-v4-pro-0813"),
             (10, "bailian-qwen38-max", "qwen3.8-max"),
-            (11, "deepseek", "deepseek-v4-flash"),
+            (11, "qianfan-ernie51", "ernie-5.1"),
+            (12, "deepseek", "deepseek-v4-flash"),
         ]
         by_name = {c[0]: c for c in self.ch}
         for prio, name, model in want:

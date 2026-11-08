@@ -1721,8 +1721,17 @@ REMOTE_API_CHANNELS = {
             "quota_limit": -1,  # 硅基流动：积分抵扣期视为免费（平台限速内）
             "api_url": "https://api.siliconflow.cn/v1/chat/completions",
             "api_key": os.environ.get("SILICONFLOW_API_KEY", ""),
-            "priority": 5,  # ★466批：3→5，百炼渠道插进来后往后挪
-            "enabled": True,
+            # ★478批（2026-11-08 重启实测）：HTTP 402 "account balance is insufficient"
+            #   ⇒ 账户余额耗尽。渠道降级保留（enabled=False + priority=99 垫底），
+            #   槽位 priority=5 让给已恢复的魔搭。充值后 enabled 改回 True、
+            #   priority 改回 5 即恢复，其余字段无需动。
+            "priority": 99,
+            "enabled": False,
+            "channel_status": "invalid",
+            "invalid_since": "2026-11-08",
+            "invalid_reason": "HTTP 402 账户余额不足（account balance is insufficient）",
+            "invalid_evidence": "HTTP 402 {\"code\":30001,\"message\":"
+                                "\"Sorry, your account balance is insufficient\"}",
             "adapter": "openai_compatible",
             "max_concurrent": 2,   # 免费模型有平台限速，不适合高并发
         },
@@ -1761,21 +1770,58 @@ REMOTE_API_CHANNELS = {
             #   ★api_url / api_key / model / quota_type 全部**逐字保留**：
             #     模型回来后只改 enabled=True + priority=7 即可恢复，无需改代码。
             "name": "modelscope",
-            "model": "Qwen/Qwen2.5-7B-Instruct",
+            # ★478批（2026-11-08 真机探针实测）：原 Qwen/Qwen2.5-7B-Instruct 已下架；
+            #   探针 GET /v1/models 拿到 38 个可调模型，POST chat 实测
+            #   `Qwen/Qwen3.8-Flash-Next` 返回 200 "OK" ⇒ 换它并恢复启用。
+            #   槽位：priority 99→5、enabled False→True（顶替已余额耗尽的 siliconflow）。
+            "model": "Qwen/Qwen3.8-Flash-Next",
             "quota_type": "dynamic",  # 免费限流，配额动态调整（非固定日/月额度）
             "quota_limit": -1,
             "api_url": "https://api-inference.modelscope.cn/v1/chat/completions",
             "api_key": os.environ.get("MODELSCOPE_API_KEY", ""),
-            "priority": 99,          # ★426 刀4：7 → 99（垫底；不删渠道位置）
-            "enabled": False,        # ★426 刀4：渠道选择跳过它
-            "channel_status": "invalid",
-            "invalid_since": "2026-11-02",
-            "invalid_reason": "模型下架：HTTP 400 Model id has no provider supported",
-            "invalid_evidence": "HTTP 400 {\"error\":{\"message\":\"Model id : "
-                                "Qwen/Qwen2.5-7B-Instruct , has no provider supported\"}}",
+            "priority": 5,
+            "enabled": True,
             "adapter": "openai_compatible",
             "max_concurrent": 2,
         },
+        {
+            # ★478批新增：百度千帆 v2（OpenAI 兼容）。2026-11-08 真机探针实测：
+            #   GET /v2/models 26 个可调模型；ernie-5.1 / glm-5.2 chat 均 200 "OK"。
+            #   注意：本账号**没开通** ernie-speed-8k（永久免费那档），所以选已开通的
+            #   ernie-5.1。priority 12 = 排在付费兜底 deepseek(11) 之后，仅作末位备援。
+            "name": "qianfan-ernie51",
+            "model": "ernie-5.1",
+            "quota_type": "dynamic",
+            "quota_limit": -1,
+            "api_url": "https://qianfan.baidubce.com/v2/chat/completions",
+            "api_key": os.environ.get("QIANFAN_API_KEY", ""),
+            # priority 11：排在付费官方 deepseek(12) 之前（先烧已有额度，再烧现金）
+            "priority": 11,
+            "enabled": True,
+            "adapter": "openai_compatible",
+            "max_concurrent": 2,
+        },
+        # ── ★478：待启用模板（key 未设，暂不激活）。设好环境变量后把整段取消注释即可：
+        #    · 腾讯混元：HUNYUAN_API_KEY=<TokenHub 的 sk- Key（不是 CAM 密钥）>
+        #    · 腾讯云 TokenHub：TOKENHUB_API_KEY=<同一个 sk- Key>
+        # {
+        #     "name": "hunyuan-lite",          # 永久免费档（并发 5）
+        #     "model": "hunyuan-lite",
+        #     "quota_type": "dynamic", "quota_limit": -1,
+        #     "api_url": "https://api.hunyuan.cloud.tencent.com/v1/chat/completions",
+        #     "api_key": os.environ.get("HUNYUAN_API_KEY", ""),
+        #     "priority": 13, "enabled": True,
+        #     "adapter": "openai_compatible", "max_concurrent": 1,
+        # },
+        # {
+        #     "name": "tokenhub",              # 一个 Key 调 DeepSeek/GLM/Kimi/MiniMax
+        #     "model": "<先用 GET https://tokenhub.tencentcloudmaas.com/v1/models 查>",
+        #     "quota_type": "dynamic", "quota_limit": -1,
+        #     "api_url": "https://tokenhub.tencentcloudmaas.com/v1/chat/completions",
+        #     "api_key": os.environ.get("TOKENHUB_API_KEY", ""),
+        #     "priority": 14, "enabled": True,
+        #     "adapter": "openai_compatible", "max_concurrent": 2,
+        # },
         {
             "name": "deepseek",
             "model": "deepseek-v4-flash",  # 官方API，收费但便宜，最后兜底
@@ -1784,7 +1830,8 @@ REMOTE_API_CHANNELS = {
             "api_key": os.environ.get("DEEPSEEK_API_KEY", ""),
             # ★352刀9：7→8（收费兜底继续垫底；免费渠道从 1 条变 4 条，它更应该靠后）
             # ★466批：8→11，百炼7渠道插进来后继续垫底
-            "priority": 11,
+            # ★478批：11→12（千帆 ernie-5.1 插到 11；付费官方仍是全池末位兜底）
+            "priority": 12,
             "enabled": True,
             "adapter": "openai_compatible",
             "max_concurrent": 10,  # DeepSeek 付费渠道，给更大初始并发
@@ -5575,6 +5622,8 @@ EVOLUTION_LLM_PRICE_TABLE = {
     "qwen3.7-plus-2026-05-26": 0.0,         # 478：替代 qwen3.7-plus
     "deepseek-v4-pro-0813": 0.0,            # 478：替代 deepseek-v4-pro（免费别名）
     "glm-5.2": 0.0,                         # 478：替代 glm-5.3
+    "Qwen/Qwen3.8-Flash-Next": 0.0,         # 478：魔搭 API-Inference 免费限流档
+    "ernie-5.1": None,                      # 478：千帆，单价未核验（不臆造）
     # ---- 豆包 / 火山方舟（Seed 系）----
     "Doubao-Seed-2.1-pro": 0.0008,  # 输入档 ¥0.8/M ⇒ ¥0.0008/1K；输出 ¥8/M ⇒ ¥0.008/1K；来源 volcengine.com 计价文档
     "doubao-seed-2.1-pro": 0.0008,  # 小写别名（渠道返回大小写不一，按同价兜底）

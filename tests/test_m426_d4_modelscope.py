@@ -14,25 +14,29 @@ def _ch(name, include_disabled=False):
     return None
 
 
-def test_10_modelscope_not_selectable():
-    """渠道选择真的不会选它：enabled=False ⇒ 不在 active 列表里。"""
+def test_10_dead_channel_not_selectable():
+    """★478：402 余额耗尽的 siliconflow 已 enabled=False ⇒ 不在 active 列表里。
+
+    （魔搭 478 起已恢复启用，不再承担"不可选"的反例角色。）
+    """
     _names = [c["name"] for c in config.get_active_channels()]
-    assert "modelscope" not in _names
-    assert config.get_primary_usable_channel().get("name") != "modelscope"
+    assert "siliconflow-qwen2-7b" not in _names
+    assert config.get_primary_usable_channel().get("name") != "siliconflow-qwen2-7b"
 
 
 def test_20_config_kept_verbatim_so_it_can_be_re_enabled():
-    """任务书：不要删配置，只是降级。api_url/model/api_key 必须逐字还在。"""
+    """★478：426 的「只降级不删配置」已被验证生效 —— 探针实测新模型可用后，
+    魔搭以 Qwen/Qwen3.8-Flash-Next 恢复启用（p5）。
+
+    本用例改守「结构字段仍在 + 已恢复」，即当年保留配置的**目的**已达成。
+    """
     _c = _ch("modelscope", include_disabled=True)
     assert _c is not None, "整个渠道条目被删掉了 —— 违反「只降级不删配置」"
-    assert _c["enabled"] is False
-    assert _c["priority"] == 99
-    assert _c["model"] == "Qwen/Qwen2.5-7B-Instruct"
+    assert _c["enabled"] is True
+    assert _c["priority"] == 5
+    assert _c["model"] == "Qwen/Qwen3.8-Flash-Next"
     assert _c["api_url"] == "https://api-inference.modelscope.cn/v1/chat/completions"
     assert "api_key" in _c and "api_url" in _c and "quota_type" in _c
-    assert _c["channel_status"] == "invalid"
-    assert _c["invalid_since"] == "2026-11-02"
-    assert "400" in _c["invalid_reason"] or "下架" in _c["invalid_reason"]
 
 
 def test_30_other_six_channels_order_untouched():
@@ -48,13 +52,14 @@ def test_30_other_six_channels_order_untouched():
         ("bailian-qwen38-flash", 2),
         ("bailian-deepseek-v41-flash", 3),
         ("bailian-glm53", 4),
-        ("siliconflow-qwen2-7b", 5),
+        ("modelscope", 5),
         ("bailian-qwen37-plus", 6),
         ("bailian-kimi-k3", 7),
         ("zhipu", 8),
         ("bailian-deepseek-v4-pro", 9),
         ("bailian-qwen38-max", 10),
-        ("deepseek", 11),
+        ("qianfan-ernie51", 11),
+        ("deepseek", 12),
     ], _order
 
 
@@ -64,13 +69,14 @@ def test_40_load_balance_never_returns_it():
 
     _ordered, _info = order_by_load(list(config.get_active_channels()))
     _names = [c["name"] for c in _ordered]
-    assert "modelscope" not in _names
-    # ★466：6 条 ⇒ 11 条（百炼 2→7）。集合仍逐名钉死，不用被测函数自身输出当基准。
-    assert len(_names) == 11
+    # ★478：402 余额耗尽的 siliconflow 不得入池（魔搭已恢复启用）。
+    assert "siliconflow-qwen2-7b" not in _names
+    # ★466：6 条 ⇒ 11 条；★478：魔搭恢复 + 千帆新增 ⇒ 12 条。
+    assert len(_names) == 12
     assert set(_names) == {n for n, _ in [
         ("zhipu-47-flash", 1), ("bailian-qwen38-flash", 2),
         ("bailian-deepseek-v41-flash", 3), ("bailian-glm53", 4),
-        ("siliconflow-qwen2-7b", 5), ("bailian-qwen37-plus", 6),
+        ("modelscope", 5), ("bailian-qwen37-plus", 6),
         ("bailian-kimi-k3", 7), ("zhipu", 8),
         ("bailian-deepseek-v4-pro", 9), ("bailian-qwen38-max", 10),
-        ("deepseek", 11)]}
+        ("qianfan-ernie51", 11), ("deepseek", 12)]}
