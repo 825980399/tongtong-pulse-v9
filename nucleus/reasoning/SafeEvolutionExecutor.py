@@ -2888,8 +2888,13 @@ class SafeEvolutionExecutor:
             _best = _res.get("best") if isinstance(_res, dict) else None
             _bs = int(_best.get("score") or 0) if isinstance(_best, dict) else 0
             _pick = bool(getattr(_cfg479, "ENABLE_M479_ALL_COLLAB_PICK", False))
+            # ★479 收尾：替换前再守一道「真能用」——best 已是完整方法才替换。
+            #   理由：470 判据要求 modified 的 def 行方法名 == method，非完整方法
+            #   进 469 必拦；替换只会白烧延迟并让日志看起来「换过了」。
+            _bd = (_best.get("score_detail") or {}) if isinstance(_best, dict) else {}
+            _b_usable = bool(_bd.get("full_method") is True)
             _chosen = ""
-            if _pick and isinstance(_best, dict) and _bs > _bl:
+            if _pick and isinstance(_best, dict) and _bs > _bl and _b_usable:
                 _chosen = str(_best.get("code") or "").strip()
                 if _chosen:
                     _module_logger.info(
@@ -2905,6 +2910,9 @@ class SafeEvolutionExecutor:
                 "best_channel": (str(_best.get("channel") or "")
                                  if isinstance(_best, dict) else ""),
                 "best_score": _bs,
+                "best_usable": _b_usable,
+                "usable_candidates": int(_res.get("usable") or 0)
+                if isinstance(_res, dict) else 0,
                 "picked": bool(_chosen),
                 "elapsed": (_res.get("elapsed") if isinstance(_res, dict) else 0),
                 "candidates": [

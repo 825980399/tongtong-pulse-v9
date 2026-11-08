@@ -279,6 +279,71 @@ def score_code(code: str, original: str = "", method: str = "") -> dict:
 
 # ────────────────────────── 渠道挑选与并发生成 ──────────────────────────
 
+_DEAD_LOGGED: set = set()
+
+
+def _dead_channels(window: int = 200, min_tries: int = 10) -> set:
+    """从台账最近 window 轮里找出「零产出」渠道（数据驱动，不硬编码名单）。
+
+    判据刻意保守：**tried >= min_tries 且 ok == 0** 才判死。
+    理由：只要有过一次成功就说明渠道是活的（可能只是限流/慢），不能剔；
+    而 21 次全空说明是「模型档位选错」（如推理模型把 token 花在思考上、
+    content 恒空），继续调用纯属烧配额。
+
+    只看最近 window 轮 ⇒ 换模型/修好后旧数据滑出窗口，自动复活，不会永久拉黑。
+    """
+    _out: set = set()
+    try:
+        import config as _cfg
+        if not getattr(_cfg, "M479_ALL_COLLAB_SKIP_DEAD", True):
+            return _out
+        _win = int(getattr(_cfg, "M479_ALL_COLLAB_DEAD_WINDOW", window) or window)
+        _min = int(getattr(_cfg, "M479_ALL_COLLAB_DEAD_MIN_TRIES", min_tries) or min_tries)
+    except (ImportError, AttributeError, TypeError, ValueError) as _e:
+        silent_exc(_e, where="autonomy.all_collab::_dead_channels config", level="debug")
+        _win, _min = window, min_tries
+
+    _p = _ledger_path()
+    if not os.path.isfile(_p):
+        return _out
+    _stat: dict = {}
+    try:
+        with open(_p, encoding="utf-8", errors="replace") as _f:
+            _lines = [x for x in _f if x.strip()]
+        for _ln in _lines[-max(1, _win):]:
+            try:
+                _r = json.loads(_ln)
+            except (json.JSONDecodeError, ValueError) as _e:
+                silent_exc(_e, where="autonomy.all_collab::_dead_channels row", level="debug")
+                continue
+            for _c in (_r.get("candidates") or []):
+                if not isinstance(_c, dict):
+                    continue
+                _n = str(_c.get("channel") or "")
+                if not _n:
+                    continue
+                _b = _stat.setdefault(_n, [0, 0])
+                _b[0] += 1
+                _b[1] += int(bool(_c.get("ok")))
+    except OSError as _e:
+        silent_exc(_e, where="autonomy.all_collab::_dead_channels open", level="debug")
+        return _out
+
+    for _n, (_tried, _ok) in _stat.items():
+        if _tried >= _min and _ok == 0:
+            _out.add(_n)
+            if _n not in _DEAD_LOGGED:
+                _DEAD_LOGGED.add(_n)
+                try:
+                    from nucleus.logger import get_logger as _gl
+                    _gl("autonomy.all_collab").info(
+                        "[479ALL协作] 跳过零产出渠道 %s（近 %d 轮 %d 次调用 0 次成功）",
+                        _n, _win, _tried)
+                except (ImportError, AttributeError, TypeError, ValueError) as _e:
+                    silent_exc(_e, where="autonomy.all_collab::_dead_channels log", level="debug")
+    return _out
+
+
 def pick_channels(n: int = 3, exclude: str = "") -> list[dict]:
     """从活跃渠道池里挑 n 条「有 key」的渠道；exclude 为要跳过的渠道名。"""
     try:
@@ -300,10 +365,13 @@ def pick_channels(n: int = 3, exclude: str = "") -> list[dict]:
 
     _out: list[dict] = []
     _ex = str(exclude or "")
+    _dead = _dead_channels()
     for _c in _chs:
         if not isinstance(_c, dict):
             continue
         if _ex and str(_c.get("name") or "") == _ex:
+            continue
+        if _dead and str(_c.get("name") or "") in _dead:
             continue
         try:
             if not _rak(_c):
@@ -380,17 +448,26 @@ def generate_candidates(prompt: str, *, original: str = "", method: str = "",
         _r["score_detail"] = _sc
 
     _rows.sort(key=lambda x: (-int(x.get("score") or 0), float(x.get("elapsed") or 0)))
-    # 达标线 65：parse(35)+full_method(20)+no_bare(10) 即已 65 ——
-    #   即「语法通 + 是完整方法 + 无裸 except」，这是能进补丁链的**最低门槛**。
+    # ★479 收尾：best 必须同时满足「分数 >= 65」与「**真的是完整方法**」。
+    #   原实现只判分数，而 65 分可由 parse(35)+no_bare(10)+changed(10)+minimal(10)
+    #   凑出 —— 不含 full_method(20)。实测 22 轮里有大量 78 分但 full_method=false
+    #   的候选被选为 best；这类候选进 469 粒度对齐必被拦（470 要求 original==body
+    #   且 modified 的 def 行方法名匹配），替换等于白烧 40s 且污染日志。
+    #   现在 full_method=false 的候选**不进 best**，只在台账里留档供分析。
     _best = None
     for _r in _rows:
-        if int(_r.get("score") or 0) >= 65:
+        _d = _r.get("score_detail") or {}
+        if int(_r.get("score") or 0) >= 65 and _d.get("full_method") is True:
             _best = _r
             break
+    _usable = sum(1 for _r in _rows
+                  if int(_r.get("score") or 0) >= 65
+                  and (_r.get("score_detail") or {}).get("full_method") is True)
     return {
         "ok": bool(_rows),
         "candidates": _rows,
         "best": _best,
+        "usable": _usable,
         "elapsed": round(time.time() - _t0, 2),
         "channels_tried": [r.get("channel") for r in _rows],
     }
@@ -454,12 +531,27 @@ def ledger_stats(ledger_path: str | None = None) -> dict:
     _by_ch: dict[str, dict] = {}
     _hit = 0
     _with_cand = 0
+    # ★479 收尾：把「分数够」与「真能用（完整方法）」分开统计。
+    #   只看 best_score 会高估协作价值（78 分但无 def 行的候选进不了下游）。
+    _cand_total = 0
+    _cand_usable = 0
+    _rounds_with_usable = 0
     for _r in _rows:
         _cands = _r.get("candidates") or []
         if _cands:
             _with_cand += 1
         if _r.get("best_channel"):
             _hit += 1
+        _r_usable = 0
+        for _c in _cands:
+            _cand_total += 1
+            _cd = _c.get("detail") or {}
+            if (int(_c.get("score") or 0) >= 65
+                    and _cd.get("full_method") is True):
+                _cand_usable += 1
+                _r_usable += 1
+        if _r_usable:
+            _rounds_with_usable += 1
         for _c in _cands:
             _n = str(_c.get("channel") or "?")
             _b = _by_ch.setdefault(_n, {"tried": 0, "ok": 0, "score_sum": 0,
@@ -479,5 +571,10 @@ def ledger_stats(ledger_path: str | None = None) -> dict:
         "with_candidates": _with_cand,
         "best_found": _hit,
         "hit_rate": round(_hit / _n_total, 4),
+        "candidates_total": _cand_total,
+        "candidates_usable": _cand_usable,
+        "usable_rate": round(_cand_usable / max(1, _cand_total), 4),
+        "rounds_with_usable": _rounds_with_usable,
+        "rounds_usable_rate": round(_rounds_with_usable / _n_total, 4),
         "by_channel": _by_ch,
     }

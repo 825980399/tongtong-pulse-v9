@@ -194,7 +194,13 @@ class TestAllCollabGate:
         assert _written[0]["best_score"] == 100
 
     def test_23_pick_on_replaces_when_better(self, monkeypatch):
-        """PICK=True 且 best>baseline ⇒ 用候选代码替换。"""
+        """PICK=True 且 best>baseline 且 **是完整方法** ⇒ 用候选代码替换。
+
+        ★479 收尾契约变更：PICK 除「分数更高」外还要求 best 的
+        score_detail.full_method is True —— 因为 470 判据要求 modified 的
+        def 行方法名 == method，非完整方法进 469 必被拦，替换等于白烧延迟。
+        回滚点：删掉 SafeEvolutionExecutor 里 `_b_usable` 与条件中的该项。
+        """
         import config
         monkeypatch.setattr(config, "ENABLE_M479_ALL_COLLAB", True)
         monkeypatch.setattr(config, "M479_ALL_COLLAB_TRIGGER_BELOW", 85)
@@ -203,14 +209,42 @@ class TestAllCollabGate:
             "ok": True, "elapsed": 1.0,
             "candidates": [{"channel": "c1", "model": "m1", "ok": True,
                             "score": 100, "elapsed": 1.0, "error": None,
-                            "code": FULL, "score_detail": {}}],
-            "best": {"channel": "c1", "model": "m1", "score": 100, "code": FULL},
+                            "code": FULL,
+                            "score_detail": {"score": 100, "full_method": True}}],
+            "best": {"channel": "c1", "model": "m1", "score": 100, "code": FULL,
+                     "score_detail": {"score": 100, "full_method": True}},
         }
         monkeypatch.setattr(AC, "generate_candidates", lambda *a, **k: _fake)
         monkeypatch.setattr(AC, "note_round", lambda rec, **k: {"ok": True})
         _bad = "def f(:\n    pass"
         _out = self._inst()._m479_all_collab("p", _bad, {"method": "f"}, FULL_SAME)
         assert _out == FULL, "PICK=True 且更优时必须替换"
+
+    def test_23b_pick_on_refuses_non_full_method_even_if_better(self, monkeypatch):
+        """★反证：分数更高但 full_method=False ⇒ **不许**替换。
+
+        真实现象：22 轮里大量 78 分但无 def 行的候选；若替换，下游 469
+        粒度对齐必拦（470 要求 def 行方法名匹配）⇒ 白烧 40s 且日志显示
+        「换过了」造成误判。
+        """
+        import config
+        monkeypatch.setattr(config, "ENABLE_M479_ALL_COLLAB", True)
+        monkeypatch.setattr(config, "M479_ALL_COLLAB_TRIGGER_BELOW", 85)
+        monkeypatch.setattr(config, "ENABLE_M479_ALL_COLLAB_PICK", True)
+        _fake = {
+            "ok": True, "elapsed": 1.0,
+            "candidates": [{"channel": "c1", "model": "m1", "ok": True,
+                            "score": 100, "elapsed": 1.0, "error": None,
+                            "code": FULL,
+                            "score_detail": {"score": 100, "full_method": False}}],
+            "best": {"channel": "c1", "model": "m1", "score": 100, "code": FULL,
+                     "score_detail": {"score": 100, "full_method": False}},
+        }
+        monkeypatch.setattr(AC, "generate_candidates", lambda *a, **k: _fake)
+        monkeypatch.setattr(AC, "note_round", lambda rec, **k: {"ok": True})
+        _bad = "def f(:\n    pass"
+        _out = self._inst()._m479_all_collab("p", _bad, {"method": "f"}, FULL_SAME)
+        assert _out == _bad, "非完整方法即使 100 分也不许替换"
 
     def test_24_pick_on_keeps_answer_when_not_better(self, monkeypatch):
         """PICK=True 但 best 不高于 baseline ⇒ 保持原答案。"""
@@ -292,10 +326,16 @@ class TestConfigContract:
         assert hasattr(config, "ENABLE_M479_ALL_COLLAB_PICK")
         assert hasattr(config, "M479_ALL_COLLAB_CHANNELS")
         assert hasattr(config, "M479_ALL_COLLAB_TRIGGER_BELOW")
-        # 默认必须是「总开关关 + 不替换」，否则上线即改行为
-        assert config.ENABLE_M479_ALL_COLLAB is False
-        assert config.ENABLE_M479_ALL_COLLAB_PICK is False
+        # ★479 收尾契约变更：总开关已改 True（只跑影子攒数据，为「是否开 PICK」取证）。
+        #   真正「不改行为」的保证是 PICK=False —— 影子里 answer 一字不改。
+        #   回滚点：config.ENABLE_M479_ALL_COLLAB 改回 False ⇒ 完全不并发生成、不写台账。
+        assert config.ENABLE_M479_ALL_COLLAB is True
+        assert config.ENABLE_M479_ALL_COLLAB_PICK is False, \
+            "★PICK 必须 False —— 这才是「上线即改行为」的开关"
         assert int(config.M479_ALL_COLLAB_CHANNELS) >= 1
+        # ★479 收尾新增：零产出渠道过滤默认开（纯节省配额，不改变任何补丁内容）
+        assert config.M479_ALL_COLLAB_SKIP_DEAD is True
+        assert int(config.M479_ALL_COLLAB_DEAD_MIN_TRIES) >= 1
 
     def test_41_wire_point_exists_in_see(self):
         """接线防回潮：必须接在 `_call_llm_for_repair`，**不能**接在底层

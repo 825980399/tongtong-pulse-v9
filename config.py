@@ -4431,6 +4431,16 @@ M479_ALL_COLLAB_MAX_TOKENS = 2048
 #   设为 0 则每次都并行（不推荐，仅供对照实验）。
 M479_ALL_COLLAB_TRIGGER_BELOW = 85
 
+# ★479 收尾：候选池「零产出渠道」过滤（数据驱动，非硬编码名单）。
+#   实测 22 轮 84 次调用：bailian-deepseek-v41-flash **0/21 成功**（推理模型把
+#   token 全花在思考上、content 恒空），zhipu-47-flash 2/21（429），
+#   而 pick_channels(4) 按 priority 取 1~4 恰好把这俩都装进来 ⇒ 一半配额白烧。
+#   判据保守：只有「近 WINDOW 轮内 tried >= MIN_TRIES 且 ok == 0」才剔除；
+#   有过一次成功就保留（可能只是限流）。只看最近 WINDOW 轮 ⇒ 换模型后自动复活。
+M479_ALL_COLLAB_SKIP_DEAD = True
+M479_ALL_COLLAB_DEAD_WINDOW = 200      # 只看最近 200 轮台账
+M479_ALL_COLLAB_DEAD_MIN_TRIES = 10    # 至少 10 次调用才判死（避免小样本误杀）
+
 # ★479 批：语义桥 —— 用 3.12 sidecar 跑 bge-small-zh-v1.5，补 3.14t 缺 fastembed 的坑。
 #   背景：3.14t 是自由线程构建，fastembed / onnxruntime 没有 cp314t wheel ⇒
 #   VectorEncoder 只能走关键词通道 ⇒ 语义缓存（相同问题重复调 LLM）、知识检索
