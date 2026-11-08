@@ -290,6 +290,11 @@ _OUTPUT_STATS = {"runs": 0, "productive": 0, "zero_output": 0}
 _M479_REPEAT: dict = {}
 _M479_REPEAT_MAX_KEYS = 800
 
+# ★479 收尾：影子协作的后台并发许可。
+#   影子（PICK=False）改后台跑后必须限并发，否则每次 LLM 修复都起一个线程，
+#   渠道限流下会堆一堆等 60s 的线程。拿不到许可就**跳过本轮影子**（不排队）。
+_M479_SHADOW_SLOTS = __import__("threading").BoundedSemaphore(2)
+
 # ★333批刀3（判据固化 · 2026-10-21）：**K1 判据 = 同一进程代次内累计 20 拍 ≥15/20
 #   且三列同报**（productive / reviewed / report）。
 #   为什么写死代次：K1 已被重启清零两次（22:48 / 00:20），"跨进程不得拼接"是
@@ -2903,6 +2908,38 @@ class SafeEvolutionExecutor:
             _n = int(getattr(_cfg479, "M479_ALL_COLLAB_CHANNELS", 4) or 4)
             _to = float(getattr(_cfg479, "M479_ALL_COLLAB_TIMEOUT", 60.0) or 60.0)
             _mt = int(getattr(_cfg479, "M479_ALL_COLLAB_MAX_TOKENS", 2048) or 2048)
+
+            # ★479 收尾：纯影子（PICK=False）改**后台执行**，立即返回 answer。
+            #   病因：generate_candidates 是 `for f in futs: f.result()` ⇒ 总耗时
+            #   = 最慢那一路（台账实测 38~60s）。而影子只写台账、answer 一字不改
+            #   ⇒ 等于每次 LLM 修复白等 40s 换零行为收益，把主链路拖慢。
+            #   ★PICK=True 时**必须保持同步**：异步的话替换会发生在 answer 返回之后，
+            #     「择优」永远不生效 —— 这条不能用开关覆盖。
+            #   ★注意：本方法里 `_pick` 是在 generate_candidates **之后**才赋值的，
+            #     此处不能用它（会 UnboundLocalError），故独立读一次。
+            _pick_shadow479 = bool(getattr(
+                _cfg479, "ENABLE_M479_ALL_COLLAB_PICK", False))
+            _async_shadow = bool(getattr(
+                _cfg479, "M479_ALL_COLLAB_ASYNC_SHADOW", True)) and not _pick_shadow479
+            if _async_shadow:
+                if not _M479_SHADOW_SLOTS.acquire(blocking=False):
+                    _row.update({
+                        "best_channel": "", "best_score": 0, "picked": False,
+                        "skipped": "shadow_inflight_full", "candidates": [],
+                    })
+                    note_round(_row)
+                    return answer
+                try:
+                    import threading as _th479
+                    _th479.Thread(
+                        target=self._m479_shadow_worker,
+                        args=(prompt, _orig, _method, _n, _to, _mt, dict(_row)),
+                        name="m479-shadow", daemon=True).start()
+                except (RuntimeError, OSError, ValueError) as _e:
+                    _M479_SHADOW_SLOTS.release()
+                    silent_exc(_e, where="SafeEvolutionExecutor::479影子起线程",
+                               level="debug")
+                return answer
             _res = generate_candidates(
                 prompt, original=_orig, method=_method, n=_n,
                 timeout=_to, max_tokens=_mt,
@@ -2986,6 +3023,86 @@ class SafeEvolutionExecutor:
             silent_exc(_e479, where="SafeEvolutionExecutor::479ALL协作",
                        level="debug")
             return answer
+    def _m479_shadow_worker(self, prompt: str, original: str, method: str,
+                            n: int, timeout: float, max_tokens: int,
+                            row: dict) -> None:
+        """★479 收尾：影子协作的后台执行体（**绝不抛、绝不改主链路状态**）。
+
+        只做三件事：并发出草稿 → 曈曈判据打分 → 写台账。
+        `_M479_SHADOW_SLOTS` 的许可在 finally 释放，保证不会因异常漏放而永久卡死。
+        """
+        try:
+            from nucleus.autonomy.all_collab import (
+                generate_candidates as _gc479,
+                note_round as _nr479,
+            )
+            _res = _gc479(prompt, original=original, method=method, n=n,
+                          timeout=timeout, max_tokens=max_tokens)
+            _cands = (_res.get("candidates") or []) if isinstance(_res, dict) else []
+            _oks = sum(1 for _c in _cands
+                       if isinstance(_c, dict) and _c.get("ok"))
+            _fk = {"429": 0, "timeout": 0, "empty": 0, "quota": 0, "other": 0}
+            for _c in _cands:
+                if not isinstance(_c, dict) or _c.get("ok"):
+                    continue
+                _er = str(_c.get("error") or "")
+                if "429" in _er:
+                    _fk["429"] += 1
+                elif "timed out" in _er or "Timeout" in _er:
+                    _fk["timeout"] += 1
+                elif "无有效内容" in _er:
+                    _fk["empty"] += 1
+                elif "403" in _er:
+                    _fk["quota"] += 1
+                else:
+                    _fk["other"] += 1
+            _best = _res.get("best") if isinstance(_res, dict) else None
+            _bd = (_best.get("score_detail") or {}) if isinstance(_best, dict) else {}
+            if _cands and _oks == 0:
+                _module_logger.warning(
+                    "[479ALL协作] 本轮 %d 条候选**全部**未拿到内容（%s）"
+                    "⇒ 属渠道不可用，不是模型能力问题；本条协作纯消耗 %.0fs",
+                    len(_cands),
+                    ", ".join(f"{k}×{v}" for k, v in _fk.items() if v),
+                    float((_res.get("elapsed") if isinstance(_res, dict) else 0) or 0))
+            elif isinstance(_best, dict):
+                _module_logger.info(
+                    "[479ALL协作] 影子(后台)：最优 %s(%s) %d 分（%d 条候选，可用 %d，未替换）",
+                    _best.get("channel"), _best.get("model"),
+                    int(_best.get("score") or 0), len(_cands),
+                    int(_res.get("usable") or 0))
+            row.update({
+                "best_channel": (str(_best.get("channel") or "")
+                                 if isinstance(_best, dict) else ""),
+                "best_score": int(_best.get("score") or 0)
+                if isinstance(_best, dict) else 0,
+                "best_usable": bool(_bd.get("full_method") is True),
+                "usable_candidates": int(_res.get("usable") or 0)
+                if isinstance(_res, dict) else 0,
+                "oks": _oks,
+                "fail_kinds": _fk,
+                "picked": False,
+                "elapsed": (_res.get("elapsed") if isinstance(_res, dict) else 0),
+                "candidates": [
+                    {"channel": _c.get("channel"), "model": _c.get("model"),
+                     "ok": _c.get("ok"), "score": _c.get("score"),
+                     "elapsed": _c.get("elapsed"),
+                     "error": str(_c.get("error") or "")[:120],
+                     "detail": _c.get("score_detail")}
+                    for _c in _cands if isinstance(_c, dict)
+                ],
+            })
+            _nr479(row)
+        except Exception as _e:
+            silent_exc(_e, where="SafeEvolutionExecutor::479影子后台执行",
+                       level="debug")
+        finally:
+            try:
+                _M479_SHADOW_SLOTS.release()
+            except (ValueError, RuntimeError) as _e:
+                silent_exc(_e, where="SafeEvolutionExecutor::479影子释放许可",
+                           level="debug")
+
     # ===== ★479 收尾：重复送 LLM 探针（纯记账，不改任何判据）=====
     def _m479_note_repeat(self, issue: Any) -> None:
         """记「同一 (file, method) 被反复送进 LLM」并超阈值告警一次。

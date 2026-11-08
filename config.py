@@ -4464,6 +4464,15 @@ ENABLE_M479_REPEAT_PROBE = True
 M479_REPEAT_WINDOW_SEC = 1800          # 30 分钟窗口
 M479_REPEAT_THRESHOLD = 3              # 第 4 次起告警
 
+# ★479 收尾：纯影子（PICK=False）改**后台执行**，不阻塞主链路。
+#   病因：generate_candidates 是 `for f in futs: f.result()` ⇒ 总耗时 = 最慢那一路
+#   （台账实测 elapsed 38~60s，44 轮里 28 次读超时）。而影子的语义是「只打分写台账、
+#   answer 一字不改」⇒ 等于每次 LLM 修复白等 40s 换零行为收益，把进化循环拖慢。
+#   ★PICK=True 时无论此开关如何都**保持同步**（异步会让「择优替换」永远不生效）。
+#   ★后台并发上限由 SafeEvolutionExecutor._M479_SHADOW_SLOTS 控制（默认 2），
+#     拿不到许可就跳过本轮影子（不排队、不堆积）。
+M479_ALL_COLLAB_ASYNC_SHADOW = True
+
 # ★479 批：语义桥 —— 用 3.12 sidecar 跑 bge-small-zh-v1.5，补 3.14t 缺 fastembed 的坑。
 #   背景：3.14t 是自由线程构建，fastembed / onnxruntime 没有 cp314t wheel ⇒
 #   VectorEncoder 只能走关键词通道 ⇒ 语义缓存（相同问题重复调 LLM）、知识检索

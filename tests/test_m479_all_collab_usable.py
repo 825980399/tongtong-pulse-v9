@@ -285,13 +285,19 @@ class TestChannelVsModelSeparation:
     """
 
     def _run(self, cands, monkeypatch):
-        """跑一次 _m479_all_collab，返回被写进台账的那一行。"""
+        """跑一次 _m479_all_collab，返回被写进台账的那一行。
+
+        ★479 收尾：本组断言「台账写了什么」，需要**同步**执行才能当场取到，
+          故显式关掉后台影子（`M479_ALL_COLLAB_ASYNC_SHADOW=False`）。
+          异步路径本身由 TestAsyncShadow 专项覆盖，不是放弃覆盖。
+        """
         import config
         from nucleus.reasoning.SafeEvolutionExecutor import SafeEvolutionExecutor
 
         monkeypatch.setattr(config, "ENABLE_M479_ALL_COLLAB", True)
         monkeypatch.setattr(config, "M479_ALL_COLLAB_TRIGGER_BELOW", 85)
         monkeypatch.setattr(config, "ENABLE_M479_ALL_COLLAB_PICK", False)
+        monkeypatch.setattr(config, "M479_ALL_COLLAB_ASYNC_SHADOW", False)
         _fake = {"ok": True, "elapsed": 40.0, "candidates": cands, "best": None,
                  "usable": 0}
         _cap = {}
@@ -359,6 +365,109 @@ class TestChannelVsModelSeparation:
             _src = _f.read()
         assert '"oks": _oks479' in _src
         assert '"fail_kinds": _fk479' in _src
+
+
+class TestAsyncShadow:
+    """★479 收尾：纯影子（PICK=False）必须后台跑，不许阻塞主链路。
+
+    病因：generate_candidates 是 `for f in futs: f.result()` ⇒ 总耗时 = 最慢那一路
+    （台账实测 elapsed 38~60s）。影子只写台账、answer 一字不改 ⇒ 每次 LLM 修复
+    白等 40s 换零行为收益。
+
+    ★PICK=True 时**必须保持同步** —— 异步会让替换发生在 answer 已返回之后，
+      「择优」永远不生效。这条不能用开关覆盖，所以单独测。
+    """
+
+    def _o(self):
+        from nucleus.reasoning.SafeEvolutionExecutor import SafeEvolutionExecutor
+        return SafeEvolutionExecutor.__new__(SafeEvolutionExecutor)
+
+    def test_40_shadow_returns_immediately(self, monkeypatch):
+        import time
+
+        import config
+        monkeypatch.setattr(config, "ENABLE_M479_ALL_COLLAB", True)
+        monkeypatch.setattr(config, "ENABLE_M479_ALL_COLLAB_PICK", False)
+        monkeypatch.setattr(config, "M479_ALL_COLLAB_TRIGGER_BELOW", 85)
+        monkeypatch.setattr(config, "M479_ALL_COLLAB_ASYNC_SHADOW", True)
+
+        def _slow(*a, **k):
+            time.sleep(3.0)
+            return {"ok": True, "elapsed": 3.0, "candidates": [],
+                    "best": None, "usable": 0}
+
+        monkeypatch.setattr(AC, "generate_candidates", _slow)
+        monkeypatch.setattr(AC, "note_round", lambda rec, **k: {"ok": True})
+        _ans = "def f(self):\n    return 1"
+        _t0 = time.time()
+        _out = self._o()._m479_all_collab("p", _ans, {"method": "f"}, _ans)
+        _dt = time.time() - _t0
+        assert _out == _ans, "影子模式不许改答案"
+        assert _dt < 1.0, f"影子仍然阻塞主链路：{_dt:.2f}s"
+
+    def test_41_pick_on_stays_synchronous(self, monkeypatch):
+        """★核心反证：PICK=True 时即使 ASYNC=True 也必须同步等结果。"""
+        import time
+
+        import config
+        monkeypatch.setattr(config, "ENABLE_M479_ALL_COLLAB", True)
+        monkeypatch.setattr(config, "ENABLE_M479_ALL_COLLAB_PICK", True)
+        monkeypatch.setattr(config, "M479_ALL_COLLAB_TRIGGER_BELOW", 85)
+        monkeypatch.setattr(config, "M479_ALL_COLLAB_ASYNC_SHADOW", True)
+        _full = "def f(self):\n    try:\n        return 2\n    except ValueError as _e:\n        silent_exc(_e, where='x')\n        return 1\n"
+
+        def _slow(*a, **k):
+            time.sleep(1.0)
+            return {"ok": True, "elapsed": 1.0, "usable": 1,
+                    "candidates": [{"channel": "c1", "model": "m1", "ok": True,
+                                    "score": 100, "code": _full,
+                                    "score_detail": {"score": 100,
+                                                     "full_method": True}}],
+                    "best": {"channel": "c1", "model": "m1", "score": 100,
+                             "code": _full,
+                             "score_detail": {"score": 100, "full_method": True}}}
+
+        monkeypatch.setattr(AC, "generate_candidates", _slow)
+        monkeypatch.setattr(AC, "note_round", lambda rec, **k: {"ok": True})
+        _bad = "def f(:\n    pass"
+        _t0 = time.time()
+        _out = self._o()._m479_all_collab("p", _bad, {"method": "f"},
+                                          "    def f(self):\n        return 1\n")
+        _dt = time.time() - _t0
+        assert _out.strip() == _full.strip(), \
+            "PICK=True 必须同步拿到并替换（异步则择优失效）"
+        assert _dt >= 0.9, f"PICK=True 不该走异步：{_dt:.2f}s"
+
+    def test_42_async_switch_off_is_synchronous(self, monkeypatch):
+        import config
+        monkeypatch.setattr(config, "ENABLE_M479_ALL_COLLAB", True)
+        monkeypatch.setattr(config, "ENABLE_M479_ALL_COLLAB_PICK", False)
+        monkeypatch.setattr(config, "M479_ALL_COLLAB_TRIGGER_BELOW", 85)
+        monkeypatch.setattr(config, "M479_ALL_COLLAB_ASYNC_SHADOW", False)
+        _cap = {}
+
+        def _fast(*a, **k):
+            return {"ok": True, "elapsed": 0.1, "candidates": [], "best": None,
+                    "usable": 0}
+
+        monkeypatch.setattr(AC, "generate_candidates", _fast)
+        monkeypatch.setattr(AC, "note_round",
+                            lambda rec, **k: (_cap.update(rec) or {"ok": True}))
+        _ans = "def f(self):\n    return 1"
+        self._o()._m479_all_collab("p", _ans, {"method": "f"}, _ans)
+        assert _cap, "开关关闭时必须同步写台账（可回滚保证）"
+        assert _cap.get("picked") is False
+
+    def test_43_source_has_async_branch(self):
+        with open(os.path.join(ROOT, "nucleus", "reasoning",
+                               "SafeEvolutionExecutor.py"),
+                  encoding="utf-8", errors="replace") as _f:
+            _src = _f.read()
+        assert "M479_ALL_COLLAB_ASYNC_SHADOW" in _src
+        assert "_m479_shadow_worker" in _src
+        # 必须显式排除 PICK=True，否则择优会失效
+        _i = _src.index("_async_shadow = bool(getattr(")
+        assert "_pick_shadow479" in _src[_i:_i + 400]
 
 
 if __name__ == "__main__":
