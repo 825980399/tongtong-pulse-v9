@@ -386,16 +386,16 @@ def test_刀9_三新增渠道齐备():
                           # ★352追补项1：Qwen2-7B 已下架（403）⇒ 改 zai-org/GLM-5.3-Flash
                           #   ★466：priority 3→5（百炼插队后往后挪）
                           ("siliconflow-qwen2-7b", 5, "zai-org/GLM-5.3-Flash"),
-                          ("bailian-qwen37-plus", 6, "qwen3.7-plus")):
+                          ("bailian-qwen37-plus", 6, "qwen3.7-plus-2026-05-26")):
         assert n in ch, "缺渠道 %s" % n
         assert ch[n]["priority"] == pri
         assert ch[n]["model"] == model
         assert ch[n]["enabled"] is True
     # ★466 新增的 5 条同样必须齐备（名字/优先级/模型/启用四判）
-    for n, pri, model in (("bailian-deepseek-v41-flash", 3, "deepseek-v4.1-flash"),
-                          ("bailian-glm53", 4, "glm-5.3"),
+    for n, pri, model in (("bailian-deepseek-v41-flash", 3, "deepseek-v4.1-flash-1017"),
+                          ("bailian-glm53", 4, "glm-5.2"),
                           ("bailian-kimi-k3", 7, "kimi-k3"),
-                          ("bailian-deepseek-v4-pro", 9, "deepseek-v4-pro"),
+                          ("bailian-deepseek-v4-pro", 9, "deepseek-v4-pro-0813"),
                           ("bailian-qwen38-max", 10, "qwen3.8-max")):
         assert n in ch, f"缺 466 新增渠道 {n}"
         assert ch[n]["priority"] == pri

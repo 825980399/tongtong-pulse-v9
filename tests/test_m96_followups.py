@@ -569,13 +569,13 @@ class TestM96ChannelPriority(unittest.TestCase):
         want = [
             (1, "zhipu-47-flash", "glm-4.7-flash"),
             (2, "bailian-qwen38-flash", "qwen3.7-flash"),
-            (3, "bailian-deepseek-v41-flash", "deepseek-v4.1-flash"),
-            (4, "bailian-glm53", "glm-5.3"),
+            (3, "bailian-deepseek-v41-flash", "deepseek-v4.1-flash-1017"),
+            (4, "bailian-glm53", "glm-5.2"),
             (5, "siliconflow-qwen2-7b", "zai-org/GLM-5.3-Flash"),
-            (6, "bailian-qwen37-plus", "qwen3.7-plus"),
+            (6, "bailian-qwen37-plus", "qwen3.7-plus-2026-05-26"),
             (7, "bailian-kimi-k3", "kimi-k3"),
             (8, "zhipu", "glm-4-flash"),
-            (9, "bailian-deepseek-v4-pro", "deepseek-v4-pro"),
+            (9, "bailian-deepseek-v4-pro", "deepseek-v4-pro-0813"),
             (10, "bailian-qwen38-max", "qwen3.8-max"),
             (11, "deepseek", "deepseek-v4-flash"),
         ]

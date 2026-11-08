@@ -1624,8 +1624,11 @@ REMOTE_API_CHANNELS = {
         },
         {
             # ★466批新增：DeepSeek V4.1 Flash（百炼上的deepseek flash版）
+            # ★478批（2026-11-08 用户实查控制台）：`deepseek-v4.1-flash` 免费额度已耗尽
+            #   （控制台已无该条目）⇒ 换同族**带日期别名** `deepseek-v4.1-flash-1017`
+            #   （剩 1M/共 1M，到期 2027-01-17）。渠道名/priority 全部保留。
             "name": "bailian-deepseek-v41-flash",
-            "model": "deepseek-v4.1-flash",
+            "model": "deepseek-v4.1-flash-1017",
             "quota_type": "monthly_free",
             "quota_limit": 1000000,
             "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
@@ -1637,8 +1640,10 @@ REMOTE_API_CHANNELS = {
         },
         {
             # ★466批新增：GLM-5.3（百炼上的智谱最新模型）
+            # ★478批（2026-11-08）：`glm-5.3` 免费额度已耗尽 ⇒ 换 `glm-5.2`（剩 1M，
+            #   同智谱族、能力档接近；glm-5/5.1 也满额，留作后续备选）。渠道名保留。
             "name": "bailian-glm53",
-            "model": "glm-5.3",
+            "model": "glm-5.2",
             "quota_type": "monthly_free",
             "quota_limit": 1000000,
             "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
@@ -1650,8 +1655,10 @@ REMOTE_API_CHANNELS = {
         },
         {
             # ★466批：原bailian-qwen-max剩880K，替换为qwen3.7-plus（中等能力主力档）
+            # ★478批（2026-11-08）：`qwen3.7-plus` 免费额度已耗尽 ⇒ 换同族**带日期别名**
+            #   `qwen3.7-plus-2026-05-26`（剩 1M/共 1M）。渠道名/priority 全部保留。
             "name": "bailian-qwen37-plus",
-            "model": "qwen3.7-plus",
+            "model": "qwen3.7-plus-2026-05-26",
             "quota_type": "monthly_free",
             "quota_limit": 1000000,
             "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
@@ -1676,8 +1683,11 @@ REMOTE_API_CHANNELS = {
         },
         {
             # ★466批新增：DeepSeek V4 Pro（推理能力最强档）
+            # ★478批（2026-11-08）：`deepseek-v4-pro` 免费额度已耗尽 ⇒ 换同族**带日期别名**
+            #   `deepseek-v4-pro-0813`（剩 1M/共 1M）。渠道名/priority 全部保留。
+            #   注意：价格表里 `deepseek-v4-pro` 仍是付费单价 0.0047，与本免费别名是两条键。
             "name": "bailian-deepseek-v4-pro",
-            "model": "deepseek-v4-pro",
+            "model": "deepseek-v4-pro-0813",
             "quota_type": "monthly_free",
             "quota_limit": 1000000,
             "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
@@ -5560,6 +5570,11 @@ EVOLUTION_LLM_PRICE_TABLE = {
     "glm-5.3": 0.0,                 # 466：智谱最新档
     "kimi-k3": 0.0,                 # 466：长文本理解档
     "deepseek-v4.1-flash": 0.0,     # 466：百炼上的 deepseek flash 档
+    # ★478批：468 换上的「满额带日期别名」同样按免费档 0.0 定价
+    "deepseek-v4.1-flash-1017": 0.0,        # 478：替代 deepseek-v4.1-flash
+    "qwen3.7-plus-2026-05-26": 0.0,         # 478：替代 qwen3.7-plus
+    "deepseek-v4-pro-0813": 0.0,            # 478：替代 deepseek-v4-pro（免费别名）
+    "glm-5.2": 0.0,                         # 478：替代 glm-5.3
     # ---- 豆包 / 火山方舟（Seed 系）----
     "Doubao-Seed-2.1-pro": 0.0008,  # 输入档 ¥0.8/M ⇒ ¥0.0008/1K；输出 ¥8/M ⇒ ¥0.008/1K；来源 volcengine.com 计价文档
     "doubao-seed-2.1-pro": 0.0008,  # 小写别名（渠道返回大小写不一，按同价兜底）

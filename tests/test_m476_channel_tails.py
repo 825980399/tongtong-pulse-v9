@@ -31,7 +31,10 @@ class TestPriceTable:
 
     def test_bailian_free_tier_all_priced(self):
         for _m in ("qwen3.8-flash", "qwen3.7-plus", "qwen3.8-max", "glm-5.3",
-                   "kimi-k3", "deepseek-v4.1-flash"):
+                   "kimi-k3", "deepseek-v4.1-flash",
+                   # ★478：耗尽后换上的满额带日期别名
+                   "deepseek-v4.1-flash-1017", "qwen3.7-plus-2026-05-26",
+                   "deepseek-v4-pro-0813", "glm-5.2"):
             assert _m in config.EVOLUTION_LLM_PRICE_TABLE, f"缺价: {_m}"
             assert config.EVOLUTION_LLM_PRICE_TABLE[_m] == 0.0, f"{_m} 应为免费档 0.0"
 
