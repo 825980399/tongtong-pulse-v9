@@ -603,6 +603,50 @@ def _m91_indent_repair_on() -> bool:
         return True
 
 
+# ★477（日志严谨性）：LLM 语法失败的**窗口聚合**。
+#   背景：`_m91_gate2_parse` 是判据函数，语法失败属正常控制流；此前每次失败都走
+#   silent_exc(level="warning")，12:02:39 一秒内刷 15 条，把「静默异常可见化」
+#   指标污染成洪水，真异常被淹没；且 where 写死 L535（函数实际已漂移到 606）。
+#   现改为：逐条 DEBUG + 每 60s 一条带原因分布的 WARNING，形成可观测闭环。
+_M477_GATE2_WINDOW: dict = {"ts": 0.0, "count": 0, "by_type": {}}
+_M477_GATE2_QUIET_SEC = 60.0
+
+
+def _m477_note_gate2_fail(exc: BaseException) -> bool:
+    """累计一次；每 60s 打开窗口并汇总一条 WARNING（含原因分布）。
+
+    返回 True 表示**本次打开了窗口**（调用方仅此时才落一条逐条记录）。
+    这样即使部署把日志级别开到 DEBUG，逐条也不会刷屏。
+    """
+    try:
+        _now = time.time()
+        _st = _M477_GATE2_WINDOW
+        _st["count"] = int(_st.get("count") or 0) + 1
+        _tn = type(exc).__name__
+        _bt = _st.get("by_type")
+        if not isinstance(_bt, dict):
+            _bt = {}
+            _st["by_type"] = _bt
+        _bt[_tn] = int(_bt.get(_tn) or 0) + 1
+        if _now - float(_st.get("ts") or 0.0) < _M477_GATE2_QUIET_SEC:
+            return False
+        _dist = " / ".join(
+            f"{k}×{v}" for k, v in sorted(_bt.items(), key=lambda kv: -kv[1]))
+        _n = int(_st.get("count") or 0)
+        _st["ts"] = _now
+        _st["count"] = 0
+        _st["by_type"] = {}
+        _module_logger.warning(
+            "[477][LLM语法] 近 %.0fs 共 %d 条判据未通过（%s）；"
+            "属「LLM 产出不合法」的正常否定，非系统异常",
+            _M477_GATE2_QUIET_SEC, _n, _dist)
+        return True
+    except Exception as _e:
+        silent_exc(_e, where="SafeEvolutionExecutor::_m477_note_gate2_fail",
+                   level="debug")
+        return False
+
+
 def _m91_gate2_parse(code: str) -> tuple:
     """与 `PatchManager._check_llm_patch_completeness` **关2 同口径**的解析，
     返回 `(是否通过, 失败文案, 包裹后文本中的错误行号)`。
@@ -626,10 +670,17 @@ def _m91_gate2_parse(code: str) -> tuple:
                       filename="<llm-patch>")
         return True, "", 0
     except SyntaxError as _g2_e:
-        silent_exc(_g2_e, where="nucleus/reasoning/SafeEvolutionExecutor.py::_m91_gate2_parse L535", level="warning")
+        # ★477（日志严谨性）：语法失败是**判据的正常否定**（LLM 产出不合法），
+        #   不是"异常被静默吞掉"。逐条降 DEBUG（生产默认不可见），由聚合器每 60s
+        #   出一条带原因分布的 WARNING；`where` 去掉陈旧的硬编码行号（L535 早已漂移）。
+        if _m477_note_gate2_fail(_g2_e):
+            silent_exc(_g2_e, where="SafeEvolutionExecutor::_m91_gate2_parse(syntax)",
+                       level="debug")
         return False, f"{type(_g2_e).__name__}: {_g2_e}", int(getattr(_g2_e, "lineno", 0) or 0)
     except Exception as _g2_e2:
-        silent_exc(_g2_e2, where="nucleus/reasoning/SafeEvolutionExecutor.py::_m91_gate2_parse L537", level="warning")
+        # 非语法异常（ast 内部错误等）= 真·意外，保留 WARNING
+        silent_exc(_g2_e2, where="SafeEvolutionExecutor::_m91_gate2_parse(unexpected)",
+                   level="warning")
         return False, f"{type(_g2_e2).__name__}: {_g2_e2}", 0
 
 
