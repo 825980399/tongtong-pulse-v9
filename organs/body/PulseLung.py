@@ -1408,6 +1408,10 @@ class PulseLung(BasePulseOrgan):
             _mt = _policy.get("max_tokens_override")
             if _mt:
                 _out["max_tokens"] = int(_mt)
+            # ★476 追补：渠道不接受 temperature（百炼 kimi-k3 传 0.7 必 400）
+            #   ⇒ 显式置 None，由适配器省略该字段（用省略哨兵区分「未指定」与「明确不要」）。
+            if _policy.get("omit_temperature"):
+                _out["temperature"] = None
             # ★471刀3：渠道参数契约（两条百炼渠道实测 HTTP 400，见 config 注释）。
             #   · force_enable_thinking：上游只接受 true（glm-5.3）
             #   · reasoning_effort_when_off：关思考时 effort 必须为指定值（qwen3.8-flash 要 none）

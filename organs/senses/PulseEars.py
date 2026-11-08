@@ -8,7 +8,7 @@ import logging as _m365_logging
 import os
 import sys
 
-from config import TIMEOUT_CONFIG
+from config import ENABLE_VOICE_LISTEN, TIMEOUT_CONFIG
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -50,7 +50,6 @@ from nucleus.const import (
     SystemEvent,
 )
 from nucleus.data.DataAccessLayer import safe_read_json, safe_write_json
-
 
 #: ★365刀C2：语音启动失败分档（只分类留痕；不改识别链路）
 M365_VOICE_FAILS = ("dependency", "model", "no_mic", "device_busy",
@@ -179,7 +178,8 @@ class PulseEars(BasePulseOrgan):
 
         self._listen_count = 0
         self._code_block_count = 0
-        self._voice_enabled = True        # 语音监听开关
+        # ★476：默认关（3.14t 自由线程下 sounddevice/PortAudio 录音必崩 0xC0000005）
+        self._voice_enabled = bool(ENABLE_VOICE_LISTEN)  # 语音监听开关（PULSE_VOICE_LISTEN=1 开启）
         self._voice_thread = None         # 语音监听后台线程
         self._voice_running = False       # 线程运行标记
         self._current_user_name = "访客"  # 当前用户（从SWITCHED脉冲更新）

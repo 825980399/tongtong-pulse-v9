@@ -1941,6 +1941,13 @@ CHANNEL_REQUEST_FIELD_POLICY = {
     "bailian-glm53": {
         "force_enable_thinking": True,
     },
+    # ★476 追补（2026-11-08 重启实测）：kimi-k3 不接受 `temperature` 字段，
+    #   传默认 0.7 必 HTTP 400。上游原文："Parameter 'temperature'=0.7 is not
+    #   supported for kimi-k3 model"。这里显式置 None ⇒ 适配器**省略**该字段
+    #   （用省略哨兵，与「未指定 ⇒ 用默认 0.7」区分开）。
+    "bailian-kimi-k3": {
+        "omit_temperature": True,
+    },
 }
 
 # ★主线第25批 T2/P2-162：渠道请求字段白名单总开关。
@@ -1964,6 +1971,16 @@ ENABLE_M471_CHANNEL_PARAM_CONTRACT = True
 #   读取点：nucleus/reasoning/PatchManager.py::_m471_core_human_exempt
 #   False = 完全退回改造前行为（核心文件一律拦，人工批准也不例外）。
 ENABLE_M471_CORE_HUMAN_OVERRIDE = True
+
+# ★476 追补（2026-11-08 主进程原生崩溃止血）：
+#   3.14t 自由线程构建（GIL disabled）下，`sounddevice`(PortAudio) 在 PulseEars 的
+#   麦克风监听线程里 `sd.rec → start_stream → stop` 触发原生访问冲突 **0xC0000005**
+#   （Windows 应用事件日志 pid=0x33E0=13280、错误模块 ntdll.dll；
+#    pulse_crash.log 留栈：sounddevice.py:1143 stop ← PulseEars.py:331 _voice_listen_loop）。
+#   PortAudio 非 free-thread-safe ⇒ 任何一次录音都可能硬崩整个进程，try/except 拦不住。
+#   默认 False：**不启动语音监听线程**（本机 pyaudio 未安装、也无可用音频设备，
+#   该功能本来就不可用）；需要语音输入时设环境变量 PULSE_VOICE_LISTEN=1 显式开启。
+ENABLE_VOICE_LISTEN = os.environ.get("PULSE_VOICE_LISTEN", "0") == "1"
 
 # ★主线第58批 T2（P2-393延伸）：ark-seed 深度思考渠道优化。
 #   背景：ark-seed 系列为 Doubao-Seed 深度思考模型，默认开启 thinking，
@@ -5515,6 +5532,17 @@ EVOLUTION_LLM_PRICE_TABLE = {
     "glm-4-flash": 0.0,             # 智谱 GLM-4-Flash 官方免费额度（100 万 T/天）计费为 0；来源 docs.bigmodel.cn
     "glm-4-flash-250414": 0.0,      # GLM-4-Flash 带日期别名（同一免费档）
     "qwen2:7b-instruct-q4_K_M": 0.0,  # 本地自托管 qwen2 推理，零 API 成本
+    # ---- ★476 追补：百炼免费额度档（月免费 1M；额度内计费为 0，耗尽转付费后需按官方单价补）----
+    #   背景：476 换 qwen3.8-flash→qwen3.7-flash 后日志报 `[343单价] 未定价`，
+    #   熔断器读不到花费（虽是免费档，但「未定价」与「定价 0」是两种事实，必须落 0.0）。
+    #   依据：百炼控制台（2026-11-08）各档均显示「剩 1M/共 1M」免费额度、状态已开启。
+    "qwen3.7-flash": 0.0,           # 476：替代 qwen3.8-flash 的闪速档
+    "qwen3.8-flash": 0.0,           # 466：原闪速档（额度恢复后回滚用）
+    "qwen3.7-plus": 0.0,            # 466：中等能力主力档
+    "qwen3.8-max": 0.0,             # 466：综合最强档
+    "glm-5.3": 0.0,                 # 466：智谱最新档
+    "kimi-k3": 0.0,                 # 466：长文本理解档
+    "deepseek-v4.1-flash": 0.0,     # 466：百炼上的 deepseek flash 档
     # ---- 豆包 / 火山方舟（Seed 系）----
     "Doubao-Seed-2.1-pro": 0.0008,  # 输入档 ¥0.8/M ⇒ ¥0.0008/1K；输出 ¥8/M ⇒ ¥0.008/1K；来源 volcengine.com 计价文档
     "doubao-seed-2.1-pro": 0.0008,  # 小写别名（渠道返回大小写不一，按同价兜底）

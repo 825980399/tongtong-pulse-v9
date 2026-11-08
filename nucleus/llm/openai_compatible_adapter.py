@@ -32,9 +32,14 @@ class OpenAICompatibleAdapter(BaseLLMAdapter):
         req: dict[str, Any] = {
             "model": model,
             "messages": messages,
-            "temperature": kwargs.get("temperature", self.DEFAULT_TEMPERATURE),
             "max_tokens": kwargs.get("max_tokens", self.DEFAULT_MAX_TOKENS),
         }
+        # ★476 追补：显式传 temperature=None ⇒ **省略**该字段（部分上游如百炼 kimi-k3
+        #   不接受 temperature，传 0.7 会 HTTP 400）。
+        #   未传 / 传数值时行为与改造前**逐字一致**（仍落到 DEFAULT_TEMPERATURE）。
+        _t476 = kwargs.get("temperature", self.DEFAULT_TEMPERATURE)
+        if _t476 is not None:
+            req["temperature"] = _t476
         # 思考模式：
         #   ★主线第58批 T2：优先使用调用方显式指定的 thinking（如 ark-seed 按复杂度路由），
         #     此时 reasoning_effort 也以调用方为准（若存在）；
