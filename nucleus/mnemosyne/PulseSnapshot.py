@@ -273,6 +273,15 @@ class PulseSnapshot:
         self._pending_flush: bool = False
         # ===== 新增: 生命连续性状态 =====
         self._extra_state: dict[str, Any] = {}
+        # ★480 刀13：元状态独立小文件的路径（与快照同目录）。
+        #   为什么单独一份：`SNAPSHOT_SAVE_JSON_BACKUP=False` 之后主 JSON 不再写，
+        #   而 extra_state 只存在 JSON 头部 ⇒ Parquet 主存储路径下它无处安放。
+        try:
+            self.meta_state_path = os.path.join(
+                os.path.dirname(self.snapshot_path) or ".", "snapshot_meta_state.json")
+        except Exception as _m480e:
+            silent_exc(_m480e, where="PulseSnapshot.__init__ 480元状态路径", level="debug")
+            self.meta_state_path = "snapshot_meta_state.json"
         # L1独立快照路径
         self.l1_snapshot_path = os.path.join(
             os.path.dirname(snapshot_path) if snapshot_path else "data/knowledge",
@@ -505,6 +514,9 @@ class PulseSnapshot:
             if _success:
                 self._last_full_save_time = _now
         if _success:
+            # ★480 刀13：主快照成功 ⇒ 同步落一份元状态小文件。
+            #   失败**不影响**主流程（元状态丢一次不等于快照坏），但会留痕。
+            self._m480_save_meta_state()
             # ★v24.0同步：主快照保存成功后同步保存L1独立快照
             try:
                 self.save_l1()
@@ -2039,7 +2051,102 @@ class PulseSnapshot:
         except Exception as _e70:
             self._log(LogLevel.WARNING,
                       f"[第70批] 冷热加载失败，退回全量加载: {type(_e70).__name__}: {_e70}")
+        # ★480 刀13：Parquet 主存储不携带元状态 ⇒ 这里**只补空**。
+        #   若上面任何一条路径已经读到了 extra_state，绝不覆盖。
+        self._m480_restore_meta_state_if_empty()
         return _nodes
+
+    # ============ ★480 刀13：元状态独立落盘 / 兜底恢复 ============
+    @staticmethod
+    def _m480_meta_state_on() -> bool:
+        """灰度（缺省开；显式 False ⇒ 不写也不读，逐字回到改前）。"""
+        try:
+            import config as _c480m
+            _v = getattr(_c480m, "ENABLE_M480_META_STATE", True)
+            if _v is None:
+                return True
+            if isinstance(_v, str):
+                return _v.strip().lower() in ("1", "true", "yes", "on")
+            return bool(_v)
+        except Exception as _e480m:
+            silent_exc(_e480m, where="PulseSnapshot._m480_meta_state_on", level="debug")
+            return True
+
+    def _m480_save_meta_state(self) -> bool:
+        """★480 刀13：把元状态写进独立小文件（原子替换，失败只留痕）。
+
+        写什么 / 不写什么：只写**跨重启必须继承**的少量元状态。
+        节点正文仍归 Parquet 管，不在这里重复存（否则又变回大 JSON）。
+        """
+        if not self._m480_meta_state_on():
+            return False
+        try:
+            _p = getattr(self, "meta_state_path", "")
+            if not _p:
+                return False
+            _dir = os.path.dirname(_p) or "."
+            os.makedirs(_dir, exist_ok=True)
+            _payload = {
+                "schema": "snapshot_meta_state/480.v1",
+                "saved_at": time.time(),
+                "extra_state": self._extra_state,
+                "node_list_checksum": getattr(self, "_last_saved_checksum", ""),
+                "inference_cache": dict(getattr(self, "inference_cache", {}) or {}),
+            }
+            _tmp = _p + ".m480.tmp"
+            with open(_tmp, "w", encoding="utf-8") as _f:
+                json.dump(_payload, _f, ensure_ascii=False)
+                _f.flush()
+                os.fsync(_f.fileno())
+            os.replace(_tmp, _p)
+            return True
+        except Exception as _e:
+            silent_exc(_e, where="PulseSnapshot._m480_save_meta_state", level="warning")
+            try:
+                self._log(LogLevel.WARNING,
+                          f"[480刀13] 元状态落盘失败（不影响主快照）: {type(_e).__name__}: {_e}")
+            except Exception as _le:
+                silent_exc(_le, where="PulseSnapshot._m480_save_meta_state 日志", level="debug")
+            return False
+
+    def _m480_restore_meta_state_if_empty(self) -> bool:
+        """★480 刀13：`_extra_state` 为空时从小文件兜底恢复。
+
+        **只补空**：主 JSON 路径若已读到元状态，这里一个字都不改
+        （否则会把「刚读到的新值」用「上次的旧值」盖掉）。
+        """
+        if not self._m480_meta_state_on():
+            return False
+        if getattr(self, "_extra_state", None):
+            return False
+        try:
+            _p = getattr(self, "meta_state_path", "")
+            if not _p or not os.path.exists(_p):
+                return False
+            with open(_p, encoding="utf-8") as _f:
+                _d = json.load(_f)
+            if not isinstance(_d, dict):
+                return False
+            _es = _d.get("extra_state")
+            if isinstance(_es, dict) and _es:
+                self._extra_state = _es
+                if not getattr(self, "_last_saved_checksum", ""):
+                    self._last_saved_checksum = str(_d.get("node_list_checksum") or "")
+                _ic = _d.get("inference_cache")
+                if isinstance(_ic, dict) and _ic and not getattr(self, "inference_cache", None):
+                    self.inference_cache = _ic
+                try:
+                    self._log(LogLevel.INFO,
+                              f"[480刀13] 元状态已从 {os.path.basename(_p)} 恢复："
+                              f"extra_state 键={len(_es)}")
+                except Exception as _le:
+                    silent_exc(_le, where="PulseSnapshot._m480_restore 日志", level="debug")
+                return True
+            return False
+        except Exception as _e:
+            silent_exc(_e, where="PulseSnapshot._m480_restore_meta_state_if_empty",
+                       level="warning")
+            return False
 
     def _m342_try_lazy_load(self, full_load: bool, src: str):
         """★342刀1：`full_load=False` 的懒加载入口 —— 返回 view，或 None（调用方回退全量）。

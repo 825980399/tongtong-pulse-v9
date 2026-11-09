@@ -8221,6 +8221,27 @@ WEB_CHAT_MAX_UPLOAD_BYTES = 32 * 1024 * 1024
 #     就能绕过全部判据，直达云元数据/内网。
 #   ★若某个 LLM 渠道确实正常依赖重定向（本仓实测未见 301/302），再置 True。
 SSRF_ALLOW_REDIRECT = False
+
+# ==================== ★480批：元状态跨重启（台账 D1 / D4 / F3） ====================
+#
+# ENABLE_M480_META_STATE
+#   默认值：True
+#   语义：True  ⇒ `PulseSnapshot` 在全量保存成功后，额外落一份
+#                `snapshot_meta_state.json`（与快照同目录，只几 KB）；
+#                `load()` 结束时**只补空**——只有当任何路径都没读到
+#                `extra_state` 时，才从该文件恢复。
+#         False ⇒ 不写也不读（逐字回到 480 之前）。
+#   病灶（活体 2026-11-09 实测）：
+#     · `SNAPSHOT_SAVE_JSON_BACKUP=False` ⇒ 主 JSON 不再写；
+#     · `data/knowledge/pulse_knowledge_snapshot.json` **已不存在**
+#       （只剩 11-03 的 805MB `.bak`）；
+#     · `extra_state`（organ_states/兴趣/QICA/赫布…）**只存在 JSON 头部**；
+#     · `load()` 走 Parquet 主存储时完全不读 JSON
+#       ⇒ `_extra_state` 保持 `{}` ⇒ **每次重启元状态彻底归零**。
+#   ★为什么单独一个小文件而不是重开 JSON 备份：全量 JSON 近 500MB，
+#     重开等于把第 68 批省下的磁盘又还回去；元状态只有几 KB。
+#   读取点：nucleus/mnemosyne/PulseSnapshot.py::_m480_meta_state_on()
+ENABLE_M480_META_STATE = True
 #
 # ENABLE_M447_APPLY_TRACE / M447_APPLY_TRACE_PATH / M447_APPLY_TRACE_MAX_CHARS
 #   默认值：True / "data/patches/apply_trace.jsonl" / 0（0 = 不截断）
