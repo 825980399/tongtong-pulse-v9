@@ -22,6 +22,7 @@ from nucleus.const import (
     EvolutionEvent,
     GrowthEvent,
     HealthEvent,
+    HeartEvent,
     LogLevel,
     MetricsEvent,
     NarrativeEvent,
@@ -32,6 +33,7 @@ from nucleus.const import (
     SelfAwarenessEvent,
     SkinEvent,
     SpinalCordEvent,
+    SystemEvent,
     ThymusEvent,
     TouchEvent,
     WhiteCellEvent,
@@ -611,7 +613,7 @@ PULSE_PRIORITY = {
 PULSE_LAYER = {
     # ── L0 生命线层：最高优先级，单线程独占，禁止并行 ──
     "l0_threads": 1,
-    "l0_queue_max": 0,              # 0 = 无上限（生命线脉冲永不丢弃）
+    "l0_queue_max": 5000,           # 5000 = 保险丝；0 = 关闭保险丝（旧行为）
     "l0_enabled": True,
     "l0_processor_timeout": 8.0,      # ★T-112c：L0 看门狗单次处理器最大允许执行时长（秒），消除硬编码 8.0s 漂移
 
@@ -9148,3 +9150,39 @@ ENABLE_M482_INITIATIVE_SOURCE_TRACE = True
 #   关掉 ⇒ 5 个发射点同节拍撞车时重复照发。
 ENABLE_M482_INITIATIVE_DEDUP = True
 M482_INITIATIVE_DEDUP_SEC = 120.0
+
+# ===== [M483-CFG] 483 批 · 稳定性红线（2026-11-09）=====
+# 三刀各自独立回滚；默认按下列具体值生效，置 False / 空串即逐字回到该刀之前的行为。
+#   读取点：nucleus/field/InfoField.py / nucleus/pulse/PulseCore.py /
+#           nucleus/pulse_types.py / organs/core/PulseMetricsCollector.py
+# ── 483-2 L0 保险丝 ──
+# True ⇒ 用 PULSE_LAYER["l0_queue_max"]=5000；False ⇒ 启动时强制读成 0（旧行为）。
+ENABLE_M483_L0_QUEUE_CAP = True
+# 生命线白名单：队列达上限时仍放行，但仍受「上限 × 4」绝对硬顶约束。
+# 不收 heart.beat（在 L3）、不收 spinal.inspect / proprioception.request（请求风暴源）。
+M483_L0_LIFELINE_EVENTS = (
+    SystemEvent.ALARM, SystemEvent.ERROR, SystemEvent.STOP,
+    # ★T0 偏差 D12：任务书字面给的 vascular.silent_organ 在 const.py 中不存在；
+    #   真实事件是 VascularEvent.SILENT_ORGAN（值 organ.silent），本身走 L0。
+    #   本批按任务书保留该条目，不擅自扩充白名单 ⇒ 列星轨裁决。
+    "vascular.silent_organ", HeartEvent.ALIVE,
+)
+# ── 483-3 脉冲 deadline（执行 SLA，与 ttl_ns 同级，不进 payload）──
+# False = 只观测不丢（默认）；True 才会真丢。LAYERS="" 连观测也停。
+# L1 取 40000 而非任务书的 30000：M453_TOTAL_BUDGET_SEC=34.0，
+#   30s 会在重试阶段把正常长回答判死；40s = 34s 预算 + 6s 余量。
+# L0 取 10000 而非 8000：避开 l0_processor_timeout=8.0s 同刻触发，
+#   让看门狗先动手，deadline 只清「排队超过 10s 的陈货」。
+PULSE_DEADLINE_ENABLED = False
+PULSE_DEADLINE_LAYERS = "L0,L1"
+PULSE_DEADLINE_MS_BY_LAYER = {"L0": 10000, "L1": 40000,
+                              "L2": 60000, "L3": 120000}
+# ── 483-1 启动内存分诊（gc 类型差分，**不开 tracemalloc**）──
+# T0+600s / T0+2400s / T0+4200s 共 3 拍，之后停止；
+# 挂在同一条 _m339_memory_probe 活采样链上，不新开定时器/线程。
+ENABLE_M483_BOOT_PROBE = True
+M483_PROBE_SAMPLES = 3
+M483_PROBE_FIRST_SEC = 600.0
+# 必须 > M416_MEMORY_PROBE_MAX_RUNTIME_SEC=900，否则第 2 拍被自己的
+# 单飞租约护栏挡掉，表现为「只采到第一拍」。
+M483_PROBE_INTERVAL_SEC = 1800.0

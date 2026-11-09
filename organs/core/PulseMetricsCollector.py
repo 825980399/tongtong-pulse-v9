@@ -875,6 +875,12 @@ class PulseMetricsCollector(BasePulseOrgan):
         self._metrics_history: list = []
         self._snapshot_count = 0
         self._beat_count = 0
+        # ★483刀1：启动相对窗口三拍（不新开定时器，挂在 _m339_memory_probe 活链上）。
+        self._m483_boot_ts = time.time()
+        self._m483_done = 0
+        self._m483_next_due = self._m483_boot_ts + float(
+            self._m339_cfg_get("M483_PROBE_FIRST_SEC", 600.0) or 600.0)
+        self._m483_prev = None   # 上一拍精简快照（proc_gen / rss / gc_rows / file）
         self._max_history = 100
         self._liver_compress_count = 0    # 肝脏压缩次数
         self._liver_fuse_count = 0        # 肝脏融合次数
@@ -1435,8 +1441,93 @@ class PulseMetricsCollector(BasePulseOrgan):
                           "**只覆盖本次快照可见的行**（cumulative 模式下含进程至今，"
                           "增量看 tracemalloc_delta_rows）")}
 
+    # ==================== ★483刀1：启动相对窗口 + gc 类型差分 ====================
+
+    def _m483_boot_on(self) -> bool:
+        """开关 False ⇒ 连 boot 触发判定都停（秒级回滚）。"""
+        return bool(self._m339_cfg_get("ENABLE_M483_BOOT_PROBE", True))
+
+    def _m483_rss_mb(self):
+        """本拍 RSS（MB）；取不到写 None，**不填 0**（铁律156）。"""
+        try:
+            _m = self.info_field._m169_memory_pressure() if self.info_field else None
+            _v = _m.get("process_rss_mb") if isinstance(_m, dict) else None
+            if isinstance(_v, (int, float)) and not isinstance(_v, bool):
+                return round(float(_v), 1)
+        except Exception as _e483:
+            silent_exc(_e483, where="PulseMetricsCollector::_m483_rss_mb info_field",
+                       level="debug")
+        try:
+            import psutil as _ps483
+            return round(float(_ps483.Process().memory_info().rss) / 1048576.0, 1)
+        except Exception as _e483b:
+            silent_exc(_e483b, where="PulseMetricsCollector::_m483_rss_mb psutil",
+                       level="debug")
+            return None
+
+    @staticmethod
+    def _m483_int(v) -> int:
+        """只读可信数值，脏值一律记 0（不把「读不到」伪装成 0 增量以外的事实）。"""
+        return int(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else 0
+
+    @staticmethod
+    def _m483_gc_baseline(_dir: str, _proc_gen: str):
+        """磁盘回读同 proc_gen 的最新一份产物 ⇒ (state, basis, rows, rss_mb)。
+
+        四态照抄 _m377_tm_delta 契约：ok / no_growth（由调用方判）/ no_baseline /
+        unreadable。**基线坏了照常写盘**，不能因为读不到上拍就停产。
+        """
+        _files = []
+        try:
+            _files = [os.path.join(_dir, _f) for _f in os.listdir(_dir)
+                      if _f.startswith("top_types_") and _f.endswith(".json")]
+            if not _files:
+                return "no_baseline", "", None, None
+            _files.sort(key=lambda _p: (os.path.getmtime(_p), _p))
+            _p = _files[-1]
+            with open(_p, encoding="utf-8") as _f483:
+                _d = json.load(_f483)
+        except Exception as _e483:
+            silent_exc(_e483, where="PulseMetricsCollector::_m483_gc_baseline",
+                       level="debug")
+            return "unreadable", "", None, None
+        # 跨进程比较无意义：重启后堆是新的
+        if str(_d.get("proc_gen") or "") != str(_proc_gen):
+            return "no_baseline", "", None, None
+        _rows = _d.get("gc_type_rows")
+        if not isinstance(_rows, list) or not _rows:    # 上一拍没采到，不能当 0 比
+            return "no_baseline", "", None, None
+        return "ok", os.path.basename(_p), _rows, _d.get("rss_mb")
+
+    @classmethod
+    def _m483_gc_delta_rows(cls, _prev_rows, _now_rows, _topn):
+        """增量行：只收 bytes_diff > 0，按 bytes_diff 降序取 top_n。"""
+        _pmap = {str(_r.get("type")): _r for _r in (_prev_rows or [])
+                 if isinstance(_r, dict)}
+        _out = []
+        for _r in _now_rows or []:
+            if not isinstance(_r, dict):
+                continue
+            _t = str(_r.get("type"))
+            _p = _pmap.get(_t, {})
+            _cn = cls._m483_int(_r.get("count"))
+            _cp = cls._m483_int(_p.get("count"))
+            _bn = cls._m483_int(_r.get("bytes"))
+            _bp = cls._m483_int(_p.get("bytes"))
+            _bd = _bn - _bp
+            if _bd <= 0:
+                continue
+            _out.append({"type": _t, "count_prev": _cp, "count_now": _cn,
+                         "count_diff": _cn - _cp, "bytes_prev": _bp,
+                         "bytes_now": _bn, "bytes_diff": _bd})
+        _out.sort(key=lambda _x: -_x["bytes_diff"])
+        return _out[:max(1, int(_topn))]
+
     def _m339_memory_probe(self, heap_mb=None,
-                           out_dir: str | None = None) -> dict[str, Any]:
+                           out_dir: str | None = None,
+                           rss_mb: float | None = None,
+                           trigger: str = "slot",
+                           boot_seq: int = 0) -> dict[str, Any]:
         """★339刀4：堆自观测快照（**每日 ≤2 次**，产物只落一处）。
 
         两档：
@@ -1449,6 +1540,11 @@ class PulseMetricsCollector(BasePulseOrgan):
 
         路径注入（铁律158）：`out_dir` 为 None 才默认项目根 `data/reports/memory`；
         隔离验证必须传入沙箱目录。
+
+        ★483刀1：新增「启动相对窗口三拍」（trigger=boot），走 gc 类型差分，
+        不启 tracemalloc、不新开定时器、不写 `_m339_probe_last_slot`。
+        三个新形参都带默认值，既有单参调用点 :2249 一字不改。
+        `trigger` 是**产物标记**（boot / slot），不是外部强制开关。
         """
         _out: dict[str, Any] = {"ran": False, "mode": None, "path": None,
                                 "elapsed_sec": None, "reason": "", "top_n": 0}
@@ -1469,11 +1565,35 @@ class PulseMetricsCollector(BasePulseOrgan):
         _heap_hi = bool(heap_mb is not None and float(heap_mb) > _h1)
         _last = getattr(self, "_m339_probe_last_slot", None)
         _last_gc = getattr(self, "_m339_probe_last_gc_slot", None)
-        _mode = ""
-        if _in_slot and _last != _slot:
-            _mode = "tracemalloc+gc_objects" if _heap_hi else "tracemalloc"
-        elif _heap_hi and _last_gc != _slot:
+        # ★483刀1：启动相对时间窗三拍（gc 类型差分，不启 tracemalloc）。
+        #   T0+600s / T0+2400s / T0+4200s，共 3 拍后停止；不新开定时器。
+        _boot_ts = float(getattr(self, "_m483_boot_ts", 0.0) or _now)
+        _uptime = max(0.0, _now - _boot_ts)
+        _is_boot = False
+        _trigger = trigger
+        _boot_seq = int(boot_seq or 0)
+        _boot_done = int(getattr(self, "_m483_done", 0) or 0)
+        _samples = int(self._m339_cfg_get("M483_PROBE_SAMPLES", 3) or 3)
+        _due = float(getattr(self, "_m483_next_due", 0.0) or 0.0)
+        if _due <= 0.0:
+            _due = _boot_ts + float(
+                self._m339_cfg_get("M483_PROBE_FIRST_SEC", 600.0) or 600.0)
+            self._m483_next_due = _due
+        # 与 05:00 日槽位不打架：日槽位也到期就只跑日槽位，boot 计数不前进、30 分钟后补。
+        _slot_wins = bool(_in_slot and _last != _slot)
+        if (self._m483_boot_on() and _boot_done < _samples
+                and _now >= _due and not _slot_wins):
             _mode = "gc_objects"
+            _trigger = "boot"
+            _boot_seq = _boot_done + 1
+            _is_boot = True
+        else:
+            _mode = ""
+        if not _is_boot:
+            if _in_slot and _last != _slot:
+                _mode = "tracemalloc+gc_objects" if _heap_hi else "tracemalloc"
+            elif _heap_hi and _last_gc != _slot:
+                _mode = "gc_objects"
         if not _mode:
             _out["reason"] = (f"slot_done(hour={_lt.tm_hour} slot={_slot})"
                               if _in_slot else
@@ -1495,7 +1615,7 @@ class PulseMetricsCollector(BasePulseOrgan):
             #    多份 tracemalloc 快照层叠 = 11-01 内存雪崩的直接机制。
             if "tracemalloc" in _mode:
                 self._m339_probe_last_slot = _slot
-            if _heap_hi:
+            if _heap_hi and not _is_boot:
                 self._m339_probe_last_gc_slot = _slot
             # ③ 堆太高 ⇒ 只做 gc 计数。1.4M 活块上 take_snapshot 单次 300~1800s，
             #    结论还拿不到（产物里 tracemalloc_rows 恒空）—— 成本收益完全倒挂。
@@ -1669,9 +1789,28 @@ class PulseMetricsCollector(BasePulseOrgan):
                       f"（自身分配开销会把治理变增负） mode={_mode}")
             _out["reason"] = "timeout"
             return _out
+        # ★483刀1：本拍 RSS（取不到写 None，**不填 0**，铁律156）。
+        _rss_now = rss_mb
+        if _rss_now is None:
+            _rss_now = self._m483_rss_mb()
         _v = self._m339_version_stamp()
         _img_cache = getattr(self, "_m337_image_cache", None)
         _img = (_img_cache.get("mb") if isinstance(_img_cache, dict) else None)
+        # ★483刀1：磁盘回读同 proc_gen 的最新一份产物做差分。
+        #   在本拍写盘**之前**读，所以磁盘上最新一份必然是上一拍。
+        _bl_state, _bl_basis, _bl_rows, _bl_rss = self._m483_gc_baseline(
+            _dir, _v["proc_gen"])
+        # ★无基线 / 基线坏了 ⇒ 不产出「增量行」：把 bytes_prev=0 当增量
+        #   等于凭空造出一份「全都在涨」的假结论，与 no_baseline 自相矛盾。
+        _delta_rows = (self._m483_gc_delta_rows(_bl_rows, _gc_types, _topn)
+                       if _bl_state == "ok" else [])
+        _gc_delta_state = _bl_state
+        if _bl_state == "ok" and not _delta_rows:
+            _gc_delta_state = "no_growth"
+        _rss_delta = None
+        if (isinstance(_rss_now, (int, float)) and not isinstance(_rss_now, bool)
+                and isinstance(_bl_rss, (int, float)) and not isinstance(_bl_rss, bool)):
+            _rss_delta = round(float(_rss_now) - float(_bl_rss), 1)
         _payload = {
             # ── 头字段六项（任一取不到写 None/unknown，不填 0）──
             "proc_gen": _v["proc_gen"],
@@ -1718,10 +1857,24 @@ class PulseMetricsCollector(BasePulseOrgan):
                 __import__("tracemalloc").is_tracing()),
             "elapsed_sec": round(_elapsed, 3),
             "ts": _now,
+            # ── ★483刀1：启动相对窗口 + gc 类型差分（原有字段一个不动）──
+            "trigger": _trigger,
+            "boot_seq": _boot_seq,
+            "uptime_sec": round(_uptime, 1),
+            "rss_mb": (round(float(_rss_now), 1)
+                       if isinstance(_rss_now, (int, float))
+                       and not isinstance(_rss_now, bool) else None),
+            "rss_delta_mb": _rss_delta,
+            "gc_delta_rows": _delta_rows,
+            "gc_delta_state": _gc_delta_state,
+            "gc_delta_basis": _bl_basis,
             "note": ("只产计数与读数，**不改任何业务状态**；"
                      "resident 模式下 tracemalloc 常驻（basis=cumulative，含进程至今），"
                      "`tracemalloc_delta_rows` 是相邻两拍差分的增量；"
-                     "window 模式下快照只覆盖本拍之后，归因不可用会显式标 unavailable"),
+                     "window 模式下快照只覆盖本拍之后，归因不可用会显式标 unavailable；"
+                     "gc_bytes_kind=shallow（sys.getsizeof 浅口径，不是实际占用），"
+                     "gc_objects_scope=gc_tracked_only（只含 GC 跟踪对象），"
+                     "gc_truncated=true 时 top20 只代表已扫描部分，不是全堆分布"),
         }
         # ★377刀4：目录解析与 344补 3 域过滤已前移到采样之前（差分基线要落在同一目录）。
         try:
@@ -1739,8 +1892,18 @@ class PulseMetricsCollector(BasePulseOrgan):
             return _out
         if "tracemalloc" in _mode:
             self._m339_probe_last_slot = _slot
-        if _heap_hi:
+        if _heap_hi and not _is_boot:
             self._m339_probe_last_gc_slot = _slot
+        if _is_boot:
+            # ★只推进 boot 计数 / 下次到期；**不写** _m339_probe_last_slot
+            #   （那是 05:00 日采样的槽位锁，写了会把日采样顶掉）。
+            self._m483_done = _boot_done + 1
+            self._m483_next_due = _now + float(
+                self._m339_cfg_get("M483_PROBE_INTERVAL_SEC", 1800.0) or 1800.0)
+            self._m483_prev = {
+                "proc_gen": _v["proc_gen"], "rss_mb": _payload["rss_mb"],
+                "gc_rows": _gc_types, "file": os.path.basename(_p),
+            }
         _out.update({"ran": True, "mode": _mode, "path": _p,
                      "top_n": len(_payload["top20"])})
         self._log(LogLevel.INFO,
@@ -2726,6 +2889,24 @@ class PulseMetricsCollector(BasePulseOrgan):
                        where="PulseMetricsCollector::_build_observability_snapshot backpressure",
                        level="debug")
             snapshot["backpressure"] = None
+
+        # ★483刀3：脉冲 deadline 三态观测（默认只观测不丢）。
+        #   块必须**始终存在**：「值为 0」与「块缺失」是两回事，缺块即未接线。
+        try:
+            if self.info_field and hasattr(self.info_field, "get_deadline_stats"):
+                _dl_stat = self.info_field.get_deadline_stats()
+                snapshot["pulse_deadline"] = _dl_stat
+                snapshot["pulse_timeout_deadline"] = int(
+                    (_dl_stat or {}).get("timeout_deadline_total", 0) or 0)
+            else:
+                snapshot["pulse_deadline"] = None
+                snapshot["pulse_timeout_deadline"] = None
+        except Exception as _dl_e:
+            silent_exc(_dl_e,
+                       where="PulseMetricsCollector::_build_observability_snapshot deadline",
+                       level="debug")
+            snapshot["pulse_deadline"] = None
+            snapshot["pulse_timeout_deadline"] = None
 
         # ★443刀5：O-A4 双路（单向影子）观测入口。
         #   383 批就建好了 `shadow_stats()`（规则覆盖率 / 凭证可见率分开算，不给合并结论），

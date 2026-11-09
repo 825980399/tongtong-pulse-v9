@@ -101,7 +101,22 @@ class ChipAgnosticDims(TypedDict, total=False):
     target_organ: str      # 标注制目标器官（语义标注，非路由键），默认空串       # 序列化格式 'json' | 'binary'，默认 'json'
 
 
-class Pulse(ChipAgnosticDims):
+# ========================================================================
+# ★483刀3：传输层可选维度（deadline_ms 与 ttl_ns 同级，不进 payload）
+# ========================================================================
+class TransportDims(TypedDict, total=False):
+    """483批：脉冲执行 SLA 的可选字段。
+
+    单独用 ``total=False`` 混入类，而不是直接给 Pulse 加字段：
+    本模块启用了 ``from __future__ import annotations``，注解被字符串化为
+    ForwardRef，CPython 3.12 的 TypedDict 在类创建期认不出 NotRequired，
+    直接加会变成**必填**（全仓 117 个发射点都不传 ⇒ 静态检查报一片）。
+    计量起点与 ttl_ns 同源（timestamp_ns）；单位毫秒，与 l0_processor_timeout 对齐。
+    """
+    deadline_ms: int
+
+
+class Pulse(ChipAgnosticDims, TransportDims):
     """完整脉冲字典契约（对应 PulseCore.emit 的返回 dict）。
 
     字段与 PulseCore.emit 第 150-169 行逐一对应，是跨器官脉冲传递的
@@ -181,4 +196,5 @@ __all__ = [
     "SpaceDim",
     "StateDim",
     "TimeDim",
+    "TransportDims",
 ]

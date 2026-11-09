@@ -206,6 +206,23 @@ def _m474_hard_cap_multiplier() -> int:
         return 0
 
 
+def _m483_layer_deadline_ms(layer: str | None) -> int:
+    """★483刀3：派发侧按层取 deadline 兜底值（裸 dict / 老路径没有该字段时用）。"""
+    _tbl = getattr(_cfg, "PULSE_DEADLINE_MS_BY_LAYER", None)
+    if not isinstance(_tbl, dict):
+        return 0
+    _v = _tbl.get(str(layer or ""), 0)
+    if isinstance(_v, bool) or not isinstance(_v, (int, float)):
+        return 0
+    return max(0, int(_v))
+
+
+def _m483_deadline_layers() -> set[str]:
+    """当前参与判定的层；空串 = 连观测也停（秒级回滚）。"""
+    _raw = str(getattr(_cfg, "PULSE_DEADLINE_LAYERS", "L0,L1") or "")
+    return {_x.strip() for _x in _raw.split(",") if _x.strip()}
+
+
 class InfoField(SilentLogMixin):
     """
     全局信息场（v9.5 分层异步调度 · 终极完整版）
@@ -405,6 +422,23 @@ class InfoField(SilentLogMixin):
         }
         # ★P2-31：降级放行阈值 —— priority 数值越小优先级越高，
         #   小于等于该值的脉冲在队列满时放行（默认 3，即高/紧急级）
+        # ★483刀2：生命线白名单放行次数（只在内存，进快照）。
+        self._layer_lifeline_admitted = {
+            _PULSE_LAYER_L0: 0, _PULSE_LAYER_L1: 0,
+            _PULSE_LAYER_L2: 0, _PULSE_LAYER_L3: 0,
+        }
+        # ★483刀2：每层最近一次拒绝的 unix 秒（None = 从未拒绝）。
+        self._layer_last_reject_ts = {
+            _PULSE_LAYER_L0: None, _PULSE_LAYER_L1: None,
+            _PULSE_LAYER_L2: None, _PULSE_LAYER_L3: None,
+        }
+        # ★483刀3：deadline 三态计数（默认只观测不丢）。
+        self._deadline_stats = {
+            _l: {"would_timeout": 0, "dropped": 0, "overrun": 0}
+            for _l in (_PULSE_LAYER_L0, _PULSE_LAYER_L1,
+                      _PULSE_LAYER_L2, _PULSE_LAYER_L3)
+        }
+        self._m483_deadline_malformed = 0
         self._overflow_priority_allow = 3
         # ★三期：硬件自适应智能化（开关关闭时全部保持原行为，零回归）
         self._adaptive_tuning_enabled = self._read_adaptive_tuning_flag()
@@ -532,19 +566,24 @@ class InfoField(SilentLogMixin):
         #   无界 SimpleQueue —— 稳态规则 7「风暴队列上限」在实现层是空的，
         #   脉冲风暴时任务在堆内存无限堆积，存在 OOM 风险。
         #   语义（沿用 config.py 原注释）：
-        #     L0 = 0     → 生命线，永不丢弃（0 表示无上限）
+        #     L0 = 5000  → 保险丝：超限拒低优先级，生命线白名单除外（0 = 关闭保险丝）
         #     L1 = 500   → 软上限：超限先告警并限流，达 2 倍才拒绝（限流不丢包）
-        #     L2 = 200   → 标准上限：超限拒绝
-        #     L3 = 100   → 硬上限：超限拒绝（后台自主层，丢弃代价最低）
+        #     L2 = 300   → 标准上限：超限拒绝（以 config.PULSE_LAYER 现值为准）
+        #     L3 = 300   → 硬上限：超限拒绝（后台自主层，丢弃代价最低）
         self._layer_queue_limits = {
-            _PULSE_LAYER_L0: self._as_int(layer_config.get("l0_queue_max", 0), 0),
+            _PULSE_LAYER_L0: self._m483_l0_cap_value(),
             _PULSE_LAYER_L1: self._as_int(layer_config.get("l1_queue_soft_limit", 500), 500),
             _PULSE_LAYER_L2: self._as_int(layer_config.get("l2_queue_limit", 200), 200),
             _PULSE_LAYER_L3: self._as_int(layer_config.get("l3_queue_hard_limit", 100), 100),
         }
+        _l0_cap = self._layer_queue_limits[_PULSE_LAYER_L0]
+        if 0 < _l0_cap < 100:
+            _module_logger.warning(
+                f"[背压] L0 上限={_l0_cap} 异常偏小（疑似手滑写成 50），"
+                "请核对 config.PULSE_LAYER.l0_queue_max（保险丝建议 5000）")
         _module_logger.info(
             f"[背压] 分层队列上限已生效: "
-            f"L0={self._layer_queue_limits[_PULSE_LAYER_L0] or '无上限(生命线)'}, "
+            f"L0={self._layer_queue_limits[_PULSE_LAYER_L0]}, "
             f"L1={self._layer_queue_limits[_PULSE_LAYER_L1]}(软), "
             f"L2={self._layer_queue_limits[_PULSE_LAYER_L2]}, "
             f"L3={self._layer_queue_limits[_PULSE_LAYER_L3]}")
@@ -953,13 +992,15 @@ class InfoField(SilentLogMixin):
                 # ★P0-4（第十二批）：分层队列有界背压准入。
                 #   放在 _increment_organ_concurrency 之前——被拒绝时不做任何自增，
                 #   因此不存在并发计数泄漏，无需额外的回滚分支。
-                #   L0 上限为 0（无上限），生命线脉冲永不被拒绝。
+                #   L0 达 5000 后拒低优先级脉冲，生命线白名单（system.alarm 等）除外。
                 _pri = pulse.get("priority", 5) if isinstance(pulse, dict) else 5
                 # ★主线第16批 T5/P2-100：L3 生产端过滤（重复/低价值不占队列）
                 if layer_tag == _PULSE_LAYER_L3 and self._should_filter_l3_pulse(
                         pulse, organ_name):
                     continue
-                if not self._admit_layer_task(layer_tag, pool, organ_name, _pri):
+                if not self._admit_layer_task(
+                        layer_tag, pool, organ_name, _pri,
+                        pulse.get("event_type", "") if isinstance(pulse, dict) else ""):
                     if layer_tag == _PULSE_LAYER_L3:
                         self.note_l3_backpressure(layer_tag)
                     continue
@@ -1204,6 +1245,13 @@ class InfoField(SilentLogMixin):
             #   用 sys._current_frames() 精确定位卡死线程的调用栈。
             self._l0_inflight[_pid] = (time.time(), organ_name, threading.get_ident())
         try:
+            # ★483刀3：deadline 入口判定 —— **必须在 try 之内**。
+            #   放到 try 之前会让 finally 的 _l0_inflight.pop / -1 计数漏减，
+            #   等于自己制造并发泄漏。默认 PULSE_DEADLINE_ENABLED=False 只观测不丢。
+            _dl_drop, _dl_ms = self._m483_deadline_check(pulse, layer_tag)
+            if _dl_drop:
+                return                  # finally 照常收尾，handler 不执行
+            _dl_start_ns = time.time_ns()
             # ★P1-2修复：明确标注串行路由为预留功能，当前版本统一使用并行分发
             # ★436刀2：同器官串行（每器官 RLock 排队）、跨器官并行。
             #   关 ENABLE_M436_ORGAN_SERIAL ⇒ 逐字回到改前（直接调，无锁）。
@@ -1224,6 +1272,8 @@ class InfoField(SilentLogMixin):
                     _lk.release()
             else:
                 self._call_handler_safe(pulse, handler)
+            # ★483刀3：事后计量 overrun（异常路径不计 —— 没有「跑完」这个事实）。
+            self._m483_note_overrun(layer_tag, _dl_start_ns, _dl_ms)
         finally:
             if _is_l0 and _pid is not None:
                 self._l0_inflight.pop(_pid, None)
@@ -2062,7 +2112,7 @@ class InfoField(SilentLogMixin):
         }
 
     def _admit_layer_task(self, layer: str, pool, organ_name: str = "",
-                          priority: int = 5) -> bool:
+                          priority: int = 5, event_type: str = "") -> bool:
         """分层队列准入判定（有界背压）。
 
         返回 True 允许提交，False 表示队列已满、本次分发应被拒绝。
@@ -2087,7 +2137,8 @@ class InfoField(SilentLogMixin):
                 用于查 :attr:`_layer_queue_limits` 中的上限；未知层取 0（= 不限流）。
             pool: 目标线程池（``ThreadPoolExecutor``）；``None`` 时直接放行。
             organ_name: 提交方器官名，**仅用于告警文案**（可空串）。
-            priority: 脉冲优先级，**不参与准入判定**（保留形参以兼容调用约定）。
+            priority: 脉冲优先级（数值越小越优先）；队列满时 <=3 仍降级放行。
+            event_type: 事件名，**仅**用于 L0 生命线白名单判定（其余层不参与）。
 
         返回:
             True  = 允许提交；
@@ -2098,8 +2149,8 @@ class InfoField(SilentLogMixin):
             info_field._admit_layer_task("L3", pool, "PulseCortex")  ->  True
             # L3 深度已达 300 → 拒绝（不阻塞主链路，仅丢弃本条脉冲）
             info_field._admit_layer_task("L3", pool, "PulseCortex")  ->  False
-            # L0 生命线永不限流
-            info_field._admit_layer_task("L0", pool)                 ->  True
+            # L0 达 5000 后：低优先级被拒，生命线白名单事件仍放行
+            info_field._admit_layer_task("L0", pool, event_type=_lifeline_event) -> True
 
         """
         _limit = self._layer_queue_limits.get(layer, 0)
@@ -2135,20 +2186,30 @@ class InfoField(SilentLogMixin):
             return True
 
         # ★474刀24：降级放行的**绝对硬顶** —— 堵住无界积压漏口。
-        #   L0（limit=0）在本方法开头已 return True，生命线永不受影响。
+        #   483 批起 L0 上限=5000，也会走到这里；硬顶对含白名单在内的所有事件生效。
         #   硬顶只拦「上限×N」之外的极端深度；未达硬顶时完整保留原有降级放行语义。
         _hard_mult = _m474_hard_cap_multiplier()
         if _hard_mult and _depth >= _limit * _hard_mult:
             self._layer_rejected_count[layer] = (
                 self._layer_rejected_count.get(layer, 0) + 1)
             _hard_rejected = self._layer_rejected_count[layer]
+            self._m483_note_reject_ts(layer)
             if _hard_rejected == 1 or _hard_rejected % 100 == 0:
                 _module_logger.warning(
                     f"[背压·硬顶] {layer}层队列深度 {_depth}/{_limit} "
                     f"已达硬顶({_limit * _hard_mult})，即使优先级={priority} 也拒绝"
                     f"（累计拒绝={_hard_rejected}）"
-                    + (f" 器官={organ_name}" if organ_name else ""))
+                    + (f" 器官={organ_name}" if organ_name else "")
+                    + (f" 事件={event_type}" if event_type else ""))
             return False
+
+        # ★483刀2：生命线白名单 —— 硬顶之后、降级放行之前。
+        #   命中 ⇒ 绕过 5000 上限（但仍受上面的绝对硬顶约束），并单独计数。
+        #   只收「丢了会瞎」的系统级告警；心跳在 L3、请求类正是要限流的源，都不收。
+        if self._m483_is_lifeline_event(layer, event_type):
+            self._layer_lifeline_admitted[layer] = (
+                self._layer_lifeline_admitted.get(layer, 0) + 1)
+            return True
 
         # ★P2-31 降级放行：队列满时不再一刀切拒绝。
         #   高优先级脉冲（priority 数值越小越优先）仍放行，仅低优先级被丢弃，
@@ -2167,16 +2228,156 @@ class InfoField(SilentLogMixin):
         # —— 拒绝 ——
         self._layer_rejected_count[layer] = self._layer_rejected_count.get(layer, 0) + 1
         _rejected = self._layer_rejected_count[layer]
+        self._m483_note_reject_ts(layer)
         # 节流：每 100 次打一条，避免风暴时日志本身成为负担
         if _rejected == 1 or _rejected % 100 == 0:
             _module_logger.warning(
                 f"[背压] {layer}层队列已满(深度={_depth}, 上限={_limit})，"
                 f"拒绝本次分发以保护内存（累计拒绝={_rejected}）"
                 f"{'' if not organ_name else f'，器官={organ_name}'}。"
+                f"{'' if not event_type else f'，事件={event_type}。'}"
                 f"{self._m479_inflight_hint(layer)}"
                 f"提示：若频繁出现，请调高 config.PULSE_LAYER 对应层上限，"
                 f"或排查该层处理器是否阻塞")
         return False
+
+    # ==================== ★483刀3：deadline 三态（默认只观测不丢）====================
+
+    def _m483_deadline_check(self, pulse, layer_tag) -> tuple[bool, int]:
+        """★入口判定：返回 ``(是否真丢, deadline_ms)``。必须在 try 内调用。
+
+        灰度关（默认）⇒ ``would_timeout`` 照常累加、``dropped`` 恒 0、
+        handler 一定执行。Python 无法抢占线程，本函数只拦「排队超时」。
+
+        不判的四类（层未选中 / timestamp 坏 / 时钟回拨 / deadline<=0）统一
+        返回 ``(False, 0)``，**不并入 would_timeout** —— 脏数据不是超时，
+        混进去会让「这个 SLA 是不是太松」永远读不准。
+        """
+        if layer_tag not in _m483_deadline_layers():
+            return False, 0
+        _ts = pulse.get("timestamp_ns") if isinstance(pulse, dict) else None
+        if not isinstance(_ts, int) or isinstance(_ts, bool):
+            self._m483_note_malformed()
+            return False, 0
+        _dl = pulse.get("deadline_ms") if isinstance(pulse, dict) else None
+        if _dl is None:
+            _dl = _m483_layer_deadline_ms(layer_tag)
+        if isinstance(_dl, bool) or not isinstance(_dl, (int, float)):
+            return False, 0
+        _dl = int(_dl)
+        if _dl <= 0:                       # 与 ttl_ns<=0 = 永不过期保持同一直觉
+            return False, 0
+        _elapsed_ms = (time.time_ns() - _ts) / 1_000_000.0
+        if _elapsed_ms < 0:               # 时钟回拨 / NTP 校时，绝不误杀
+            return False, 0
+        if _elapsed_ms <= _dl:
+            return False, _dl
+        _bucket = (getattr(self, "_deadline_stats", None) or {}).get(layer_tag)
+        if not isinstance(_bucket, dict):
+            return False, _dl
+        _enabled = False
+        try:
+            _enabled = bool(getattr(_cfg, "PULSE_DEADLINE_ENABLED", False))
+        except Exception as _e483:
+            silent_exc(_e483, where="InfoField::_m483_deadline_check cfg", level="debug")
+        with self._lock:
+            _bucket["would_timeout"] = int(_bucket.get("would_timeout", 0) or 0) + 1
+            if _enabled:
+                _bucket["dropped"] = int(_bucket.get("dropped", 0) or 0) + 1
+        return bool(_enabled), _dl
+
+    def _m483_note_overrun(self, layer_tag, start_ns, deadline_ms) -> None:
+        """★事后计量：handler 已经跑完且超 SLA ⇒ 只计 overrun，不假装能杀线程。"""
+        if not deadline_ms or layer_tag not in _m483_deadline_layers():
+            return
+        if ((time.time_ns() - start_ns) / 1_000_000.0) <= deadline_ms:
+            return
+        _bucket = (getattr(self, "_deadline_stats", None) or {}).get(layer_tag)
+        if isinstance(_bucket, dict):
+            with self._lock:
+                _bucket["overrun"] = int(_bucket.get("overrun", 0) or 0) + 1
+
+    def _m483_note_malformed(self) -> None:
+        """timestamp 缺失/非整数单独计数，绝不并入三态。"""
+        self._m483_deadline_malformed = int(
+            getattr(self, "_m483_deadline_malformed", 0) or 0) + 1
+
+    def get_deadline_stats(self) -> dict:
+        """★483刀3：deadline 三态观测端点（供 health 快照消费）。
+
+        ``timeout_deadline_total`` 只等于总 dropped；灰度关时它恒 0，
+        但**本块必须存在且 enabled 可读** —— 「值为 0」与「块缺失」是两回事，
+        缺块就是未接线（与 339 批「ran=true 但 top20_source=none」同形的假读数）。
+        """
+        try:
+            _enabled = bool(getattr(_cfg, "PULSE_DEADLINE_ENABLED", False))
+        except Exception as _e483:
+            silent_exc(_e483, where="InfoField::get_deadline_stats cfg", level="debug")
+            _enabled = False
+        _layers = str(getattr(_cfg, "PULSE_DEADLINE_LAYERS", "L0,L1") or "")
+        _stats = getattr(self, "_deadline_stats", None) or {}
+        _by: dict = {}
+        _total = 0
+        with self._lock:
+            for _l in (_PULSE_LAYER_L0, _PULSE_LAYER_L1,
+                       _PULSE_LAYER_L2, _PULSE_LAYER_L3):
+                _b = _stats.get(_l) or {}
+                _by[_l] = {
+                    "would_timeout": int(_b.get("would_timeout", 0) or 0),
+                    "dropped": int(_b.get("dropped", 0) or 0),
+                    "overrun": int(_b.get("overrun", 0) or 0),
+                }
+                _total += _by[_l]["dropped"]
+        return {
+            "enabled": _enabled,
+            "layers": _layers,
+            "by_layer": _by,
+            "timeout_deadline_total": int(_total),
+            "malformed": int(getattr(self, "_m483_deadline_malformed", 0) or 0),
+        }
+
+    # ==================== ★483刀2：L0 保险丝（可秒级回滚）====================
+
+    @staticmethod
+    def _m483_l0_cap_value() -> int:
+        """L0 队列上限的**有效值**。开关 False ⇒ 强制 0，逐字回到 483 前旧行为。
+
+        ★只有 None 才算缺省；False / 0 都是显式值，不许用 ``or`` 覆盖。
+        读配置失败 ⇒ 0（fail-open：宁可退回无上限，也不猜一个会拒脉冲的值）。
+        """
+        _on = True
+        try:
+            _on = bool(getattr(_cfg, "ENABLE_M483_L0_QUEUE_CAP", True))
+        except Exception as _e483:
+            silent_exc(_e483, where="InfoField::_m483_l0_cap_value cfg", level="debug")
+            _on = True
+        if not _on:
+            return 0
+        try:
+            return max(0, int(PULSE_LAYER.get("l0_queue_max", 0) or 0))
+        except (TypeError, ValueError) as _e483b:
+            silent_exc(_e483b, where="InfoField::_m483_l0_cap_value value", level="debug")
+            return 0
+
+    @staticmethod
+    def _m483_is_lifeline_event(layer: str, event_type: str) -> bool:
+        """白名单判定：只对 L0 生效；开关关 / 无事件名 ⇒ 恒 False（零行为变化）。"""
+        if layer != _PULSE_LAYER_L0 or not event_type:
+            return False
+        try:
+            if not bool(getattr(_cfg, "ENABLE_M483_L0_QUEUE_CAP", True)):
+                return False
+            _wl = tuple(getattr(_cfg, "M483_L0_LIFELINE_EVENTS", ()) or ())
+        except Exception as _e483:
+            silent_exc(_e483, where="InfoField::_m483_is_lifeline_event", level="debug")
+            return False
+        return str(event_type) in _wl
+
+    def _m483_note_reject_ts(self, layer: str) -> None:
+        """记录该层最近一次拒绝的 unix 秒；轻量实例（__new__）也能安全调用。"""
+        _d = getattr(self, "_layer_last_reject_ts", None)
+        if isinstance(_d, dict):
+            _d[layer] = time.time()
 
     def reload_l2_config(self) -> dict:
         """★主线第57批 T4（P2-394）：运行时热重载 L2 队列上限与 worker 数（无需重启框架）。
@@ -2216,6 +2417,14 @@ class InfoField(SilentLogMixin):
                 "queue_depth": _depth,
                 "limit": self._layer_queue_limits.get(_layer, 0),
                 "rejected": self._layer_rejected_count.get(_layer, 0),
+                # ★483刀2：三个新观测键（键名沿用 queue_depth/limit/rejected，
+                #   不要照任务书写 depth —— 历史消费方读不到）。
+                "lifeline_admitted": getattr(
+                    self, "_layer_lifeline_admitted", {}).get(_layer, 0),
+                "overflow_allowed": getattr(
+                    self, "_layer_overflow_allowed", {}).get(_layer, 0),
+                "last_reject_ts": getattr(
+                    self, "_layer_last_reject_ts", {}).get(_layer),
             }
         return _out
 

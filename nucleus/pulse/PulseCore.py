@@ -74,6 +74,25 @@ _DEFAULT_LAYER_MAP = {
 }
 
 
+def _m483_emit_deadline_ms(layer, explicit):
+    """★483刀3：emit 单点写 deadline_ms。显式优先，否则按层查兜底表。
+
+    读配置失败 / 值坏 ⇒ 0（= 该条不设 SLA），绝不猜一个会丢脉冲的值。
+    """
+    if explicit is not None:
+        if isinstance(explicit, bool) or not isinstance(explicit, (int, float)):
+            return 0
+        return max(0, int(explicit))
+    import config as _cfg483
+    _tbl = getattr(_cfg483, "PULSE_DEADLINE_MS_BY_LAYER", None)
+    if not isinstance(_tbl, dict):
+        return 0
+    _v = _tbl.get(str(layer or ""), 0)
+    if isinstance(_v, bool) or not isinstance(_v, (int, float)):
+        return 0
+    return max(0, int(_v))
+
+
 class PulseCore:
     """
     脉冲核心引擎（v9.5 终极完整版）
@@ -128,7 +147,8 @@ class PulseCore:
              ttl_ns: int = 5_000_000_000,
              layer: str | None = None,
              intent: str | None = None,
-             target_organ: str = "") -> Pulse:
+             target_organ: str = "",
+             deadline_ms: int | None = None) -> Pulse:
         """
         创建一个脉冲（v9.5: 原生支持 layer）。
         
@@ -138,6 +158,8 @@ class PulseCore:
             payload:     载荷数据
             priority:    优先级 0-10
             ttl_ns:      有效期（纳秒），默认 5 秒
+            deadline_ms: 执行 SLA（毫秒，483批）。None ⇒ 按层查默认表；
+                         显式值优先。字段与 ttl_ns 同级，**不进 payload**。
             layer:       脉冲层级（v9.5 新增）。
                           - 'L0' 生命线（心跳/熔断/告警）
                           - 'L1' 实时交互（对话/意图）
@@ -208,6 +230,11 @@ class PulseCore:
             "amplitude": DEFAULT_AMPLITUDE,
             "target_organ": target_organ,   # 207批·刀1：标注制目标器官（语义标注，非路由键）
         }
+        # ★483刀3：deadline_ms 必须与 ttl_ns 同级（**不能进 payload** ——
+        #   business_fingerprint 对 payload 全字段精确哈希，塞进去会让同一业务
+        #   事件每次 emit 产生不同指纹 ⇒ 去重直接失效）。117 个发射点一个都不改，
+        #   只在这唯一收口处按层兜底；显式形参优先。
+        pulse["deadline_ms"] = _m483_emit_deadline_ms(layer, deadline_ms)
         # ★第226批（新方向·方向调整引导）：log_emit 下沉到 emit 内部 → 单点全覆盖双轨
         #   原打点仅挂 BasePulseOrgan._send 且受 DEBUG_PULSE_TRACE 门控；直连 pulse_core.emit
         #   的轨B（PulseEyes.stream_frame / heart.beat / info_field.publish(emit) 等）绕过 _send
