@@ -696,6 +696,16 @@ class PulseVisualCortex(BasePulseOrgan):
             result["error"] = f"未知任务类型: {task_type}"
             return result
 
+        # ★485刀3（T-断网未兜底记账）：视觉渠道断网失败观测 —— OCR/PDF 引擎走
+        #   渠道池取数（远端），引擎异常或空文本即「该渠道断网未兜底」。
+        #   只加 WARNING 留痕，不改任何逻辑与返回值（任务书 §485-3）。
+        if result.get("error") or (result.get("status") == "processed"
+                                   and not (result.get("text") or "").strip()):
+            self._log(LogLevel.WARNING,
+                      f"[断网未兜底] 视觉渠道(OCR/PDF)失败且无兜底: task={task_type} "
+                      f"file={os.path.basename(str(file_path))[:40]} "
+                      f"err={str(result.get('error'))[:60]} text_len={len(result.get('text') or '')}")
+
         # 将识别结果发射为知识消化脉冲（后台知识积累）
         if result["text"] and len(result["text"].strip()) >= 5:
             _file_name = os.path.basename(file_path)

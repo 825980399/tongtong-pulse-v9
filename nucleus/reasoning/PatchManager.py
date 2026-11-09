@@ -1526,6 +1526,32 @@ class PatchManager:
     ))
 
     @staticmethod
+    def _m485_baseline_positive(patch: dict) -> bool:
+        """★485刀7：baseline>0 判据（纯函数）。
+
+        * 取值链：顶层 ``baseline_errors`` → ``runtime_verify_result.baseline_errors``
+          → ``runtime_verify_result.baseline``（与 B 通道/老化判据同源字段）；
+        * **显式 0 ⇒ False**（禁入自动审批）；
+        * **缺失/非数值 ⇒ True**（无法判定 ≠ 0，铁律 102：不拿缺失冤枉补丁）；
+        * 开关 `config.ENABLE_M485_BASELINE_GATE` 只控制**消费点**是否调用本判据。
+        """
+        if not isinstance(patch, dict):
+            return True
+        _b = patch.get("baseline_errors")
+        if _b is None:
+            _rvr = patch.get("runtime_verify_result")
+            if isinstance(_rvr, dict):
+                _b = _rvr.get("baseline_errors", _rvr.get("baseline"))
+        if _b is None:
+            return True
+        try:
+            return float(_b) > 0
+        except (TypeError, ValueError) as _e485bp:
+            silent_exc(_e485bp, where="PatchManager::_m485_baseline_positive",
+                       level="debug")
+            return True
+
+    @staticmethod
     def _m85_local_low_risk_auto_apply(patch: dict, evo_cfg: dict | None = None) -> bool:
         """★第85批 T-85d（D84-4）：本地生成的低风险补丁是否放行自动应用。
 
@@ -1584,6 +1610,18 @@ class PatchManager:
                     "[补丁自动审批][406窄闸] 本地低风险放行被拦下(%s): %s:%s",
                     _m406_why, patch.get("file", ""), patch.get("method", ""))
                 return False
+            # ★485刀7：baseline=0 禁入放行档（开关 False ⇒ 逐字回改前）。
+            #   B 通道 _m101 早在第105批就查了 baseline，本地放行档此前漏查。
+            try:
+                import config as _c485
+                if bool(getattr(_c485, "ENABLE_M485_BASELINE_GATE", False)) \
+                        and not PatchManager._m485_baseline_positive(patch):
+                    _module_logger.info(
+                        "[补丁自动审批][485刀7] baseline=0 禁入本地低风险放行: "
+                        "%s:%s ⇒ 转人工", patch.get("file", ""), patch.get("method", ""))
+                    return False
+            except Exception as _e485:
+                silent_exc(_e485, where="PatchManager::_m85 485刀7闸", level="debug")
             return True
         except Exception as _e:
             _module_logger.debug(
@@ -4248,8 +4286,24 @@ class PatchManager:
                     f"issue_type={_issue_type_a1} ⇒ 转人工（BLOCKED）")
         # ★第280批刀3：llm 补丁永不自动审批（即使 risk/trust/whitelist 达标也转人工）。
         _source_is_llm_a1 = str(patch.get("source", "")) == "llm"
+        # ★485刀7：baseline=0 禁入 A1 内联自动审批（开关 False ⇒ 逐字回改前）。
+        #   这是烛微 §3.5 坑三怀疑、施工时实测钉死的缺口：B 通道/老化/八闸都查了
+        #   baseline，唯独这条 risk+trust+whitelist 直升 approved 的路径没查。
+        _baseline_ok_a1 = True
+        try:
+            import config as _c485
+            if bool(getattr(_c485, "ENABLE_M485_BASELINE_GATE", False)):
+                _baseline_ok_a1 = PatchManager._m485_baseline_positive(patch)
+                if not _baseline_ok_a1:
+                    _module_logger.warning(
+                        "[补丁自动审批][485刀7] baseline=0 禁入 A1 自动审批: "
+                        "%s:%s ⇒ 转人工（BLOCKED）",
+                        patch.get("file", ""), patch.get("method", ""))
+        except Exception as _e485a1:
+            silent_exc(_e485a1, where="PatchManager::save_pending_patch 485刀7闸",
+                       level="debug")
         if (_risk_ok_a1 and _trust_ok_a1 and _whitelist_ok_a1
-                and not _source_is_llm_a1):
+                and not _source_is_llm_a1 and _baseline_ok_a1):
             # ★主线第80批 T7 (P0-3)：免签改写闸门——verified 或核心文件或总开关关闭，
             #   禁止升 approved；核心/关闭场景下未 verified 的补丁强制置 verified 待人工。
             # ★M85-4：总开关关闭时，本地低风险补丁仍放行（_m85_allow 认定）；

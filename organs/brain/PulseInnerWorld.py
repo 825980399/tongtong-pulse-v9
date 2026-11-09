@@ -3935,6 +3935,10 @@ class PulseInnerWorld(
         self._log(LogLevel.INFO,
                   "搜索终止信号(Terminated): 已登记终止，不进入结果审查/兜底通路 "
                   f"(主题='{str(search_topic)[:40]}')")
+        # ★485刀3（T-断网未兜底记账）：搜索链是远端依赖渠道，终止即「未拿到结果且无
+        #   兜底答案」——补 WARNING 留痕（只加日志，不改登记/回退逻辑）。
+        self._log(LogLevel.WARNING,
+                  f"[断网未兜底] 搜索渠道被终止且无兜底: 主题='{str(search_topic)[:40]}'")
         try:
             _exp_map = getattr(self, "_search_experience", None) or {}
             _exp_key = self._make_experience_key(search_topic) if search_topic else ""

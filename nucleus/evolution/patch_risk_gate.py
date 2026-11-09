@@ -266,6 +266,205 @@ def check_not_approval_pool(record: Any) -> dict:
             "why": "approval_pool" if _hit else ""}
 
 
+# ============ ★485刀4+5：零语义变更闸 + issue_type 匹配闸 ============
+#:
+#: 落点（烛微 §2.4）：在 406 三条件**之后**、自动应用之前 —— 只收窄、不放宽：
+#:   * 406 判 low 的补丁若被 485 闸拒 ⇒ level 降 medium（转人工），补丁不删；
+#:   * 406 本来就 medium/high 的 ⇒ 不受影响（拒因照样记录，供台账观测）。
+#: 拒绝计数（坑三）不写在 judge()（judge 会被 annotate_rows 与 gate_allows
+#: 各调一次会重复计数），而是记在这两个**真实消费点**上。
+
+#: 拒绝计数文件（data/ gitignore ⇒ 只落盘不进 git；测试经 monkeypatch 注入 tmp）
+_M485_REJECT_REL = os.path.join("data", "monitor", "patch_m485_reject_counts.json")
+
+#: print 调用（print_instead_of_log 匹配口径）
+_RE_PRINT = re.compile(r"\bprint\s*\(")
+#: 日志调用（logging.* / logger.* / self._log(...) / _log_*(...)）
+_RE_LOG_CALL = re.compile(r"\b(?:logging\.\w+|logger\.\w+|self\._log\s*\(|_log\w*\s*\()")
+#: 纯吞异常（except ...: 之后紧跟 pass/continue，文本口径，够判「没修」）
+_RE_BARE_SWALLOW = re.compile(r"except[^\n]*:\s*\n\s*(?:pass|continue)\b")
+#: 重入守卫习语（periodic_task_no_reentry 匹配口径）
+_RE_REENTRY_GUARD = re.compile(
+    r"(reentr|in_progress|already[_\s]?running|_running|is_running|_busy|"
+    r"_lock\.acquire|_inflight|_executing)", re.IGNORECASE)
+
+
+def _m485_gates_enabled() -> tuple:
+    """读 485-4/485-5 开关（读不到 ⇒ False ⇒ 逐字回 406 口径，零回归）。"""
+    _no_sem = _match = False
+    try:
+        import config as _c485
+        _no_sem = bool(getattr(_c485, "ENABLE_M485_NO_SEMANTIC_GATE", False))
+        _match = bool(getattr(_c485, "ENABLE_M485_ISSUE_MATCH_GATE", False))
+    except Exception as _e:
+        silent_exc(_e, where="patch_risk_gate._m485_gates_enabled", level="debug")
+    return _no_sem, _match
+
+
+def _m485_doc_issue_types() -> tuple:
+    """comment_only 可放行的 issue_type 白名单（默认空 ⇒ comment_only 一律拒，
+    烛微 §2.5 坑二：当前历史 10 类里没有 doc/comment 类）。"""
+    try:
+        import config as _c485
+        return tuple(getattr(_c485, "M485_DOC_COMMENT_ISSUE_TYPES", ()) or ())
+    except Exception as _e:
+        silent_exc(_e, where="patch_risk_gate._m485_doc_issue_types", level="debug")
+        return ()
+
+
+def _semantic_fingerprint(src: str) -> str | None:
+    """★485刀4：语义指纹 —— 去 docstring + **剥类型注解**后的 AST dump。
+
+    ★为什么不用 `_skeleton`：它只去 docstring，类型注解仍在 AST 里 ——
+      「删一个 `-> int`」这种零语义补丁会被判成 `logic` 绕过窄闸（烛微坑一）。
+    ★口径：`x: int`（纯注解声明）折叠为 `Pass` —— 模块级它有 __annotations__
+      副作用，但补丁片段级判定取「两侧同变换后等价」这一对称口径（交付报告注）。
+    """
+    try:
+        _tree = ast.parse(textwrap.dedent(src))
+    except (SyntaxError, ValueError) as _e:
+        silent_exc(_e, where="patch_risk_gate._semantic_fingerprint", level="debug")
+        return None
+
+    class _Strip(ast.NodeTransformer):
+        def _strip_doc(self, node: Any) -> None:
+            _body = getattr(node, "body", None)
+            if _body and isinstance(_body[0], ast.Expr):
+                _v = _body[0].value
+                if isinstance(_v, ast.Constant) and isinstance(_v.value, str):
+                    node.body = _body[1:] or [ast.Pass()]
+
+        def visit_FunctionDef(self, node: Any) -> Any:
+            self.generic_visit(node)
+            node.returns = None
+            self._strip_doc(node)
+            return node
+
+        visit_AsyncFunctionDef = visit_FunctionDef
+
+        def visit_ClassDef(self, node: Any) -> Any:
+            self.generic_visit(node)
+            self._strip_doc(node)
+            return node
+
+        def visit_Module(self, node: Any) -> Any:
+            self.generic_visit(node)
+            self._strip_doc(node)
+            return node
+
+        def visit_arg(self, node: Any) -> Any:
+            node.annotation = None
+            return node
+
+        def visit_AnnAssign(self, node: Any) -> Any:
+            self.generic_visit(node)
+            if node.value is not None:
+                return ast.copy_location(
+                    ast.Assign(targets=node.targets, value=node.value), node)
+            return ast.copy_location(ast.Pass(), node)
+
+    try:
+        _tree = _Strip().visit(_tree)
+        ast.fix_missing_locations(_tree)
+        return ast.dump(_tree)
+    except (SyntaxError, ValueError, AttributeError) as _e:
+        silent_exc(_e, where="patch_risk_gate._semantic_fingerprint strip", level="debug")
+        return None
+
+
+def _m485_issue_type_matches(issue_type: str, orig: str, new: str) -> tuple:
+    """★485刀5：issue_type 与 diff 构造是否名实相符。
+
+    Returns:
+        (True, "") = 匹配/不在本批口径内；(False, 原因) = 名实不符。
+    ★诚实边界：只装烛微点名的 3 类；其余 issue_type 放行 406 原判（不装全覆盖）。
+    """
+    _t = str(issue_type or "").strip()
+    if not _t:
+        return True, ""                       # 缺元数据的补丁不冤枉
+    if _t == "silent_exception":
+        if "except" not in new:
+            return False, "no_except_after"
+        if _RE_BARE_SWALLOW.search(new):
+            return False, "still_swallowing"
+        return True, ""
+    if _t == "print_instead_of_log":
+        if "print(" not in orig:
+            return False, "no_print_in_orig"
+        if _RE_PRINT.search(new):
+            return False, "print_still_present"
+        if not _RE_LOG_CALL.search(new):
+            return False, "no_log_call_added"
+        return True, ""
+    if _t == "periodic_task_no_reentry":
+        _added = _added_lines(orig, new)
+        if not _added:
+            return False, "no_added_lines"
+        if not _RE_REENTRY_GUARD.search("\n".join(_added)):
+            return False, "no_reentry_guard_in_added_lines"
+        return True, ""
+    return True, ""
+
+
+def _m485_gate_verdict(record: Any, kind: str) -> str:
+    """★485闸总判定：返回拒因（""=通过）。只读 record，不改状态。"""
+    if not isinstance(record, dict):
+        return ""
+    _no_sem, _match_on = _m485_gates_enabled()
+    if not (_no_sem or _match_on):
+        return ""
+    _issue = str(record.get("issue_type") or "").strip()
+    _doc_types = _m485_doc_issue_types()
+    _orig = str(record.get("original_code") or "")
+    _new = str(record.get("modified_code") or "")
+    # ★顺序：issue_type 名实不符拒因最具体，先判；再到 comment_only/零语义。
+    if _match_on:
+        _ok, _why = _m485_issue_type_matches(_issue, _orig, _new)
+        if not _ok:
+            return "issue_type_mismatch:" + _why
+    if _no_sem and _issue not in _doc_types:
+        # 坑二：comment_only（只动注释/docstring）∧ issue_type 非 doc 类 ⇒ 拒
+        if kind == "comment_only":
+            return "comment_only_non_doc_issue"
+        # 坑一：类型注解级零语义（_skeleton 会判 logic 绕过）⇒ 拒
+        if (_orig.strip() and _new.strip() and _orig.strip() != _new.strip()):
+            _fo = _semantic_fingerprint(_orig)
+            _fn = _semantic_fingerprint(_new)
+            if _fo is not None and _fn is not None and _fo == _fn:
+                return "no_semantic_change"
+    return ""
+
+
+def _m485_reject_counter_inc(reason: str, project_root: str | None = None) -> None:
+    """★485刀4 坑三：拒绝计数与原因落盘（data/monitor，原子写，失败不抛）。"""
+    if not reason:
+        return
+    _root = _project_root(project_root)
+    _p = os.path.join(_root, _M485_REJECT_REL)
+    try:
+        _d: dict = {}
+        if os.path.isfile(_p):
+            try:
+                with open(_p, encoding="utf-8") as _f:
+                    _d = json.load(_f)
+                if not isinstance(_d, dict):
+                    _d = {}
+            except (OSError, ValueError) as _e:
+                silent_exc(_e, where="patch_risk_gate._m485_reject_counter_inc 读", level="debug")
+                _d = {}
+        _d[str(reason)] = int(_d.get(str(reason), 0)) + 1
+        _d["_updated_at"] = round(time.time(), 3)
+        _dir = os.path.dirname(_p)
+        if _dir and not os.path.isdir(_dir):
+            os.makedirs(_dir, exist_ok=True)
+        _tmp = _p + ".485.tmp"
+        with open(_tmp, "w", encoding="utf-8") as _f:
+            json.dump(_d, _f, ensure_ascii=False)
+        os.replace(_tmp, _p)
+    except (OSError, TypeError, ValueError) as _e:
+        silent_exc(_e, where="patch_risk_gate._m485_reject_counter_inc 写", level="debug")
+
+
 # ============ 三、综合判定 ============
 
 def judge(record: Any, project_root: str | None = None) -> dict:
@@ -289,17 +488,26 @@ def judge(record: Any, project_root: str | None = None) -> dict:
         _level = "low"
     else:
         _level = "medium"
+    # ★485刀4+5：零语义闸 + issue_type 匹配闸 —— 在 406 判级**之后**只收窄：
+    #   406 判 low 被 485 拒 ⇒ 降 medium（转人工），补丁本身不删。
+    _m485 = _m485_gate_verdict(record, _kind)
+    if _m485 and _level == "low":
+        _level = "medium"
+    _why = _explain(_level, _kind, _c1, _c2, _c3)
+    if _m485:
+        _why = _why + "；★485闸拒:" + _m485
     return {
         "schema": SCHEMA,
         "level": _level,
         "diff_kind": _kind,
         "eligible": _level == "low",
+        "m485_reject_reason": _m485 or None,
         "checks": {
             "unit_tests_green": _c1,
             "single_organ": _c2,
             "not_approval_pool": _c3,
         },
-        "why": _explain(_level, _kind, _c1, _c2, _c3),
+        "why": _why,
     }
 
 
@@ -329,15 +537,17 @@ def _ok_of(v: Any) -> bool:
 
 
 def _brief(entry: Any) -> tuple:
-    """判定摘要（用于幂等比较：结论没变就不重写，避免每拍刷 mtime）。"""
+    """判定摘要（用于幂等比较：结论没变就不重写，避免每拍刷 mtime）。
+    ★485：拒因计入摘要 —— 拒因变了也要重写（否则新拒因永远上不了台账）。"""
     if not isinstance(entry, dict):
-        return ("", "", False, ())
+        return ("", "", False, (), "")
     _ck = entry.get("checks") if isinstance(entry.get("checks"), dict) else {}
     return (str(entry.get("level") or ""),
             str(entry.get("diff_kind") or ""),
             entry.get("eligible") is True,
             tuple(_ok_of(_ck.get(_k)) for _k in
-                  ("unit_tests_green", "single_organ", "not_approval_pool")))
+                  ("unit_tests_green", "single_organ", "not_approval_pool")),
+            str(entry.get("m485_reject_reason") or ""))
 
 
 def annotate_rows(rows: Any, project_root: str | None = None) -> dict:
@@ -366,6 +576,7 @@ def annotate_rows(rows: Any, project_root: str | None = None) -> dict:
             "diff_kind": _j["diff_kind"],
             "eligible": _j["eligible"],
             "why": _j["why"],
+            "m485_reject_reason": _j.get("m485_reject_reason"),
             "checks": {_k: bool((_v or {}).get("ok")) for _k, _v in _j["checks"].items()},
             "at": _now,
         }
@@ -373,6 +584,10 @@ def annotate_rows(rows: Any, project_root: str | None = None) -> dict:
             continue
         _r["m406_risk"] = _new
         _changed += 1
+        # ★485刀4 坑三：新打上拒因的行 ⇒ 计数（幂等跳过的行不重复计）
+        _m485_reason = str(_j.get("m485_reject_reason") or "")
+        if _m485_reason:
+            _m485_reject_counter_inc(_m485_reason, project_root=project_root)
     return {"changed": _changed, "total": len(rows), "verdicts": _verdicts}
 
 
@@ -501,6 +716,12 @@ def gate_allows(record: Any, project_root: str | None = None) -> tuple:
         return False, "judge_failed"
     if _j.get("eligible"):
         return True, "low:%s" % _j.get("diff_kind")
+    # ★485：拦下时把拒因带出（含 485 闸拒因），计数只在真消费点记一次
+    _m485_reason = str(_j.get("m485_reject_reason") or "")
+    if _m485_reason:
+        _m485_reject_counter_inc(_m485_reason, project_root=project_root)
+        return False, "%s:%s:485拒:%s" % (_j.get("level"), _j.get("diff_kind"),
+                                          _m485_reason)
     return False, "%s:%s" % (_j.get("level"), _j.get("diff_kind"))
 
 

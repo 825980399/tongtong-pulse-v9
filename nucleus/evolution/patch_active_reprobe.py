@@ -478,6 +478,91 @@ def detector_hits(issue_type: Any, code: Any) -> list[dict[str, Any]]:
         return []
 
 
+# ==================== ★485刀6：补 3 个检测器 ====================
+# 此前三类 issue_type 无检测器 ⇒ 复现恒 not_applicable ⇒ 可判定率静默下降
+# （detector_coverage 只暴露不修）。检测器签名与既有一致：code → [hits]。
+
+_RE_TB_LOG = re.compile(
+    r"traceback\.(?:print_exc|format_exc)\s*\(|Traceback \(most recent call last\)")
+_RE_SQL_CALL = {"execute", "executemany", "executescript"}
+
+
+def detect_bare_return_none_in_except(code: Any) -> list:
+    """★485刀6：except 块里裸 ``return`` / ``return None``（AST 口径）。
+
+    为什么按 AST 而不按文本：``return None`` / 裸 ``return`` / ``return None  # 兜底``
+    文本口径会互相漏；AST 的 ``Return.value`` 是 None 就是一处。
+    """
+    try:
+        _tree = ast.parse(textwrap.dedent(str(code or "")))
+    except (SyntaxError, ValueError) as _e:
+        silent_exc(_e, where="patch_active_reprobe.detect_bare_return_none_in_except",
+                   level="debug")
+        return []
+    _hits: list = []
+    for _node in ast.walk(_tree):
+        if isinstance(_node, ast.ExceptHandler):
+            for _sub in ast.walk(_node):
+                if not isinstance(_sub, ast.Return):
+                    continue
+                _v = _sub.value
+                # 裸 return（value=None）与 return None（Constant(None)）都算
+                if _v is None or (isinstance(_v, ast.Constant) and _v.value is None):
+                    _hits.append({"line": getattr(_sub, "lineno", 0),
+                                  "why": "except 块内裸 return / return None（静默吞错）"})
+    return _hits
+
+
+def detect_traceback_log(code: Any) -> list:
+    """★485刀6：日志型 traceback —— ``print_exc`` / ``format_exc`` /
+    字面 ``Traceback (most recent call last)``（文本口径）。
+
+    ★口径说明（任务书 §485-6）：这类「打日志不处理」误报率天然偏高，
+    检测器只作**复现统计**（baseline→after 计数），不作拒审依据。
+    """
+    _src = str(code or "")
+    _hits: list = []
+    for _i, _line in enumerate(_src.splitlines(), 1):
+        if _RE_TB_LOG.search(_line):
+            _hits.append({"line": _i,
+                          "why": "日志型 traceback（只打不处理）"})
+    return _hits
+
+
+def detect_sql_injection(code: Any) -> list:
+    """★485刀6：execute/executemany/executescript 的字符串拼接/f-string 参数。
+
+    为什么只盯这三个方法：AST 级无法知道连接对象类型，按方法名收口既覆盖
+    sqlite3/pymysql/psycopg 等主流口，也把误报面钉死在「执行 SQL」这一处。
+    """
+    try:
+        _tree = ast.parse(textwrap.dedent(str(code or "")))
+    except (SyntaxError, ValueError) as _e:
+        silent_exc(_e, where="patch_active_reprobe.detect_sql_injection",
+                   level="debug")
+        return []
+    _hits: list = []
+    for _node in ast.walk(_tree):
+        if not isinstance(_node, ast.Call):
+            continue
+        _fn = _node.func
+        _name = getattr(_fn, "attr", "") if isinstance(_fn, ast.Attribute) else \
+            (getattr(_fn, "id", "") if isinstance(_fn, ast.Name) else "")
+        if _name not in _RE_SQL_CALL:
+            continue
+        for _arg in (_node.args or [])[:1]:
+            if isinstance(_arg, ast.BinOp) and isinstance(_arg.op, ast.Add):
+                _hits.append({"line": getattr(_node, "lineno", 0),
+                              "why": "SQL 语句用 + 字符串拼接外部输入"})
+            elif isinstance(_arg, ast.JoinedStr):
+                _has_value = any(isinstance(_v, ast.FormattedValue)
+                                 for _v in _arg.values)
+                if _has_value:
+                    _hits.append({"line": getattr(_node, "lineno", 0),
+                                  "why": "SQL 语句用 f-string 插值外部输入"})
+    return _hits
+
+
 #: ``issue_type`` → 检测器
 _DETECTORS: dict[str, Callable[[Any], list]] = {
     "silent_exception": detect_silent_exception,
@@ -487,6 +572,10 @@ _DETECTORS: dict[str, Callable[[Any], list]] = {
     "periodic_task_no_reentry": detect_periodic_task_no_reentry,
     "non_atomic_write": detect_non_atomic_write,
     "cross_module_singleton_call": detect_cross_module_singleton_call,
+    # ★485刀6：再补三类「无检测器 ⇒ 复现恒 not_applicable」的类型
+    "bare_return_none_in_except": detect_bare_return_none_in_except,
+    "Traceback": detect_traceback_log,
+    "sql_injection": detect_sql_injection,
 }
 
 

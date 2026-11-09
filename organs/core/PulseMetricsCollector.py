@@ -2908,6 +2908,17 @@ class PulseMetricsCollector(BasePulseOrgan):
             snapshot["pulse_deadline"] = None
             snapshot["pulse_timeout_deadline"] = None
 
+        # ★485刀2：LLM 断网降级窗口观测（cortex 写 data/monitor/llm_degraded_state.json）。
+        #   块必须**始终存在**：无文件/解析失败 ⇒ None（不填假 0：没测到 ≠ 真 0）。
+        try:
+            from nucleus.offline_state import read_llm_degraded_state
+            snapshot["llm_offline"] = read_llm_degraded_state()
+        except Exception as _m485_e:
+            silent_exc(_m485_e,
+                       where="PulseMetricsCollector::_build_observability_snapshot llm_offline",
+                       level="debug")
+            snapshot["llm_offline"] = None
+
         # ★443刀5：O-A4 双路（单向影子）观测入口。
         #   383 批就建好了 `shadow_stats()`（规则覆盖率 / 凭证可见率分开算，不给合并结论），
         #   但全仓**只有测试在读**（生产零消费）⇒ 属于"建而不开"。

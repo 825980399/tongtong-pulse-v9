@@ -9220,3 +9220,34 @@ ENABLE_M484_RANDOM_SEED = True
 # 加权公式已实现（PulseNodePool.sample_random），默认 uniform；
 # 拿到 3 天「种子 activation 分位 × 追问采纳」对照数据前不开 log_activation。
 M484_SEED_WEIGHT = "uniform"
+
+# ===== [M485-CFG] 485 批 · 断网兜底 + 补丁闸（2026-11-10）=====
+# ★默认值沿用 482/483/484 批 D5 裁决口径：任务书开关列写的 False 是**回滚态取值**，
+#   不是出厂默认；置 False 即逐字回该刀之前的行为（每刀独立，互不牵连）。
+# ── 485-1 断网兜底出口重构 ──
+# False ⇒ _on_inference_result 的兜底结构逐字回改前（离线链仍锁在 ctx is None 分支内）。
+ENABLE_M485_OFFLINE_FALLBACK = True
+# canned 话术**逐字固定**（断网时模型不可用，不许生成式话术；测试逐字比对）。
+M485_OFFLINE_CANNED_REPLY = "我现在连不上外部模型，先记下你这句话，恢复后我会接着处理"
+# ── 485-2 断网判定 ──
+# False ⇒ 委派超时仍走 DIALOG_DELEGATE_TIMEOUT_SEC（90s），不记失败账、无降级窗口。
+ENABLE_M485_OFFLINE_DETECT = True
+M485_DELEGATE_TIMEOUT_SEC = 12.0     # 单次：委派后无 RESULT 的等待上限
+M485_FAILURE_WINDOW_SEC = 300.0      # 连续：失败计入的回看窗口（5 分钟）
+M485_FAILURE_THRESHOLD = 3           # 连续：窗口内第 3 次失败 ⇒ 进入降级窗口
+M485_DEGRADE_WINDOW_SEC = 120.0      # 降级窗口时长（期间直接本地链+canned，不委派）
+# ── 485-4 零语义变更闸 ──
+# ★出厂默认 False（回滚态）：406 测试生态（test_m406_k4 E 组）钉着「comment_only
+#   可走免签通道」的旧契约，灰度开启前需星轨裁决上线默认值（485 交付报告 §J）。
+#   False ⇒ patch_risk_gate.judge 不做零语义判定（comment_only 等按 406 口径照旧）。
+ENABLE_M485_NO_SEMANTIC_GATE = False
+# comment_only 可放行的 issue_type 白名单（当前历史 10 类里无 doc/comment 类 ⇒ 空 =
+# comment_only 一律拒；烛微 485 前置 §2.5 坑二）。
+M485_DOC_COMMENT_ISSUE_TYPES: tuple = ()
+# ── 485-5 issue_type 匹配检查 ──
+# ★出厂默认 False（同 485-4 口径，随灰度一并裁决）。False ⇒ 不做匹配检查。
+ENABLE_M485_ISSUE_MATCH_GATE = False
+# ── 485-7 baseline=0 禁入自动审批 ──
+# ★出厂默认 False（同上，随灰度一并裁决）。False ⇒ A1 内联自动审批与 _m85 本地
+#   低风险放行不查 baseline（逐字回改前；B 通道 _m101 与老化 _m94 早已查，不受影响）。
+ENABLE_M485_BASELINE_GATE = False

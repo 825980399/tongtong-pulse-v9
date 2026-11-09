@@ -1272,8 +1272,9 @@ class PulseCortex(BasePulseOrgan):
                 return
             _now = time.time()
             _plen = len(str(prompt or ""))
+            # ★485刀2：判定启用 ⇒ 单次等待上限收为 12s（任务书），否则沿用 458 口径
             self._delegate_pending[str(correlation_id)] = {
-                "deadline": _now + self._m458_delegate_timeout_sec(),
+                "deadline": _now + self._m485_delegate_timeout_sec(),
                 "prompt_len": _plen,
                 "method": str(method or ""),
                 "question": str(prompt or "")[:80],
@@ -1315,11 +1316,13 @@ class PulseCortex(BasePulseOrgan):
         _n = 0
         try:
             if not self._delegate_pending:
+                self._m485_refresh_degraded_state()   # ★485刀2：无账时也顺带刷新降级过期
                 return 0
             import config as _cfg
             if not bool(getattr(_cfg, "ENABLE_M458_DELEGATE_WATCHDOG", True)):
                 return 0
             _now = float(now if now is not None else time.time())
+            self._m485_refresh_degraded_state(_now)   # ★485刀2：窗口过期即清状态文件
             for _cid, _rec in list(self._delegate_pending.items()):
                 _dl = float(_rec.get("deadline") or 0.0)
                 # ★extend_remediation_lock 的宽限对委派账本同样生效（见该方法）
@@ -1329,6 +1332,9 @@ class PulseCortex(BasePulseOrgan):
                 self._delegate_pending.pop(_cid, None)
                 self._delegate_stats["timeout"] += 1
                 _waited = max(0.0, _now - float(_rec.get("ts") or _now))
+                # ★485刀2：委派超时 = 一次「模型不可达」证据，记入连续失败账，
+                #   窗口内满 3 次 ⇒ 置降级窗口（期间对话兜底不再委派，直接本地+canned）。
+                self._m485_record_delegate_failure(_cid, _now, _waited)
                 # ★D：文案必须说「已经失败」，绝不写"请稍候"（否则用户继续等、
                 #   继续追问，队列越堆越长 —— 本次事故的 4 条追问就是这么来的）。
                 _content = (
@@ -1374,6 +1380,142 @@ class PulseCortex(BasePulseOrgan):
             silent_exc(e, where="organs.brain.PulseCortex::_m458_sweep_delegates",
                        level="warning")
             return _n
+
+    # ==================== ★485刀1+2：断网兜底出口 + 断网判定 ====================
+
+    def _m485_fallback_enabled(self) -> bool:
+        """★485刀1：断网兜底出口重构开关（False ⇒ 逐字回改前结构）。"""
+        try:
+            import config as _cfg485
+            return bool(getattr(_cfg485, "ENABLE_M485_OFFLINE_FALLBACK", False))
+        except Exception as _e:
+            silent_exc(_e, where="PulseCortex::_m485_fallback_enabled", level="debug")
+            return False
+
+    def _m485_detect_enabled(self) -> bool:
+        """★485刀2：断网判定开关（False ⇒ 无 12s 单次超时、无降级窗口）。"""
+        try:
+            import config as _cfg485
+            return bool(getattr(_cfg485, "ENABLE_M485_OFFLINE_DETECT", False))
+        except Exception as _e:
+            silent_exc(_e, where="PulseCortex::_m485_detect_enabled", level="debug")
+            return False
+
+    def _m485_canned_reply(self) -> str:
+        """★485刀1：canned 话术（逐字固定，断网时模型不可用不许生成）。"""
+        try:
+            import config as _cfg485
+            return str(getattr(_cfg485, "M485_OFFLINE_CANNED_REPLY", "") or "")
+        except Exception as _e:
+            silent_exc(_e, where="PulseCortex::_m485_canned_reply", level="debug")
+            return ""
+
+    def _m485_delegate_timeout_sec(self) -> float:
+        """★485刀2：单次委派等待上限 —— 判定启用 ⇒ 12s（任务书）；否则沿用 458 口径。"""
+        if self._m485_detect_enabled():
+            try:
+                import config as _cfg485
+                _t = float(getattr(_cfg485, "M485_DELEGATE_TIMEOUT_SEC", 12.0) or 12.0)
+                if _t > 0:
+                    return _t
+            except Exception as _e:
+                silent_exc(_e, where="PulseCortex::_m485_delegate_timeout_sec", level="debug")
+        return self._m458_delegate_timeout_sec()
+
+    def _m485_record_delegate_failure(self, correlation_id: str,
+                                      now: float, waited: float) -> None:
+        """★485刀2：委派超时记入连续失败账；窗口内满阈值 ⇒ 置降级窗口。
+
+        ★为什么不用「失败 1 次就降级」：偶发超时会变成全站降级（烛微 §1.7）。
+        """
+        if not self._m485_detect_enabled():
+            return
+        try:
+            import config as _cfg485
+            _win = float(getattr(_cfg485, "M485_FAILURE_WINDOW_SEC", 300.0) or 300.0)
+            _thr = int(getattr(_cfg485, "M485_FAILURE_THRESHOLD", 3) or 3)
+            _dur = float(getattr(_cfg485, "M485_DEGRADE_WINDOW_SEC", 120.0) or 120.0)
+        except Exception as _e:
+            silent_exc(_e, where="PulseCortex::_m485_record_delegate_failure 读阈值", level="debug")
+            return
+        _fails = getattr(self, "_m485_delegate_failures", None)
+        if not isinstance(_fails, deque):
+            _fails = deque(maxlen=200)
+            self._m485_delegate_failures = _fails
+        _fails.append(float(now))
+        while _fails and (float(now) - float(_fails[0])) > _win:
+            _fails.popleft()
+        if len(_fails) >= max(1, _thr):
+            _fails.clear()
+            self._m485_set_degraded(float(now) + _dur,
+                                    reason=f"{_thr} 次委派失败 / {_win:.0f}s")
+            self._log(LogLevel.WARNING,
+                      f"[485刀2] 连续{_thr}次委派超时（最近{_win:.0f}s）⇒ "
+                      f"进入降级窗口{_dur:.0f}s，期间对话兜底走本地链+canned不再委派 "
+                      f"cid={str(correlation_id)[:16]} waited={waited:.1f}s")
+
+    def _m485_set_degraded(self, until: float, reason: str = "") -> None:
+        """★485刀2：置降级窗口（内存态 + 状态文件，供 health_snapshot 观测）。"""
+        self._m485_llm_unavailable_until = float(until)
+        self._m485_degraded_written = True
+        try:
+            from nucleus.offline_state import write_llm_degraded_state
+            write_llm_degraded_state(True, until=until, reason=reason)
+        except Exception as _e:
+            silent_exc(_e, where="PulseCortex::_m485_set_degraded 写状态文件", level="debug")
+
+    def _m485_llm_degraded(self, now: float | None = None) -> bool:
+        """★485刀2：当前是否处于 LLM 降级窗口（内存判据，零 IO）。"""
+        _now = float(now if now is not None else time.time())
+        _until = float(getattr(self, "_m485_llm_unavailable_until", 0.0) or 0.0)
+        return _until > _now
+
+    def _m485_refresh_degraded_state(self, now: float | None = None) -> None:
+        """★485刀2：窗口自然过期 ⇒ 清内存标记 + 把状态文件改回 degraded=False
+        （只在实际翻转时写盘，5s 快照读文件零压力）。"""
+        _now = float(now if now is not None else time.time())
+        if not getattr(self, "_m485_degraded_written", False):
+            return
+        if self._m485_llm_degraded(_now):
+            return
+        self._m485_degraded_written = False
+        self._m485_llm_unavailable_until = 0.0
+        try:
+            from nucleus.offline_state import write_llm_degraded_state
+            write_llm_degraded_state(False, reason="窗口自然过期")
+        except Exception as _e:
+            silent_exc(_e, where="PulseCortex::_m485_refresh_degraded_state", level="debug")
+
+    def _m485_canned_exit(self, correlation_id: str, user_name: str) -> dict[str, Any]:
+        """★485刀1：canned 兜底出口 —— 断网时用户的**最终可见回应**。
+
+        * 坑三（烛微 §1.8）：必须发 `MouthEvent.SPEAK`，不能只 return 状态；
+        * 坑四：canned **不消费**委派幂等键（`_claim_select_model_emit`），
+          但若此 cid 此前已有委派在账，销账防止看门狗重复出口；
+        * 内在自主（correlation_id 为空）无用户在等 ⇒ 不发 SPEAK，只留状态。
+        """
+        if correlation_id:
+            if self._dialog_should_output(correlation_id):
+                self._emit(MouthEvent.SPEAK, {
+                    "content": self._m485_canned_reply(),
+                    "source": "cortex_offline_fallback",
+                    "user_name": str(user_name or "用户"),
+                    "reasoning_path": "offline_canned",
+                    "correlation_id": correlation_id,
+                }, priority=7, layer="L1")
+                # ★与 458 看门狗同款：必须放行队列，否则下一条继续排队（事故形状）
+                self._dialog_mark_output_done(correlation_id)
+            # 此前若有委派在账（如 :846 路径先登记过），canned 出口即终态 ⇒ 销账
+            self._m458_settle_delegate(correlation_id, reason="canned_485")
+            _ds = getattr(self, "_delegate_stats", None)
+            if isinstance(_ds, dict):
+                _ds["canned_485"] = int(_ds.get("canned_485", 0)) + 1
+        self._log(LogLevel.WARNING,
+                  f"[485刀1] 断网兜底canned出口: cid={str(correlation_id)[:16]} "
+                  f"user={str(user_name or '')[:12]}")
+        return {"status": "offline_canned", "correlation_id": correlation_id,
+                "reason": "llm_unavailable_or_local_unsolved"}
+
     def _m461_consume_loop_results(self) -> int:
         """★461 刀3：主进程消费闭环回传的结果单（明确消费点 + 内存状态 + 留痕）。
 
@@ -1635,6 +1777,17 @@ class PulseCortex(BasePulseOrgan):
                         "intent": "background_learning",
                         "reason": "search_terminated_background_digestion",
                     }
+                elif self._m485_fallback_enabled():
+                    # ★485刀1（T-断网兜底出口重构）：兜底出口统一收敛到下方
+                    #   「本地链 → canned/委派」判定，不再在本分支就地委派外脑。
+                    #   ctx 只在这里构造一次（烛微坑一：保证 :1702 取 user_name 不 KeyError），
+                    #   question 从 payload 带出，供本地链与输出路径使用。
+                    ctx = {
+                        "content": payload.get("question", ""),
+                        "user_name": payload.get("user_name", "用户"),
+                        "file_paths": [],
+                        "code_blocks": [],
+                    }
                 else:
                     # 对话回退：正常通过嘴巴输出
                     self._log(LogLevel.INFO, f"内在世界回退，correlation_id={correlation_id}，直接尝试调用肺模型")
@@ -1700,6 +1853,23 @@ class PulseCortex(BasePulseOrgan):
                     "code_blocks": [],
                 }
         user_name = ctx["user_name"]
+
+        # ★485刀1（T-断网兜底出口重构）：answer 为空 ⇒ 本地 Symbolic→Causal→Analogy
+        #   链先行（判据只看 answer，ctx 不再当门槛——改前离线链被 `ctx is None`
+        #   关在门里，真实断网形态 ctx 有值 ⇒ 链一次都跑不到，只能委派已死外脑）。
+        #   解出 ⇒ method=offline_local，落下方 `if answer:` 统一输出路径（SPEAK）；
+        #   未解出 ⇒ 落下方 else 分支的 canned/委派决策（485-2 降级窗口接线在那里）。
+        if answer is None and self._m485_fallback_enabled() \
+                and not payload.get("is_background_learning", False):
+            _m485_q = str((ctx or {}).get("content") or payload.get("question") or "")
+            if _m485_q:
+                _m485_off = self._compute_offline_survival(_m485_q)
+                if _m485_off:
+                    answer = _m485_off
+                    method = "offline_local"
+                    self._log(LogLevel.INFO,
+                              f"[485刀1] 本地离线链兜底命中: cid={str(correlation_id)[:16]} "
+                              f"len={len(_m485_off)}")
 
         if answer:
             # 有答案，但先检查是否有文件需要处理
@@ -2122,6 +2292,18 @@ class PulseCortex(BasePulseOrgan):
                 "method": method,
             }
         else:
+            # ★485刀1+2（T-断网兜底出口）：走到这里 = 本地链已试过仍未解出（或未启用）。
+            #   判定启用 ∧ 处于降级窗口 ⇒ canned 出口（不再委派已死外脑）；
+            #   判定未启用 ⇒ 485-1 口径直接 canned（任务书：解不出来就走 canned 话术出口）；
+            #   判定启用 ∧ 不在降级窗口 ⇒ 外脑大概率活着 ⇒ 落下方既有委派（12s 看门狗）。
+            #   后台学习绝不出 canned 话术（任务书坑二）；内在自主无用户在等同理
+            #   （canned_exit 内部已挡）。
+            if self._m485_fallback_enabled() \
+                    and not payload.get("is_background_learning", False):
+                _m485_must_canned = (not self._m485_detect_enabled()) \
+                    or self._m485_llm_degraded()
+                if _m485_must_canned:
+                    return self._m485_canned_exit(correlation_id, user_name)
             # 内在世界未匹配，检查是否有代码块或文件需要处理
             file_paths = ctx.get("file_paths", [])
             code_blocks = ctx.get("code_blocks", [])

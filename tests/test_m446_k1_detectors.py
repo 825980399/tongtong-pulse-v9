@@ -187,8 +187,12 @@ def test_registry_code_optimization_still_none():
 
 
 def test_registry_unknown_type_none():
-    assert detector_for("sql_injection") is None
+    # ★485刀6 契约变更：sql_injection / Traceback / bare_return_none_in_except
+    #   已按任务书要求补齐检测器（485 前确实为 None，由
+    #   tests/test_m485_detectors.py 守护新契约）。此处保留 None 型断言：
+    #   非字符串 / 未登记类型仍必须返回 None。
     assert detector_for(None) is None
+    assert detector_for("no_such_issue_type_485x") is None
 
 
 def test_active_reprobe_true_pass_for_periodic():
