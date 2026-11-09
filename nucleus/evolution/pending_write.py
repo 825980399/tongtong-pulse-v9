@@ -112,6 +112,16 @@ def _m480_status_dist(payload: Any) -> dict:
     return _d
 
 
+def _m480_status_of_file(path: str) -> dict:
+    """★480 刀12：直接读某个 JSON 文件的 status 分布（探针专用，只读）。"""
+    try:
+        with open(path, encoding="utf-8") as _f:
+            return _m480_status_dist(json.load(_f))
+    except (OSError, ValueError) as _e:
+        silent_exc(_e, where="pending_write._m480_status_of_file", level="debug")
+        return {"<unreadable>": 1}
+
+
 def _rows_on_disk(path: str) -> int | None:
     try:
         with open(path, encoding="utf-8") as _f:
@@ -174,6 +184,7 @@ def write_pending(payload: Any, *, path: str | None = None,
     _t0 = time.time()
     with PENDING_WRITE_LOCK:
         _tmp = None
+        _m480_tmp_status: dict = {}
         try:
             _dir = os.path.dirname(_p) or "."
             if not os.path.isdir(_dir):
@@ -183,6 +194,9 @@ def write_pending(payload: Any, *, path: str | None = None,
                 json.dump(payload, _f, ensure_ascii=False, indent=1)
                 _f.flush()
                 os.fsync(_f.fileno())
+            # ★480 刀12：**replace 之前**先读回 tmp —— 这是「dump 时对象是什么」
+            #   的唯一直接证据（dump 与日志统计之间可能被别的线程改过）。
+            _m480_tmp_status = _m480_status_of_file(_tmp)
             _replace_with_retry(_tmp, _p)   # ★403刀4：3 次重试，间隔 100ms
             _tmp = None
         except (OSError, TypeError, ValueError) as _e:
@@ -210,8 +224,10 @@ def write_pending(payload: Any, *, path: str | None = None,
         # ★480 刀11：补 `status=` 与 `path=` —— 这是区分「没改」与「被覆盖」的
         #   唯一判据（活体 11-09：两次审批成功而文件 sha256 一字未变）。
         _module_logger.info(
-            "[356单写者] writer=%s rows=%s 读回=%s ok=%s status=%s path=%s 耗时=%.1fms",
+            "[356单写者] writer=%s rows=%s 读回=%s ok=%s status_mem=%s status_tmp=%s "
+            "status_disk=%s path=%s 耗时=%.1fms",
             writer or "?", _rows, _back, _ok, _m480_status_dist(payload) or "-",
+            _m480_tmp_status or "-", _m480_status_of_file(_p) or "-",
             _p, (time.time() - _t0) * 1000.0)
     return {"ok": bool(_ok), "rows": _back, "writer": writer,
             "why": "" if _ok else "readback_mismatch", "path": _p}
