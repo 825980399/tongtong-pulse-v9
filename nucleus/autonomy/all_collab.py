@@ -56,6 +56,9 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from nucleus._silent_except import silent_exc
+from nucleus.logger import get_module_logger
+
+_L = get_module_logger("ALL协作")
 
 SCHEMA = "479.all_collab.v1"
 _LEDGER_NAME = "all_collab.jsonl"
@@ -346,11 +349,10 @@ def _low_rate_channels(window: int = 200, min_tries: int = 10,
         if _n not in _LOWRATE_LOGGED:
             _LOWRATE_LOGGED.add(_n)
             try:
-                from nucleus.logger import get_logger as _gl
-                _gl("autonomy.all_collab").info(
+                _L.info(
                     "[479ALL协作] 跳过低成功率渠道 %s（近 %d 轮 %d 次成功 %d 次 = %.1f%%，门槛 %.0f%%）",
                     _n, _win, _tried, _ok, 100.0 * _ok / max(1, _tried), _rate * 100)
-            except (ImportError, AttributeError, TypeError, ValueError) as _e:
+            except (AttributeError, TypeError, ValueError) as _e:
                 silent_exc(_e, where="autonomy.all_collab::_low_rate_channels log",
                            level="debug")
     return _out
@@ -388,11 +390,10 @@ def _dead_channels(window: int = 200, min_tries: int = 10) -> set:
             if _n not in _DEAD_LOGGED:
                 _DEAD_LOGGED.add(_n)
                 try:
-                    from nucleus.logger import get_logger as _gl
-                    _gl("autonomy.all_collab").info(
+                    _L.info(
                         "[479ALL协作] 跳过零产出渠道 %s（近 %d 轮 %d 次调用 0 次成功）",
                         _n, _win, _tried)
-                except (ImportError, AttributeError, TypeError, ValueError) as _e:
+                except (AttributeError, TypeError, ValueError) as _e:
                     silent_exc(_e, where="autonomy.all_collab::_dead_channels log", level="debug")
     return _out
 
@@ -449,11 +450,10 @@ def pick_channels(n: int = 3, exclude: str = "") -> list[dict]:
     _out = _collect(_dead)
     if _out:
         try:
-            from nucleus.logger import get_logger as _gl
-            _gl("autonomy.all_collab").warning(
+            _L.warning(
                 "[479ALL协作] 低成功率过滤后无渠道可用 ⇒ 回落为只排除零产出渠道（%d 条）",
                 len(_out))
-        except (ImportError, AttributeError, TypeError, ValueError) as _e:
+        except (AttributeError, TypeError, ValueError) as _e:
             silent_exc(_e, where="autonomy.all_collab::pick_channels 回落日志",
                        level="debug")
     return _out

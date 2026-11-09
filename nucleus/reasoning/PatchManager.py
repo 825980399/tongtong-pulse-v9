@@ -4690,7 +4690,58 @@ class PatchManager:
                             reason: str = "",
                             basis: dict | None = None,
                             judged_by: str | None = None) -> dict[str, Any]:
-        """★439刀1：**按 id** 审批 —— pending 状态变更的**唯一写口**。
+        """★480 刀5：审批入口 —— 整段「读-定位-改-写」在 pending 唯一写口锁内。
+
+        为什么必须整段加锁（而不是只锁写）：`write_pending` 已把**写**串行化，
+        但本方法的流程是「读 pending → 算下标 → approve_patch（内部**再读一次**）
+        → 改 → 写」。整段在锁外时，任何并发写者（入队/收敛/归档）都能用旧快照
+        把它盖回去 —— 活体 2026-11-09 实测「同一件批准成功 3 次、落盘仍是
+        verified」，3 次把当日额度吃光，当天其余补丁全部 daily_cap。
+
+        锁是 `RLock`：`approve_patch → _save_patch_list → write_pending`
+        会再次获取同一把锁，同线程重入不会死锁。
+
+        开关 `M480_APPROVE_LOCK`（缺省开，显式 False ⇒ 逐字回到加锁前）。
+        """
+        if not PatchManager._m480_approve_lock_on():
+            return self._m480_approve_by_id_unlocked(
+                patch_id, by=by, reason=reason, basis=basis, judged_by=judged_by)
+        try:
+            from nucleus.evolution.pending_write import PENDING_WRITE_LOCK as _lk480
+        except Exception as _e480lk:
+            silent_exc(_e480lk,
+                       where="PatchManager.approve_patch_by_id 480锁",
+                       level="debug")
+            return self._m480_approve_by_id_unlocked(
+                patch_id, by=by, reason=reason, basis=basis, judged_by=judged_by)
+        with _lk480:
+            return self._m480_approve_by_id_unlocked(
+                patch_id, by=by, reason=reason, basis=basis, judged_by=judged_by)
+
+    @staticmethod
+    def _m480_approve_lock_on() -> bool:
+        """★480 刀5 灰度（缺省开；显式 False ⇒ 逐字回到加锁前）。"""
+        try:
+            import config as _c480l
+            _v = getattr(_c480l, "M480_APPROVE_LOCK", True)
+            if _v is None:
+                return True
+            if isinstance(_v, str):
+                return _v.strip().lower() in ("1", "true", "yes", "on")
+            return bool(_v)
+        except Exception as _e480lo:
+            silent_exc(_e480lo,
+                       where="PatchManager._m480_approve_lock_on",
+                       level="debug")
+            return True
+
+    def _m480_approve_by_id_unlocked(self, patch_id: str, by: str = "human:unknown",
+                                     reason: str = "",
+                                     basis: dict | None = None,
+                                     judged_by: str | None = None) -> dict[str, Any]:
+        """★439刀1 的**内部实现**（★480 刀5 起由 `approve_patch_by_id` 加锁后调用）。
+
+        ★439刀1：**按 id** 审批 —— pending 状态变更的**唯一写口**。
 
         为什么加这个而不是改造 `approve_patch`：既有 `approve_patch(index, signer, ...)`
         被 CLI / 测试多处按**下标**调用，改签名等于改契约（铁律 117）。这里只做
@@ -4794,6 +4845,19 @@ class PatchManager:
             return {"ok": False, "approved": 0,
                     "reason": "写入失败（可能被 WriteGuard 拦截）",
                     "error": "写入失败（可能被 WriteGuard 拦截）"}
+        # ★480 刀4：**读回目标条目**——只比条数会放过"条数没变、内容被覆盖"。
+        #   假成功会让上游记一次额度、而 pending 里 status 仍是 verified，
+        #   下一轮重投再"成功"一次 ⇒ 额度被同一件空耗干净（活体 11-09 实测 3 次）。
+        if _save_ok and PatchManager._m480_readback_on():
+            _rb_ok, _rb_why = self._m480_verify_approved_on_disk(_patch)
+            if not _rb_ok:
+                _module_logger.error(
+                    "[480刀4][审批读回] 落盘后校验未通过，按失败返回（不记额度）: "
+                    "%s:%s why=%s", _patch.get("file", ""),
+                    _patch.get("method", ""), _rb_why)
+                return {"ok": False, "approved": 0,
+                        "reason": f"落盘读回校验失败: {_rb_why}",
+                        "error": "write_readback_mismatch"}
         _module_logger.info(
             f"[补丁审批] index={index} {_patch.get('file','')}:{_patch.get('method','')} "
             f"grade={_patch.get('aesthetic_grade','?')}")
@@ -7494,6 +7558,60 @@ class PatchManager:
         except Exception as _m428_e:
             silent_exc(_m428_e, where="nucleus/reasoning/PatchManager.py::_resolve_patch_file L6123", level="debug")
             return file_path
+
+    @staticmethod
+    def _m480_readback_on() -> bool:
+        """★480 刀4 灰度开关（缺省开；显式 False ⇒ 逐字回到刀4 之前）。"""
+        try:
+            import config as _c480
+            _v = getattr(_c480, "M480_APPROVE_READBACK", True)
+            if _v is None:
+                return True
+            if isinstance(_v, str):
+                return _v.strip().lower() in ("1", "true", "yes", "on")
+            return bool(_v)
+        except Exception as _e480:
+            silent_exc(_e480,
+                       where="PatchManager._m480_readback_on",
+                       level="debug")
+            return True
+
+    def _m480_verify_approved_on_disk(self, patch: dict) -> tuple[bool, str]:
+        """★480 刀4：读回 pending，确认**这一条**真的落成了 approved。
+
+        为什么不复用 `_save_patch_list` 的返回值：那是条数比对（7==7），
+        内容被并发写者用旧快照覆盖时同样返回 True —— 正是本刀要堵的假成功。
+
+        匹配口径：优先 `id`（唯一）；无 id 的老条目退化为 (basename(file), method)。
+
+        Returns: `(ok, why)`；why 只在 ok=False 时有意义（给日志/留痕用）。
+        """
+        _pid = str(patch.get("id") or "")
+        _base = os.path.basename(str(patch.get("file") or ""))
+        _meth = str(patch.get("method") or "")
+        try:
+            _rows = self._load_patch_list(self._pending_file)
+        except Exception as _e:
+            silent_exc(_e, where="PatchManager._m480_verify_approved_on_disk 读回",
+                       level="warning")
+            return False, f"读回异常: {type(_e).__name__}"
+        if not isinstance(_rows, list):
+            return False, "读回不是列表"
+        for _r in _rows:
+            if not isinstance(_r, dict):
+                continue
+            if _pid:
+                if str(_r.get("id") or "") != _pid:
+                    continue
+            else:
+                if (os.path.basename(str(_r.get("file") or "")) != _base
+                        or str(_r.get("method") or "") != _meth):
+                    continue
+            _st = str(_r.get("status") or "")
+            if _st == "approved":
+                return True, ""
+            return False, f"落盘后 status={_st!r}（应为 approved）"
+        return False, "读回找不到该条（疑被并发写者覆盖/出队）"
 
     def _load_patch_list(self, path, default=None):
         """读取补丁列表（pending/history）并把 file 解析为绝对路径。"""

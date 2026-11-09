@@ -262,6 +262,20 @@ def approval_trace_path(root: str | None = None) -> str:
     return os.path.join(_root, APPROVAL_TRACE_REL)
 
 
+def _m480_cap_dedup_on() -> bool:
+    """★480 刀3：日额度是否按 `patch_id` 去重（缺省开）。
+
+    显式 False ⇒ 逐字回到「按 approved 行数计费」的旧行为（`None` 视作缺省=开，
+    与铁律「只有 None 才算缺省」同向：写 0 不算关）。
+    """
+    _v = _cfg("M480_APPROVE_CAP_DEDUP", True)
+    if _v is None:
+        return True
+    if isinstance(_v, str):
+        return _v.strip().lower() in ("1", "true", "yes", "on")
+    return bool(_v)
+
+
 def daily_cap() -> int:
     """每天最多自动批准几条（`M447_APPROVE_DAILY_CAP`，缺省 1；<=0 视为关闭自动批准）。"""
     try:
@@ -356,18 +370,35 @@ def approved_today(root: str | None = None, *, now: float | None = None) -> int:
 
     去重：同一 `patch_id` 的退款只扣一次（同一件可能失败多次、或被重投重批），
     否则一件失败能把额度扣成负数（虽有 `max(0, ...)` 兜底，语义仍错）。
+
+    ★480 刀3：**批准侧同样按 `patch_id` 去重**。病因见模块注释——
+    同一件因「状态没落盘」被反复重投重批，3 次就吃光当日额度，
+    当天其余补丁全部 `daily_cap`（活体 2026-11-09 实测）。
+    开关 `M480_APPROVE_CAP_DEDUP`，显式 False ⇒ 逐字回到按行计数。
     """
     _refunded: set = set()
-    _n = 0
+    # ★480 刀3：同一条补丁当天被重复放行只计 1 条（额度是"几条件"，不是"几次点击"）。
+    #   无 `patch_id` 的行无处去重 ⇒ 仍逐行计数（fail-open，不因缺字段而少算）。
+    _dedup = _m480_cap_dedup_on()
+    _approved_ids: set = set()
+    _n_rows = 0
+    _n_no_id = 0        # ★没有 patch_id 的行**单独计**：它们无处去重，只能逐行算
     for _row in _read_today_rows(root, now=now):
+        _pid = _pid_of(_row)
         if _row.get("refund") is True:
-            _pid = _pid_of(_row)
             if _pid:
                 _refunded.add(_pid)
             continue
         if _row.get("approved") is True:
-            _n += 1
-    return max(0, _n - len(_refunded))
+            _n_rows += 1
+            if _pid:
+                _approved_ids.add(_pid)
+            else:
+                _n_no_id += 1
+    if _dedup:
+        # 有 id 的按 id 去重（同一件重复放行只计 1），无 id 的逐行计。
+        return max(0, len(_approved_ids - _refunded) + _n_no_id)
+    return max(0, _n_rows - len(_refunded))
 
 
 def approved_today_ids(root: str | None = None, *,

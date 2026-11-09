@@ -8130,6 +8130,47 @@ ENABLE_M447_APPROVAL_BRIDGE = True
 #     再往上（>3）建议先看一周的 approval_trace 成功率再谈。
 #   ★回滚：改回 1 即逐字回到 446/447 的原始保守口径。
 M447_APPROVE_DAILY_CAP = 3
+
+# ==================== ★480批：让「审批成功」这个返回值诚实 ====================
+#
+# 病因（活体 2026-11-09 实测，三处叠加成一条死锁）：
+#   ① `approve_patch` 落盘后只校验「条数」（7 == 7），pending 走
+#      `pending_write.write_pending` 也只比条数 ⇒ **内容被并发写者用旧快照
+#      盖回去时同样报成功**；
+#   ② 于是同一条 `patch_llm_1794030764_3274`（PulseTouch.py::_schedule_next_snapshot）
+#      当天被"批准成功" 3 次，pending 里 status 始终是 verified、approved_source=None；
+#   ③ `retry_468` 的跳过条件读 `approved_at`/`approved`（都没落盘）⇒ 每轮重投
+#      ⇒ 每批一次计一次额度 ⇒ 3 次吃光当日额度 ⇒ 当天其余补丁全部 daily_cap
+#      ⇒ `[422刀3] approved=0` ⇒ apply 恒 0。
+#
+# 三个开关都能单独回滚到「改前逐字行为」。
+
+# M480_APPROVE_READBACK
+#   默认值：True
+#   语义：True  ⇒ `approve_patch` 落盘后**按 id 重新读盘**，确认这一条真的
+#                `status=="approved"`；不是 ⇒ 返回 ok=False（fail-closed）。
+#                上游三处自动变诚实：status_written=False / approved=False /
+#                trace 记 approved=False ⇒ **不计额度**。
+#        False ⇒ 只校验条数（刀4 之前的行为）。
+#   读取点：nucleus/reasoning/PatchManager.py::_m480_readback_on()
+M480_APPROVE_READBACK = True
+
+# M480_APPROVE_LOCK
+#   默认值：True
+#   语义：True  ⇒ `approve_patch_by_id` 的「读 → 定位下标 → approve_patch（内部
+#                再读一次）→ 改 → 写」整段放进 `pending_write.PENDING_WRITE_LOCK`
+#                （RLock，可重入，不会死锁）。
+#        False ⇒ 整段在锁外（刀5 之前的行为，存在 lost update）。
+#   读取点：nucleus/reasoning/PatchManager.py::_m480_approve_lock_on()
+M480_APPROVE_LOCK = True
+
+# M480_APPROVE_CAP_DEDUP
+#   默认值：True
+#   语义：True  ⇒ 日额度按 `patch_id` 去重：同一件当天被重复放行只计 1 条
+#                （额度是「几条」，不是「几次点击」）。无 patch_id 的行仍逐行计。
+#        False ⇒ 逐行计数（刀3 之前的行为）。
+#   读取点：nucleus/evolution/approval_bridge.py::_m480_cap_dedup_on()
+M480_APPROVE_CAP_DEDUP = True
 #
 # ENABLE_M447_APPLY_TRACE / M447_APPLY_TRACE_PATH / M447_APPLY_TRACE_MAX_CHARS
 #   默认值：True / "data/patches/apply_trace.jsonl" / 0（0 = 不截断）

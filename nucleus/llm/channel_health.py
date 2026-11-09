@@ -16,6 +16,8 @@ from __future__ import annotations
 import threading
 import time
 
+from nucleus._silent_except import silent_exc
+
 
 class ChannelHealthTracker:
     """渠道健康度跟踪器（内存态、线程安全）。"""
@@ -116,3 +118,73 @@ class ChannelHealthTracker:
                 self._stats.clear()
             else:
                 self._stats.pop(name, None)
+
+
+# ========== ★480 刀1：进程级单例（channel_client 上报口） ==========
+#
+# 为什么要有这一层：
+#   `nucleus/reasoning/channel_client.py::_report_health` 每次渠道调用都执行
+#   `from nucleus.llm.channel_health import get_channel_health`，但本模块此前
+#   **只有类、没有这个函数** ⇒ 每次都 ImportError ⇒ 被 silent_exc 吞成 DEBUG
+#   ⇒「渠道健康度」这本账从来没被写进去过，`is_available()` 永远 True、
+#   `success_rate()` 永远 1.0，熔断机制等于不存在。
+#
+# 为什么参数从 config 取：
+#   `organs/body/PulseLung._get_channel_health()` 早就用
+#   `config.REMOTE_API_CHANNELS["health"]` 的 window_size / threshold / seconds
+#   构造自己的实例。单例必须用**同一份参数**，否则两本账口径不同。
+#   ★但实例仍各自持有（本刀不合并 PulseLung 的实例）—— 合并会改 core 文件
+#     的读路径，风险与本刀收益不成正比，留作后续单独立项。
+_GLOBAL_TRACKER: ChannelHealthTracker | None = None
+_GLOBAL_LOCK = threading.Lock()
+
+
+def _build_tracker_from_config() -> ChannelHealthTracker:
+    """按 config.REMOTE_API_CHANNELS["health"] 构造；取不到就用类默认值。"""
+    _kw = {}
+    try:
+        import config as _cfg
+        _h = (getattr(_cfg, "REMOTE_API_CHANNELS", None) or {}).get("health", {}) or {}
+        _kw = {
+            "window_size": int(_h.get("window_size", 10)),
+            "circuit_break_threshold": int(_h.get("circuit_break_threshold", 3)),
+            "circuit_break_seconds": float(_h.get("circuit_break_seconds", 300)),
+        }
+    except Exception as _e:
+        silent_exc(_e, where="channel_health::_build_tracker_from_config",
+                   level="debug")
+        _kw = {}
+    try:
+        return ChannelHealthTracker(**_kw)
+    except Exception as _e:
+        silent_exc(_e, where="channel_health::_build_tracker_from_config 构造",
+                   level="warning")
+        return ChannelHealthTracker()
+
+
+def get_channel_health() -> ChannelHealthTracker:
+    """取进程级共享的渠道健康度跟踪器（惰性构造，线程安全）。
+
+    返回对象与 `PulseLung._get_channel_health()` 的实例**互不影响**，
+    但参数同源（同一份 config），口径不会分叉。
+    """
+    global _GLOBAL_TRACKER
+    if _GLOBAL_TRACKER is not None:
+        return _GLOBAL_TRACKER
+    with _GLOBAL_LOCK:
+        if _GLOBAL_TRACKER is None:
+            _GLOBAL_TRACKER = _build_tracker_from_config()
+    return _GLOBAL_TRACKER
+
+
+def reset_channel_health() -> None:
+    """丢弃单例并把统计清零（测试 / 热重载用）。"""
+    global _GLOBAL_TRACKER
+    with _GLOBAL_LOCK:
+        if _GLOBAL_TRACKER is not None:
+            try:
+                _GLOBAL_TRACKER.reset()
+            except Exception as _e:
+                silent_exc(_e, where="channel_health::reset_channel_health",
+                           level="debug")
+        _GLOBAL_TRACKER = None
