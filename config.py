@@ -8171,6 +8171,22 @@ M480_APPROVE_LOCK = True
 #        False ⇒ 逐行计数（刀3 之前的行为）。
 #   读取点：nucleus/evolution/approval_bridge.py::_m480_cap_dedup_on()
 M480_APPROVE_CAP_DEDUP = True
+
+# M480_HEARTBEAT_KEEP_CHAIN
+#   默认值：True
+#   语义：True  ⇒ `PulseHeart._trigger_heartbeat` 在 `is_running=False` 时
+#                **仍然预排下一拍**再返回（不发心跳，语义不变）。
+#         False ⇒ 逐字回到「首行 return」的旧行为。
+#   为什么必须续链（台账 T1 / F4；memory 交接 473 ②）：
+#     「租约接管续跳」(374刀1) 与「预排下一拍」(396刀1) 都写在 `if not self.is_running: return`
+#     **之后** ⇒ 一旦 is_running 变 False，这一拍静默早退、链再没有人续：
+#     看门狗只能看着 age 涨（活体 20:41→21:21 连续 5 次 274→2704s、takeover=0），
+#     且 is_running 后来恢复 True 也没有下一拍把它叫醒 ⇒ **不可自发恢复**。
+#   ★为什么安全：`stop()` 是「先 _cancel_timer() 再 super().stop()」，正常停机
+#     根本走不到这里；`_next_timer.daemon=True` ⇒ 也不会阻止进程退出。
+#     能走到这里的只有「Timer 还活着、is_running 却是 False」这个异常态。
+#   读取点：organs/body/PulseHeart.py::_m480_keep_chain_on()
+M480_HEARTBEAT_KEEP_CHAIN = True
 #
 # ENABLE_M447_APPLY_TRACE / M447_APPLY_TRACE_PATH / M447_APPLY_TRACE_MAX_CHARS
 #   默认值：True / "data/patches/apply_trace.jsonl" / 0（0 = 不截断）

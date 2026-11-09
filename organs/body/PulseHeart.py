@@ -486,6 +486,20 @@ class PulseHeart(BasePulseOrgan):
         #   is_running / 在途 Timer 是什么状态（早退？livelock？）。
         self._m396_trace_enter()
         if not self.is_running:
+            # ★480 刀6：停机 ≠ 断链。
+            #   `stop()` 是「先 _cancel_timer() 再 super().stop()」，正常停机根本
+            #   走不到这里；能走到这里说明**Timer 还活着、is_running 却是 False**
+            #   （活体实测：20:41→21:21 连续 5 次 age=274→2704s、takeover=0）。
+            #   旧实现在此直接 return，于是「预排下一拍」与「租约接管」永远进不来
+            #   ⇒ 链断死，is_running 后来恢复 True 也没有下一拍叫醒它。
+            #   现在只补续链、不发心跳（语义不变）；daemon Timer 不阻止进程退出。
+            if PulseHeart._m480_keep_chain_on():
+                self._m374_schedule_ahead()
+                self._log(LogLevel.ERROR,
+                          f"[480刀6] is_running=False 但心跳 Timer 仍在触发 "
+                          f"⇒ 已续链保活（beat={getattr(self, '_beat_count', 0)}，"
+                          f"is_running 恢复后下一拍自动复活），不发心跳",
+                          error_code="heartbeat_chain_kept_while_stopped")
             return
         # ★374刀1 ①：**先排下一拍，再判守卫**。
         #   原实现的续链只在 finally ⇒ 这一拍卡住就永久断链（17:24 事故）。
@@ -745,6 +759,23 @@ class PulseHeart(BasePulseOrgan):
                       f"beat={getattr(self, '_beat_count', 0)}）："
                       f"{type(_e).__name__}: {_e}",
                       error_code="heartbeat_pre_sched_fail")
+
+    @staticmethod
+    def _m480_keep_chain_on() -> bool:
+        """★480 刀6 灰度（缺省开；显式 False ⇒ 逐字回到首行 return）。"""
+        try:
+            import config as _c480h
+            _v = getattr(_c480h, "M480_HEARTBEAT_KEEP_CHAIN", True)
+            if _v is None:
+                return True
+            if isinstance(_v, str):
+                return _v.strip().lower() in ("1", "true", "yes", "on")
+            return bool(_v)
+        except Exception as _e480h:
+            silent_exc(_e480h,
+                       where="PulseHeart::_m480_keep_chain_on",
+                       level="debug")
+            return True
 
     def _m374_guard_lease(self) -> float:
         """守卫租约秒数（3×当前间隔；间隔取不到用保守值）。"""
