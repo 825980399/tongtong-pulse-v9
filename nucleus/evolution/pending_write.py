@@ -363,6 +363,34 @@ def update_pending(mutator, *, path: str | None = None, root: str | None = None,
         return _r
 
 
+def flush_if_changed(payload: Any, before: Any, *, path: str | None = None,
+                     root: str | None = None, writer: str = "") -> dict:
+    """★481 刀18：只在内容真的变了才写 pending（零变更不碰盘）。
+
+    背景：`SafeEvolutionExecutor.verify_submitted_patches` 在锁外读一份
+    pending 旧快照，末尾「保存更新后的补丁队列」时无条件整体写回。活体
+    11-09 两次复现（13:09:59 / 14:42:18）：审批桥刚把某条改成 approved
+    并落盘，紧接着这个 `_total=0` 的空轮就把旧快照写回去 ⇒ approved 凭空
+    消失，日额度被同一件补丁反复空耗。
+
+    为什么挂在写口模块：调用方是「锁外读 → 整体写」的典型 lost update，
+    「有没有变」只有拿读入时的原样副本比才知道；把判据收在唯一写口旁，
+    后续任何写者都能复用，不必各自造一套计数变量（那种判据在旧代码上
+    也能成立，铁律35）。
+
+    Returns: `write_pending` 的返回体 + `written`（是否真的写了盘）；
+             零变更时 `ok=True / written=False / why="unchanged"`，
+             **不抛、不写盘**，调用方按 written 决定是否留痕。
+    """
+    if payload == before:
+        return {"ok": True, "written": False, "why": "unchanged",
+                "rows": _rows_of(payload), "writer": writer,
+                "path": path or pending_path(root)}
+    _r = write_pending(payload, path=path, root=root, writer=writer)
+    _r["written"] = True
+    return _r
+
+
 def write_stats() -> dict:
     """写口自检（供测试/诊断）：锁是否被占、路径是什么。"""
     return {

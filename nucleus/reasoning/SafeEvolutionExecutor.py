@@ -4540,6 +4540,11 @@ class SafeEvolutionExecutor:
             if not _pending:
                 return {"total": 0, "verified": 0, "failed": 0,
                         "skipped": 0, "avg_effectiveness": 0.0}
+            # ★481 刀18：记下「锁外读到的旧快照」原样。本函数末尾要整体写回
+            #   pending，而期间审批桥可能已把某条改成 approved 并落盘。
+            #   有 before/after 才能精确区分「本轮真的改了东西」与「零变更也照写」。
+            import copy as _m481_copy
+            _m481_pending_before = _m481_copy.deepcopy(_pending)
 
             _total = 0
             _verified = 0
@@ -4880,9 +4885,28 @@ class SafeEvolutionExecutor:
                 _module_logger.info(
                     f"[运行时验证] T-105a 补回边：验证后复查放行 {_released} 条 T-101a 合格补丁")
 
-            # 保存更新后的补丁队列
-            self._patch_manager._save_json(
-                self._patch_manager.get_pending_file(), _pending)
+            # ★481 刀18：pending 写回收敛到 356 唯一写口。
+            #   活体证据（11-09 13:09:59 / 14:42:18 两次复现）：
+            #     写口 writer=PatchManager status_disk 含 approved:1
+            #     → 紧接着 [运行时验证] 批量验证完成 总数=0
+            #     → 外部读盘变成 verified:6、approved_at 全无
+            #   原来这里用 `_save_json` 直接写回**锁外读到的旧快照**，且即使
+            #   `_total=0`（本轮什么都没验）也照写不误 ⇒ 把刚批准的补丁整体冲回。
+            #   ① 零实质变更 ⇒ 不写盘（少一次纯破坏性的无效写，业务逐字不变）；
+            #   ② 真有变更 ⇒ 走唯一写口，其「审批状态单调保护」会继承盘上
+            #      已生效的 approved 字段，旧快照再也冲不掉审批结果。
+            from nucleus.evolution.pending_write import flush_if_changed as _m481_flush
+            _m481_wr = _m481_flush(
+                _pending, _m481_pending_before,
+                path=self._patch_manager.get_pending_file(),
+                writer="SafeEvolutionExecutor.verify_submitted_patches")
+            if not _m481_wr.get("written"):
+                _module_logger.info(
+                    "[481刀18] 本轮 pending 无实质变更，跳过整体写回（防止旧快照冲掉新审批）")
+            elif not _m481_wr.get("ok"):
+                _module_logger.warning(
+                    "[356单写者] verify_submitted_patches 重写 pending 未通过校验: %s",
+                    _m481_wr.get("why"))
 
             _avg = sum(_effects) / len(_effects) if _effects else 0.0
 
