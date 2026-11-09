@@ -122,23 +122,91 @@ class PulseMouth(BasePulseOrgan):
         return None
 
     def _on_initiative(self, payload: dict) -> dict[str, Any]:
-        """收到主动问候内容，直接输出"""
-        greeting = payload.get("greeting", "")
+        """收到主动问候内容，直接输出。
+
+        ★482-B1 主动表达止血（4 刀，各自独立回滚开关，False ⇒ 逐字回到该刀之前的行为）：
+          刀1 content 兜底 / 刀2 内在自主闸门预留 / 刀3 来源标记透传 / 刀4 同键去重。
+        """
+        try:
+            import config as _cfg
+        except Exception as _e:  # config 恒可导入，此处仅防运行期热替换异常
+            silent_exc(_e, where="organs.motor.PulseMouth::_on_initiative import config", level="debug")
+            _cfg = None
+
+        def _flag(_name, _default=True):
+            """读灰度开关；不用 or 兜底，避免 False / 0 被当成缺省（铁律）。"""
+            if _cfg is None:
+                return _default
+            return getattr(_cfg, _name, _default)
+
+        # ===== 482-1：B1 键名错配。发射侧写 content，接收侧原本只读 greeting。=====
+        # 回滚：ENABLE_M482_INITIATIVE_CONTENT_FALLBACK=False ⇒ 逐字回到只读 greeting。
+        if _flag("ENABLE_M482_INITIATIVE_CONTENT_FALLBACK"):
+            greeting = payload.get("greeting") or payload.get("content") or ""
+        else:
+            greeting = payload.get("greeting", "")
         user_name = payload.get("user_name", "用户")
 
         if not greeting:
             return {"status": "skipped", "reason": "空问候"}
 
+        # ===== 482-2：与 _on_speak:166 同口径的内在自主 / 后台内容隔离闸门。=====
+        # 现有 6 个真实发射点均不带这两个标记 ⇒ 默认放行，零行为变化（预留隔离能力）。
+        # 回滚：ENABLE_M482_INITIATIVE_INNER_GATE=False ⇒ 完全不检查这两个标记。
+        if (_flag("ENABLE_M482_INITIATIVE_INNER_GATE")
+                and (payload.get("is_inner_autonomous") or payload.get("is_background_learning"))):
+            self._log(LogLevel.DEBUG,
+                      f"[482刀2] 抑制内在自主/后台主动表达 (len={len(greeting)})")
+            return {"status": "suppressed", "reason": "inner_autonomous"}
+
+        # ===== 482-4：同 user_name + 正文前 40 字，窗口内只发一次。=====
+        # 回滚：ENABLE_M482_INITIATIVE_DEDUP=False ⇒ 重复照发。
+        if _flag("ENABLE_M482_INITIATIVE_DEDUP"):
+            _now = time.time()
+            _window = getattr(_cfg, "M482_INITIATIVE_DEDUP_SEC", 120.0) if _cfg is not None else 120.0
+            try:
+                _window = max(0.0, float(_window))
+            except (TypeError, ValueError) as _e:
+                silent_exc(_e, where="organs.motor.PulseMouth::_on_initiative dedup window", level="debug")
+                _window = 120.0
+            _state = getattr(self, "_m482_initiative_dedup", None)
+            if not isinstance(_state, dict):
+                _state = {}
+                self._m482_initiative_dedup = _state
+            _key = (str(user_name), str(greeting)[:40])
+            # 顺手清理过期项，避免去重表无限增长
+            for _k in [k for k, v in list(_state.items()) if _now - v >= _window]:
+                _state.pop(_k, None)
+            _last = _state.get(_key) if _window > 0 else None
+            if _last is not None and 0 <= _now - _last < _window:
+                self._log(LogLevel.DEBUG, "[482刀4] 主动表达去重: 窗口内重复，跳过输出")
+                return {"status": "skipped", "reason": "重复主动表达"}
+            _state[_key] = _now
+
         reply_text = self._filter_personality(greeting)
         # GIL-dependent atomic increment (safe on CPython 3.11/3.12, review before free-threaded migration)
         self._reply_count += 1
 
-        self._emit(MouthEvent.REPLY, {
-            "content": reply_text,
-            "user_name": user_name,
-            "source": "initiative",
-
-        }, priority=8, layer="L1")
+        # ===== 482-3：送达率可测前提 =====
+        # source 用 initiative_<type>：既满足验收②的 initiative_* 口径，
+        # 又保留 chat_service._source_icon 的 "initiative" 子串命中（零可见回归）；
+        # 原名保留到 initiative_source，原始分类另存 initiative_type 供分组。
+        # 回滚：ENABLE_M482_INITIATIVE_SOURCE_TRACE=False ⇒ 逐字回到旧 REPLY payload。
+        if _flag("ENABLE_M482_INITIATIVE_SOURCE_TRACE"):
+            _itype = str(payload.get("initiative_type") or "unknown")
+            self._emit(MouthEvent.REPLY, {
+                "content": reply_text,
+                "user_name": user_name,
+                "source": "initiative_" + _itype,
+                "initiative_source": "initiative",
+                "initiative_type": payload.get("initiative_type", ""),
+            }, priority=8, layer="L1")
+        else:
+            self._emit(MouthEvent.REPLY, {
+                "content": reply_text,
+                "user_name": user_name,
+                "source": "initiative",
+            }, priority=8, layer="L1")
         # 语音朗读代码执行结果
         self._speak_tts(reply_text)
 

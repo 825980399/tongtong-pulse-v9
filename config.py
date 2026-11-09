@@ -9131,3 +9131,20 @@ ENABLE_M470_WINDOW_REVERIFY = True
 # 刀2 同一补丁的延迟复验次数上限（防 fixed_at 脏数据导致无限复验）。
 #   读取点：SafeEvolutionExecutor.py::_m470_max_reverify
 M470_MAX_REVERIFY = 3
+
+# ===== [M482-CFG] 482-B1 主动表达止血（2026-11-09）=====
+# 四刀各自独立回滚；默认 True = 修复生效，把某一项改成 False 即逐字回到该刀之前的行为。
+#   读取点统一在 organs/motor/PulseMouth.py::_on_initiative
+# 刀1 content 兜底：修 B1 键名错配（发射侧写 content，接收侧只读 greeting）。
+#   关掉 ⇒ 回到只读 greeting，今日实测 6 个发射点全部 skipped/空问候。
+ENABLE_M482_INITIATIVE_CONTENT_FALLBACK = True
+# 刀2 内在自主 / 后台内容隔离闸门（与 _on_speak:166 同口径）。
+#   当前 6 个发射点均不带 is_inner_autonomous / is_background_learning ⇒ 默认放行、零行为变化。
+ENABLE_M482_INITIATIVE_INNER_GATE = True
+# 刀3 来源标记透传：source=initiative_<type>，原名存 initiative_source。
+#   关掉 ⇒ source 回到 "initiative"（按 initiative_type 分组不可测）。
+ENABLE_M482_INITIATIVE_SOURCE_TRACE = True
+# 刀4 去重：同 user_name + 正文前 40 字，在窗口内只发一次。
+#   关掉 ⇒ 5 个发射点同节拍撞车时重复照发。
+ENABLE_M482_INITIATIVE_DEDUP = True
+M482_INITIATIVE_DEDUP_SEC = 120.0
