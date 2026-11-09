@@ -8732,7 +8732,12 @@ class SafeEvolutionExecutor:
                     _int_label = "主动终止/fast-fail(STATUS_FATAL_APP_EXIT)"
                 else:
                     _int_label = f"信号终止(exitcode={proc.exitcode})"
-                self._module_logger.info(
+                # ★480 刀13：本类**没有** self._module_logger（只有模块级同名对象）。
+                #   活体 11-09 12:22:11 实测打 ERROR：
+                #   [自主迭代] 子进程调用异常: 'SafeEvolutionExecutor' object has no
+                #   attribute '_module_logger' ⇒ 整个 mode=execute 子进程被外层 except 吞掉，
+                #   自主迭代白跑一轮。改为模块级调用。
+                _module_logger.info(
                     f"[自主迭代] 子进程被主动中断(非崩溃): exitcode={_int_code}, "
                     f"mode={mode}, 原因={_int_label}, 耗时={_elapsed:.1f}s")
                 return {"status": "interrupted",

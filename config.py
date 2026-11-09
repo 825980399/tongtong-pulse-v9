@@ -8242,6 +8242,28 @@ SSRF_ALLOW_REDIRECT = False
 #     重开等于把第 68 批省下的磁盘又还回去；元状态只有几 KB。
 #   读取点：nucleus/mnemosyne/PulseSnapshot.py::_m480_meta_state_on()
 ENABLE_M480_META_STATE = True
+
+# ==================== ★480批：pending 单调保护 + 台账 C8/C10/C12 裁决 ====================
+#
+# 刀14：唯一写口落盘前继承盘上已批准的审批字段（防旧快照整体写回冲掉 approved）。
+#   活体 13:09:59 探针 status_mem/status_tmp/status_disk 全是 approved:1，
+#   而外部读盘 verified:6 ⇒ 写口返回后被旧快照覆盖。显式 False 逐字回滚。
+ENABLE_M480_PENDING_MONOTONIC = True
+
+# 刀15（C8 裁决）：风险谨慎模式「只写不读 + 单向棘轮」。
+#   裁决 = 补读点 + TTL 自动复位，但**不接进任何决策链**（语义从未定义，
+#   贸然生效可能全局压制正常演化）。False ⇒ 完全回到 480 之前。
+ENABLE_M480_RISK_CAUTIOUS_TELEMETRY = True
+M480_RISK_CAUTIOUS_TTL_SEC = 3600.0
+
+# 刀16（C10 裁决）：周期精神校验传 proposed_content="" 必然 safe=True。
+#   裁决 = 不伪造输入，改为对「当前自身基线要素」做真实存在性自检；
+#   False ⇒ 逐字回到空参校验（仅用于 A/B 对照）。
+ENABLE_M480_CONSTITUTION_REAL_CHECK = True
+
+# 刀17（C12 裁决）：跨渠道回复串台。裁决 = 服务端加可选游标，不改前端协议：
+#   不传 ?since= 的老客户端行为一字不变；传了的新客户端各自维护游标、互不取走。
+ENABLE_M480_REPLY_CURSOR = True
 #
 # ENABLE_M447_APPLY_TRACE / M447_APPLY_TRACE_PATH / M447_APPLY_TRACE_MAX_CHARS
 #   默认值：True / "data/patches/apply_trace.jsonl" / 0（0 = 不截断）

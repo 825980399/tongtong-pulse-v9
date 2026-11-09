@@ -31,6 +31,15 @@ from nucleus.const import (
 )
 
 
+def _m480_cfg_bool(name: str, default: bool = True) -> bool:
+    """★480：读 config 布尔开关（config 未加载时用缺省；None 视作缺省）。"""
+    import sys as _sys
+    _cfg = _sys.modules.get("config")
+    if _cfg is None:
+        return default
+    return bool(getattr(_cfg, name, default))
+
+
 class PulseSpiritConstitution(BasePulseOrgan):
     """
     精神宪法运行时（v24.0新增）
@@ -196,10 +205,21 @@ class PulseSpiritConstitution(BasePulseOrgan):
             # 4. 执行精神校验
             if self.personality_kernel:
                 try:
-                    baseline = self.personality_kernel.check_modification_baseline(
-                        proposed_content="",
-                        proposed_file=""
-                    )
+                    # ★480 刀16（台账 C10 裁决）：周期自检**没有"提议的修改"**，
+                    #   传空参让 check_modification_baseline 必然 safe=True，
+                    #   第 4 步等于没执行、还白记一次校验计数。
+                    #   裁决：不伪造输入，改为对「当前自身基线要素」做真实存在性自检；
+                    #   结果另存 result["spirit_integrity"] 影子留痕。
+                    #   下游判据一字不动 ⇒ 基线齐全时行为与改前完全一致，
+                    #   基线**真的缺了**才会报 violation（那本来就该报）。
+                    if _m480_cfg_bool("ENABLE_M480_CONSTITUTION_REAL_CHECK"):
+                        baseline = self.personality_kernel.check_own_baseline_intact()
+                        result["spirit_integrity"] = dict(baseline)
+                    else:
+                        baseline = self.personality_kernel.check_modification_baseline(
+                            proposed_content="",
+                            proposed_file=""
+                        )
                     if not baseline.get("safe", True):
                         result["violations"].append(baseline)
                         result["status"] = "violation"

@@ -399,6 +399,32 @@ class PulsePersonalityKernel(BasePulseOrgan):
         # ===== v21.0新增结束 =====
 
         return {"allowed": True, "reason": "通过边界检查"}
+    def check_own_baseline_intact(self) -> dict[str, Any]:
+        """★480 刀16（台账 C10）：周期自检该做的事 —— 校验**自身**基线要素是否齐全。
+
+        与 check_modification_baseline 的区别：后者校验「外部提议的修改」，
+        周期自检根本没有提议内容，传 proposed_content="" 必然 safe=True
+        （PulseSpiritConstitution.py:198 传的就是空参，第 4 步等于没执行）。
+        本方法只读、不改状态、不发告警，返回结构化结果供影子留痕。
+        领域无关：任何「不可变基线」类资产都能用同一套存在性判据。
+        """
+        _missing = []
+        for _k in ("identity", "father", "brother", "mission", "sister"):
+            if not str((self._core_anchors or {}).get(_k) or "").strip():
+                _missing.append("anchor:" + _k)
+        if not self._core_values:
+            _missing.append("core_values")
+        if not self._immutable_boundaries:
+            _missing.append("immutable_boundaries")
+        if not self._baseline_protected_terms:
+            _missing.append("baseline_protected_terms")
+        return {"safe": not _missing, "missing": _missing,
+                "anchors": len(self._core_anchors or {}),
+                "values": len(self._core_values or []),
+                "boundaries": len(self._immutable_boundaries or []),
+                "terms": len(self._baseline_protected_terms or ()),
+                "reason": "基线完整" if not _missing else f"基线要素缺失: {_missing}"}
+
     def check_modification_baseline(self, proposed_content: str = "",
                                       proposed_file: str = "") -> dict[str, Any]:
         """

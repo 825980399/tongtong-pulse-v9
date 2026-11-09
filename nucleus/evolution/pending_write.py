@@ -122,6 +122,90 @@ def _m480_status_of_file(path: str) -> dict:
         return {"<unreadable>": 1}
 
 
+# ★480 刀14：审批状态是**单调**的。全仓没有任何一处会把 approved_at 置空
+#   （grep 过 None/del/pop 均无命中）⇒ 「盘上 approved、新 payload 里同一 id
+#   却连 approved_at 都没有」只可能是审批前的旧快照，不可能是合法撤销。
+_M480_APPROVAL_FIELDS = (
+    "status", "approved_source", "approved_signer", "approved_at",
+    "approved_judged_by", "approved_basis",
+)
+
+
+def _m480_monotonic_on() -> bool:
+    """灰度开关：缺省开；显式 False ⇒ 逐字回到 480 刀14 之前。"""
+    import sys as _sys
+    _cfg = _sys.modules.get("config")
+    if _cfg is None:
+        return True
+    return bool(getattr(_cfg, "ENABLE_M480_PENDING_MONOTONIC", True))
+
+
+def _m480_rows_of(payload: Any) -> list:
+    """兼容 pending 的两种容器形态（裸 list / dict 包装）。只读不改。"""
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        for _k in ("patches", "pending", "items"):
+            if isinstance(payload.get(_k), list):
+                return payload[_k]
+    return []
+
+
+def _m480_inherit_approvals(payload: Any, path: str) -> int:
+    """落盘前把盘上已生效的审批字段继承进 payload，防旧快照冲掉 approved。
+
+    活体证据（11-09 13:09:59）：
+        status_mem / status_tmp / status_disk **三处都是 approved:1**
+        （status_disk 是 os.replace 之后读的最终路径）
+        而外部进程读同一文件是 verified:6，sha256 与几小时前完全相同。
+    ⇒ 写口返回之后，有人用「审批前的旧快照」整体写回。
+    所有调用方（PatchManager / PatchAutoApprover / dispatch_ttl）都是
+    「锁外读 → 整体写」，逐个改成 update_pending 风险大且不保证第三方；
+    保护放在唯一写口才能覆盖全部路径。
+
+    只继承这一种，避免拦掉合法撤销：
+      · 盘上该 id 是 status=approved 且 approved_at 有值；
+      · payload 里同一 id **没有 approved_at**。
+    有意撤销应显式写新状态并保留 approved_at ⇒ 不匹配，不拦截。
+
+    Returns: 被保护的条数（只用于留痕，绝不决定返回值）。
+    """
+    if not _m480_monotonic_on():
+        return 0
+    try:
+        with open(path, encoding="utf-8") as _f:
+            _disk = json.load(_f)
+    except (OSError, ValueError) as _e:
+        silent_exc(_e, where="pending_write._m480_inherit_approvals 读盘", level="debug")
+        return 0
+    _approved: dict = {}
+    for _row in _m480_rows_of(_disk):
+        if not isinstance(_row, dict):
+            continue
+        _pid = _row.get("patch_id") or _row.get("id")
+        if _pid and _row.get("status") == "approved" and _row.get("approved_at"):
+            _approved[str(_pid)] = _row
+    if not _approved:
+        return 0
+    _n = 0
+    for _row in _m480_rows_of(payload):
+        if not isinstance(_row, dict):
+            continue
+        _pid = str(_row.get("patch_id") or _row.get("id") or "")
+        _old = _approved.get(_pid)
+        if _old is None or _row.get("approved_at"):
+            continue
+        for _k in _M480_APPROVAL_FIELDS:
+            _v = _old.get(_k)
+            if _k in _old:
+                _row[_k] = dict(_v) if isinstance(_v, dict) else _v
+        _n += 1
+    if _n:
+        _module_logger.info(
+            "[480刀14] 状态单调保护：继承 %d 条已批准状态（旧快照回退被拦）", _n)
+    return _n
+
+
 def _rows_on_disk(path: str) -> int | None:
     try:
         with open(path, encoding="utf-8") as _f:
@@ -183,6 +267,9 @@ def write_pending(payload: Any, *, path: str | None = None,
     _rows = _rows_of(payload)
     _t0 = time.time()
     with PENDING_WRITE_LOCK:
+        # ★480 刀14：落盘前继承盘上已批准的审批字段（详见函数注释）。
+        #   放在锁内 ⇒ 读盘与 os.replace 之间不会被别的写者插进来。
+        _m480_inherited = _m480_inherit_approvals(payload, _p)
         _tmp = None
         _m480_tmp_status: dict = {}
         try:
@@ -224,9 +311,10 @@ def write_pending(payload: Any, *, path: str | None = None,
         # ★480 刀11：补 `status=` 与 `path=` —— 这是区分「没改」与「被覆盖」的
         #   唯一判据（活体 11-09：两次审批成功而文件 sha256 一字未变）。
         _module_logger.info(
-            "[356单写者] writer=%s rows=%s 读回=%s ok=%s status_mem=%s status_tmp=%s "
-            "status_disk=%s path=%s 耗时=%.1fms",
-            writer or "?", _rows, _back, _ok, _m480_status_dist(payload) or "-",
+            "[356单写者] writer=%s rows=%s 读回=%s ok=%s inherited=%s "
+            "status_mem=%s status_tmp=%s status_disk=%s path=%s 耗时=%.1fms",
+            writer or "?", _rows, _back, _ok, _m480_inherited,
+            _m480_status_dist(payload) or "-",
             _m480_tmp_status or "-", _m480_status_of_file(_p) or "-",
             _p, (time.time() - _t0) * 1000.0)
     return {"ok": bool(_ok), "rows": _back, "writer": writer,

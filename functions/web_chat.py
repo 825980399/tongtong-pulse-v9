@@ -26,19 +26,35 @@ FUNCTION_META = {
 # 内存中的回复队列（★FIX: 限制上限，避免无客户端轮询时内存无限增长）
 _reply_queue: deque = deque(maxlen=200)
 _reply_lock = threading.Lock()
+_reply_seq = 0          # ★480 刀17：单调递增游标
+
 
 def push_reply(content: str, source: str = ""):
+    global _reply_seq
     with _reply_lock:
+        _reply_seq += 1
         _reply_queue.append({
             "content": content,
             "source": source,
             "timestamp": time.time(),
+            "seq": _reply_seq,
         })
 
-def pop_replies():
+
+def pop_replies(since_id=None):
+    """★480 刀17（台账 C12 裁决）：可选游标读取，修跨渠道回复串台。
+
+    不传 since_id（或开关关）⇒ **逐字保持旧行为**：全取并清空。
+    传整数 ⇒ 只返回 seq 更大的、**不清空** ⇒ 多个客户端各维护自己的游标，
+    互不会把对方的回复取走。不改前端协议，老客户端零感知。
+    """
     with _reply_lock:
-        replies = list(_reply_queue)
-        _reply_queue.clear()
+        if since_id is None or not _m480_cfg("ENABLE_M480_REPLY_CURSOR", True):
+            replies = list(_reply_queue)
+            _reply_queue.clear()
+        else:
+            replies = [r for r in _reply_queue
+                       if isinstance(r, dict) and int(r.get("seq") or 0) > since_id]
     return replies
 
 # 上传文件保存目录
@@ -512,11 +528,24 @@ class WebChatHandler(BaseHTTPRequestHandler):
         self.wfile.write(WEB_CHAT_HTML.encode('utf-8'))
 
     def _serve_replies(self):
-        replies = pop_replies()
+        # ★480 刀17：解析可选 ?since=N（解析不了就当没传，回落旧行为）。
+        _since = None
+        try:
+            from urllib.parse import parse_qs, urlparse
+            _raw = parse_qs(urlparse(self.path).query).get("since", [None])[0]
+            if _raw is not None:
+                _since = int(_raw)
+        except (TypeError, ValueError) as _e:
+            silent_exc(_e, where="functions.web_chat::_serve_replies since",
+                       level="debug")
+        replies = pop_replies(since_id=_since)
+        _cursor = max([int(r.get("seq") or 0) for r in replies
+                       if isinstance(r, dict)], default=_since or 0)
         self.send_response(200)
         self.send_header('Content-Type', 'application/json; charset=utf-8')
         self.end_headers()
-        self.wfile.write(json.dumps({"replies": replies}, ensure_ascii=False).encode('utf-8'))
+        self.wfile.write(json.dumps({"replies": replies, "cursor": _cursor},
+                                    ensure_ascii=False).encode('utf-8'))
 
     def _get_current_user_name(self):
         """从信息场获取当前活跃身份"""

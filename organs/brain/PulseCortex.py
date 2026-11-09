@@ -82,6 +82,15 @@ def _m383_note_semantic_upstream() -> None:
         silent_exc(_e, where="PulseCortex::_m383_note_semantic_upstream", level="debug")
 
 
+def _m480_cfg_bool(name: str, default: bool = True) -> bool:
+    """★480：读 config 布尔开关（config 未加载时用缺省；None 视作缺省）。"""
+    import sys as _sys
+    _cfg = _sys.modules.get("config")
+    if _cfg is None:
+        return default
+    return bool(getattr(_cfg, name, default))
+
+
 class PulseCortex(BasePulseOrgan):
     """脉冲驱动大脑皮层（v9.5 分层脉冲版）"""
 
@@ -259,6 +268,10 @@ class PulseCortex(BasePulseOrgan):
         # ★426刀5：最近一次兴趣变化（`InterestEvent.CHANGED` 缓存，只读留痕用）
         self._m426_last_interest_change = None
         self._risk_cautious_mode = False  # ★P0-1：风险谨慎模式标记
+        # ★480 刀15（台账 C8）：本标记原先全仓**只有写、没有任何读点**，
+        #   且一旦置 True 永不复位（单向棘轮）。补置位时刻/触发源 + TTL 复位。
+        self._risk_cautious_since = None
+        self._risk_cautious_trigger = ""
         self._risk_alert_summary = ""     # ★P3-5：基础风险告警摘要（供语气微调）
         self._safe_mode = False           # ★P3-5：L4 安全模式标记（暂停高风险推理）
         self._latest_reports = {}         # ★P3-5：各器官监控报告汇总（健康/人格/免疫/本体感知）
@@ -2282,11 +2295,46 @@ class PulseCortex(BasePulseOrgan):
         }, priority=9, layer="L1")
         return {"status": "terminated", "reason": reason}
 
+    def _m480_enter_risk_cautious(self, trigger: str) -> None:
+        """★480 刀15：置位同时记录时刻/触发源并留痕（信号不再"写了没人看"）。"""
+        self._risk_cautious_mode = True
+        if _m480_cfg_bool("ENABLE_M480_RISK_CAUTIOUS_TELEMETRY"):
+            self._risk_cautious_since = time.time()
+            self._risk_cautious_trigger = str(trigger)
+            self._log(LogLevel.INFO, f"[480刀15] 风险谨慎模式置位: trigger={trigger}")
+
+    def get_risk_cautious_state(self, now: float | None = None) -> dict:
+        """★480 刀15：唯一的**读点** + TTL 自动复位（修台账 C8 单向棘轮）。
+
+        ★裁决理由：不接进任何决策链。谨慎模式的适用语义从未定义，
+          贸然让它生效可能全局压制正常演化；但没有读点等于代码在骗人。
+          本方法只提供可查询状态 + 自动过期，零行为变化。
+        """
+        import sys as _sys
+        _now = time.time() if now is None else float(now)
+        _ttl = 3600.0
+        _cfg = _sys.modules.get("config")
+        if _cfg is not None:
+            _v = getattr(_cfg, "M480_RISK_CAUTIOUS_TTL_SEC", None)
+            if isinstance(_v, (int, float)) and _v > 0:
+                _ttl = float(_v)
+        _since = self._risk_cautious_since
+        _active = bool(self._risk_cautious_mode)
+        if (_active and _m480_cfg_bool("ENABLE_M480_RISK_CAUTIOUS_TELEMETRY")
+                and _since is not None and (_now - _since) > _ttl):
+            self._risk_cautious_mode = False
+            self._risk_cautious_since = None
+            self._risk_cautious_trigger = ""
+            _active = False
+        return {"active": _active, "since": _since,
+                "trigger": self._risk_cautious_trigger, "ttl_sec": _ttl,
+                "age_sec": max(0.0, _now - _since) if _since else None}
+
     def _on_risk_moderate(self, payload: dict) -> dict[str, Any]:
         """★P0-1修复：收到中风险脉冲，标记当前对话为谨慎模式"""
         self._log(LogLevel.INFO, f"风险谨慎模式: {payload.get('reason', '')}")
         # 缓存谨慎标记，供 _get_guidance 生成更谨慎的语气建议
-        self._risk_cautious_mode = True
+        self._m480_enter_risk_cautious(f"risk_moderate:{payload.get('reason', '')}")
         return {"status": "cautious"}
 
     def _on_crisis_referral(self, payload: dict) -> dict[str, Any]:
@@ -3497,7 +3545,7 @@ class PulseCortex(BasePulseOrgan):
         """★P3-5补闭环：健康报告 → 汇总到自我状态，有告警时进入谨慎模式"""
         self._latest_reports["health"] = payload
         if payload.get("alarms"):
-            self._risk_cautious_mode = True
+            self._m480_enter_risk_cautious("health_report:alarms")
         return {"status": "health_recorded"}
 
     def _on_personality_integrity_report(self, payload: dict) -> dict[str, Any]:

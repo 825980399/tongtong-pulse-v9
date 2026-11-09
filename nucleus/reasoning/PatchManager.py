@@ -3904,8 +3904,18 @@ class PatchManager:
             else:
                 _raw = _keep
             if _arch or _res["runtime_failed"]:
-                with open(self._pending_file, "w", encoding="utf-8") as _f:
-                    json.dump(_raw, _f, ensure_ascii=False, indent=2)
+                # ★480 刀13：收敛到 356 唯一写口。原先的裸 open('w') 既非原子、
+                #   又不与其他写者共享 PENDING_WRITE_LOCK，且 `_raw` 是**本函数在
+                #   锁外读的旧快照** —— 会把期间刚落盘的 approved 整体冲回 verified。
+                #   活体 11-09 13:09:59 探针 status_disk 含 approved:1，而外部读盘
+                #   是 verified:6，唯一能解释「写口之后又被覆盖」的正是这类裸写。
+                from nucleus.evolution.pending_write import write_pending as _m480_wp
+                _m480_wr = _m480_wp(_raw, path=self._pending_file,
+                                    writer="PatchManager.sweep_runtime_failed")
+                if not _m480_wr.get("ok"):
+                    _module_logger.warning(
+                        "[356单写者] sweep_runtime_failed 重写 pending 未通过校验: %s",
+                        _m480_wr.get("why"))
         except Exception as _e:
             silent_exc(_e, where="nucleus.reasoning.PatchManager::sweep_runtime_failed 323", level="warning")
             _res["skipped_reason"] = f"{type(_e).__name__}: {_e}"
