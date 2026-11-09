@@ -42,7 +42,29 @@ def _m473_rebind_restart_stdout() -> None:
             return
         # SIM115 豁免（理由）：这是要交给 sys.stdout 的**长期句柄**，
         #   用 with 会在函数返回前就把它关掉，之后所有 print 都会写进已关闭的文件。
-        _con473 = open("CONOUT$", "w", encoding="utf-8", buffering=1)  # noqa: SIM115
+        # ★482刀20：473刀22 只挡住「CONOUT$ 打不开」，没挡住「打得开、写不了」。
+        #   16:34:33 现场：接班进程 pid=12996 已装配完成，父进程退出瞬间该句柄失效，
+        #   framework.start() 末尾唯一一次 print() 抛 WinError 233 且未捕获 ⇒ 整机退出。
+        #   对策：重绑前先试写一次；坏句柄绝不挂到 sys.stdout，改挂独立文件句柄。
+        _con473 = None
+        try:
+            _con473 = open("CONOUT$", "w", encoding="utf-8", buffering=1)  # noqa: SIM115
+            _con473.write("\n")
+            _con473.flush()
+        except Exception as _e473_probe:
+            silent_exc(_e473_probe, where="main.py::_m473_rebind_restart_stdout:conout_probe",
+                       level="debug")
+            if _con473 is not None:
+                try:
+                    _con473.close()
+                except Exception as _e473_close:
+                    silent_exc(_e473_close,
+                               where="main.py::_m473_rebind_restart_stdout:conout_close",
+                               level="debug")
+            # 回退到进程自己新开的日志文件：不继承父进程任何句柄，父退出也不受影响。
+            _boot482 = _os473.path.join(
+                _os473.path.dirname(_os473.path.abspath(__file__)), "logs", "boot_crash.log")
+            _con473 = open(_boot482, "a", encoding="utf-8", buffering=1)  # noqa: SIM115
         _sys473.stdout = _con473
         _sys473.stderr = _con473
     except Exception as _e473:
@@ -51,6 +73,21 @@ def _m473_rebind_restart_stdout() -> None:
 
 
 _m473_rebind_restart_stdout()
+
+
+def _m482_safe_startup_blank_line() -> None:
+    """482刀21：启动期唯一一次空行打印；stdout 坏了也不能拖死已装配完成的框架。
+
+    16:34:33 现场（接班进程 pid=12996）：装配、57 器官启动、自检全部完成，
+    却在 framework.start() 末尾的裸 print() 上抛
+    OSError [WinError 233]「管道的另一端上无任何进程」且未捕获 ⇒ 整机退出，
+    直到 18:00 由用户手动拉起才恢复。打印属于展示层，绝不允许决定进程生死。
+    """
+    try:
+        print()
+    except Exception as _e482:
+        silent_exc(_e482, where="main.py::_m482_safe_startup_blank_line", level="debug")
+
 
 # ===== 第三方库弃用警告抑制（不影响功能，仅净化启动日志）=====
 import warnings
@@ -2292,9 +2329,15 @@ class PulseFramework:
         except Exception as _a2r_e:
             self._log(LogLevel.DEBUG, f"重置推理池拒绝旗异常（不影响启动）: {_a2r_e}")
 
-        print(f"\n{'='*50}")
-        print(f"  {config.SYSTEM_NAME} {config.SYSTEM_VERSION} 启动中...")
-        print(f"{'='*50}\n")
+        # ★482刀21：这三行横幅与末尾空行同属展示层。16:34:33 现场崩的是末尾那行，
+        #   但只要父进程退得更早，最先炸的就是这里 ⇒ 一并收进保护。
+        try:
+            print(f"\n{'='*50}")
+            print(f"  {config.SYSTEM_NAME} {config.SYSTEM_VERSION} 启动中...")
+            print(f"{'='*50}\n")
+        except Exception as _e482_banner:
+            silent_exc(_e482_banner, where="main.py:PulseFramework.start:banner",
+                       level="debug")
 
         # 步骤0：加载本能快照（在所有知识加载之前）
         instinct_nodes = self.instinct_snapshot.load()
@@ -2984,7 +3027,7 @@ class PulseFramework:
         global_id = registry.get("global_personality_id", "TTP-001")
         self._log(LogLevel.INFO, f"数字生命标识: 全局人格={global_id}, 实例={instance_id}")
         self._log(LogLevel.INFO, "等待交互...")
-        print()
+        _m482_safe_startup_blank_line()
 
     # ========================================================================
     # 框架优雅退出（v9.5增强: InfoField线程池关闭）
