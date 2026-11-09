@@ -249,8 +249,18 @@ def safe_http_json(
         _req = urllib.request.Request(
             url, data=data, headers=headers or {}, method=method
         )
-        with urllib.request.urlopen(_req, timeout=timeout) as _resp:
-            _parsed = json.loads(_resp.read().decode("utf-8"))
+        # ★480 刀9（台账 S5）：此前是裸 `urlopen`，**默认跟随 30x**。
+        #   守卫只做首跳静态判定 ⇒ 公网 URL 回 302 到 `169.254.169.254`
+        #   或 `127.0.0.1`，重定向目标**完全没有再校验**，直达云元数据/内网。
+        #   现在默认不跟随（逐跳重校要改写 handler，风险更大）；
+        #   确有渠道正常依赖重定向时，置 config.SSRF_ALLOW_REDIRECT=True 回滚。
+        _m480_opener = _m480_get_opener()
+        if _m480_opener is None:
+            with urllib.request.urlopen(_req, timeout=timeout) as _resp:
+                _parsed = json.loads(_resp.read().decode("utf-8"))
+        else:
+            with _m480_opener.open(_req, timeout=timeout) as _resp:
+                _parsed = json.loads(_resp.read().decode("utf-8"))
         if _m360_rid:
             try:
                 from nucleus.llm.paid_api_trace import finish as _m360_finish
@@ -280,7 +290,7 @@ def safe_http_json(
             try:
                 from nucleus.llm.paid_api_trace import finish as _m360_finish
                 _m360_finish(_m360_rid, False,
-                             error=("HTTP %s" % _e.code) if _m465_on else "URLError")
+                             error=(f"HTTP {_e.code}") if _m465_on else "URLError")
             except Exception as _m360e:
                 silent_exc(_m360e, where="nucleus.ssrf_guard::safe_http_json 埋点 finish", level="debug")
         if not _m465_on:
@@ -294,7 +304,7 @@ def safe_http_json(
             _m465_body = ""
         _m465_txt = " ".join(str(_m465_body).split())[:400] or str(_e.reason)
         silent_exc(_e, where="nucleus.ssrf_guard::safe_http_json HTTP错误", level="debug")
-        return False, "HTTP %s: %s" % (_e.code, _m465_txt)
+        return False, f"HTTP {_e.code}: {_m465_txt}"
     except urllib.error.URLError as _e:
         if _m360_rid:
             try:
@@ -422,3 +432,42 @@ def _m367_reset_reject_stats() -> None:
     """清空计数（**仅供测试**；生产不要调）。"""
     _M367_REJECT_COUNTS.clear()
 
+
+# ============ ★480 刀9：禁跟随重定向（台账 S5） ============
+class _M480NoRedirect(urllib.request.HTTPRedirectHandler):
+    """把任何 30x 当成错误抛出，绝不再发第二次请求。
+
+    台账 S5：守卫只校验**首跳** URL，而 `urlopen` 默认跟随重定向
+    ⇒ 公网 URL 回 `302 Location: http://169.254.169.254/...` 就能绕过全部判据。
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.HTTPError(
+            getattr(req, "full_url", ""), int(code),
+            f"SSRF 守卫拒绝跟随重定向 → {str(newurl)[:200]}",
+            headers, fp)
+
+
+def _m480_allow_redirect() -> bool:
+    """★480 刀9：是否允许跟随重定向（缺省 False = 禁，安全优先）。"""
+    import sys as _sys
+    _c = _sys.modules.get("config")
+    _v = False if _c is None else getattr(_c, "SSRF_ALLOW_REDIRECT", False)
+    if _v is None:
+        return False
+    if isinstance(_v, str):
+        return _v.strip().lower() in ("1", "true", "yes", "on")
+    return bool(_v)
+
+
+_M480_OPENER = None
+
+
+def _m480_get_opener():
+    """禁跟随 opener；允许重定向时返回 None（调用方退回裸 urlopen）。"""
+    global _M480_OPENER
+    if _m480_allow_redirect():
+        return None
+    if _M480_OPENER is None:
+        _M480_OPENER = urllib.request.build_opener(_M480NoRedirect)
+    return _M480_OPENER

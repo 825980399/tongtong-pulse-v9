@@ -44,6 +44,69 @@ def pop_replies():
 # 上传文件保存目录
 _UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "uploads")
 
+
+# ============ ★480：S 系列四项的开关与判据 ============
+def _m480_cfg(name: str, default):
+    """读 config（读不到就用缺省；`None` 视作缺省，与铁律同向）。"""
+    import sys as _sys
+    _c = _sys.modules.get("config")
+    if _c is None:
+        return default
+    _v = getattr(_c, name, default)
+    return default if _v is None else _v
+
+
+def _m480_lg():
+    """★480：本模块此前**没有 logger**，只有 silent_exc。
+    路径沙箱的拒写必须留痕（否则"为什么这个文件没被 OCR"无从回答），
+    但又不能因 logger 不可用而打断主流程 ⇒ 退化到标准库 logger。"""
+    try:
+        from nucleus.logger import get_module_logger
+        return get_module_logger("Web对话")
+    except Exception as _e:
+        silent_exc(_e, where="functions.web_chat::_m480_lg", level="debug")
+        import logging
+        _std = logging.getLogger("web_chat")
+        _std.debug("get_module_logger 不可用: %s", type(_e).__name__)
+        return _std
+
+
+def _m480_guard_replies_on() -> bool:
+    """★480 刀8：`/replies` 是否做同源校验（缺省 True）。"""
+    _v = _m480_cfg("WEB_CHAT_GUARD_REPLIES", True)
+    if isinstance(_v, str):
+        return _v.strip().lower() in ("1", "true", "yes", "on")
+    return bool(_v)
+
+
+def _m480_max_upload_bytes() -> int:
+    """★480 刀10：上传大小上限（字节）。<=0 ⇒ 不限制（逐字回到旧行为）。"""
+    try:
+        return int(_m480_cfg("WEB_CHAT_MAX_UPLOAD_BYTES", 32 * 1024 * 1024))
+    except (TypeError, ValueError) as _e:
+        silent_exc(_e, where="functions.web_chat::_m480_max_upload_bytes",
+                   level="debug")
+        return 32 * 1024 * 1024
+
+
+def _m480_path_under_uploads(path: str) -> tuple:
+    """★480 刀7：路径必须落在 `data/uploads/` 之下（按**路径语义**判，不按字符串前缀）。
+
+    为什么不用 `str.startswith`：`data/uploads_evil/x.jpg` 会被前缀判据放行。
+    """
+    import os as _os
+    try:
+        _root = _os.path.abspath(_UPLOAD_DIR)
+        _p = _os.path.abspath(str(path))
+        _rel = _os.path.relpath(_p, _root)
+    except (OSError, ValueError) as _e:
+        silent_exc(_e, where="functions.web_chat::_m480_path_under_uploads",
+                   level="debug")
+        return False, f"路径解析失败: {type(_e).__name__}"
+    if _rel == _os.pardir or _rel.startswith(_os.pardir + _os.sep):
+        return False, "不在 data/uploads 之下"
+    return True, ""
+
 # HTML页面
 WEB_CHAT_HTML = r"""
 <!DOCTYPE html>
@@ -413,6 +476,16 @@ class WebChatHandler(BaseHTTPRequestHandler):
         if self.path == '/' or self.path == '/index.html':
             self._serve_html()
         elif self.path == '/replies':
+            # ★480 刀8（台账 S2）：`/replies` 此前**完全没有**同源校验 ——
+            #   `_check_origin` 只挂在 `do_POST` 上。于是 DNS rebinding
+            #   （evil.com 解析到 127.0.0.1，浏览器带 Host: evil.com 发请求）
+            #   就能把 `_reply_queue` 里**全部对话回复**取走并清空。
+            #   这里补上同一道校验；关开关可逐字回滚（WEB_CHAT_GUARD_REPLIES=False）。
+            if _m480_guard_replies_on() and not self._check_origin():
+                self.send_response(403)
+                self.end_headers()
+                self.wfile.write(b'Forbidden')
+                return
             self._serve_replies()
         else:
             self.send_response(404)
@@ -472,7 +545,18 @@ class WebChatHandler(BaseHTTPRequestHandler):
             return
 
         # 读取body
-        content_length = int(self.headers.get('Content-Length', 0))
+        # ★480 刀10（台账 S13）：此前**无任何大小上限**，整个 body 直接进内存
+        #   ⇒ 一个超大 Content-Length 就能把进程撑爆（内存放大 DoS）。
+        _m480_max = _m480_max_upload_bytes()
+        content_length = int(self.headers.get('Content-Length', 0) or 0)
+        if _m480_max > 0 and content_length > _m480_max:
+            self.send_response(413)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(json.dumps(
+                {"error": f"文件过大: {content_length} > 上限 {_m480_max}"},
+                ensure_ascii=False).encode('utf-8'))
+            return
         body = self.rfile.read(content_length)
 
         # 提取boundary
@@ -609,8 +693,23 @@ class WebChatHandler(BaseHTTPRequestHandler):
                     self.server.info_field.publish(chat_pulse)
 
                 # 处理上传的文件：直接发射视觉查询脉冲
+                # ★480 刀7（台账 S1）：此前只判 `os.path.exists(fp)`，**没有路径沙箱**
+                #   ⇒ 客户端在 POST /send 里传 `{"file_paths": ["C:/Users/x/身份证.jpg"]}`
+                #   就能让任意本地文件被 OCR 进对话与长期记忆。
+                #   现在只接受 `data/uploads/` 之下的文件（上传口写的就是这里）。
                 for fp in file_paths:
                     if not os.path.exists(fp):
+                        continue
+                    _m480_ok, _m480_why = _m480_path_under_uploads(fp)
+                    if not _m480_ok:
+                        try:
+                            _m480_lg().warning(
+                                "[480刀7][路径沙箱] 拒绝 file_paths 越界: %s（%s）",
+                                str(fp)[:200], _m480_why)
+                        except Exception as _m480le:
+                            silent_exc(_m480le,
+                                       where="functions.web_chat::file_paths 沙箱日志",
+                                       level="debug")
                         continue
                     ext = os.path.splitext(fp)[1].lower()
                     if ext in ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff'):

@@ -8187,6 +8187,40 @@ M480_APPROVE_CAP_DEDUP = True
 #     能走到这里的只有「Timer 还活着、is_running 却是 False」这个异常态。
 #   读取点：organs/body/PulseHeart.py::_m480_keep_chain_on()
 M480_HEARTBEAT_KEEP_CHAIN = True
+
+# ==================== ★480批：S 系列安全面（台账 S1/S2/S5/S13） ====================
+#
+# 四项都来自《全量问题汇总台账与修复路线图_20261106》横切面一，
+# 都按「默认安全 + 单开关逐字回滚」落地。
+
+# WEB_CHAT_GUARD_REPLIES
+#   默认值：True
+#   语义：True  ⇒ `GET /replies` 与 `POST` 一样过 `_check_origin`（Host/Origin 白名单）。
+#         False ⇒ 逐字回到旧行为（GET 完全无校验）。
+#   病灶（台账 S2）：`_check_origin` 此前只挂在 `do_POST` 上，`/replies` 裸奔
+#     ⇒ DNS rebinding（evil.com 解析到 127.0.0.1）可把 `_reply_queue` 里
+#     **全部对话回复**取走并清空。
+#   ★若你确实要从别的机器访问 web_chat：把该机器加进 `WEB_CHAT_ALLOWED_HOSTS`，
+#     或把本开关置 False（后者等于放弃这道防护）。
+WEB_CHAT_GUARD_REPLIES = True
+
+# WEB_CHAT_MAX_UPLOAD_BYTES
+#   默认值：33554432（32 MiB）；<=0 ⇒ 不限制（逐字回到旧行为）
+#   语义：`/upload` 在读 body **之前**按 Content-Length 拦截，超限回 413。
+#   病灶（台账 S13）：此前 `rfile.read(content_length)` 无上限，
+#     一个超大 Content-Length 就能把进程撑爆（内存放大 DoS）。
+WEB_CHAT_MAX_UPLOAD_BYTES = 32 * 1024 * 1024
+
+# SSRF_ALLOW_REDIRECT
+#   默认值：False（禁跟随，安全优先）
+#   语义：False ⇒ `ssrf_guard.safe_http_json` 用禁跟随的 opener，
+#                任何 30x 直接当 HTTPError 抛出（不进第二次请求）。
+#         True  ⇒ 逐字回到裸 `urlopen`（默认跟随 30x）。
+#   病灶（台账 S5）：守卫只做**首跳**静态判定，而 `urlopen` 默认跟随重定向
+#     ⇒ 公网 URL 回 `302 Location: http://169.254.169.254/...`
+#     就能绕过全部判据，直达云元数据/内网。
+#   ★若某个 LLM 渠道确实正常依赖重定向（本仓实测未见 301/302），再置 True。
+SSRF_ALLOW_REDIRECT = False
 #
 # ENABLE_M447_APPLY_TRACE / M447_APPLY_TRACE_PATH / M447_APPLY_TRACE_MAX_CHARS
 #   默认值：True / "data/patches/apply_trace.jsonl" / 0（0 = 不截断）
