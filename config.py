@@ -36,6 +36,7 @@ from nucleus.const import (
     SystemEvent,
     ThymusEvent,
     TouchEvent,
+    VascularEvent,
     WhiteCellEvent,
 )
 
@@ -650,7 +651,11 @@ PULSE_LAYER = {
     "l0_l1_use_lockfree_queue": True,   # L0/L1使用无锁并发队列
     "cpu_affinity_enabled": False,       # CPU亲和绑定（可选，需手动配置核心ID）
     "cpu_affinity_cores": [],            # 绑定的CPU核心列表，如[0,1,2,3]
-    "disable_ttl_for_l0_l1": True,       # L0/L1脉冲关闭TTL自动清理
+    "disable_ttl_for_l0_l1": True,       # L0/L1脉冲关闭TTL自动清理（484批保留供回滚）
+    # ===== [M484-CFG] 484-4：拆 TTL 开关（旧键上方保留，关闭开关即逐字回旧表达式）=====
+    "disable_ttl_for_l0": True,
+    "disable_ttl_for_l1": False,
+    "l1_ttl_ms": 5000,                   # 毫秒；InfoField 内部 ×1e6 换算纳秒
 
     # ── 器官并发安全（蓝图第7节） ──
     "organ_max_concurrent_pulses": 0,    # 单器官最大并发接收数（0=无上限）
@@ -7588,7 +7593,8 @@ ENABLE_M378_SANDBOX_TTL_FREEZE = True
 
 # 生命线事件的层位修正（379批 P0）：把误降到后台层的生命线事件拉回 L1。
 # 默认 True：**这一条关掉会直接弱化告警/熔断**，只在定位层位问题时短时关。
-ENABLE_M379_LIFELINE_LAYER = True
+# ★484-1：关停 379 生命线前缀强制。置 True 且注册表关掉可精确复现改前行为（T0 D8）。
+ENABLE_M379_LIFELINE_LAYER = False
 
 # 托管 tick 的消费者闸（380刀1）：只把 tick 发给真有消费者的事件名。
 # 默认 True：关掉 ⇒ 恢复"无消费者也照发"（死信回潮）。
@@ -9162,10 +9168,9 @@ ENABLE_M483_L0_QUEUE_CAP = True
 # 不收 heart.beat（在 L3）、不收 spinal.inspect / proprioception.request（请求风暴源）。
 M483_L0_LIFELINE_EVENTS = (
     SystemEvent.ALARM, SystemEvent.ERROR, SystemEvent.STOP,
-    # ★T0 偏差 D12：任务书字面给的 vascular.silent_organ 在 const.py 中不存在；
-    #   真实事件是 VascularEvent.SILENT_ORGAN（值 organ.silent），本身走 L0。
-    #   本批按任务书保留该条目，不擅自扩充白名单 ⇒ 列星轨裁决。
-    "vascular.silent_organ", HeartEvent.ALIVE,
+    # ★484-2 已处理 483 遗留裁决 D12：死的裸串换成真实事件常量
+    #   VascularEvent.SILENT_ORGAN（值 organ.silent），白名单成员语义不变。
+    VascularEvent.SILENT_ORGAN, HeartEvent.ALIVE,
 )
 # ── 483-3 脉冲 deadline（执行 SLA，与 ttl_ns 同级，不进 payload）──
 # False = 只观测不丢（默认）；True 才会真丢。LAYERS="" 连观测也停。
@@ -9186,3 +9191,32 @@ M483_PROBE_FIRST_SEC = 600.0
 # 必须 > M416_MEMORY_PROBE_MAX_RUNTIME_SEC=900，否则第 2 拍被自己的
 # 单飞租约护栏挡掉，表现为「只采到第一拍」。
 M483_PROBE_INTERVAL_SEC = 1800.0
+
+# ===== [M484-CFG] 484 批 · 背压架构 + B3 随机取种（2026-11-09）=====
+# 默认按任务书具体值生效；置 False / uniform 即逐字回该刀之前的行为。
+#   ★任务书「回滚纪律」列写的是**回滚态取值**，不是默认值（沿用 482/483 的 D5 裁决）。
+#   ★各刀开关彼此独立；刀1 的 379 开关与刀2 的注册表开关需**组合**才能精确复现改前（T0 D8）。
+# ── 484-2 事件分层注册表 ──
+# True ⇒ _infer_layer 查 EVENT_LAYER_MAP（唯一真源），未登记兜底 L3 + WARNING；
+# False ⇒ 逐字回旧路径（379 前缀规则 + _DEFAULT_LAYER_MAP + 兜底 L1）。
+ENABLE_M484_EVENT_REGISTRY = True
+# ── 484-3 digest.knowledge 批次预算 ──
+ENABLE_M484_DIGEST_BUDGET = True
+M484_DIGEST_BUDGET_PER_ROUND = 50
+# ── 484-4 L1 TTL ──
+# False ⇒ TTL 判定逐字回旧表达式（L0/L1 全豁免）。
+ENABLE_M484_L1_TTL = True
+M484_DIALOG_TTL_MS = 30000
+# ── 484-5 sample_random ──
+# N 超过阈值才切蓄水池降级路径；oversample 是死节点/过滤后的有界补抽倍数。
+M484_SAMPLE_MAX_POOL = 200000
+M484_SAMPLE_OVERSAMPLE = 2
+# ── 484-6 取种多样性埋点 ──
+M484_DIVERSITY_LOG = True
+M484_DIVERSITY_MAX_LINES = 5000
+# ── 484-7 潜意识取种接线 ──
+# False ⇒ 回 query(L3,10) + query(L2,20)，逐字旧行为。
+ENABLE_M484_RANDOM_SEED = True
+# 加权公式已实现（PulseNodePool.sample_random），默认 uniform；
+# 拿到 3 天「种子 activation 分位 × 追问采纳」对照数据前不开 log_activation。
+M484_SEED_WEIGHT = "uniform"

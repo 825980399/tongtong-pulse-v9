@@ -33,6 +33,18 @@ from nucleus.pulse.PulseCore import PulseCore  # noqa: E402
 _PAIRS = os.path.join(ROOT, "data", "monitor", "pulse_pairs_20261028.jsonl")
 
 
+@pytest.fixture(autouse=True)
+def _m484_pin_legacy_switches(monkeypatch):
+    """484-1/484-2 规格变更：379 默认关停 + 注册表接管 _infer_layer。
+
+    本文件是 **379 规则的行为契约测试**，全部断言一字不改。为验证任务书
+    484-1「开关开着的时候，行为和改前完全一致」，显式钉回改前组合
+    （379 开 + 注册表关）。新默认下的行为由 test_m484_m379_off.py 覆盖。
+    """
+    monkeypatch.setattr(config, "ENABLE_M379_LIFELINE_LAYER", True, raising=False)
+    monkeypatch.setattr(config, "ENABLE_M484_EVENT_REGISTRY", False, raising=False)
+
+
 def _core():
     """不跑 `__init__`（避免拉起执行后端/线程），只取纯判定方法。"""
     return PulseCore.__new__(PulseCore)

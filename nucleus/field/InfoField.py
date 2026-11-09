@@ -754,6 +754,38 @@ class InfoField(SilentLogMixin):
         return _out
 
     # ========== 脉冲发布 ==========
+    # ===== [M484-IF] 484-4 拆 TTL 开关 =====
+    # ★T0 D9：旧键 disable_ttl_for_l0_l1 保留供回滚；新键 l1_ttl_ms 单位是毫秒，
+    #   内部 ×1e6 换算纳秒。开关关闭时**逐字**复现旧判定表达式。
+    #   L0 永豁免；L1 对话 30s / 非对话 5s；L2/L3 沿用 pulse 自带 ttl_ns。
+    def _m484_ttl_verdict(self, ttl_ns, layer, event_type, elapsed_ns):
+        """返回 (是否过期, 判定口径)。纯函数，不读 pulse、不写状态。"""
+        try:
+            import config as _c
+            if not bool(getattr(_c, "ENABLE_M484_L1_TTL", True)):
+                return (bool(ttl_ns > 0 and elapsed_ns > ttl_ns
+                             and not (PULSE_LAYER.get("disable_ttl_for_l0_l1", True)
+                                      and layer in (_PULSE_LAYER_L0, _PULSE_LAYER_L1))),
+                        "legacy")
+            if layer == _PULSE_LAYER_L0:
+                return (False, "l0_exempt")
+            if layer == _PULSE_LAYER_L1:
+                from nucleus.const import ChatEvent, Event, MouthEvent
+                _dialog = (Event.CHAT_MESSAGE, MouthEvent.REPLY,
+                           ChatEvent.INITIATIVE)
+                _ms = (int(getattr(_c, "M484_DIALOG_TTL_MS", 30000))
+                       if event_type in _dialog
+                       else int(PULSE_LAYER.get("l1_ttl_ms", 5000)))
+                _budget_ns = max(0, _ms) * 1_000_000
+                return (bool(ttl_ns > 0 and elapsed_ns > _budget_ns), "l1")
+            return (bool(ttl_ns > 0 and elapsed_ns > ttl_ns), "other")
+        except Exception as _e:
+            silent_exc(_e, where="InfoField::_m484_ttl_verdict", level="debug")
+            return (bool(ttl_ns > 0 and elapsed_ns > ttl_ns
+                         and not (PULSE_LAYER.get("disable_ttl_for_l0_l1", True)
+                                  and layer in (_PULSE_LAYER_L0, _PULSE_LAYER_L1))),
+                    "legacy")
+
     def publish(self, pulse: dict[str, Any]) -> dict[str, Any]:
         # ★P1 运行时埋点: 记录脉冲处理耗时起点（零阻塞，仅在结尾投递）
         _rt_start = time.time()
@@ -828,7 +860,9 @@ class InfoField(SilentLogMixin):
         # === 步骤0: TTL校验 ===
         now_ns = time.time_ns()
         if ttl_ns > 0 and (now_ns - timestamp_ns) > ttl_ns:
-            if not (PULSE_LAYER.get("disable_ttl_for_l0_l1", True) and layer in (_PULSE_LAYER_L0, _PULSE_LAYER_L1)):
+            _m484_expired, _m484_ttl_mode = self._m484_ttl_verdict(
+                ttl_ns, layer, event_type, now_ns - timestamp_ns)
+            if _m484_expired:
                 with self._lock:
                     self._total_expired += 1
                 _trace_route_matched(pulse_id, 0, 0, False, "expired")

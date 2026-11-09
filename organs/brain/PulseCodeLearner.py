@@ -52,6 +52,57 @@ class PulseCodeLearner(BasePulseOrgan):
     专门负责理解和分析自己的代码结构。
     """
 
+    # ===== [M484-CL] 484-3 digest.knowledge 批次预算 =====
+    # ★T0 D10：7 个 emit 点分布在 5 个方法里，故收口到统一发射口；
+    #   超预算入进程内 FIFO 队列，下轮 _m484_begin_round 先冲刷再受本轮预算约束。
+    #   队列为内存态（重启不保留）——报告已写明边界。全程不 sleep。
+    @staticmethod
+    def _m484_budget_on() -> bool:
+        try:
+            import config as _c
+            return bool(getattr(_c, "ENABLE_M484_DIGEST_BUDGET", True))
+        except Exception as _e:
+            silent_exc(_e, where="PulseCodeLearner::_m484_budget_on", level="debug")
+            return True
+
+    def _m484_begin_round(self) -> int:
+        """每轮学习开始：重置预算 + FIFO 冲刷上轮超预算知识点，返回冲刷条数。"""
+        _pending = getattr(self, "_m484_pending_knowledge", None)
+        if _pending is None:
+            self._m484_pending_knowledge = []
+            _pending = self._m484_pending_knowledge
+        try:
+            import config as _c
+            _budget = max(0, int(getattr(_c, "M484_DIGEST_BUDGET_PER_ROUND", 50)))
+        except Exception as _e:
+            silent_exc(_e, where="PulseCodeLearner::_m484_begin_round", level="debug")
+            _budget = 50
+        self._m484_round_left = _budget
+        _flushed = 0
+        while _pending and self._m484_round_left > 0:
+            _payload, _prio, _layer = _pending.pop(0)
+            self._emit(DigestEvent.KNOWLEDGE, _payload, priority=_prio, layer=_layer)
+            self._m484_round_left -= 1
+            _flushed += 1
+        return _flushed
+
+    def _m484_emit_knowledge(self, payload, priority=3, layer="L2"):
+        """484-3 统一预算化发射口；开关关掉时逐字回旧 _emit。"""
+        if not self._m484_budget_on():
+            self._emit(DigestEvent.KNOWLEDGE, payload, priority=priority, layer=layer)
+            return
+        if not hasattr(self, "_m484_round_left"):
+            self._m484_begin_round()
+        if self._m484_round_left <= 0:
+            _pending = getattr(self, "_m484_pending_knowledge", None)
+            if _pending is None:
+                self._m484_pending_knowledge = []
+                _pending = self._m484_pending_knowledge
+            _pending.append((payload, priority, layer))
+            return
+        self._m484_round_left -= 1
+        self._emit(DigestEvent.KNOWLEDGE, payload, priority=priority, layer=layer)
+
     def refresh_runtime_params(self):
         """★P1: 刷新运行时参数（热加载后调用）。"""
         try:
@@ -621,6 +672,8 @@ class PulseCodeLearner(BasePulseOrgan):
             silent_exc(e, where="organs.brain.PulseCodeLearner::_m65_get_load_level L323", level="debug")
             return "low"
     def _learn_own_code_structure(self):
+        # ★484-3：每轮开始重置 digest 预算，并 FIFO 冲刷上轮超预算知识点。
+        self._m484_begin_round()
         # ★T3: 自适应降频接线——代码学习
         try:
             from nucleus.runtime_metrics import get_adaptive_controller
@@ -840,12 +893,13 @@ class PulseCodeLearner(BasePulseOrgan):
                     # ★v17.0新增：扫描docs目录下的核心设计文档
                     # 这些文档定义了框架的根本原则和设计规范，是曈曈理解"为什么"的关键
                     _docs_dir = os.path.join(_project_root, "docs")
-                    _docs_files = [
-                        "BLUEPRINT_CONSTITUTION.md",   # 演化宪法——三条使命、十四条稳态规则
-                        "CODE_STYLE.md",               # 代码风格规范——反模式速查、设计原则
-                        "LESSONS_LEARNED.md",           # 核心经验教训——260+条避坑清单
-                        "框架调用关系全景图.md",         # 器官间协作参考框架
-                    ]
+                    # ★# TODO[M484] 484-3：以下 4 个设计文档实测均不存在，
+                    #   原循环体因 :851-852 的 continue 恒不执行（死分支）。
+                    #   等文件补上之后再开；**开之前必须先开批次预算**
+                    #   （ENABLE_M484_DIGEST_BUDGET=True），否则又会灌满 L2。
+                    #   原清单：BLUEPRINT_CONSTITUTION / CODE_STYLE / LESSONS_LEARNED /
+                    #   框架调用关系全景图（4 个 .md）。
+                    _docs_files = []  # 484-3：保持「不扫描」这一既有实际行为
                     for _df in _docs_files:
                         _df_path = os.path.join(_docs_dir, _df)
                         if not os.path.exists(_df_path):
@@ -970,7 +1024,7 @@ class PulseCodeLearner(BasePulseOrgan):
                                     _doc_node.value = clean_content_text(_doc_node.value) or _doc_node.value
                                     self.node_pool.add(_doc_node)
 
-                                self._emit(DigestEvent.KNOWLEDGE, {
+                                self._m484_emit_knowledge({
                                     "content": _doc_knowledge,
                                     "source_organ": self.organ_name,
                                     "trigger_reason": f"self_understanding.design_doc:{_doc_name}",
@@ -1013,7 +1067,7 @@ class PulseCodeLearner(BasePulseOrgan):
                                     self.node_pool.add(_doc_node)
                                 if self.knowledge_tree:
                                     self.knowledge_tree.register_path(f"/自我/架构/设计文档/{_doc_name}")
-                                self._emit(DigestEvent.KNOWLEDGE, {
+                                self._m484_emit_knowledge({
                                     "content": _doc_knowledge,
                                     "source_organ": self.organ_name,
                                     "trigger_reason": f"self_understanding.design_doc:{_doc_name}",
@@ -1310,7 +1364,7 @@ class PulseCodeLearner(BasePulseOrgan):
                     self.knowledge_tree.register_path(f"/自我理解/代码/{organ_name}")
 
                 # 发射消化脉冲
-                self._emit(DigestEvent.KNOWLEDGE, {
+                self._m484_emit_knowledge({
                     "content": knowledge_content,
                     "source_organ": self.organ_name,
                     "trigger_reason": "self_understanding.code_learning",
@@ -1901,7 +1955,7 @@ class PulseCodeLearner(BasePulseOrgan):
             self._log(LogLevel.INFO,
                      f"兴趣反馈: 学习{organ_name}后增强兴趣维度 {', '.join(_interest_dims)}")
         # 发射消化脉冲
-        self._emit(DigestEvent.KNOWLEDGE, {
+        self._m484_emit_knowledge({
             "content": _handbook,
             "source_organ": self.organ_name,
             "trigger_reason": f"self_understanding.organ_handbook:{organ_name}",
@@ -2122,7 +2176,7 @@ class PulseCodeLearner(BasePulseOrgan):
                     self.knowledge_tree.register_path(f"/自我理解/代码/{caller_organ}")
 
                 # 发射消化脉冲
-                self._emit(DigestEvent.KNOWLEDGE, {
+                self._m484_emit_knowledge({
                     "content": weave_content,
                     "source_organ": self.organ_name,
                     "trigger_reason": "self_understanding.code_weaving",
@@ -2296,7 +2350,7 @@ class PulseCodeLearner(BasePulseOrgan):
             if self.knowledge_tree:
                 self.knowledge_tree.register_path(f"/自我理解/代码/{organ}")
 
-            self._emit(DigestEvent.KNOWLEDGE, {
+            self._m484_emit_knowledge({
                 "content": _flow_content,
                 "source_organ": self.organ_name,
                 "trigger_reason": "self_understanding.data_flow",
@@ -4020,7 +4074,7 @@ class PulseCodeLearner(BasePulseOrgan):
                 if self.knowledge_tree:
                     self.knowledge_tree.register_path(f"/自我理解/代码/链路/{_organ}")
 
-                self._emit(DigestEvent.KNOWLEDGE, {
+                self._m484_emit_knowledge({
                     "content": _knowledge_content,
                     "source_organ": self.organ_name,
                     "trigger_reason": "self_understanding.call_chain",

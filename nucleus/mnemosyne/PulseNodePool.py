@@ -1467,6 +1467,111 @@ class PulseNodePool(SilentLogMixin):
 
         return results
 
+    # ===== [M484-NP] 484-5 sample_random（烛微细前置设计 §1）=====
+    # 用 random.sample(list(ids), k)：15k 键指针拷贝实测 0.087ms，
+    # 比 Python 级蓄水池循环快 67 倍；只在 N > M484_SAMPLE_MAX_POOL 时切蓄水池。
+    # ★绝不调 activate() / 不改 activation_count / last_activated —— 抽样不是访问，
+    #   顺手加计数会喂给 _promote_to_hot 造成池子漂移。
+    # ★全程持锁且锁内不调 get()/query()/get_stats()（self._lock 非 RLock，重入即死锁）。
+    def sample_random(self, k, evol_level=None, *, pool=None, weight="uniform",
+                      filters=None, rng=None):
+        """随机抽样（均匀/对数激活度加权），三条件过滤，无副作用，绝不抛异常。"""
+        import random as _random
+        import time as _time
+
+        _t0 = _time.perf_counter()
+        _rng = rng if rng is not None else _random
+        _k = int(k) if isinstance(k, (int, float)) and not isinstance(k, bool) else 0
+        stat = {"scanned": 0, "dead_dropped": 0, "blanked_dropped": 0,
+                "filtered_dropped": 0, "shortfall": False, "elapsed_ms": 0.0}
+        self._m484_last_sample = stat
+        if _k <= 0:
+            stat["elapsed_ms"] = (_time.perf_counter() - _t0) * 1000.0
+            return []
+        try:
+            import config as _c
+            _max_pool = int(getattr(_c, "M484_SAMPLE_MAX_POOL", 200000))
+            _oversample = max(1, int(getattr(_c, "M484_SAMPLE_OVERSAMPLE", 2)))
+        except Exception as _e:
+            silent_exc(_e, where="PulseNodePool::sample_random.cfg", level="debug")
+            _max_pool, _oversample = 200000, 2
+
+        _flt = filters if isinstance(filters, dict) else {}
+        _excl_states = _flt.get("state", ("dormant", "locked"))
+        _excl_quality = _flt.get("quality_flag", ("polluted",))
+        _exclude_blanked = bool(_flt.get("exclude_blanked", True))
+
+        with self._lock:
+            try:
+                if evol_level is not None:
+                    if evol_level not in self._level_index:
+                        return []
+                    ids = list(self._level_index[evol_level])
+                elif pool in ("hot", "warm", "cold"):
+                    ids = list(getattr(self, "_" + pool, {}))
+                else:
+                    ids = list(self._hot) + list(self._warm) + list(self._cold)
+                stat["scanned"] = len(ids)
+                if not ids:
+                    return []
+
+                def _node_of(_nid):
+                    return (self._hot.get(_nid) or self._warm.get(_nid)
+                            or self._cold.get(_nid))
+
+                if len(ids) > _max_pool:
+                    # 蓄水池降级：单次 O(N)，内存 O(k)，仅百万级池使用
+                    _reservoir = []
+                    for _i, _nid in enumerate(ids):
+                        if _i < _k:
+                            _reservoir.append(_nid)
+                        else:
+                            _j = _rng.randint(0, _i)
+                            if _j < _k:
+                                _reservoir[_j] = _nid
+                    _picks = _reservoir
+                else:
+                    _take = min(len(ids), max(_k, _k * _oversample))
+                    _picks = _rng.sample(ids, _take)
+
+                out = []
+                for _nid in _picks:
+                    if len(out) >= _k:
+                        break
+                    _n = _node_of(_nid)
+                    if _n is None:
+                        stat["dead_dropped"] += 1
+                        continue
+                    if getattr(_n, "_m70_blanked", False) and _exclude_blanked:
+                        stat["blanked_dropped"] += 1
+                        continue
+                    if (getattr(_n, "state", "active") in _excl_states
+                            or getattr(_n, "quality_flag", "clean") in _excl_quality):
+                        stat["filtered_dropped"] += 1
+                        continue
+                    out.append(_n)
+
+                if weight == "log_activation" and len(out) > 1:
+                    # 烛微 §2.3：w = 1 + ln(1 + min(activation_count, 500))，
+                    # suspect 给 0.5 系数。最大权重比约 7.2:1，避免重尾变成「固定 3」。
+                    import math as _math
+                    _ws = []
+                    for _n in out:
+                        _a = max(0, min(500, int(getattr(_n, "activation_count", 0) or 0)))
+                        _w = 1 + _math.log(1 + _a)
+                        if getattr(_n, "quality_flag", "clean") == "suspect":
+                            _w *= 0.5
+                        _ws.append(_w)
+                    if hasattr(_rng, "choices"):
+                        out = _rng.choices(out, weights=_ws, k=len(out))
+                stat["shortfall"] = len(out) < _k
+                return out
+            except Exception as _e:
+                silent_exc(_e, where="PulseNodePool::sample_random", level="debug")
+                return []
+            finally:
+                stat["elapsed_ms"] = (_time.perf_counter() - _t0) * 1000.0
+
     def get_all(self) -> list[PulseNode]:
         """获取所有内存节点（热 + 温 + 冷缓存），**不含被驱逐的冷节点**。
 

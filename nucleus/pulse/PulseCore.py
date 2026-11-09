@@ -383,12 +383,31 @@ class PulseCore:
         如果无匹配则返回 'L1'。
 
         ★379刀3（DJ4-02）：先过生命线规则 —— 避免"显式没传 layer 时"漏判。
+        ★484刀2：注册表开启时它是唯一真源；关闭时逐字回旧路径（D8 双路径）。
         """
+        if self._m484_registry_on():
+            from nucleus.event_layers import EVENT_LAYER_MAP, UNKNOWN_LAYER
+            _hit = EVENT_LAYER_MAP.get(str(event_type or ""))
+            if _hit is not None:
+                return _hit
+            logger.warning("[484刀2] 事件未登记分层，兜底 %s: %s",
+                           UNKNOWN_LAYER, event_type)
+            return UNKNOWN_LAYER
         if self._m379_is_lifeline(event_type) and self._m379_lifeline_fix_on():
             return "L1"
         if event_type in _DEFAULT_LAYER_MAP:
             return _DEFAULT_LAYER_MAP[event_type]
         return "L1"
+
+    @staticmethod
+    def _m484_registry_on() -> bool:
+        """484-2 灰度开关（默认开，置 False 逐字回旧路径）。"""
+        try:
+            import config as _c
+            return bool(getattr(_c, "ENABLE_M484_EVENT_REGISTRY", True))
+        except Exception as _e:
+            silent_exc(_e, where="PulseCore::_m484_registry_on", level="debug")
+            return True
 
     def set_auto_layer(self, enabled: bool):
         """启用/禁用自动 layer 推断"""

@@ -2082,6 +2082,37 @@ class PulseSubconscious(BasePulseOrgan):
                 if chunk not in keywords:
                     keywords.append(chunk)
         return keywords[:5]
+    # ===== [M484-SUB] 484-6 埋点 + 484-7 随机取种接线 =====
+    @staticmethod
+    def _m484_random_seed_on() -> bool:
+        try:
+            import config as _c
+            return bool(getattr(_c, "ENABLE_M484_RANDOM_SEED", True))
+        except Exception as _e:
+            silent_exc(_e, where="PulseSubconscious::_m484_random_seed_on", level="debug")
+            return True
+
+    @staticmethod
+    def _m484_seed_weight() -> str:
+        try:
+            import config as _c
+            return str(getattr(_c, "M484_SEED_WEIGHT", "uniform") or "uniform")
+        except Exception as _e:
+            silent_exc(_e, where="PulseSubconscious::_m484_seed_weight", level="debug")
+            return "uniform"
+
+    def _m484_record_seed(self, **kw):
+        """484-6 埋点薄封装：开关关 / 埋点异常都不得影响取种主流程。"""
+        try:
+            import config as _c
+            if not bool(getattr(_c, "M484_DIVERSITY_LOG", True)):
+                return None
+            from nucleus.m484_diversity import record_seed
+            return record_seed(**kw)
+        except Exception as _e:
+            silent_exc(_e, where="PulseSubconscious::_m484_record_seed", level="debug")
+            return None
+
     def _generate_self_question(self) -> str | None:
         """
         自我追问：从已有知识中生成探索性问题。
@@ -2089,6 +2120,7 @@ class PulseSubconscious(BasePulseOrgan):
         而是在获得答案后继续追问"这个答案的假设是什么""有没有反例"。
         """
         if self.node_pool is None:
+            self._m484_record_seed(exit_reason="no_pool")
             return None
 
         # ===== 新增: 深层追问链 =====
@@ -2103,14 +2135,23 @@ class PulseSubconscious(BasePulseOrgan):
                 last_self_question, last_self_answer
             )
             if deep_question:
+                self._m484_record_seed(exit_reason="deep_followup")
                 return deep_question
 
         # 随机抽取L3或L2节点作为种子
-        l3_nodes = self.node_pool.query(evol_level="L3", limit=10)
-        l2_nodes = self.node_pool.query(evol_level="L2", limit=20)
+        # ★484-7：开关开走全库随机取种；关掉逐字回原 query 两行。
+        _m484_random = self._m484_random_seed_on()
+        _m484_weight = self._m484_seed_weight()
+        if _m484_random and hasattr(self.node_pool, "sample_random"):
+            l3_nodes = self.node_pool.sample_random(10, evol_level="L3", weight=_m484_weight)
+            l2_nodes = self.node_pool.sample_random(20, evol_level="L2", weight=_m484_weight)
+        else:
+            l3_nodes = self.node_pool.query(evol_level="L3", limit=10)
+            l2_nodes = self.node_pool.query(evol_level="L2", limit=20)
         all_nodes = l3_nodes + l2_nodes
 
         if not all_nodes:
+            self._m484_record_seed(exit_reason="empty")
             return None
 
         seed = random.choice(all_nodes)
@@ -2154,8 +2195,17 @@ class PulseSubconscious(BasePulseOrgan):
         question = random.choice(question_templates)
         question = self._clean_topic(question)
         if question is None:
+            self._m484_record_seed(exit_reason="clean_reject")
             return None
 
+        # ★484-6：成功取种落一行（ids / fingerprint / chosen 全记录）。
+        self._m484_record_seed(
+            exit_reason="ok", l3_n=len(l3_nodes), l2_n=len(l2_nodes),
+            ids=[str(getattr(_n, "node_id", "")) for _n in all_nodes],
+            chosen=str(getattr(seed, "node_id", "")),
+            shortfall=(len(all_nodes) < 30),
+            weighted=(_m484_weight != "uniform"),
+        )
         # 记录本次追问，供下次深层追问使用
         self._last_self_question = question
 

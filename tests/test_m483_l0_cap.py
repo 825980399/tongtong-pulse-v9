@@ -10,6 +10,7 @@ import threading
 import unittest
 
 import config
+from nucleus.const import VascularEvent
 from nucleus.field.InfoField import InfoField
 
 
@@ -155,7 +156,11 @@ class TestM483L0Cap(unittest.TestCase):
         self.assertIn("system.alarm", config.M483_L0_LIFELINE_EVENTS)
         self.assertIn("system.error", config.M483_L0_LIFELINE_EVENTS)
         self.assertIn("system.stop", config.M483_L0_LIFELINE_EVENTS)
-        self.assertIn("vascular.silent_organ", config.M483_L0_LIFELINE_EVENTS)
+        # ★484-2 已处理 483 遗留裁决 D12：死的裸串换成真实事件常量。
+        #   断言仍是「白名单必须含该事件」，期望值由虚构名改为 const.py 真值，
+        #   并补一条「虚构名不得残留」，强度只增不减。
+        self.assertIn(VascularEvent.SILENT_ORGAN, config.M483_L0_LIFELINE_EVENTS)
+        self.assertNotIn("vascular.silent_organ", config.M483_L0_LIFELINE_EVENTS)
         self.assertIn("heart.alive", config.M483_L0_LIFELINE_EVENTS)
         # 明确不收的两类：L3 心跳 / 请求类风暴源
         self.assertNotIn("heart.beat", config.M483_L0_LIFELINE_EVENTS)
