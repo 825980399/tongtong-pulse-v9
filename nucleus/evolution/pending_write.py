@@ -86,6 +86,32 @@ def _rows_of(payload: Any) -> int | None:
     return None
 
 
+def _m480_status_dist(payload: Any) -> dict:
+    """★480 刀11：payload 里各 status 的条数（写盘日志用，**只读不改**）。
+
+    为什么需要：同一件补丁两次「审批成功」而文件内容一字未变时，
+    只凭 `rows=7 读回=7 ok=True` 分不清「修改没进列表」还是「被二次覆盖」。
+    """
+    _rows = None
+    if isinstance(payload, list):
+        _rows = payload
+    elif isinstance(payload, dict):
+        for _k in ("patches", "pending", "items"):
+            if isinstance(payload.get(_k), list):
+                _rows = payload[_k]
+                break
+    if not _rows:
+        return {}
+    _d: dict = {}
+    for _it in _rows:
+        if not isinstance(_it, dict):
+            _d["<not-dict>"] = _d.get("<not-dict>", 0) + 1
+            continue
+        _k = str(_it.get("status") or "<none>")
+        _d[_k] = _d.get(_k, 0) + 1
+    return _d
+
+
 def _rows_on_disk(path: str) -> int | None:
     try:
         with open(path, encoding="utf-8") as _f:
@@ -181,9 +207,12 @@ def write_pending(payload: Any, *, path: str | None = None,
             _module_logger.warning(
                 "[356单写者] 读回不一致 writer=%s 写入=%s 读回=%s path=%s",
                 writer or "?", _rows, _back, _p)
+        # ★480 刀11：补 `status=` 与 `path=` —— 这是区分「没改」与「被覆盖」的
+        #   唯一判据（活体 11-09：两次审批成功而文件 sha256 一字未变）。
         _module_logger.info(
-            "[356单写者] writer=%s rows=%s 读回=%s ok=%s 耗时=%.1fms",
-            writer or "?", _rows, _back, _ok, (time.time() - _t0) * 1000.0)
+            "[356单写者] writer=%s rows=%s 读回=%s ok=%s status=%s path=%s 耗时=%.1fms",
+            writer or "?", _rows, _back, _ok, _m480_status_dist(payload) or "-",
+            _p, (time.time() - _t0) * 1000.0)
     return {"ok": bool(_ok), "rows": _back, "writer": writer,
             "why": "" if _ok else "readback_mismatch", "path": _p}
 
