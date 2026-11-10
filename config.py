@@ -9391,6 +9391,11 @@ ENABLE_M4925_CHANNEL_NEXT_REVIVE = True        # 492.5-5：exhausted 的 next_re
 ENABLE_M4925_PUBLISH_TIMING_TRACE = True       # 492.5-6：publish_ms/lock_wait_ms 落 pulse_pairs + 嘴节点补 record
 ENABLE_M4925_WATCHDOG_CANCEL_BACKGROUND = True   # 492.5-7：看门狗超时兜底后丢弃同 cid 后续输出，杜绝双发（等效取消后台请求）
 ENABLE_M4925_UNIFIED_CHANNEL_HEALTH_ALL_PATH = True  # 492.5-1：统一健康账本全路径接入总开关（含 ark/zhipu 显式 tie-break）
+
+# ── 493 批 Self-Index 身体索引底座（只读导出 + 查询，不改逻辑） ──
+ENABLE_M493_SELF_INDEX = True                 # 493-1：统一 Self-Index 导出总开关（只读导出器官/事件/意图/连接关系）
+ENABLE_M493_SELF_QUERY_FASTPATH = True        # 493-5：自我查询 fast path（自我指称/代码指称本地答，不调大模型）
+
 # ── 485-7 baseline=0 禁入自动审批 ──
 # ★出厂默认 False（同上，随灰度一并裁决）。False ⇒ A1 内联自动审批与 _m85 本地
 #   低风险放行不查 baseline（逐字回改前；B 通道 _m101 与老化 _m94 早已查，不受影响）。

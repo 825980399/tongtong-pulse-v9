@@ -969,6 +969,27 @@ class PulseCortex(BasePulseOrgan):
         # 清理过期暂存（超过30秒未匹配的）
         self._cleanup_pending()
 
+        # ===== 493-5：自我查询 fast path（self-index 本地答，不调大模型）=====
+        # 命中自我指称 / 代码指称 ⇒ 直接 emit SPEAK 本地答并 early-return；
+        # 未命中 / 查不到 ⇒ 原样继续（现有应答路径零修改）。全 try 包裹，
+        # 任何异常均 fallback 到原思考链路。
+        try:
+            import config as _c493
+            if bool(getattr(_c493, "ENABLE_M493_SELF_QUERY_FASTPATH", True)):
+                from nucleus.self_index.fastpath import self_query_fastpath
+                _ans493 = self_query_fastpath(content)
+                if _ans493:
+                    self._emit(MouthEvent.SPEAK, {
+                        "content": _ans493,
+                        "source": "cortex",
+                        "user_name": user_name,
+                        "reasoning_path": "self_query_fastpath",
+                    }, priority=8, layer="L1")
+                    self._decision_count = getattr(self, "_decision_count", 0) + 1
+                    return {"status": "self_index_fastpath", "answered": True}
+        except Exception as _e493:
+            self._log_ignored_exception(_e493, "493-5 self_query_fastpath")
+
         # ★主线第17批 T2/P2-63：旁路事件（只发布，不改变任何现有逻辑）
         tap_publish(
             Event.CORTEX_DIALOG_START,
