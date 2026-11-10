@@ -366,7 +366,24 @@ def order_by_load(candidates: list, health=None, quota=None, manager=None,
         _ld = channel_load(_lb_name(_c), health=health, quota=_q, manager=_mgr)
         # ★稳定排序：分数相同就保持原 priority 顺序（`_i` 是原下标）
         _scored.append((-_ld["score"], _i, _c, _ld))
-    _scored.sort(key=lambda x: (x[0], x[1]))
+    # ★492.5-1：score 并列时按渠道名哈希固定次序 tie-break（不再依赖传入顺序 /
+    #   随机撞）。受 ENABLE_M4925_UNIFIED_CHANNEL_HEALTH_ALL_PATH 控制，默认开；
+    #   关开关逐字回到改前（仅按原下标排序）。
+    try:
+        import config as _cfg_k1
+        _k1_on = bool(getattr(_cfg_k1, "ENABLE_M4925_UNIFIED_CHANNEL_HEALTH_ALL_PATH", True))
+    except Exception as _e_k1c:
+        silent_exc(_e_k1c, where="nucleus.llm.channel_balance::order_by_load:k1cfg", level="debug")
+        _k1_on = True
+    if _k1_on:
+        import hashlib as _hl_k1
+
+        def _k1_name_hash(_n):
+            return int(_hl_k1.md5(str(_n or "").encode("utf-8")).hexdigest()[:8], 16)
+
+        _scored.sort(key=lambda x: (x[0], _k1_name_hash(_lb_name(x[2])), x[1]))
+    else:
+        _scored.sort(key=lambda x: (x[0], x[1]))
 
     _new_free = [x[2] for x in _scored]
     _new = _new_free + _paid_rows

@@ -123,6 +123,29 @@ def _row_locked(name: str) -> dict:
     return _r
 
 
+def _next_month_reset_ts(now_ts: float) -> float:
+    """★492.5-5：exhausted 的下次复活时间戳（纯诊断，不参与月度复活门控）。
+
+    取 config.M491_MONTHLY_RESET_DAY（默认15）所在"下一次月内该日"零点 + 随机0-59分，
+    与 491-4 月度复活口径一致，便于在账本里直观看到复活档期。
+    """
+    import datetime as _dt
+    import random as _rnd
+    _day = int(_cfg("M491_MONTHLY_RESET_DAY", 15))
+    _t = _dt.datetime.fromtimestamp(float(now_ts))
+    if _t.day >= _day:
+        _nm = _t.month + 1
+        if _nm > 12:
+            _y, _m = _t.year + 1, 1
+        else:
+            _y, _m = _t.year, _nm
+    else:
+        _y, _m = _t.year, _t.month
+    _target = _dt.datetime(_y, _m, _day, 0, 0, 0)
+    _target += _dt.timedelta(minutes=_rnd.randint(0, 59))
+    return _target.timestamp()
+
+
 def mark_http_error(name: str, status_code: int,
                     error_type: str = "") -> dict | None:
     """491-3：按 HTTP 状态码记账。关开关时首行返回（逐字回改前）。
@@ -150,7 +173,11 @@ def mark_http_error(name: str, status_code: int,
                 _r["fail_count"] = int(_r.get("fail_count", 0)) + 1
                 if _r["fail_count"] >= int(_cfg("M491_HTTP_EXHAUST_THRESHOLD", 3)):
                     _r["state"] = _EXHAUSTED
-                    _r["next_revive_at"] = 0.0
+                    # ★492.5-5：诊断用写"下月15号+随机分"（默认开）；关 ⇒ 回退 0.0 哨兵
+                    _r["next_revive_at"] = (
+                        _next_month_reset_ts(_now)
+                        if bool(_cfg("ENABLE_M4925_CHANNEL_NEXT_REVIVE", True))
+                        else 0.0)
             _save_locked()
             return dict(_r)
     except Exception as _e:

@@ -223,6 +223,32 @@ def _m483_deadline_layers() -> set[str]:
     return {_x.strip() for _x in _raw.split(",") if _x.strip()}
 
 
+# ── 492.5-2 模块级 helper（实例标识 + 开关）──
+_M488_INSTANCE_GEN = round(time.time(), 3)  # ★492.5-2：进程实例生成戳（重启/多实例区分）
+
+
+def _m4925_ledger_on() -> bool:
+    """★492.5-2：instance_id + 窗口增量 + 幽灵去抖 总开关（fail-closed）。"""
+    try:
+        import config
+        return bool(getattr(config, "ENABLE_M4925_LEDGER_INSTANCE_ID", False))
+    except Exception as _e:
+        silent_exc(_e, where="InfoField::_m4925_ledger_on", level="debug")
+        return False
+
+
+def _m488_instance_id() -> str:
+    """★492.5-2：本进程实例标识 = 配置instance_id#pid#生成戳。"""
+    try:
+        import config
+        _base = str(getattr(config, "instance_id", "") or "")
+    except Exception as _e:
+        silent_exc(_e, where="InfoField::_m488_instance_id", level="debug")
+        _base = ""
+    import os as _os
+    return f"{_base}#{_os.getpid()}#{_M488_INSTANCE_GEN}"
+
+
 class InfoField(SilentLogMixin):
     """
     全局信息场（v9.5 分层异步调度 · 终极完整版）
@@ -325,6 +351,10 @@ class InfoField(SilentLogMixin):
         self._event_dropped: dict[str, dict[str, int]] = {}
         self._m488_lock = threading.Lock()
         self._m488_timer = None
+        # ★492.5-2：上次落盘的累计值（算窗口增量，避免多进程累计混看像回退）
+        self._m488_last_written: dict[str, dict] = {}
+        # ★492.5-2：幽灵丢失连续窗口计数（连续 3 窗口才告警，去抖）
+        self._m488_ghost_streak: dict[str, int] = {}
         # ★488-2：扇出统计（门控 ENABLE_M488_FANOUT_STAT）
         self._fanout_current: dict[str, float] = {}
         self._fanout_baseline: dict[str, float] = {}
@@ -1251,6 +1281,21 @@ class InfoField(SilentLogMixin):
             _trace_route_matched(pulse_id, _real, _univ, bool(matched_organs), _status)
         except Exception as _e:
             _module_logger.debug(f"[路由打点忽略] type={type(_e).__name__} {_e}")
+        # ★492.5-6：把本次 publish 的实测耗时/锁等待写入 pulse_pairs（观测用）。
+        #   门控 ENABLE_M4925_PUBLISH_TIMING_TRACE（默认开）；关 ⇒ 不执行，逐字回改前。
+        try:
+            import config as _cfg_pf
+            if bool(getattr(_cfg_pf, "ENABLE_M4925_PUBLISH_TIMING_TRACE", True)):
+                from utils import pulse_tracer as _pt
+                _pt.log_publish(
+                    pulse_id,
+                    (time.time() - _rt_start) * 1000.0,
+                    _lock_wait_ms,
+                    _depth,
+                    correlation_id=str(pulse.get("correlation_id", "")),
+                )
+        except Exception as _e_k6:
+            silent_exc(_e_k6, where="InfoField::publish:4925", level="debug")
         return {
             "status": "published",
             "pulse_id": pulse_id,
@@ -3553,12 +3598,38 @@ class InfoField(SilentLogMixin):
 
     def _m488_write_ledger_file(self) -> None:
         _ledger = self._m488_compute_ledger()
-        for _et, _row in _ledger.items():
+        _inst_on = _m4925_ledger_on()
+        _instance_id = _m488_instance_id() if _inst_on else ""
+        # ★492.5-2：开开关时改算窗口增量 + 幽灵告警连续3窗口去抖
+        _out_ledger = _ledger
+        if _inst_on:
+            _out_ledger = {}
+            for _et, _row in _ledger.items():
+                _prev = self._m488_last_written.get(_et, {})
+                _nr = dict(_row)
+                _nr["emitted_delta"] = int(_row["emitted"]) - int(_prev.get("emitted", 0))
+                _nr["matched_delta"] = int(_row["matched"]) - int(_prev.get("matched", 0))
+                _nr["handled_delta"] = int(_row["handled"]) - int(_prev.get("handled", 0))
+                self._m488_last_written[_et] = {
+                    "emitted": int(_row["emitted"]),
+                    "matched": int(_row["matched"]),
+                    "handled": int(_row["handled"]),
+                }
+                # 幽灵告警去抖：连续 3 个窗口 ghost_loss>0 才报
+                if int(_row["ghost_loss"]) > 0:
+                    self._m488_ghost_streak[_et] = int(self._m488_ghost_streak.get(_et, 0)) + 1
+                else:
+                    self._m488_ghost_streak[_et] = 0
+                _out_ledger[_et] = _nr
+        for _et, _row in _out_ledger.items():
             if _row["ghost_loss"] > 0:
+                if _inst_on and self._m488_ghost_streak.get(_et, 0) < 3:
+                    continue  # 去抖：未连续 3 窗口不报
                 _module_logger.warning(
                     f"[事件账本·幽灵丢失] {_et}: matched={_row['matched']} "
                     f"handled={_row['handled']} dropped={sum(_row['dropped'].values())} "
                     f"⇒ 幽灵丢失 {_row['ghost_loss']}（应投递-实处理-已声明丢弃>0）"
+                    f"{(' [实例=' + _instance_id + ']') if _instance_id else ''}"
                 )
         try:
             from nucleus.data.write_guard import guard_write
@@ -3574,7 +3645,9 @@ class InfoField(SilentLogMixin):
             os.makedirs(_dir, exist_ok=True)
         except Exception as _e:
             silent_exc(_e, where="InfoField::_m488_write_ledger_file::makedirs", level="debug")
-        _out = {"ts": _ts, "ledger": _ledger}
+        _out = {"ts": _ts, "ledger": _out_ledger}
+        if _instance_id:
+            _out["instance_id"] = _instance_id
         try:
             with open(_path, "a", encoding="utf-8") as _f:
                 _f.write(json.dumps(_out, ensure_ascii=False) + "\n")

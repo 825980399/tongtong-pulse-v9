@@ -237,6 +237,34 @@ class PulseMouth(BasePulseOrgan):
                       f"len={len(content)})")
             return {"status": "suppressed", "reason": "inner_autonomous"}
 
+        # ===== 492.5-7：看门狗超时兜底后丢弃同 cid 后续输出，杜绝双发 =====
+        # 事故形状：458刀1 委派看门狗超时先吐「委派超时」提示（source=cortex_watchdog、
+        #   reasoning_path=delegate_timeout），但肺的同步阻塞 LLM 请求仍在后台跑，最终
+        #   完成又吐一句答案 ⇒ 用户收到两句。事件驱动架构下无独立可取消 future 句柄
+        #   （_on_select_model 为同步 urllib 阻塞），故用「标记 cid + 丢弃后续」等效
+        #   方案：达成验收——控制台只一次超时提示，不再冒第二句。
+        try:
+            import config as _cfg_m4925
+            if bool(getattr(_cfg_m4925, "ENABLE_M4925_WATCHDOG_CANCEL_BACKGROUND", True)):
+                _tset = self.__dict__.get("_m4925_timed_out_cids")
+                if not isinstance(_tset, set):
+                    _tset = set()
+                    self._m4925_timed_out_cids = _tset
+                if str(source) == "cortex_watchdog" and \
+                        str(payload.get("reasoning_path", "")) == "delegate_timeout":
+                    if correlation_id:
+                        _tset.add(str(correlation_id))
+                elif correlation_id and str(correlation_id) in _tset:
+                    self._log(LogLevel.DEBUG,
+                              f"[492.5-7] 超时兜底已吐过，丢弃同 cid 后续输出: "
+                              f"cid={str(correlation_id)[:16]}")
+                    return {"status": "suppressed",
+                            "reason": "watchdog_timed_out_dup"}
+        except Exception as _e_m4925:
+            from nucleus._silent_except import silent_exc
+            silent_exc(_e_m4925, where="PulseMouth::_on_speak 492.5-7",
+                       level="debug")
+
         # 人格过滤（嘴巴唯一保留的处理逻辑）
         reply_text = self._filter_personality(content)
         # 身份语气增强：根据关系指导和情绪状态微调回复
@@ -289,6 +317,16 @@ class PulseMouth(BasePulseOrgan):
             "source": source or "cortex",
             "correlation_id": correlation_id,  # ★v27.1修复：传递对话ID用于输出完成回调
         }, priority=8, layer="L1")
+        # ★492.5-6：补「嘴节点」出词完成打点（复用 486 对话框 trace 开关，
+        #   关开关时 record 内部直接 return，逐字回改前）。
+        try:
+            from nucleus import dialog_latency_trace as _dlt
+            _dlt.record(correlation_id, MouthEvent.REPLY, "L1", "PulseMouth",
+                        "emit", is_synthetic=False)
+        except Exception as _e_m:
+            from nucleus._silent_except import silent_exc
+            silent_exc(_e_m, where="PulseMouth::_on_speak dialog_trace",
+                       level="debug")
 
         # 模型生成和内在沉思的回复都是高质量知识，优先保障高重要性
         importance = "A" if source in ("lung", "inner_world") else "B"

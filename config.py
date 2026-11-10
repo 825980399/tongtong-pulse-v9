@@ -9378,6 +9378,19 @@ M492_INTENT_SAMPLE_EVERY = 3                  # 492-4：开开关时覆盖累计
 ENABLE_M492_WOULD_METHOD_LOOKUP = False       # 492-5：dry-run 查 INTENT_TO_METHOD（默认关，观测一轮再开）
 ENABLE_M492_HYPOTHESIS_LOG = True             # 492-6：假设生成台账落盘（纯观测，命中侧留接口）
 M492_HYPOTHESIS_LOG_PATH = ""                 # 492-6：空 ⇒ data/evolution/hypothesis_hits.jsonl（测试可注入）
+# ── 492.5 批开关（观测纠偏补丁）──
+# 每刀独立开关，关掉任一开关即逐字回到改前行为。
+# 注：492.5-1 复用 491-3 的 ENABLE_M491_CHANNEL_STATE_PERSIST（同一账本扩路径，不另开开关）。
+#     2/3/4 默认关：它们改的是落盘 schema / 过滤语义，默认关保护 488/490 既有落盘与测试零回退，
+#     验证一轮后再开；5/6 是纯观测纠偏，默认开。
+ENABLE_M4925_LEDGER_INSTANCE_ID = False        # 492.5-2：event_ledger 加 instance_id + 窗口增量 + 幽灵告警连续3窗口去抖
+ENABLE_M4925_EVIDENCE_REQUEST_ID_FIX = False   # 492.5-3：证据 request_id 真实query哈希 + 空query(<5字)跳过
+ENABLE_M4925_LAYER_OBSERVE_THROTTLE = False    # 492.5-4：层观测 flush 日上限1000行（超过丢+汇总一条）
+ENABLE_M4925_MEM_LEAK_SIGN_FIX = True          # 492.5-5：内存告警稳态斜率符号修正（负斜率=GC回落不再误判泄漏）
+ENABLE_M4925_CHANNEL_NEXT_REVIVE = True        # 492.5-5：exhausted 的 next_revive_at 写"下月15号+随机0-59分"（纯诊断，不参与月度复活门控）
+ENABLE_M4925_PUBLISH_TIMING_TRACE = True       # 492.5-6：publish_ms/lock_wait_ms 落 pulse_pairs + 嘴节点补 record
+ENABLE_M4925_WATCHDOG_CANCEL_BACKGROUND = True   # 492.5-7：看门狗超时兜底后丢弃同 cid 后续输出，杜绝双发（等效取消后台请求）
+ENABLE_M4925_UNIFIED_CHANNEL_HEALTH_ALL_PATH = True  # 492.5-1：统一健康账本全路径接入总开关（含 ark/zhipu 显式 tie-break）
 # ── 485-7 baseline=0 禁入自动审批 ──
 # ★出厂默认 False（同上，随灰度一并裁决）。False ⇒ A1 内联自动审批与 _m85 本地
 #   低风险放行不查 baseline（逐字回改前；B 通道 _m101 与老化 _m94 早已查，不受影响）。

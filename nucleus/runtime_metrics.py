@@ -788,6 +788,8 @@ class RuntimeMetrics:
             _cov_ratio = 0.9
         _out.update({"threshold": _thr, "ratio_thr": _ratio,
                      "hold_sec": _hold, "step_mb": _step_mb})
+        # ★492.5-5：稳态斜率符号修正开关（默认开）。关 ⇒ 回退旧 abs(_s) 行为。
+        _sign_fix = bool(getattr(_c449, "ENABLE_M4925_MEM_LEAK_SIGN_FIX", True))
         if not _on:
             return _out
         try:
@@ -822,7 +824,7 @@ class RuntimeMetrics:
             _out["steady_window_sec_read"] = (
                 round(float(_cov_s), 1) if isinstance(_cov_s, (int, float)) else None)
             _out["steady_cover_ok"] = bool(_cov_ok)
-            _leak_cond = bool(_cov_ok) and abs(_s) >= _thr
+            _leak_cond = bool(_cov_ok) and (_s if _sign_fix else abs(_s)) >= _thr
             _step_cond = _out["step_delta"] >= _step_mb
             # 持续窗：只有"连续满足"才算，抖动一次就清零
             _since = getattr(self, "_m449_spike_since", None)
@@ -852,7 +854,7 @@ class RuntimeMetrics:
             else:
                 _out["why"] = (f"未达告警条件（瞬时={_i:.1f} 稳态={_s:.1f} "
                                f"比值={_out['ratio']:.2f} 持续={_out['held_sec']:.0f}s）")
-                if (not _cov_ok) and abs(_s) >= _thr:
+                if (not _cov_ok) and (_s if _sign_fix else abs(_s)) >= _thr:
                     _out["why"] += (
                         f"；稳态 {_s:.1f} 虽越阈值，但稳态窗只覆盖 "
                         f"{(float(_cov_s) if isinstance(_cov_s, (int, float)) else 0.0):.0f}s"

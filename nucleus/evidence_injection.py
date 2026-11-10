@@ -228,7 +228,8 @@ def build_injection(items: list[dict] | None, *, now: float | None = None,
                     min_score: float | None = None,
                     top_k: int | None = None,
                     max_chars: int | None = None,
-                    max_age_days: float | None = None) -> dict:
+                    max_age_days: float | None = None,
+                    query: str = "") -> dict:
     """净化 + 准入 + 按质量权重排序 + 拼出**纯数据块**。
 
     ``fragment=""`` ⇒ 调用方既不注入、也不创建预算（刀1）。
@@ -312,7 +313,7 @@ def build_injection(items: list[dict] | None, *, now: float | None = None,
         dropped[k] = dropped.get(k, 0) + v
     if not kept:
         _m490_flush_second(_m490_on, _m490_kept_second, _m490_scores, _m490_blocked,
-                           dropped, False, 0)
+                           dropped, False, 0, query=query)
         return {"fragment": "", "items": [], "dropped": dropped,
                 "reason": "no_usable_evidence",
                 "system_rule": SYSTEM_EVIDENCE_RULE}
@@ -324,21 +325,22 @@ def build_injection(items: list[dict] | None, *, now: float | None = None,
             f'score="{_score_of(item):.2f}">{item.get("text") or ""}</evidence>')
     _fragment = _DATA_BEGIN + "\n".join(lines)
     _m490_flush_second(_m490_on, _m490_kept_second, _m490_scores, _m490_blocked,
-                       dropped, True, len(_fragment))
+                       dropped, True, len(_fragment), query=query)
     return {"fragment": _fragment, "items": kept,
             "dropped": dropped, "reason": "ok",
             "system_rule": SYSTEM_EVIDENCE_RULE}
 
 
 def _m490_flush_second(on: bool, kept_second: int, scores, blocked,
-                       dropped: dict, injected: bool, fragment_len: int) -> None:
+                       dropped: dict, injected: bool, fragment_len: int,
+                       query: str = "") -> None:
     """★490-6：与 490-5 的第一道闸数据合并落一行（关开关时首行返回）。"""
     if not on:
         return
     try:
         from nucleus.m490_diag import note_second_gate
         note_second_gate(kept_second, scores, blocked, dropped,
-                         injected, fragment_len)
+                         injected, fragment_len, query=query)
     except Exception as _e:
         silent_exc(_e, where="evidence_injection::_m490_flush_second", level="debug")
 

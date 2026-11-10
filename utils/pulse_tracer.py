@@ -328,7 +328,7 @@ def _dump_pairs():
         _rows = []
         for e in _pending:
             _LAST_PAIR_SEQ = max(_LAST_PAIR_SEQ, e.get("seq", 0))
-            _rows.append({
+            _row = {
                 "pulse_id": e.get("pulse_id", ""),
                 "type": e.get("type", ""),
                 "organ": e.get("organ", ""),
@@ -342,7 +342,12 @@ def _dump_pairs():
                 "matched_organs": e.get("matched_organs", []),
                 "layer": e.get("layer", ""),
                 "ttl_ns": e.get("ttl_ns", None),
-            })
+            }
+            if e.get("type") == "publish":  # ★492.5-6：publish 行附带耗时/锁等待字段
+                _row["publish_ms"] = e.get("publish_ms")
+                _row["lock_wait_ms"] = e.get("lock_wait_ms")
+                _row["queue_depth"] = e.get("queue_depth")
+            _rows.append(_row)
     try:
         _path = _get_pair_path()
         os.makedirs(os.path.dirname(_path), exist_ok=True)
@@ -500,6 +505,43 @@ def _get_orphan_path():
         base = _ISO_BASE_DIR if _ISO_BASE_DIR is not None else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         _orphan_path = os.path.join(base, "data", "monitor", "pulse_orphans.json")
     return _orphan_path
+
+def log_publish(pulse_id: str, publish_ms: float, lock_wait_ms: float,
+                queue_depth: int, correlation_id: str = "") -> None:
+    """★492.5-6：把每次 publish 的耗时/锁等待写入 pulse_pairs（观测用）。
+
+    复用与 log_emit 相同的 _events 环（带 seq），仅当 ENABLE_M4925_PUBLISH_TIMING_TRACE
+    开时入列；落盘受 ENABLE_PULSE_PAIR_DUMP 控制。关开关则整段不执行，逐字回改前。
+    """
+    try:
+        import config
+        if not bool(getattr(config, "ENABLE_M4925_PUBLISH_TIMING_TRACE", True)):
+            return
+    except Exception as _e:
+        silent_exc(_e, where="utils.pulse_tracer::log_publish:gate", level="debug")
+        return
+    global _EVENT_SEQ
+    with _lock:
+        _ev = {
+            "timestamp": time.time(),
+            "type": "publish",
+            "organ": "InfoField",
+            "event_type": "publish",
+            "layer": "",
+            "pulse_id": str(pulse_id or ""),
+            "publish_ms": float(publish_ms),
+            "lock_wait_ms": float(lock_wait_ms),
+            "queue_depth": int(queue_depth),
+            "target_organ": "",
+            "ttl_ns": None,
+            "correlation_id": str(correlation_id or ""),
+            "matched_organs": [],
+            "amplitude": None,
+        }
+        _ev["seq"] = _EVENT_SEQ
+        _EVENT_SEQ += 1
+        _events.append(_ev)
+
 
 def log_emit(organ_name, event_type, layer, pulse_id="", amplitude=None, target_organ="", ttl_ns=None, correlation_id=None):
     """记录脉冲发射事件（207批·刀1：新增 target_organ 语义标注记录 + 填充率生死闸）

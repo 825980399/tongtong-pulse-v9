@@ -1365,6 +1365,19 @@ class PulseLung(BasePulseOrgan):
                 self._log(LogLevel.WARNING,
                           f"[渠道] {_name} HTTP {_he.code}"
                           f"{(' ' + _err_code) if _err_code else ''}: {_err_body}")
+                # ★492.5-1：主对话 HTTP 错误也计入统一账本（与 channel_client 同源，
+                #   复用 491-3 开关；关开关整段不执行，逐字回改前）。
+                try:
+                    import config as _cfg_k1
+                    if bool(getattr(_cfg_k1, "ENABLE_M4925_UNIFIED_CHANNEL_HEALTH_ALL_PATH", True)):
+                        from nucleus.llm.channel_state_store import mark_http_error
+                        _et_k1 = {403: "quota_exhausted", 429: "rate_limited",
+                                  401: "auth_fail", 402: "auth_fail"}.get(
+                            int(_he.code), "http_error")
+                        mark_http_error(_name, int(_he.code), _et_k1)
+                except Exception as _e_k1:
+                    silent_exc(_e_k1, where="organs.body.PulseLung::_call_channel:4925",
+                               level="debug")
                 return None
             if self._channel_http_dump_enabled():
                 self._log(LogLevel.INFO,
@@ -2474,7 +2487,7 @@ class PulseLung(BasePulseOrgan):
                     except Exception as _m454_se:
                         silent_exc(_m454_se, where="PulseLung::454 种子合并",
                                    level="debug")
-                    _inj453 = _ei453.build_injection(_block453)
+                    _inj453 = _ei453.build_injection(_block453, query=prompt)
                     # ★★刀1：先拼 fragment，**只有 fragment 非空才创建 Budget**。
                     #   无证据时 budget 保持 None ⇒ 沿用渠道原超时，不进三段式。
                     if _inj453["fragment"]:
@@ -2495,6 +2508,7 @@ class PulseLung(BasePulseOrgan):
                               f"证据={len(_inj453['items'])} "
                               f"预算={_m453_budget.total if _m453_budget else 'none'} "
                               f"过滤={_inj453['dropped']} "
+                              f"query长度={len(str(prompt or ''))} 命中={len(_m453_hits)} "
                               f"request_id={_m453_st.get('request_id')}")
                 else:
                     _ei453.note("injection_off")

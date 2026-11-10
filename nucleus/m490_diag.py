@@ -37,9 +37,19 @@ def stats_on() -> bool:
     return bool(_cfg("ENABLE_M490_EVIDENCE_TRACE_STATS", False))
 
 
+def _m4925_evidence_fix_on() -> bool:
+    """★492.5-3：request_id 真实query + 空query(<5字)跳过 开关（fail-closed）。"""
+    return bool(_cfg("ENABLE_M4925_EVIDENCE_REQUEST_ID_FIX", False))
+
+
 def layer_log_on() -> bool:
     """490-3 阶段A：仅 log 模式观测，其他任何值都不产生行为。"""
     return str(_cfg("M490_LAYER_DEFAULT_MODE", "off")) == "log"
+
+
+def _m4925_layer_throttle_on() -> bool:
+    """★492.5-4：层观测 flush 日上限 开关（fail-closed）。"""
+    return bool(_cfg("ENABLE_M4925_LAYER_OBSERVE_THROTTLE", False))
 
 
 def _bucket(score: float) -> str:
@@ -137,6 +147,10 @@ def note_first_gate(query: str, hits_raw: int, kept_first: int,
     """
     if not stats_on():
         return None
+    # ★492.5-3：空/过短 query 不记账（避免 md5("") 常量塌缩成同一 id）
+    if _m4925_evidence_fix_on() and (not str(query or "").strip()
+                                     or len(str(query or "")) < 5):
+        return None
     try:
         _prev = _pending.get()
         if _prev is not None:
@@ -167,6 +181,10 @@ def note_second_gate(kept_second: int, all_scores, blocked_scores,
         return None
     try:
         _row = _pending.get()
+        # ★492.5-3：无 pending（第一道没记）且 query 空/过短 ⇒ 跳过，不造 md5("") 常量行
+        if (_row is None and _m4925_evidence_fix_on()
+                and (not str(query or "").strip() or len(str(query or "")) < 5)):
+            return None
         if _row is None:
             _row = _new_row(stable_request_id(query))
         _row["hits_kept_second"] = int(kept_second)
@@ -194,6 +212,8 @@ _layer_last_flush = 0.0
 _LAYER_FLUSH_INTERVAL = 60.0
 _LAYER_FLUSH_STEP = 50
 _LAYER_PREFIX = "layer_migration_candidates"
+_layer_written_count = 0        # ★492.5-4：当日已写行数（进程内，跨进程需各自限）
+_layer_written_day = ""         # ★492.5-4：当前计数所属日期
 
 
 def infer_layer_quiet(event_type: str) -> str:
@@ -215,14 +235,31 @@ def infer_layer_quiet(event_type: str) -> str:
 
 
 def _flush_layer_snapshot() -> None:
+    global _layer_written_count, _layer_written_day
     with _layer_lock:
         _snap = [{"organ": k[0], "event": k[1], "current_layer": k[2],
                   "inferred_layer": k[3], "count": v,
                   "ts": round(time.time(), 3)}
                  for k, v in _layer_counts.items()]
         _layer_last_flush = time.time()
+    # ★492.5-4：日上限 1000 行（开关关时 _throttle=False，逐字回改前聚合行为）
+    _throttle = _m4925_layer_throttle_on()
+    if _throttle:
+        _today = time.strftime("%Y%m%d")
+        if _layer_written_day != _today:
+            _layer_written_day = _today
+            _layer_written_count = 0
+    _dropped = 0
     for _row in _snap:
+        if _throttle and _layer_written_count >= 1000:
+            _dropped += 1
+            continue
         append_jsonl(_LAYER_PREFIX, _row)
+        if _throttle:
+            _layer_written_count += 1
+    if _throttle and _dropped:
+        append_jsonl(_LAYER_PREFIX, {"_summary": True, "date": _today,
+                                     "combos": len(_snap), "dropped": _dropped})
 
 
 def note_layer_candidate(organ: str, event_type: str,
