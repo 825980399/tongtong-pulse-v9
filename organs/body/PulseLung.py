@@ -697,6 +697,14 @@ class PulseLung(BasePulseOrgan):
                         "integration": _integration_note,
                         "remote_verified": _remote_verified,
                     }, priority=8, layer="L1")
+                    # ★487-3：对话链埋点 —— mouth.speak 由肺发出（cid 串联最后一跳）。
+                    try:
+                        from nucleus import dialog_latency_trace as _dlt
+                        _dlt.record(payload.get("correlation_id", ""), "mouth_speak",
+                                    "L1", "PulseLung", "emit")
+                    except Exception as _e:
+                        from nucleus._silent_except import silent_exc
+                        silent_exc(_e, where="PulseLung:dialog_trace", level="debug")
                 else:
                     # 后台自主学习：不通过嘴巴输出，只消化为知识
                     self._log(LogLevel.INFO, "后台学习消化: 大模型回复已消化为知识（不对外输出）")

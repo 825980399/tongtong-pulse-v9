@@ -47,16 +47,17 @@ def test_30_other_six_channels_order_untouched():
     回滚点：466 渠道扩容回退时，本断言需退回 6 条旧表。
     """
     _order = [(c["name"], c["priority"]) for c in config.get_active_channels()]
+    # ★487-4（2026-11-10）：ark 协作主力列首位(p1) + 5 条耗尽百炼渠道关闭、3 条满额百炼新增 ⇒
+    #   启用池由 13 条变 12 条，原 p2/p3/p4/p6/p9 槽位由新渠道顶替。
     assert _order == [
+        ("ark-seed-evolving-new", 1),
         ("zhipu-47-flash", 1),
-        ("bailian-qwen38-flash", 2),
-        ("bailian-deepseek-v41-flash", 3),
-        ("bailian-glm53", 4),
+        ("bailian-qwen36-flash", 2),
+        ("bailian-qwen35-flash", 3),
+        ("bailian-kimi-k31-pro", 4),
         ("modelscope", 5),
-        ("bailian-qwen37-plus", 6),
         ("bailian-kimi-k3", 7),
         ("zhipu", 8),
-        ("bailian-deepseek-v4-pro", 9),
         ("bailian-qwen38-max", 10),
         ("qianfan-ernie51", 11),
         ("tokenhub-glm53", 12),
@@ -72,12 +73,12 @@ def test_40_load_balance_never_returns_it():
     _names = [c["name"] for c in _ordered]
     # ★478：402 余额耗尽的 siliconflow 不得入池（魔搭已恢复启用）。
     assert "siliconflow-qwen2-7b" not in _names
-    # ★466：6 条 ⇒ 11 条；★478：魔搭恢复 + 千帆新增 ⇒ 12 条；★479：TokenHub 新增 ⇒ 13 条。
-    assert len(_names) == 13
+    # ★487-4：ark 列首位 + 关 5 条耗尽、增 3 条满额 ⇒ 启用池由 13 条变 12 条。
+    assert len(_names) == 12
     assert set(_names) == {n for n, _ in [
-        ("zhipu-47-flash", 1), ("bailian-qwen38-flash", 2),
-        ("bailian-deepseek-v41-flash", 3), ("bailian-glm53", 4),
-        ("modelscope", 5), ("bailian-qwen37-plus", 6),
-        ("bailian-kimi-k3", 7), ("zhipu", 8),
-        ("bailian-deepseek-v4-pro", 9), ("bailian-qwen38-max", 10),
-        ("qianfan-ernie51", 11), ("tokenhub-glm53", 12), ("deepseek", 13)]}
+        ("ark-seed-evolving-new", 1),
+        ("zhipu-47-flash", 1), ("bailian-qwen36-flash", 2),
+        ("bailian-qwen35-flash", 3), ("bailian-kimi-k31-pro", 4),
+        ("modelscope", 5), ("bailian-kimi-k3", 7), ("zhipu", 8),
+        ("bailian-qwen38-max", 10), ("qianfan-ernie51", 11),
+        ("tokenhub-glm53", 12), ("deepseek", 13)]}

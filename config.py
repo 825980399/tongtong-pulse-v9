@@ -1612,6 +1612,23 @@ REMOTE_API_CHANNELS = {
         #   ★帝知风险：环境变量未设时这三条会 401，实际可用仍是
         #     zhipu(p4) + deepseek(p8) + 本地 Ollama 兜底。不会比改前更差（改前 10 条火山也是全失败）。
         {
+            # ★487批（2026-11-10）：星轨新加的火山方舟协作计划新模型（主力·永久免费协作渠道）。
+            #   model=ep-20261110031549-h59hv，priority=1 与 zhipu 同档（最高），
+            #   列于 zhipu 之前 ⇒ 并列时稳定排序优先选它，作为协作计划主力渠道。
+            #   api_key 用专用协作密钥 ARK_API_KEY_NEW（与历史 ARK_API_KEY 区分开），
+            #   并兜底读取 ARK_API_KEY（用户实际加载的密钥名）。
+            "name": "ark-seed-evolving-new",
+            "model": "ep-20261110031549-h59hv",
+            "quota_type": "permanent_free",
+            "quota_limit": 1000000,
+            "api_url": "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
+            "api_key": os.environ.get("ARK_API_KEY_NEW", ""),
+            "priority": 1,
+            "enabled": True,
+            "adapter": "openai_compatible",
+            "max_concurrent": 4,
+        },
+        {
             "name": "zhipu-47-flash",
             "model": "glm-4.7-flash",
             "quota_limit": -1,  # 智谱官方永久免费（不限量），不参与额度管控
@@ -1641,7 +1658,8 @@ REMOTE_API_CHANNELS = {
             "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
             "api_key": os.environ.get("DASHSCOPE_API_KEY", ""),
             "priority": 2,
-            "enabled": True,
+            # ★487批（2026-11-10）：额度已耗尽（qwen3.7-flash 免费额度 403），关闭避免每次 10s 超时。
+            "enabled": False,
             "adapter": "openai_compatible",
             "max_concurrent": 4,
         },
@@ -1657,7 +1675,8 @@ REMOTE_API_CHANNELS = {
             "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
             "api_key": os.environ.get("DASHSCOPE_API_KEY", ""),
             "priority": 3,
-            "enabled": True,
+            # ★487批（2026-11-10）：额度已耗尽，关闭。
+            "enabled": False,
             "adapter": "openai_compatible",
             "max_concurrent": 4,
         },
@@ -1672,7 +1691,8 @@ REMOTE_API_CHANNELS = {
             "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
             "api_key": os.environ.get("DASHSCOPE_API_KEY", ""),
             "priority": 4,
-            "enabled": True,
+            # ★487批（2026-11-10）：额度已耗尽，关闭。
+            "enabled": False,
             "adapter": "openai_compatible",
             "max_concurrent": 2,
         },
@@ -1687,7 +1707,8 @@ REMOTE_API_CHANNELS = {
             "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
             "api_key": os.environ.get("DASHSCOPE_API_KEY", ""),
             "priority": 6,
-            "enabled": True,
+            # ★487批（2026-11-10）：额度已耗尽，关闭。
+            "enabled": False,
             "adapter": "openai_compatible",
             "max_concurrent": 2,
         },
@@ -1716,7 +1737,8 @@ REMOTE_API_CHANNELS = {
             "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
             "api_key": os.environ.get("DASHSCOPE_API_KEY", ""),
             "priority": 9,
-            "enabled": True,
+            # ★487批（2026-11-10）：额度（剩 268K）快耗尽，关闭。
+            "enabled": False,
             "adapter": "openai_compatible",
             "max_concurrent": 1,
         },
@@ -1732,6 +1754,44 @@ REMOTE_API_CHANNELS = {
             "enabled": True,
             "adapter": "openai_compatible",
             "max_concurrent": 1,
+        },
+        {
+            # ★487批（2026-11-10）：新增 3 个满额百炼渠道，补回被关闭的 5 个耗尽渠道的能力档。
+            #   api_url/api_key 与既有百炼渠道一致；仅 model 不同。priority 沿用任务书给定值。
+            "name": "bailian-qwen36-flash",
+            "model": "qwen3.6-flash",
+            "quota_type": "monthly_free",
+            "quota_limit": 1000000,
+            "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+            "api_key": os.environ.get("DASHSCOPE_API_KEY", ""),
+            "priority": 2,
+            "enabled": True,
+            "adapter": "openai_compatible",
+            "max_concurrent": 4,
+        },
+        {
+            "name": "bailian-qwen35-flash",
+            "model": "qwen3.5-flash",
+            "quota_type": "monthly_free",
+            "quota_limit": 1000000,
+            "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+            "api_key": os.environ.get("DASHSCOPE_API_KEY", ""),
+            "priority": 3,
+            "enabled": True,
+            "adapter": "openai_compatible",
+            "max_concurrent": 4,
+        },
+        {
+            "name": "bailian-kimi-k31-pro",
+            "model": "kimi-k3.1-pro",
+            "quota_type": "monthly_free",
+            "quota_limit": 1000000,
+            "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+            "api_key": os.environ.get("DASHSCOPE_API_KEY", ""),
+            "priority": 4,
+            "enabled": True,
+            "adapter": "openai_compatible",
+            "max_concurrent": 4,
         },
         {
             # ★352追补项1（2026-10-23 小林裁决）：Qwen2-7B 已下架禁用（403），
@@ -9247,6 +9307,13 @@ M485_DOC_COMMENT_ISSUE_TYPES: tuple = ()
 # ── 485-5 issue_type 匹配检查 ──
 # ★出厂默认 False（同 485-4 口径，随灰度一并裁决）。False ⇒ 不做匹配检查。
 ENABLE_M485_ISSUE_MATCH_GATE = False
+# ── 487 批开关（背压死循环拆除 + 对话链埋点 + 出队 TTL）──
+# 全部出厂默认 False（回滚态）：关掉即逐字回到旧行为，零回归。灰度由星轨裁决。
+# 487-3 复用 486 命名空间（对话链埋点属 486 系列可观测性补全）。
+ENABLE_M486_DIALOG_TRACE = False   # 对话链 6 节点 cid 串联埋点 + dialog_latency_*.jsonl
+ENABLE_M487_UNPAUSE_DIGEST = False  # 487-1：CRITICAL 也绝不暂停 stomach_digest（消费类）
+ENABLE_M487_WORKER_FLOOR = False    # 487-2：critical 每层 worker 下限提到 2（不抽到 1/0）
+ENABLE_M487_DEQUEUE_TTL = False     # 487-5：出队时按 timestamp_ns 丢弃过期 tick 类脉冲
 # ── 485-7 baseline=0 禁入自动审批 ──
 # ★出厂默认 False（同上，随灰度一并裁决）。False ⇒ A1 内联自动审批与 _m85 本地
 #   低风险放行不查 baseline（逐字回改前；B 通道 _m101 与老化 _m94 早已查，不受影响）。

@@ -377,61 +377,69 @@ def test_刀9_三新增渠道齐备():
     os.environ.setdefault("PULSE_FRAMEWORK", "1")
     import config
     ch = {c["name"]: c for c in config.REMOTE_API_CHANNELS["default_channels"]}
-    # ★466 改口径（2026-11-06 小林裁决）：百炼渠道 2→7 条，原 qwen-plus/qwen-max
-    #   额度耗尽 403 ⇒ 换成 qwen3.8-flash / qwen3.7-plus 等新档，priority 整表重排。
-    #   回滚点：466 回退时本块需退回 bailian-qwen-plus(2, qwen-plus) /
-    #   bailian-qwen-max(5, qwen-max) 旧表。
+    # ★487-4（2026-11-10）：百炼 5 条额度耗尽 ⇒ 关闭（enabled=False）；
+    #   新增 3 条满额百炼渠道补回能力档。本用例随之更新为当期现态。
+    #   仍启用的主力/百炼渠道（名字/优先级/模型/启用四判）：
     for n, pri, model in (("zhipu-47-flash", 1, "glm-4.7-flash"),
-                          ("bailian-qwen38-flash", 2, "qwen3.7-flash"),
-                          # ★478：siliconflow 402 余额耗尽 ⇒ 停用（p99），
-                          #   槽位 p5 由恢复启用的魔搭顶替。
                           ("modelscope", 5, "Qwen/Qwen3.8-Flash-Next"),
-                          ("bailian-qwen37-plus", 6, "qwen3.7-plus-2026-05-26")):
+                          ("bailian-kimi-k3", 7, "kimi-k3"),
+                          ("bailian-qwen38-max", 10, "qwen3.8-max")):
         assert n in ch, "缺渠道 %s" % n
         assert ch[n]["priority"] == pri
         assert ch[n]["model"] == model
         assert ch[n]["enabled"] is True
-    # ★466 新增的 5 条同样必须齐备（名字/优先级/模型/启用四判）
-    for n, pri, model in (("bailian-deepseek-v41-flash", 3, "deepseek-v4.1-flash-1017"),
-                          ("bailian-glm53", 4, "glm-5.2"),
-                          ("bailian-kimi-k3", 7, "kimi-k3"),
-                          ("bailian-deepseek-v4-pro", 9, "deepseek-v4-pro-0813"),
-                          ("bailian-qwen38-max", 10, "qwen3.8-max")):
-        assert n in ch, f"缺 466 新增渠道 {n}"
+    # ★487-4 新增的 3 条满额百炼渠道必须齐备
+    for n, pri, model in (("bailian-qwen36-flash", 2, "qwen3.6-flash"),
+                          ("bailian-qwen35-flash", 3, "qwen3.5-flash"),
+                          ("bailian-kimi-k31-pro", 4, "kimi-k3.1-pro")):
+        assert n in ch, f"缺 487-4 新增渠道 {n}"
         assert ch[n]["priority"] == pri
         assert ch[n]["model"] == model
         assert ch[n]["enabled"] is True
+    # ★487-4：被关闭的 5 条耗尽渠道必须保留配置但 enabled=False（不再参与选择）
+    for n in ("bailian-qwen38-flash", "bailian-deepseek-v41-flash",
+              "bailian-glm53", "bailian-qwen37-plus", "bailian-deepseek-v4-pro"):
+        assert n in ch, f"渠道应保留（仅禁用）: {n}"
+        assert ch[n]["enabled"] is False, f"{n} 应已关闭"
 
 
 def test_刀9_优先级与ark已移除():
     import config
     ch = {c["name"]: c for c in config.REMOTE_API_CHANNELS["default_channels"]}
     # ★466 改口径：百炼 2→7 条插入后，zhipu 4→8、deepseek 8→11（收费兜底继续垫底）。
-    #   回滚点：466 回退时这两行需退回 4 / 8。
     assert ch["zhipu"]["priority"] == 8
     # ★478：千帆 p11（先烧额度）⇒ 付费官方 deepseek 降到 p12，仍为全池末位兜底
     assert ch["qianfan-ernie51"]["priority"] == 11
     assert ch["deepseek"]["priority"] == 13
-    # ★任务书 277d465 改口径：ark-* 从 default_channels **移除**，不再留 enabled=False 的挂起条目。
-    #   实测现场是 10 条（任务书写 8，方案表漏列 ark-seed-21-turbo），10 条全删。
-    ark = [c for c in ch.values() if str(c["name"]).startswith("ark-")]
-    assert ark == [], "ark-* 应已从渠道池移除，实际残留 %d 条" % len(ark)
-    # 移除 10 条 ark 后为 5 条；追加 bailian-qwen-max 备选后为 6 条；
-    # ★352追补项4 再加 modelscope(p7) ⇒ 7 条
-    # ★466：百炼 2→7 条（净 +5）⇒ 12 条；modelscope 保留配置但不入池
-    assert len(ch) == 14, "池内应为 14 条，实际 %d 条" % len(ch)
-    # ★存量红修复（2026-11-06 路灯）：426刀4 已把 modelscope 降级为
-    #   priority=99 / enabled=False（模型下架 HTTP 400），352 此处 `== 7` 自 426 起即红。
-    #   A/B 已证与 466 无关（退回 HEAD 版 config 仍红）⇒ 按 426 的新规格改钉。
-    #   回滚点：若 426刀4 回退，此两行需退回 priority == 7（且无 enabled 断言）。
-    # ★478（2026-11-08 真机探针验证）：魔搭换 Qwen/Qwen3.8-Flash-Next 并恢复启用，
-    #   顶替已余额耗尽的 siliconflow（p5）。
+    # 旧 ark-*（火山方舟历史渠道）已从渠道池移除；ark-seed-evolving-new 为本次新增的
+    # 协作计划主力渠道，除外。
+    _old_ark = [c for c in ch.values()
+                if str(c["name"]).startswith("ark-") and c["name"] != "ark-seed-evolving-new"]
+    assert _old_ark == [], "旧 ark-* 应已从渠道池移除，实际残留 %d 条" % len(_old_ark)
+    assert "ark-seed-evolving-new" in ch, "新增协作渠道 ark-seed-evolving-new 应在池内"
+    # ★487-4：关 5 条耗尽 + 增 3 条满额 + ark 协作主力（列首位）⇒ 池内由 14 条变 18 条。
+    assert len(ch) == 18, "池内应为 18 条，实际 %d 条" % len(ch)
+    # ★487批：ark 协作计划主力渠道（p1，与 zhipu 同档、列首位）
+    assert ch["ark-seed-evolving-new"]["priority"] == 1
+    assert ch["ark-seed-evolving-new"]["enabled"] is True
+    assert ch["ark-seed-evolving-new"]["model"] == "ep-20261110031549-h59hv"
+    # ★478：魔搭恢复启用顶替 siliconflow
     assert ch["modelscope"]["priority"] == 5
     assert ch["modelscope"]["enabled"] is True
     assert ch["modelscope"]["model"] == "Qwen/Qwen3.8-Flash-Next"
-    # siliconflow 402 降级保留（不删位置）
     assert ch["siliconflow-qwen2-7b"]["priority"] == 99
     assert ch["siliconflow-qwen2-7b"]["enabled"] is False
+    # ★487-4 新增 3 条满额百炼渠道的优先级/启用
+    assert ch["bailian-qwen36-flash"]["priority"] == 2
+    assert ch["bailian-qwen36-flash"]["enabled"] is True
+    assert ch["bailian-qwen35-flash"]["priority"] == 3
+    assert ch["bailian-qwen35-flash"]["enabled"] is True
+    assert ch["bailian-kimi-k31-pro"]["priority"] == 4
+    assert ch["bailian-kimi-k31-pro"]["enabled"] is True
+    # ★487-4：被关 5 条耗尽渠道 enabled=False
+    for n in ("bailian-qwen38-flash", "bailian-deepseek-v41-flash",
+              "bailian-glm53", "bailian-qwen37-plus", "bailian-deepseek-v4-pro"):
+        assert ch[n]["enabled"] is False, f"{n} 应已关闭"
 
 
 def test_刀9_ssrf白名单与高级渠道():

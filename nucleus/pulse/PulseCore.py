@@ -244,7 +244,8 @@ class PulseCore:
             log_emit(source_organ, event_type, layer, pulse_id,
                      pulse.get("amplitude", DEFAULT_AMPLITUDE),
                      pulse.get("target_organ", ""),
-                     ttl_ns=pulse.get("ttl_ns", None))
+                     ttl_ns=pulse.get("ttl_ns", None),
+                     correlation_id=pulse.get("payload", {}).get("correlation_id", ""))
         # 203批·接入执行后端：默认关闭（SPIKE_BACKEND_ENABLED=False）零行为变化；
         # 开启后调用 PythonSNNBackend.emit（当前为空实现，真实脉冲流接线待后续批次）。
         self._spike_backend_emit(pulse)

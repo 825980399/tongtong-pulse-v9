@@ -337,6 +337,7 @@ def _dump_pairs():
                 "seq": e.get("seq", 0),
                 "target_organ": e.get("target_organ", ""),
                 "amplitude": e.get("amplitude", None),
+                "correlation_id": e.get("correlation_id", ""),
                 "from": e.get("from", ""),
                 "matched_organs": e.get("matched_organs", []),
                 "layer": e.get("layer", ""),
@@ -500,8 +501,12 @@ def _get_orphan_path():
         _orphan_path = os.path.join(base, "data", "monitor", "pulse_orphans.json")
     return _orphan_path
 
-def log_emit(organ_name, event_type, layer, pulse_id="", amplitude=None, target_organ="", ttl_ns=None):
-    """记录脉冲发射事件（207批·刀1：新增 target_organ 语义标注记录 + 填充率生死闸）"""
+def log_emit(organ_name, event_type, layer, pulse_id="", amplitude=None, target_organ="", ttl_ns=None, correlation_id=None):
+    """记录脉冲发射事件（207批·刀1：新增 target_organ 语义标注记录 + 填充率生死闸）
+
+    ★487-3：新增 correlation_id 透传（从 emit 处 payload 取），仅加字段不加整个 payload；
+      门控由调用方（PulseCore.emit）控制，本函数不读 config。
+    """
     # ★431 收尾：去掉 _EMIT_INDEX —— 本函数对它只有下标赋值（非名字绑定），
     #   `global` 声明无效（PLW0602）；留着会让读代码的人误以为这里重建了索引。
     global _TO_EMIT_TOTAL, _TO_EMIT_FILLED, _EVENT_SEQ
@@ -521,6 +526,7 @@ def log_emit(organ_name, event_type, layer, pulse_id="", amplitude=None, target_
         "amplitude": amplitude,
         "target_organ": target_organ,
         "ttl_ns": ttl_ns,
+        "correlation_id": correlation_id or "",
         "matched_organs": []
     }
     with _lock:

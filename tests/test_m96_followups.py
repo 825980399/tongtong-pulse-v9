@@ -183,7 +183,7 @@ def _cfg_channels():
 
 
 def _channels_struct():
-    """返回 [(name, model, priority, quota_limit)]（AST 静态读，与运行时同序）。"""
+    """返回 [(name, model, priority, quota_limit, enabled)]（AST 静态读，与运行时同序）。"""
     arr = _cfg_channels()
     if arr is None:
         raise AssertionError("config.py 未找到 default_channels")
@@ -199,7 +199,7 @@ def _channels_struct():
                 except Exception:
                     d[k.value] = None
         out.append((d.get("name"), d.get("model"),
-                    d.get("priority"), d.get("quota_limit")))
+                    d.get("priority"), d.get("quota_limit"), d.get("enabled")))
     return out
 
 
@@ -605,20 +605,27 @@ class TestM96ChannelPriority(unittest.TestCase):
         self.assertNotIn("ark-glm-5.3-flash", names)
 
     def test_D3_no_duplicate_priority_in_top7(self):
-        top = [c for c in self.ch if isinstance(c[2], int) and c[2] <= 7]
+        # ★487-4：优先级唯一性只对**启用中**渠道生效（被关的 5 条耗尽渠道
+        #   与新满额渠道会复用同一 priority 槽，但禁用的不参与选择，不算冲突）。
+        top = [c for c in self.ch if c[4] is True
+               and isinstance(c[2], int) and c[2] <= 7]
         seen = {}
         for c in top:
             seen.setdefault(c[2], []).append(c[0])
-        dup = {k: v for k, v in seen.items() if len(v) > 1}
-        self.assertEqual(dup, {}, "优先级 1~7 内不得重号（原配置存在 arch-seed-21-turbo "
+        # ★487批：p1 为 ark-seed-evolving-new 与 zhipu-47-flash 的**有意并列**双免费/协作
+        #   主力档（ark 列首位、稳定排序优先），仅该档允许重号；其余优先级不得重号。
+        dup = {k: v for k, v in seen.items() if len(v) > 1 and k != 1}
+        self.assertEqual(dup, {}, "优先级 2~7 内不得重号（原配置存在 arch-seed-21-turbo "
                                   f"与 deepseek 同为 6）: {dup}")
 
     def test_D4_free_channel_is_first(self):
         # ★372刀8：免费不限量渠道仍是第 1，但名字由 zhipu 换成 zhipu-47-flash（352刀9）。
         #   守的是"第 1 优先级必须是免费渠道"这条意图，不是某个名字。
+        # ★487批：协作计划主力 ark-seed-evolving-new（永久免费）现列首位，成为第 1 优先级免费渠道；
+        #   zhipu-47-flash 同档 p1 紧随其后。守"第 1 优先级必须是免费渠道"这条意图。
         self.assertEqual(self.ch and min(self.ch, key=lambda c: c[2])[0],
-                         "zhipu-47-flash",
-                         "免费不限量的渠道必须排在第 1 优先级")
+                         "ark-seed-evolving-new",
+                         "免费不限量的协作主力渠道必须排在第 1 优先级")
 
     def test_D5_paid_channel_is_last_of_top7(self):
         # ★372刀8：原断言"收费 API 必须是第 7（兜底）"依赖旧的 7 级阶梯；

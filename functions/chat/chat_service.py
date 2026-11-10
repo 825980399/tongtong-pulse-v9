@@ -1159,7 +1159,8 @@ class ChatService:
         return f"dlg:{_seq}:{int(time.time() * 1000)}"
 
     def _send_chat_message(self, text: str, original_input: str, is_complex: bool = False,
-                           code_blocks: list | None = None, file_paths: list | None = None):
+                           code_blocks: list | None = None, file_paths: list | None = None,
+                           is_synthetic: bool = False):
         """
         发射聊天消息脉冲（完全非阻塞，不等待回复）。
         """
@@ -1180,6 +1181,8 @@ class ChatService:
                 "original_input": original_input,
                 "user_name": self._current_user_name,
                 "is_complex": is_complex,
+                # ★487-3：合成流量标记（acc 测试桩置 True，统计时排除；真实用户消息为 False）
+                "is_synthetic": is_synthetic,
                 "code_blocks": code_blocks or [],
                 "file_paths": file_paths or [],
                 # ★432刀4：把 cid 塞进入口 payload —— 下游（QICA 分类 → 皮层 →
@@ -1190,6 +1193,17 @@ class ChatService:
             layer="L1"
         )
         self.info_field.publish(chat_pulse)
+
+        # ★487-3：对话链埋点 —— chat.message 出口（cid 串联第 1 跳）。
+        #   开关关 ⇒ record() 直接 no-op（不打埋点）。失败静默，不污染对话链路。
+        try:
+            from nucleus import dialog_latency_trace as _dlt
+            _dlt.record(_cid, "chat_message", "L1", "chat_service", "emit",
+                        is_synthetic=is_synthetic)
+        except Exception as _e:
+            from nucleus._silent_except import silent_exc
+            silent_exc(_e, where="chat_service._send_chat_message:dialog_trace",
+                       level="debug")
 
         with self._thinking_lock:
             task_id = chat_pulse["pulse_id"]

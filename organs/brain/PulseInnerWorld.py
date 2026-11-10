@@ -2358,6 +2358,17 @@ class PulseInnerWorld(
           在每条 return 处各拼一次既难维护也必然漏。外壳只做三件事：
           清暂存 → 跑原主体 → 拼假设。原主体的每一行逻辑**一字未动**。
         """
+        # ★487-3：对话链埋点 —— inference.request 到达（cid 串联第 4 跳）。
+        #   注意：当前代码库无显式 inference.request emit（仅 const/config 引用），
+        #   故埋点落在其到达处理器入口（此处 payload 携带 correlation_id）。
+        try:
+            from nucleus import dialog_latency_trace as _dlt
+            _dlt.record(payload.get("correlation_id", ""), "inference_request",
+                        "L2", "PulseInnerWorld", "recv")
+        except Exception as _e:
+            from nucleus._silent_except import silent_exc
+            silent_exc(_e, where="PulseInnerWorld::_on_inference_request:dialog_trace",
+                       level="debug")
         _ctx = self._ir_build_context(payload)
         if _ctx is None:
             return {"status": "skipped", "reason": "空问题"}

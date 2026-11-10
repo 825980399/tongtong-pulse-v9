@@ -1138,7 +1138,9 @@ ADAPTIVE_FREQ_WHITELIST = ("对话响应", "心跳", "生命体征", "快照保�
 
 # 操作名 -> 正常间隔（秒）
 ADAPTIVE_FREQ_BASE = {
-    "stomach_digest": 30.0,
+    # ★487-1：stomach_digest 已从受管名单移除（消费类任务绝不暂停；
+    #   PulseStomach 运行时仍会 register("stomach_digest", 30) 重新登记，
+    #   其是否可被 CRITICAL 暂停由 ENABLE_M487_UNPAUSE_DIGEST 短路控制）。
     "organ_scan": 300.0,
     "code_learning": 60.0,
     "experience_cleanup": 300.0,
@@ -1164,6 +1166,22 @@ def _adaptive_enabled() -> bool:
     except Exception as e:
         silent_exc(e, where="nucleus.runtime_metrics::_adaptive_enabled L582", level="debug")
         return True
+
+
+def _m487_unpause_digest_on() -> bool:
+    """★487-1：CRITICAL 等级下是否仍恒执行 stomach_digest（消费类任务不许停）。
+
+    默认 False ⇒ 逐字回改前（stomach_digest 仍受 CRITICAL 暂停约束）。
+    ★注意：仅删 ADAPTIVE_FREQ_BASE 里的条目**不足以**解除暂停——暂停由
+    `CRITICAL → ADAPTIVE_FREQ_FACTOR["CRITICAL"]=None → get_interval 返回 inf`
+    这一**等级级**机制驱动，与是否预登记无关。真正生效的是本短路。
+    """
+    try:
+        import config
+        return bool(getattr(config, "ENABLE_M487_UNPAUSE_DIGEST", False))
+    except Exception as e:
+        silent_exc(e, where="nucleus.runtime_metrics::_m487_unpause_digest_on", level="debug")
+        return False
 
 
 def _adaptive_threshold(name: str, default: float) -> float:
@@ -1291,6 +1309,11 @@ class AdaptiveFrequencyController:
     def should_execute(self, name: str, now=None) -> bool:
         """是否应执行该操作。关键操作恒 True；开关关闭恒 True。"""
         if self.is_critical_op(name):
+            return True
+        # ★487-1：消费类 stomach_digest 在任何等级恒执行（越堵越要消费，不能拔排水泵）。
+        #   开 ENABLE_M487_UNPAUSE_DIGEST 时，stomach_digest 永不进入 CRITICAL 暂停分支；
+        #   开关关 ⇒ 不进入此分支，逐字回改前（CRITICAL 时仍按原机制暂停）。
+        if str(name) == "stomach_digest" and _m487_unpause_digest_on():
             return True
         if not _adaptive_enabled():
             return True

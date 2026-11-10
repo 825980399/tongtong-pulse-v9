@@ -978,6 +978,7 @@ class PulseCortex(BasePulseOrgan):
                 "user_name": user_name,
                 "correlation_id": correlation_id,
             }, priority=7, layer="L1")
+            self._m487_dialog_trace("semantic_classify", "L1", "emit", correlation_id)
             return {
                 "status": "classifying",
                 "correlation_id": correlation_id,
@@ -990,9 +991,23 @@ class PulseCortex(BasePulseOrgan):
                                         file_paths=file_paths,
                                         code_blocks=code_blocks)
 
+    def _m487_dialog_trace(self, event: str, layer: str, phase: str, cid: str = "",
+                          is_synthetic: bool = False) -> None:
+        """★487-3：对话链埋点（受 ENABLE_M486_DIALOG_TRACE 门控；开关关 ⇒ 空操作）。"""
+        if not cid:
+            return
+        try:
+            from nucleus import dialog_latency_trace as _dlt
+            _dlt.record(cid, event, layer, "PulseCortex", phase,
+                        is_synthetic=is_synthetic)
+        except Exception as _e:
+            from nucleus._silent_except import silent_exc
+            silent_exc(_e, where="PulseCortex::_m487_dialog_trace", level="debug")
+
     def _on_classify_result(self, payload: dict) -> dict[str, Any] | None:
         """收到QICA的分类结果，继续路由"""
         correlation_id = payload.get("correlation_id", "")
+        self._m487_dialog_trace("qica_classify_result", "L1", "recv", correlation_id)
         channel = payload.get("channel", "fast")
         intent_type = payload.get("intent_type", "一般对话")
 
@@ -1643,6 +1658,7 @@ class PulseCortex(BasePulseOrgan):
     def _on_inference_result(self, payload: dict) -> dict[str, Any]:
         """收到内在世界的推理结果（L2认知思考层），路由到嘴巴输出"""
         correlation_id = payload.get("correlation_id", "")
+        self._m487_dialog_trace("inference_result", "L2", "recv", correlation_id)
         # ★主线第17批 T2/P2-63：旁路事件的耗时计数起点（仅计时，不参与逻辑）
         _tap_t0 = time.perf_counter()
         # ★P1 清理超时输出锁（超过基础超时自动释放，防止永久阻塞）
@@ -1893,6 +1909,7 @@ class PulseCortex(BasePulseOrgan):
                         "method": method,
                         "guidance": self._get_guidance(user_name, ctx.get("content", "")),
                     }, priority=8, layer="L1")
+                    self._m487_dialog_trace("mouth_speak", "L1", "emit", correlation_id)
                 self._dialog_mark_output_done(correlation_id)
                 # ★主线第40批 T4（P2-261）：L1 观测级旁路（只记日志，不影响决策）
                 self._m40_observe_self_awareness(answer, correlation_id)
@@ -2240,7 +2257,9 @@ class PulseCortex(BasePulseOrgan):
                 "guidance": self._get_guidance(user_name, ctx.get("content", ""),
                                                confidence_hint=payload.get("confidence_hint", "")),
                 "output_relevance": _verify,  # 附加验证信息
-            }, priority=8, layer="L1")
+                }, priority=8, layer="L1")
+                self._m487_dialog_trace("mouth_speak", "L1", "emit",
+                                    payload.get("correlation_id", ""))
             # 无论是否输出，都要放行队列（避免被丢弃的回复把队列卡死）
             self._dialog_mark_output_done(correlation_id)
             # ★主线第40批 T4（P2-261）：L1 观测级旁路（只记日志，不影响决策）

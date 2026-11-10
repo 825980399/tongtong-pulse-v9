@@ -713,6 +713,8 @@ class WebChatHandler(BaseHTTPRequestHandler):
                             "original_input": message,
                             "user_name": user_name,
                             "is_complex": len(message) > 50,
+                            # ★487-3：合成流量标记（真实 Web 对话恒为 False；acc 测试桩置 True 供排除）
+                            "is_synthetic": False,
                             "code_blocks": parsed["code_blocks"],
                             "file_paths": parsed["file_paths"],
                         },

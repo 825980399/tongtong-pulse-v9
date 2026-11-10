@@ -312,6 +312,7 @@ class InfoField(SilentLogMixin):
         self._total_duplicated = 0   # v9.5新增: 幂等拦截计数
         self._total_expired = 0      # v9.5新增: TTL过期计数
         self._total_storm_blocked = 0  # v9.5新增: 风暴拦截计数
+        self._total_expired_at_dequeue = 0  # ★487-5: 出队 TTL 丢弃计数
 
         # ★登顶路线图-协调层：死数据/幽灵监听审计统计（零侵入，仅计数不改分发）
         self._cond_trigger_count: dict[str, int] = {}      # cond_id → 触发次数（幽灵监听判定）
@@ -1243,6 +1244,53 @@ class InfoField(SilentLogMixin):
             silent_exc(_e, where="InfoField::_m436_organ_serial_on", level="debug")
             return True
 
+    def _m487_worker_floor_on(self) -> bool:
+        """★487-2：critical 时每层 worker 下限是否提到 2。默认 False ⇒ 逐字回改前。"""
+        try:
+            import config
+            return bool(getattr(config, "ENABLE_M487_WORKER_FLOOR", False))
+        except Exception as _e:
+            silent_exc(_e, where="InfoField::_m487_worker_floor_on", level="debug")
+            return False
+
+    def _m487_dequeue_ttl_on(self) -> bool:
+        """★487-5：出队时是否按 timestamp_ns 丢弃过期 tick 类脉冲。默认 False ⇒ 不丢。"""
+        try:
+            import config
+            return bool(getattr(config, "ENABLE_M487_DEQUEUE_TTL", False))
+        except Exception as _e:
+            silent_exc(_e, where="InfoField::_m487_dequeue_ttl_on", level="debug")
+            return False
+
+    # ★487-5：tick 类事件前缀（心跳/巡检/快照/指标），与 PulseCore._M379_LIFELINE_PREFIXES 同口径。
+    _M487_TICK_PREFIXES = ("heart.", "spinal.", "touch.", "metrics.")
+
+    def _m487_dequeue_ttl_drop(self, pulse: dict) -> bool:
+        """★487-5：出队 TTL 判定。tick 类脉冲入队 >5s 直接丢弃（不执行 handler），返回 True。
+
+        只判「还没开始执行」的（本函数在 handler 调用前、try 内调用），已在跑的不打断。
+        """
+        if not self._m487_dequeue_ttl_on():
+            return False
+        if not isinstance(pulse, dict):
+            return False
+        _et = pulse.get("event_type", "")
+        if not isinstance(_et, str) or not _et.startswith(self._M487_TICK_PREFIXES):
+            return False
+        _ts = pulse.get("timestamp_ns")
+        if not isinstance(_ts, (int, float)):
+            return False
+        _age_ns = time.time_ns() - int(_ts)
+        if _age_ns > 5_000_000_000:  # 5 秒
+            try:
+                with self._lock:
+                    self._total_expired_at_dequeue = getattr(
+                        self, "_total_expired_at_dequeue", 0) + 1
+            except Exception as _e:
+                silent_exc(_e, where="InfoField::_m487_dequeue_ttl_drop", level="debug")
+            return True
+        return False
+
     def _m436_organ_lock(self, organ_name: str) -> "threading.RLock":
         """★436刀2：取（或建）该器官的执行锁。同器官互斥、跨器官互不影响。
 
@@ -1285,6 +1333,11 @@ class InfoField(SilentLogMixin):
             _dl_drop, _dl_ms = self._m483_deadline_check(pulse, layer_tag)
             if _dl_drop:
                 return                  # finally 照常收尾，handler 不执行
+            # ★487-5：出队 TTL —— tick 类脉冲入队 >5s 直接丢弃，不执行 handler。
+            #   放在 try 内、deadline 判定之后、handler 调用之前（与 483 deadline 同模式：
+            #   提前 return 交给 finally 收尾，_l0_inflight 等计数不漏减）。
+            if self._m487_dequeue_ttl_drop(pulse):
+                return
             _dl_start_ns = time.time_ns()
             # ★P1-2修复：明确标注串行路由为预留功能，当前版本统一使用并行分发
             # ★436刀2：同器官串行（每器官 RLock 排队）、跨器官并行。
@@ -1748,9 +1801,16 @@ class InfoField(SilentLogMixin):
         self._last_resized_level = level
 
         if level == "critical":
-            self._resize_layer_pool(_PULSE_LAYER_L1, 1)
-            self._resize_layer_pool(_PULSE_LAYER_L2, 0)
-            self._resize_layer_pool(_PULSE_LAYER_L3, 0)
+            # ★487-2：critical 每层 worker 下限提到 2（忙时最少留 2 人，不能全抽走）。
+            #   开关关 ⇒ 逐字回改前（L1=1/L2=0/L3=0，旧「有意保护」行为）。
+            if self._m487_worker_floor_on():
+                self._resize_layer_pool(_PULSE_LAYER_L1, 2)
+                self._resize_layer_pool(_PULSE_LAYER_L2, 2)
+                self._resize_layer_pool(_PULSE_LAYER_L3, 2)
+            else:
+                self._resize_layer_pool(_PULSE_LAYER_L1, 1)
+                self._resize_layer_pool(_PULSE_LAYER_L2, 0)
+                self._resize_layer_pool(_PULSE_LAYER_L3, 0)
         elif level == "heavy":
             self._resize_layer_pool(_PULSE_LAYER_L1, 2)
             self._resize_layer_pool(_PULSE_LAYER_L2, 1)
@@ -3194,6 +3254,7 @@ class InfoField(SilentLogMixin):
                 "total_unmatched": self._total_unmatched,
                 "total_duplicated": self._total_duplicated,
                 "total_expired": self._total_expired,
+                "total_expired_at_dequeue": int(getattr(self, "_total_expired_at_dequeue", 0)),
                 "total_storm_blocked": self._total_storm_blocked,
                 "active_conditions": len(self._conditions),
                 "history_size": len(self._history),
