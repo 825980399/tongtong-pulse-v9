@@ -969,26 +969,40 @@ class PulseCortex(BasePulseOrgan):
         # 清理过期暂存（超过30秒未匹配的）
         self._cleanup_pending()
 
-        # ===== 493-5：自我查询 fast path（self-index 本地答，不调大模型）=====
-        # 命中自我指称 / 代码指称 ⇒ 直接 emit SPEAK 本地答并 early-return；
-        # 未命中 / 查不到 ⇒ 原样继续（现有应答路径零修改）。全 try 包裹，
-        # 任何异常均 fallback 到原思考链路。
+        # ===== 493-5 / 493.7：自我查询 fast path + 影子模式（self-index 本地答，不调大模型）=====
+        # 纪律（493.7）：ENABLE_M493_SELF_QUERY_FASTPATH 本批保持 False —— 只上影子观测，
+        # 不实际回答。正式回答与影子共用 self_query_fastpath_explain；误答闸门（493.7-1）在
+        # 计算前先做排除（命中即跳过，不答不 emit，仅影子记录）。任何异常均 fallback 原链路。
         try:
             import config as _c493
-            if bool(getattr(_c493, "ENABLE_M493_SELF_QUERY_FASTPATH", True)):
-                from nucleus.self_index.fastpath import self_query_fastpath
-                _ans493 = self_query_fastpath(content)
-                if _ans493:
-                    self._emit(MouthEvent.SPEAK, {
-                        "content": _ans493,
-                        "source": "cortex",
-                        "user_name": user_name,
-                        "reasoning_path": "self_query_fastpath",
-                    }, priority=8, layer="L1")
-                    self._decision_count = getattr(self, "_decision_count", 0) + 1
-                    return {"status": "self_index_fastpath", "answered": True}
+            _fp_on = bool(getattr(_c493, "ENABLE_M493_SELF_QUERY_FASTPATH", True))
+            _shadow_on = bool(getattr(_c493, "ENABLE_M4937_SELF_QUERY_SHADOW", True))
+            _guard_on = bool(getattr(_c493, "ENABLE_M4937_FASTPATH_GUARD", True))
+            if _fp_on or _shadow_on:
+                from nucleus.self_index.fastpath import (
+                    self_query_fastpath_explain, fastpath_should_skip,
+                    record_self_query_shadow)
+                # 493.7-1 误答前置闸门：命中任一排除规则 → 跳过（不计算、不答）
+                _skipped = bool(_guard_on) and fastpath_should_skip(content)
+                if _skipped:
+                    if _shadow_on:
+                        record_self_query_shadow(
+                            content, {"answer": None, "skipped_by_guard": True})
+                else:
+                    _explain = self_query_fastpath_explain(content)
+                    if _shadow_on:
+                        record_self_query_shadow(content, _explain)
+                    if _fp_on and _explain.get("answer"):
+                        self._emit(MouthEvent.SPEAK, {
+                            "content": _explain["answer"],
+                            "source": "cortex",
+                            "user_name": user_name,
+                            "reasoning_path": "self_query_fastpath",
+                        }, priority=8, layer="L1")
+                        self._decision_count = getattr(self, "_decision_count", 0) + 1
+                        return {"status": "self_index_fastpath", "answered": True}
         except Exception as _e493:
-            self._log_ignored_exception(_e493, "493-5 self_query_fastpath")
+            self._log_ignored_exception(_e493, "493-5/493.7 self_query_fastpath")
 
         # ★主线第17批 T2/P2-63：旁路事件（只发布，不改变任何现有逻辑）
         tap_publish(

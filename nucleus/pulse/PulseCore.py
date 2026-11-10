@@ -102,6 +102,8 @@ class PulseCore:
     """
 
     def __init__(self, max_completed_fingerprints: int = 5000):
+        # 493.7-2.1：类级单例注册（供 action_executor 取 PulseCore 实例发控制事件）
+        PulseCore._instance = self
         self._completed_fingerprints: OrderedDict = OrderedDict()
         self._max_fingerprints = max_completed_fingerprints
 

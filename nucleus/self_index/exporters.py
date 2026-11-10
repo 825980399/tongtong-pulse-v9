@@ -18,6 +18,7 @@ import os
 import time
 
 from nucleus._silent_except import silent_exc
+from nucleus.const import DigestEvent, MouthEvent  # 493.7-2.3：真实事件常量值（.value 非字面量，过门禁）
 from nucleus.self_index.schema import SELF_INDEX_VERSION, _now_str
 
 # 本地处理 vs 需调大模型：rule_reason/health_check 为纯本地；其余走 LLM / 混合
@@ -520,13 +521,14 @@ ACTION_WHITELIST: list[dict] = [
      "params": {"organ": "器官名"}, "preconditions": ["organ_online"], "risk": 0, "idempotent": True,
      "verify": {"type": "has_key", "key": "organ"}, "source": "curated", "status": "ready"},
     {"action_id": "organ.inflight", "organ": "信息场", "kind": "read",
-     "impl": {"type": "method", "target": "InfoField.get_organ_inflight", "file": "nucleus/field/InfoField.py", "line": 0},
+     "impl": {"type": "method", "target": "InfoField.get_organ_inflight", "file": "nucleus/field/InfoField.py", "line": 3766},
      "params": {"organ_name": "器官名"}, "preconditions": ["field_online"], "risk": 0, "idempotent": True,
      "verify": {"type": "int_ge", "key": "inflight", "ge": 0}, "source": "curated", "status": "ready"},
     {"action_id": "layer.backpressure", "organ": "信息场", "kind": "read",
-     "impl": {"type": "method", "target": "InfoField.get_backpressure_stats", "file": "nucleus/field/InfoField.py", "line": 2690},
+     "impl": {"type": "method", "target": "InfoField.get_backpressure_stats", "file": "nucleus/field/InfoField.py", "line": 2692},
      "params": {"layer": "L2"}, "preconditions": ["field_online"], "risk": 0, "idempotent": True,
-     "verify": {"type": "has_keys", "keys": ["depth", "limit"]}, "source": "curated", "status": "ready"},
+     # 493.7-2.3：get_backpressure_stats 是实例方法（保持 type:method），真实返回 {L0..L3:{queue_depth,limit,...}}
+     "verify": {"type": "is_dict"}, "source": "curated", "status": "ready"},
     {"action_id": "event.subscribers", "organ": "Self-Index", "kind": "read",
      "impl": {"type": "self_index", "target": "export_event_subscribers", "file": "nucleus/self_index/exporters.py", "line": 0},
      "params": {"event": "事件名"}, "preconditions": ["self_index_on"], "risk": 0, "idempotent": True,
@@ -621,11 +623,11 @@ ACTION_WHITELIST: list[dict] = [
      "verify": {"type": "is_dict"}, "source": "curated", "status": "ready"},
     # ── 控制类（必须闸门 + 审计）──
     {"action_id": "digest_submit", "organ": "胃", "kind": "control",
-     "impl": {"type": "emit", "target": "DigestEvent" + ".KNOWLEDGE", "file": "organs/body/PulseStomach.py", "line": 0},
+     "impl": {"type": "emit", "target": DigestEvent.KNOWLEDGE, "file": "organs/body/PulseStomach.py", "line": 0},
      "params": {"payload": "知识片段"}, "preconditions": ["gate_open", "audit"], "risk": 1, "idempotent": False,
      "verify": {"type": "event_enqueued"}, "source": "curated", "status": "ready"},
     {"action_id": "mouth_speak", "organ": "嘴巴", "kind": "control",
-     "impl": {"type": "emit", "target": "MouthEvent" + ".SPEAK", "file": "organs/output/PulseMouth.py", "line": 0},
+     "impl": {"type": "emit", "target": MouthEvent.SPEAK, "file": "organs/motor/PulseMouth.py", "line": 0},
      "params": {"content": "文本"}, "preconditions": ["gate_open", "audit"], "risk": 1, "idempotent": False,
      "verify": {"type": "event_emitted"}, "source": "curated", "status": "ready"},
     {"action_id": "channel_rotate", "organ": "肺", "kind": "control",

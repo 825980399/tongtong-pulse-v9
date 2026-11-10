@@ -168,9 +168,14 @@ def _exec_control(a, params, timeout_ms):
         if _pc is None:
             return {"ok": False, "reason": "PulseCore 实例不可用（运行态才装配）", "blocked": True,
                     "action_id": a.get("action_id")}
+        from utils.pulse_tracer import traffic_counts
+        _before = traffic_counts()
         _pc.emit("Self-Index", _target, params or {}, priority=5,
                  layer="L1", deadline_ms=timeout_ms)
-        _verified = _verify_control(a)
+        # 493.7-3：发完等 100ms 再比流量计数，做真实增量校验（有人消费才算真消费）
+        time.sleep(0.1)
+        _after = traffic_counts()
+        _verified = _verify_control_delta(_before, _after, _target)
         _audit(a, params, _verified, ok=_verified.get("consumed", False))
         return {"ok": True, "emitted": _target, "verified": _verified, "blocked": False,
                 "action_id": a.get("action_id")}
@@ -225,20 +230,20 @@ def _empty_check(result):
     return {"ok": True}
 
 
-def _verify_control(a):
-    """control 验证：traffic_counts 总线可达 + dead_letter 未增长。"""
-    _out = {"consumed": False, "dead": False}
+def _verify_control_delta(before, after, target):
+    """493.7-3：control 验证改真增量。比较 emit 前后 traffic_counts 的 receives[target] 差值，
+    >0 说明该事件被真实消费（有订阅者处理）；未增长 ⇒ 未真消费（诚实判失败，绝不报已执行）。"""
+    _out = {"consumed": False, "dead": False, "delta_emits": 0, "delta_receives": 0}
     try:
-        from utils.pulse_tracer import traffic_counts
-        _tc = traffic_counts()
-        _out["consumed"] = bool(_tc.get("receives") or _tc.get("emits"))
+        _be = (before.get("emits") or {}).get(target, 0)
+        _ae = (after.get("emits") or {}).get(target, 0)
+        _br = (before.get("receives") or {}).get(target, 0)
+        _ar = (after.get("receives") or {}).get(target, 0)
+        _out["delta_emits"] = _ae - _be
+        _out["delta_receives"] = _ar - _br
+        _out["consumed"] = (_ar - _br) > 0
     except Exception as _e:
-        silent_exc(_e, where="action_executor.verify_control", level="debug")
-    try:
-        from utils.dead_letter_ledger import face_dead_letters
-        _out["dead"] = not bool(face_dead_letters())
-    except Exception as _e:
-        silent_exc(_e, where="action_executor.verify_control_dead", level="debug")
+        silent_exc(_e, where="action_executor.verify_control_delta", level="debug")
     return _out
 
 
