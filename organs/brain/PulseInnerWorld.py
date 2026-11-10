@@ -66,6 +66,39 @@ from utils.time_utils import get_current_datetime, get_weather
 #    import 区，导致其后所有 import 被判 E402）
 _module_logger = logging.getLogger(__name__)
 
+# ★492-2：新增的模糊计算词只在「问题含数字范围」时才命中 calculate 意图。
+#   原有关键词表（计算/等于/多少/总共/合计/比例）保持无条件命中，避免把
+#   "计算 3 加 5 等于多少" 这类不含范围的常规算术题打回 retrieve。
+_M492_CALC_RANGE_RE = re.compile(r"\d+\s*[到\-~]\s*\d+")
+_M492_CALC_FUZZY_WORDS = ("几个", "几只", "多少个", "几次", "占比")
+
+
+def _m492_calc_extra_hit(question: str) -> bool:
+    """492-2 门控：新增模糊词 + 数字范围守卫；关开关时恒 False（逐字回改前）。"""
+    try:
+        import config as _c492
+        if not bool(getattr(_c492, "ENABLE_M492_EXPAND_CALC_KEYWORDS", True)):
+            return False
+    except Exception as _e:
+        silent_exc(_e, where="PulseInnerWorld::_m492_calc_extra_hit cfg",
+                   level="debug")
+        return False
+    _q = str(question or "")
+    if _M492_CALC_RANGE_RE.search(_q) is None:
+        return False
+    return any(k in _q for k in _M492_CALC_FUZZY_WORDS)
+
+
+def _m492_quantify_op_on() -> bool:
+    """492-3 开关；读异常按 fail-closed 回退原 retrieve 路径。"""
+    try:
+        import config as _c492
+        return bool(getattr(_c492, "ENABLE_M492_QUANTIFY_OP", True))
+    except Exception as _e:
+        silent_exc(_e, where="PulseInnerWorld::_m492_quantify_op_on",
+                   level="debug")
+        return False
+
 
 class PulseInnerWorld(
     PulseInnerWorldSupportMixin,
@@ -1443,7 +1476,7 @@ class PulseInnerWorld(
 
     @classmethod
     def _m457_sample_write(cls, question: str, intent_type: str,
-                           would_handler: str) -> None:
+                           would_handler: str, payload: dict | None = None) -> None:
         """刀5：把一次影子判定落成一行 jsonl（`expected_intent` 留空给人工标）。
 
         ★两条纪律：
@@ -1457,6 +1490,13 @@ class PulseInnerWorld(
                 return
             _every = max(1, int(getattr(_c457, "M457_INTENT_SAMPLE_EVERY", 10) or 10))
             _target = max(1, int(getattr(_c457, "M457_INTENT_SAMPLE_TARGET", 100) or 100))
+            # ★492-4：不改 457 常量，开开关才覆盖累计日志频率（fail-closed）。
+            #   注意 _every 只控日志频率、不控样本条数（每次调用本就写一行）。
+            _m492_expand = bool(getattr(
+                _c457, "ENABLE_M492_INTENT_SAMPLE_EXPAND", False))
+            if _m492_expand:
+                _every = max(1, int(getattr(
+                    _c457, "M492_INTENT_SAMPLE_EVERY", 10) or 10))
         except Exception as _e:
             silent_exc(_e, where="PulseInnerWorld::_m457_sample_write cfg",
                        level="debug")
@@ -1482,6 +1522,26 @@ class PulseInnerWorld(
                 "would_handler": str(would_handler or ""),
                 "expected_intent": "",
             }
+            # ★492-4 / 492-5：三处新增全部包在开关内；关时 _row 逐字回到 5 字段。
+            if _m492_expand:
+                _pl = payload or {}
+                _synthetic = (bool(_pl.get("is_synthetic"))
+                              or str(_pl.get("source_organ") or "") == "acc"
+                              or str(_pl.get("origin") or "") == "synthetic")
+                if _synthetic:
+                    return                       # 测试桩不写样本
+                _row["origin"] = "user"
+                # ★492-5：dry-run 查路由表写独立字段，不动 would_handler 既有契约
+                if bool(getattr(_c457, "ENABLE_M492_WOULD_METHOD_LOOKUP", False)):
+                    try:
+                        from nucleus.qica.IntentChannels import INTENT_TO_METHOD
+                        _snap = dict(INTENT_TO_METHOD)   # 读时快照，防整体替换
+                        _row["would_method"] = str(
+                            _snap.get(str(intent_type or "")) or "")
+                    except Exception as _e492m:
+                        silent_exc(_e492m,
+                                   where="PulseInnerWorld::_m457_sample_write:492method",
+                                   level="debug")
             with open(_p, "a", encoding="utf-8", newline="\n") as _f:
                 _f.write(_json457.dumps(_row, ensure_ascii=False) + "\n")
             if cls._M457_SAMPLE_N < 0:
@@ -1658,7 +1718,8 @@ class PulseInnerWorld(
                           f"pct={self._m458_live_cfg()['pct']} "
                           f"bucket={self._m458_live_bucket(str(getattr(ctx, 'correlation_id', '') or ''))}")
             # ★457 刀5：落一条可标注样本（expected_intent 留空，人工填）
-            self._m457_sample_write(_q, _it, _would)
+            # ★492-4：把请求上下文透传给样本写入层，供测试桩过滤与 origin 判定。
+            self._m457_sample_write(_q, _it, _would, ctx.payload)
             return {"would_handler": _would, "code_evidence_count": _cn,
                     "reason": _why}
         except Exception as _e:
@@ -14952,7 +15013,10 @@ class PulseInnerWorld(
             ]
 
         # 计算验证型："计算""等于""多少"
-        if any(_kw in question for _kw in ["计算", "等于", "多少", "总共", "合计"]):
+        # ★492-2：与 _m454_annotate_plan 的 has_calc 同步接同一门控，
+        #   否则不会生成「计算验证」步，op 永远标不成 quantify（这一刀会白做）。
+        if any(_kw in question for _kw in ["计算", "等于", "多少", "总共", "合计"]) \
+                or _m492_calc_extra_hit(question):
             return [
                 {"name": "数据提取", "prompt": f"{_core_str} 数据 数值 参数", "fallback": f"{_core_str} 基本信息"},
                 {"name": "计算验证", "prompt": f"{_core_str} 计算 公式 结果", "fallback": ""},
@@ -14980,7 +15044,8 @@ class PulseInnerWorld(
             return plan
         q = str(question or "")
         has_compare = any(k in q for k in ("对比", "比较", "区别", "差异", "优劣", "哪个好"))
-        has_calc = any(k in q for k in ("计算", "等于", "多少", "总共", "合计", "比例"))
+        has_calc = (any(k in q for k in ("计算", "等于", "多少", "总共", "合计", "比例"))
+                    or _m492_calc_extra_hit(q))
         has_exclude = any(k in q for k in ("排除", "哪个不是", "剔除", "不符合", "错误的是"))
         out, prev = [], []
         for i, s in enumerate(plan, 1):
@@ -15366,6 +15431,12 @@ class PulseInnerWorld(
             if res.get("warning"):
                 _txt += "；" + str(res.get("warning"))[:40]
             return _txt
+        # ★492-3：insufficient_numbers 不编数值，返回空串由调用方出真话文案。
+        if op == "quantify":
+            if res.get("status") != "ok":
+                return ""
+            return (f"计算（{res.get('metric')}）：{res.get('value')}"
+                    f"{res.get('unit') or ''}〔{res.get('formula')}〕")
         return ""
 
     def _m456_run_local_op(self, op: str, question: str, step: dict,
@@ -15386,6 +15457,20 @@ class PulseInnerWorld(
         if op == "compare":
             _res = _lo.compare(self._m456_split_operands(question),
                                self._m456_split_dimensions(question, _ev), _ev)
+        elif op == "quantify":
+            # ★492-3：step 里没有 metric/unit/values ⇒ 从问题推 metric、
+            #   从证据文本抽数值。抽不到不塞 0，交给算子判 insufficient_numbers。
+            _blob = " ".join(str(_e0.get("text") or "") for _e0 in _ev)
+            _vals = [float(_n) for _n in
+                     re.findall(r"-?\d+(?:\.\d+)?", _blob)]
+            _metric = str(step.get("metric") or "")
+            if not _metric:
+                _metric = ("count" if any(k in question for k in
+                                          ("几个", "几次", "多少个", "计数")) else
+                           "ratio" if any(k in question for k in ("比例", "占比")) else
+                           "mean" if any(k in question for k in ("平均", "均值")) else "sum")
+            _res = _lo.quantify(_metric, _vals or list(step.get("values") or []),
+                                str(step.get("unit") or ""), _ev)
         else:
             _cands = []
             for _e0 in _ev:
@@ -15451,6 +15536,14 @@ class PulseInnerWorld(
             cls._M456_HYPS.set((list(_cur) + _add)[:2])
         except Exception as _e:
             silent_exc(_e, where="PulseInnerWorld::_m456_push_pending", level="debug")
+        # ★492-6：假设生成台账（独立模块 + 独立吞异常，绝不污染 ContextVar）。
+        #   只落生成侧；命中侧判定点当前不存在，字段留 None 等下批回写。
+        try:
+            from nucleus import m492_hypothesis_log as _m492_hl
+            _m492_hl.record(_add)
+        except Exception as _e492h:
+            silent_exc(_e492h, where="PulseInnerWorld::_m456_push_pending:492log",
+                       level="debug")
 
     @classmethod
     def _m456_take_pending(cls) -> list:
@@ -15858,7 +15951,9 @@ class PulseInnerWorld(
                 continue
             # ★456 刀6：op=compare/exclude 真调本地算子（0 次 LLM、0 次网络）
             _m456_op = str(_step.get("op") or "retrieve")
-            if _m456_op in ("compare", "exclude"):
+            # ★492-3：quantify 只在开关开时放行；关 ⇒ 逐字落到下方原 retrieve 路径。
+            if _m456_op in ("compare", "exclude") or (
+                    _m456_op == "quantify" and _m492_quantify_op_on()):
                 _m456_r = self._m456_run_local_op(
                     _m456_op, question, _step, _step_results)
                 if _m456_r is not None:
@@ -15965,9 +16060,17 @@ class PulseInnerWorld(
         self._m455_flush_trace(_plan, _m455_rows)
         _ok_n = sum(1 for _s in _step_results if _s.get("success"))
         if _ok_n == 0 and self._m34_fail_return_none_on():
+            # ★492-1：把每步已记录的 fail_reason 汇总进这一行（只改日志，不动逻辑）。
+            #   关开关 ⇒ 拼接串为空 ⇒ 输出与改前逐字一致。
+            import config as _c492
+            _m492_detail = ""
+            if bool(getattr(_c492, "ENABLE_M492_FAIL_REASON_LOG", True)):
+                _m492_detail = "：" + " / ".join(
+                    f"步骤{_n} {str(_s.get('fail_reason') or '-')}"
+                    for _n, _s in enumerate(_step_results, 1))
             self._log(LogLevel.INFO,
                       f"真多步推理: {len(_step_results)}步全部失败 → 返回 None，"
-                      f"回落上层单次大模型兜底（P2-196）")
+                      f"回落上层单次大模型兜底（P2-196）{_m492_detail}")
             return None
 
         _final = self._synthesize_step_results(_step_results, question)

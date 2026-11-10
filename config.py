@@ -9367,6 +9367,17 @@ M491_HTTP_EXHAUST_THRESHOLD = 3              # 491-3：连续 N 次额度错 →
 M491_RATE_LIMIT_REVIVE_SEC = 60.0            # 491-3：限流自动恢复窗口（秒）
 M491_WAIT_EDGE_MIN_MS = 1.0                  # 491-6：与 479 同阈值，只在等待≥1ms 时记边
 M491_SLOW_HANDLER_SEC = 30.0                 # 491-6：单器官等待超过该秒数判慢 handler
+# ── 492 批开关（多步推理接线 + 意图 shadow 扩样）──
+# 每刀独立开关，关掉任一开关即逐字回到改前行为。
+# 492-5 默认关：查表结果写独立字段 would_method，不动 would_handler 既有契约。
+ENABLE_M492_FAIL_REASON_LOG = True            # 492-1：全失败汇总日志拼每步 fail_reason（只改日志）
+ENABLE_M492_EXPAND_CALC_KEYWORDS = True       # 492-2：计算关键词扩样 + 数字范围守卫（两处词表同步）
+ENABLE_M492_QUANTIFY_OP = True                # 492-3：quantify 接执行器（关 ⇒ 逐字回 retrieve 路径）
+ENABLE_M492_INTENT_SAMPLE_EXPAND = True       # 492-4：shadow 扩样 + 测试桩过滤 + origin
+M492_INTENT_SAMPLE_EVERY = 3                  # 492-4：开开关时覆盖累计日志频率（457 常量 10 不动）
+ENABLE_M492_WOULD_METHOD_LOOKUP = False       # 492-5：dry-run 查 INTENT_TO_METHOD（默认关，观测一轮再开）
+ENABLE_M492_HYPOTHESIS_LOG = True             # 492-6：假设生成台账落盘（纯观测，命中侧留接口）
+M492_HYPOTHESIS_LOG_PATH = ""                 # 492-6：空 ⇒ data/evolution/hypothesis_hits.jsonl（测试可注入）
 # ── 485-7 baseline=0 禁入自动审批 ──
 # ★出厂默认 False（同上，随灰度一并裁决）。False ⇒ A1 内联自动审批与 _m85 本地
 #   低风险放行不查 baseline（逐字回改前；B 通道 _m101 与老化 _m94 早已查，不受影响）。

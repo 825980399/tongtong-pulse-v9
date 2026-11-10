@@ -91,6 +91,16 @@ def _m480_cfg_bool(name: str, default: bool = True) -> bool:
     return bool(getattr(_cfg, name, default))
 
 
+def _m492_on_emit() -> bool:
+    """★492-4：来源标记透传开关（fail-closed，缺键/异常按关处理）。"""
+    try:
+        import config as _c492
+        return bool(getattr(_c492, "ENABLE_M492_INTENT_SAMPLE_EXPAND", False))
+    except Exception as _e:
+        silent_exc(_e, where="PulseCortex::_m492_on_emit", level="debug")
+        return False
+
+
 class PulseCortex(BasePulseOrgan):
     """脉冲驱动大脑皮层（v9.5 分层脉冲版）"""
 
@@ -777,6 +787,17 @@ class PulseCortex(BasePulseOrgan):
             return {"status": "output_done_acked", "correlation_id": _cid}
 
         if event_type == ChatEvent.MESSAGE:
+            # ★492-4：pulse 顶层 source_organ 是 acc 测试桩的唯一可识别标记，
+            #   第二跳 _emit(InferenceEvent.REQUEST) 会重组 payload ⇒ 不注入则
+            #   样本层的「测试桩过滤」永远命中不了（死代码）。开关关时零改动。
+            try:
+                import config as _c492
+                if bool(getattr(_c492, "ENABLE_M492_INTENT_SAMPLE_EXPAND", False)):
+                    _p492 = dict(payload or {})
+                    _p492.setdefault("source_organ", pulse.get("source_organ", ""))
+                    payload = _p492
+            except Exception as _e492:
+                self._log_ignored_exception(_e492, "492-4 来源标记透传")
             return self._on_chat_message(payload)
         elif event_type == QICAEvent.CLASSIFY_RESULT:
             return self._on_classify_result(payload)
@@ -861,6 +882,17 @@ class PulseCortex(BasePulseOrgan):
         user_name = payload.get("user_name", "用户")
         file_paths = payload.get("file_paths", [])
         code_blocks = payload.get("code_blocks", [])
+        # ★492-4：合成流量判据（is_synthetic 或 acc 测试桩），随消息上下文透传到
+        #   InferenceEvent.REQUEST。开关关时恒 "user"，不改任何既有判据。
+        try:
+            import config as _c492
+            _m492_on = bool(getattr(_c492, "ENABLE_M492_INTENT_SAMPLE_EXPAND", False))
+        except Exception as _e492:
+            self._log_ignored_exception(_e492, "492-4 开关读取")
+            _m492_on = False
+        _m492_origin = ("synthetic" if _m492_on and (
+            bool(payload.get("is_synthetic"))
+            or str(payload.get("source_organ") or "") == "acc") else "user")
 
         # ===== 新增：文件拦截——图片和PDF文件直接发送给视觉皮层，不经过推理 =====
         if file_paths:
@@ -932,6 +964,7 @@ class PulseCortex(BasePulseOrgan):
             "_current_input": content,  # 供直觉系统使用
             "file_paths": file_paths,
             "code_blocks": code_blocks,
+            "m492_origin": _m492_origin,   # ★492-4：随消息上下文透传
         }
         # 清理过期暂存（超过30秒未匹配的）
         self._cleanup_pending()
@@ -1049,6 +1082,7 @@ class PulseCortex(BasePulseOrgan):
                                      code_blocks=ctx.get("code_blocks", []),
                                      suggested_method=_suggested_method,
                                      intent_type=intent_type,
+                                     m492_origin=str(ctx.get("m492_origin") or "user"),
                                      knowledge_paths=_knowledge_paths)
 
     def extend_remediation_lock(self, correlation_id: str,
@@ -2810,7 +2844,8 @@ class PulseCortex(BasePulseOrgan):
                          file_paths: list | None = None, code_blocks: list | None = None,
                          suggested_method: str = "knowledge_retrieve",
                          knowledge_paths: list | None = None,
-                         intent_type: str = "") -> dict[str, Any]:
+                         intent_type: str = "",
+                         m492_origin: str = "user") -> dict[str, Any]:
         """根据意图执行路由（v9.5: 所有发射脉冲标记L1实时交互层）
 
         ★405刀4：首行的 `route_target` 不再赋值即弃 —— 由
@@ -2953,6 +2988,11 @@ class PulseCortex(BasePulseOrgan):
             # ===== 【P2-4新增】语境感知：发射推理请求时注入语境信号 =====
             _context_signal = self._detect_context_signal(content, intent)
             # ===== 语境信号注入结束 =====
+            _m492_fields = {}
+            if _m492_on_emit():
+                # ★492-4：把来源标记带进 InferenceEvent.REQUEST，样本层才能过滤
+                _m492_fields["origin"] = str(m492_origin or "user")
+                _m492_fields["is_synthetic"] = (str(m492_origin) == "synthetic")
             self._emit(InferenceEvent.REQUEST, {
                 "question": content,
                 "user_name": user_name,
@@ -2960,6 +3000,7 @@ class PulseCortex(BasePulseOrgan):
                 "tool_hint": tool_hint,
                 "strategy_context": strategy_context,
                 "context_signal": _context_signal,  # 【P2-4新增】语境信号
+                **_m492_fields,
             }, priority=7, layer="L2")
             return {
                 "status": "inner_world_requested",
