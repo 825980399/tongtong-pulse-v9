@@ -247,6 +247,26 @@ def build_injection(items: list[dict] | None, *, now: float | None = None,
     dropped: dict[str, int] = {}
     if len(raw) - len(pool):
         dropped["low_score"] = len(raw) - len(pool)
+    # ★490-6：第二道闸分数直方图 + 前5条被挡候选的具体分数（门控，纯观测）。
+    # 绝不改 pool / dropped / 任何过滤判定；数据与第一道闸合并落同一行。
+    # ★分数闸刚过就快照保留数：后面源闸会把 pool 重新赋值为 admitted，
+    #   若到 return 再取 len(pool) 会把「源闸挡的」错记成「第二道分数闸挡的」。
+    _m490_kept_second = len(pool)
+    _m490_on = False
+    _m490_scores: list[float] = []
+    _m490_blocked: list[float] = []
+    try:
+        from nucleus.m490_diag import stats_on
+        _m490_on = stats_on()
+    except Exception as _e:
+        silent_exc(_e, where="evidence_injection::build_injection:490on", level="debug")
+    if _m490_on:
+        for _x490 in raw:
+            _s490 = _score_of(_x490)
+            if _s490 is not None:
+                _m490_scores.append(_s490)
+                if _s490 < score_floor(_x490, _min, _seed_min):
+                    _m490_blocked.append(_s490)
 
     # ★刀6：准入放在注入层；dry-run 仍保留全量命中（source_class/admitted 可审计）
     if source_gate_enabled():
@@ -291,6 +311,8 @@ def build_injection(items: list[dict] | None, *, now: float | None = None,
     for k, v in f["dropped"].items():
         dropped[k] = dropped.get(k, 0) + v
     if not kept:
+        _m490_flush_second(_m490_on, _m490_kept_second, _m490_scores, _m490_blocked,
+                           dropped, False, 0)
         return {"fragment": "", "items": [], "dropped": dropped,
                 "reason": "no_usable_evidence",
                 "system_rule": SYSTEM_EVIDENCE_RULE}
@@ -300,9 +322,25 @@ def build_injection(items: list[dict] | None, *, now: float | None = None,
         lines.append(
             f'<evidence id="E{i}" source="{_safe_source(item)}" '
             f'score="{_score_of(item):.2f}">{item.get("text") or ""}</evidence>')
-    return {"fragment": _DATA_BEGIN + "\n".join(lines), "items": kept,
+    _fragment = _DATA_BEGIN + "\n".join(lines)
+    _m490_flush_second(_m490_on, _m490_kept_second, _m490_scores, _m490_blocked,
+                       dropped, True, len(_fragment))
+    return {"fragment": _fragment, "items": kept,
             "dropped": dropped, "reason": "ok",
             "system_rule": SYSTEM_EVIDENCE_RULE}
+
+
+def _m490_flush_second(on: bool, kept_second: int, scores, blocked,
+                       dropped: dict, injected: bool, fragment_len: int) -> None:
+    """★490-6：与 490-5 的第一道闸数据合并落一行（关开关时首行返回）。"""
+    if not on:
+        return
+    try:
+        from nucleus.m490_diag import note_second_gate
+        note_second_gate(kept_second, scores, blocked, dropped,
+                         injected, fragment_len)
+    except Exception as _e:
+        silent_exc(_e, where="evidence_injection::_m490_flush_second", level="debug")
 
 
 def attach(prompt: str, fragment: str) -> str:

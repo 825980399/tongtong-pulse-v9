@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 import config  # ★421/R1-B1：483 行 getattr(config, ...) 在用，noqa 已失效
+from nucleus._silent_except import silent_exc
 from nucleus.const import ErrorCode, LogLevel, OrganStatus, SystemEvent
 from nucleus.logger import exc_location, get_organ_logger
 from nucleus.lif_shadow import LIFShadow
@@ -309,6 +310,13 @@ class BasePulseOrgan(ABC):
         """
         统一脉冲发送入口（v18.0修复：修正缩进结构，确保正常路径走PulseCore）。
         """
+        # ★490-3 阶段A：只观测「若按注册表推断该落哪层」与现层的差异，
+        # **绝不改 layer 默认值、绝不参与路由**（默认仍逐字走 L1）。
+        try:
+            from nucleus.m490_diag import observe_layer
+            observe_layer(self.organ_name, event_type, layer)
+        except Exception as _e:
+            silent_exc(_e, where="BasePulseOrgan::_send:490-3", level="debug")
         if self.info_field is None:
             self._log(LogLevel.WARNING,
                       f"脉冲发送失败: info_field 未注入，丢弃事件 {event_type}")

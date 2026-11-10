@@ -341,6 +341,13 @@ class InfoField(SilentLogMixin):
         self._idle_suspects: dict[tuple, dict] = {}
         self._m489_idle_lock = threading.Lock()
 
+        # ★490-1：pulse_id 回填计数（门控 ENABLE_M490_PULSE_ID_BACKFILL），按 source 统计
+        self._pulse_id_backfilled: dict[str, int] = {}
+        self._m490_backfill_lock = threading.Lock()
+        # ★490-2：条件表三桶前缀索引（门控 ENABLE_M490_COND_INDEX，copy-on-write）
+        # 索引只缩小候选集；min_priority / space / intent 的完整匹配逻辑一字不动。
+        self._cond_index: dict | None = None
+
         # ===== v9.5: 分层异步调度线程池 =====
         self._layer_pools: dict[str, ThreadPoolExecutor] = {}
         self._layer_disabled: dict[str, bool] = {}
@@ -826,6 +833,20 @@ class InfoField(SilentLogMixin):
         timestamp_ns = pulse.get("timestamp_ns", time.time_ns())
         route_mode = pulse.get("route_mode", CONCURRENT_COMM.get("dual_route_default", _ROUTE_PARALLEL))
 
+        # ★490-1：pulse_id 回填（门控；纯补字段，不改路由、不重造 emit）
+        # 裸 publish（如 TimeCore）不带 ID ⇒ 原本恒为 "?"，history/账本/去重键全是问号。
+        # 前缀 bf 与正常 pulse:{seq} 区分，不参与 _total_emitted 序号。
+        if getattr(_cfg, "ENABLE_M490_PULSE_ID_BACKFILL", False) \
+                and (not pulse_id or pulse_id == "?"):
+            import uuid as _uuid490
+            _src490 = str(pulse.get("source_organ", "?") or "?")
+            pulse_id = (f"pulse:bf:{_src490}:{event_type}:{time.time_ns()}:"
+                        f"{_uuid490.uuid4().hex[:8]}")
+            pulse["pulse_id"] = pulse_id
+            with self._m490_backfill_lock:
+                self._pulse_id_backfilled[_src490] = (
+                    self._pulse_id_backfilled.get(_src490, 0) + 1)
+
         # ★主线第25批 T1/P2-160：重复事件遥测（灰度；关闭时函数首行即返回）
         self._dup_trace_check(pulse, event_type)
 
@@ -902,7 +923,7 @@ class InfoField(SilentLogMixin):
                 _dedup_key = self.pulse_core.business_fingerprint(pulse)
             except Exception:
                 _dedup_key = pulse_id
-        if self._is_duplicate(_dedup_key):
+        if self._is_duplicate(_dedup_key, event_type):
             with self._lock:
                 self._total_duplicated += 1
             _trace_route_matched(pulse_id, 0, 0, False, "duplicate")
@@ -1006,7 +1027,7 @@ class InfoField(SilentLogMixin):
         # 优先分发（原实现按注册顺序，优先级字段完全不参与调度）。
         # 注：跨脉冲的严格优先级需线程池级优先队列，属 P3 架构改造，此处先闭合单脉冲内排序。
         _sorted_conditions = sorted(
-            conditions_snapshot,
+            self._m490_match_items(event_type, conditions_snapshot),
             key=lambda _kv: (_kv[1].get("condition", {}) or {}).get("min_priority", 0),
             reverse=True,
         )
@@ -1549,15 +1570,28 @@ class InfoField(SilentLogMixin):
 
     # ========== v9.5: 幂等防重放 ==========
 
-    def _is_duplicate(self, pulse_id: str) -> bool:
+    def _m490_dedup_ttl(self, event_type: str) -> float:
+        """★490-4：按事件类型查去重窗口；关开关时逐字返回旧全局值。"""
+        if not getattr(_cfg, "ENABLE_M490_DEDUP_BY_EVENT", False):
+            return float(self._processed_ttl_seconds)
+        _tbl = getattr(_cfg, "M490_DEDUP_TTL_BY_EVENT", {}) or {}
+        return float(_tbl.get(
+            event_type,
+            getattr(_cfg, "M490_DEDUP_DEFAULT_TTL", self._processed_ttl_seconds)))
+
+    def _is_duplicate(self, pulse_id: str, event_type: str = "") -> bool:
         now = time.time()
+        _ttl = self._m490_dedup_ttl(event_type)
+        # ★490-4：窗口 <= 0 表示该类事件完全不去重（对话类，同样的话可能真说两次）
+        if _ttl <= 0:
+            return False
         with self._lock:
             _ts = self._processed_pulses.get(pulse_id)
             if _ts is None:
                 return False
             # ★P1-1修复：TTL 过期视为非重复并清理，避免 5000 条容量窗口内误杀
             # 同业务事件（原 TTL 5 秒定义从未生效，导致长窗口内被误判重复）
-            if now - _ts > self._processed_ttl_seconds:
+            if now - _ts > _ttl:
                 self._processed_pulses.pop(pulse_id, None)
                 return False
             return True
@@ -3143,6 +3177,59 @@ class InfoField(SilentLogMixin):
         except Exception as _exc:
             _module_logger.debug(f"[重复事件遥测] 异常已忽略: {type(_exc).__name__}: {_exc}")
 
+    # ========== ★490-2：条件表前缀索引（门控，copy-on-write） ==========
+
+    def _m490_rebuild_cond_index(self):
+        """在 self._lock 内调用：全量重建索引并整体替换引用（copy-on-write）。
+
+        三桶：精确事件名 / 段通配模式 / 通用条件（event_types 为空）。
+        ★候选集恒为**超集**（含全部通配与通用项）：后续 _match_condition 的
+        min_priority / space / intent 完整判定一字不动，超集只会少跑几次匹配，
+        绝不会漏匹配、也绝不会改变 matched_organs。
+        ★候选 tuple 按 _conditions 原插入顺序排列，配合 sorted 的稳定性，
+        与线性路径的 matched_organs 顺序完全一致。
+        """
+        _items = tuple(self._conditions.items())
+        _exact: dict[str, set] = {}
+        _wild = set()
+        _univ = set()
+        for _cid, _data in _items:
+            _ets = (_data.get("condition") or {}).get("event_types") or []
+            if not _ets:
+                _univ.add(_cid)
+                continue
+            for _pat in _ets:
+                if "*" in str(_pat):
+                    _wild.add(_cid)
+                else:
+                    _exact.setdefault(str(_pat), set()).add(_cid)
+        _super = _wild | _univ
+        _by_event = {
+            _ev: tuple(_kv for _kv in _items if _kv[0] in (_ids | _super))
+            for _ev, _ids in _exact.items()
+        }
+        self._cond_index = {
+            "by_event": _by_event,
+            "fallback": tuple(_kv for _kv in _items if _kv[0] in _super),
+            "count": len(_items),
+        }
+
+    def _m490_match_items(self, event_type, full_snapshot):
+        """publish 步骤5 用：只读局部索引引用，不加锁。
+
+        关开关 / 索引缺失 / 索引容量与条件表不一致 ⇒ 逐字返回原全量快照。
+        """
+        if not getattr(_cfg, "ENABLE_M490_COND_INDEX", False):
+            return full_snapshot
+        _idx = self._cond_index
+        if _idx is None or _idx.get("count") != len(full_snapshot):
+            return full_snapshot
+        try:
+            return _idx["by_event"].get(event_type, _idx["fallback"])
+        except Exception as _e:
+            silent_exc(_e, where="InfoField::_m490_match_items", level="debug")
+            return full_snapshot
+
     def register_condition(self, organ_name: str,
                            event_types: list[str] | None = None,
                            space_paths: list[str] | None = None,
@@ -3162,12 +3249,14 @@ class InfoField(SilentLogMixin):
                 },
                 "handler": handler,
             }
+            self._m490_rebuild_cond_index()  # ★490-2：锁内重建，整体替换引用
             return cond_id
 
     def unregister_condition(self, cond_id: str) -> bool:
         with self._lock:
             if cond_id in self._conditions:
                 del self._conditions[cond_id]
+                self._m490_rebuild_cond_index()  # ★490-2：同上
                 return True
             return False
 

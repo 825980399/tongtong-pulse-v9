@@ -15,16 +15,21 @@ import time
 from nucleus._silent_except import silent_exc
 from nucleus.const import (
     BoneMarrowEvent,
+    ChatEvent,
     CodeEvent,
     DeviceEvent,
+    DigestEvent,
     DNARepairEvent,
     EnergyEvent,
     EvolutionEvent,
     GrowthEvent,
     HealthEvent,
     HeartEvent,
+    HormonesEvent,
+    KnowledgeEvent,
     LogLevel,
     MetricsEvent,
+    MouthEvent,
     NarrativeEvent,
     NurtureEvent,
     PersonalityEvent,
@@ -9322,6 +9327,29 @@ ENABLE_M488_FANOUT_STAT = True   # 488-2：扇出统计（每事件平均扇出�
 # 全部出厂默认 False（回滚态）：关掉即逐字回到旧行为，零回归。灰度由星轨裁决。
 ENABLE_M489_HANDLER_TIMING = False  # 489-1：handler 计时 + 返回值带出 + 按(器官,事件)7桶统计
 ENABLE_M489_IDLE_DETECT = False     # 489-3：空转判定（连续<1ms+None 或 占比>90% → WARNING + 快照 top5）
+# ── 490 批开关（主进程减负 + 证据注入诊断）──
+# 任务书要求每刀默认开；关掉任一开关即逐字回到改前行为（可单独回退）。
+# 490-5/6 共用一个开关（同一份 jsonl 一行）。
+ENABLE_M490_PULSE_ID_BACKFILL = True      # 490-1：缺 ID 时回填，纯补字段不改路由
+ENABLE_M490_EVIDENCE_TRACE_STATS = True   # 490-5/6：证据双闸归因计数 + 分数直方图（纯观测）
+ENABLE_M490_COND_INDEX = True             # 490-2：条件表三桶前缀索引（只缩候选集，匹配逻辑不变）
+ENABLE_M490_DEDUP_BY_EVENT = True         # 490-4：去重窗口按事件类型查表
+M490_LAYER_DEFAULT_MODE = "log"           # 490-3 阶段A：仅观测差异，绝不切默认值；"off" 关闭观测
+
+#: 490-4 去重窗口表（秒）。窗口<=0 表示该类事件完全不去重。
+#: 未登记事件走 M490_DEDUP_DEFAULT_TTL（旧全局值 5.0s，保守）。
+#: 表名全部用 const.py 类属性，绝不写裸事件名（事件字符串门禁）。
+M490_DEDUP_DEFAULT_TTL = 5.0
+M490_DEDUP_TTL_BY_EVENT = {
+    ChatEvent.MESSAGE: 0.0,             # 对话类：同样的话可能真说两次
+    MouthEvent.REPLY: 0.0,
+    ChatEvent.INITIATIVE: 0.0,
+    HormonesEvent.EMOTION_DETECTED: 60.0,  # 情绪类：状态型防抖
+    DigestEvent.KNOWLEDGE: 5.0,        # 知识类
+    KnowledgeEvent.WRITTEN: 5.0,
+    SystemEvent.ALARM: 30.0,           # 告警类：防重复但不丢升级
+    VascularEvent.SILENT_ORGAN: 30.0,
+}
 # ── 485-7 baseline=0 禁入自动审批 ──
 # ★出厂默认 False（同上，随灰度一并裁决）。False ⇒ A1 内联自动审批与 _m85 本地
 #   低风险放行不查 baseline（逐字回改前；B 通道 _m101 与老化 _m94 早已查，不受影响）。

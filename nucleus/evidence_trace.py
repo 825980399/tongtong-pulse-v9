@@ -222,9 +222,25 @@ def build_evidence_block(retriever: Callable[[str, int], list[Any]] | None,
         silent_exc(_e, where="evidence_trace::build_evidence_block retrieve", level="debug")
         return []
     out: list[dict] = []
+    # ★490-5：第一道闸归因计数（门控 ENABLE_M490_EVIDENCE_TRACE_STATS）。
+    # 纯观测：只统计，绝不改过滤逻辑（下面的 continue 一字不动）。
+    _m490_scores: list[float] = []
+    _m490_blocked: list[float] = []
+    _m490_on = False
+    try:
+        from nucleus.m490_diag import stats_on
+        _m490_on = stats_on()
+    except Exception as _e:
+        silent_exc(_e, where="evidence_trace::build_evidence_block:490on", level="debug")
     for h in hits:
+        if _m490_on:
+            _s490 = _score_of(h)
+            if _s490 is not None:
+                _m490_scores.append(_s490)
         s = _score_of(h)
         if s is None or s < float(min_score):
+            if _m490_on and s is not None:
+                _m490_blocked.append(s)
             continue
         out.append({
             "text": _text_of(h),
@@ -241,9 +257,20 @@ def build_evidence_block(retriever: Callable[[str, int], list[Any]] | None,
             "admitted": _source_marks(h)[1],
             "timestamp": _get(h, ("timestamp", "ts"), None),
         })
+    # ★490-5：把第一道闸的归因暂存到请求级 ContextVar，等第二道闸合并落一行。
     # ★453刀2：按质量权重降序（模板/低 reward 沉底），权重相同再比 score。
     out.sort(key=lambda x: (-x["quality_weight"], -x["score"]))
-    return out[:max(0, int(top_k))]
+    _kept = out[:max(0, int(top_k))]
+    # ★490-5：把第一道闸的归因暂存到请求级 ContextVar，等第二道闸合并落一行。
+    # kept_first 用 top_k 截断后的真实交付量（第二道闸拿到的就是它）。
+    if _m490_on:
+        try:
+            from nucleus.m490_diag import note_first_gate
+            note_first_gate(str(query or ""), len(hits), len(_kept),
+                            _m490_scores, _m490_blocked)
+        except Exception as _e:
+            silent_exc(_e, where="evidence_trace::build_evidence_block:490first", level="debug")
+    return _kept
 
 
 def note_hits(query: str, hits: list[Any], *, top_k: int = 3,
