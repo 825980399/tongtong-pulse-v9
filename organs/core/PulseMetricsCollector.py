@@ -3133,6 +3133,22 @@ class PulseMetricsCollector(BasePulseOrgan):
                 "state": "unavailable",
                 "errors": {"call": type(_e_pc421).__name__},
             }
+
+        # ★489-1/489-3：空转订阅者暴露（门控 ENABLE_M489_IDLE_DETECT；关则 get_idle_subscribers 返回 []）
+        try:
+            import config as _cfg489
+            if getattr(_cfg489, "ENABLE_M489_IDLE_DETECT", False):
+                try:
+                    _idle_subs = self.info_field.get_idle_subscribers(top=5)
+                except Exception as _e_idle:
+                    _idle_subs = []
+                    silent_exc(_e_idle, where="PulseMetricsCollector::"
+                                           "_build_observability_snapshot[idle_subscribers]",
+                               level="debug")
+                snapshot["observability"] = {"idle_subscribers": _idle_subs}
+        except Exception as _e_obs:
+            silent_exc(_e_obs, where="PulseMetricsCollector::"
+                                   "_build_observability_snapshot[observability]", level="debug")
         return snapshot
 
     # ========== ★403刀2：温/冷指标分频 ==========

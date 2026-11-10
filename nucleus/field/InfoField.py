@@ -333,6 +333,14 @@ class InfoField(SilentLogMixin):
         self._m488_load_fanout_baseline()
         self._m488_start_ledger_timer()
 
+        # ★489-1：handler 耗时埋点（门控 ENABLE_M489_HANDLER_TIMING）
+        self._handler_stats: dict[tuple, dict] = {}
+        self._handler_stats_lock = threading.Lock()
+        self._m489_handler_stats_max_keys = 2000
+        # ★489-3：空转判定（门控 ENABLE_M489_IDLE_DETECT）
+        self._idle_suspects: dict[tuple, dict] = {}
+        self._m489_idle_lock = threading.Lock()
+
         # ===== v9.5: 分层异步调度线程池 =====
         self._layer_pools: dict[str, ThreadPoolExecutor] = {}
         self._layer_disabled: dict[str, bool] = {}
@@ -1092,7 +1100,7 @@ class InfoField(SilentLogMixin):
                     # _check_organ_concurrency会永久拒收该器官的脉冲。
                     # 故此处用try/finally保证任何情况下都递减。
                     try:
-                        self._call_handler_safe(pulse, handler)
+                        self._call_handler_safe(pulse, handler, organ_name, event_type)
                     finally:
                         self._decrement_organ_concurrency(organ_name)
                         # ★P2-8修复：同步兜底路径也计入「已处理」，避免假死探测器误报
@@ -1134,7 +1142,7 @@ class InfoField(SilentLogMixin):
                     raise
             else:
                 # 池缺失时同步执行（兜底）
-                self._call_handler_safe(pulse, handler)
+                self._call_handler_safe(pulse, handler, organ_name, event_type)
                 # ★P2-8修复：同步兜底路径也计入「已处理」
                 # ★7-1/P1-13：同上，与读端同锁（详见 :514 处注释）
                 # ★PHASE14-锁优化：池缺失兜底路径同样改抢 _handled_lock
@@ -1386,11 +1394,11 @@ class InfoField(SilentLogMixin):
                 if _wait_ms >= 1.0:
                     self._m479_note_lock_wait(organ_name, _wait_ms)
                 try:
-                    self._call_handler_safe(pulse, handler)
+                    self._call_handler_safe(pulse, handler, organ_name, pulse.get("event_type", ""))
                 finally:
                     _lk.release()
             else:
-                self._call_handler_safe(pulse, handler)
+                self._call_handler_safe(pulse, handler, organ_name, pulse.get("event_type", ""))
             # ★483刀3：事后计量 overrun（异常路径不计 —— 没有「跑完」这个事实）。
             self._m483_note_overrun(layer_tag, _dl_start_ns, _dl_ms)
         finally:
@@ -1437,17 +1445,28 @@ class InfoField(SilentLogMixin):
             if layer_tag == _PULSE_LAYER_L3:
                 self._record_l3_completion()
 
-    def _call_handler_safe(self, pulse: dict[str, Any], handler: Callable):
+    def _call_handler_safe(self, pulse: dict[str, Any], handler: Callable,
+                           organ_name: str = "", event_type: str = "") -> Any:
         # ★P0-1修复：_handle_pulse_safe 分支原先无异常保护，异常会上抛导致
         # _total_handled 计数被跳过且异常被 pool.submit 的未来对象静默吞掉。
         # 这里统一 try/except，既保证异常可见（记日志），又不向外抛。
+        # ★489-1：返回值带出 + 耗时计时（开关关时两个 perf_counter 都不跑，行为逐字回改前）
+        _timing = self._m489_stat_on()
+        _t0 = time.perf_counter() if _timing else 0.0
+        _res: Any = None
+        _err = False
         try:
             if hasattr(handler, '__self__') and hasattr(handler.__self__, '_handle_pulse_safe'):
-                handler.__self__.handle_pulse_safe(pulse)
+                _res = handler.__self__.handle_pulse_safe(pulse)
             else:
-                handler(pulse)
+                _res = handler(pulse)
         except Exception as e:
+            _err = True
             _module_logger.error(f"handler 异常: {e}")
+        if _timing:
+            _elapsed = (time.perf_counter() - _t0) * 1000.0
+            self._m489_note_handler_stat(organ_name, event_type, _elapsed, _res, _err)
+        return _res
 
     # ========== L0生命线看门狗（P0-1修复） ==========
 
@@ -3495,6 +3514,152 @@ class InfoField(SilentLogMixin):
                 }
                 for _et in (set(self._fanout_current) | set(self._fanout_baseline))
             }
+
+    # ========== ★489-1：handler 耗时埋点 + 返回值带出 ==========
+
+    def _m489_timing_on(self) -> bool:
+        return bool(getattr(_cfg, "ENABLE_M489_HANDLER_TIMING", False))
+
+    def _m489_idle_on(self) -> bool:
+        return bool(getattr(_cfg, "ENABLE_M489_IDLE_DETECT", False))
+
+    def _m489_stat_on(self) -> bool:
+        # 任一开关开即记录统计（idle 检测依赖计时数据）
+        return self._m489_timing_on() or self._m489_idle_on()
+
+    @staticmethod
+    def _m489_bucket_index(ms: float) -> int:
+        if ms < 0.5:
+            return 0
+        if ms < 1.0:
+            return 1
+        if ms < 5.0:
+            return 2
+        if ms < 20.0:
+            return 3
+        if ms < 100.0:
+            return 4
+        if ms < 500.0:
+            return 5
+        return 6
+
+    def _m489_note_handler_stat(self, organ_name, event_type, elapsed_ms, result, error=False):
+        if not self._m489_stat_on():
+            return
+        _key = (organ_name, event_type)
+        with self._handler_stats_lock:
+            _d = self._handler_stats.get(_key)
+            if _d is None:
+                if len(self._handler_stats) >= self._m489_handler_stats_max_keys:
+                    _old = min(self._handler_stats,
+                               key=lambda k: self._handler_stats[k].get("last_ts", 0.0))
+                    self._handler_stats.pop(_old, None)
+                _d = {
+                    "n": 0, "sum_ms": 0.0, "max_ms": 0.0,
+                    "buckets": [0] * 7, "lt1ms_streak": 0, "none_streak": 0,
+                    "none_count": 0, "error_count": 0, "last_ms": 0.0,
+                    "last_ts": 0.0, "_idle_warned": False,
+                }
+                self._handler_stats[_key] = _d
+            _d["n"] += 1
+            _d["sum_ms"] += elapsed_ms
+            _d["max_ms"] = max(_d["max_ms"], elapsed_ms)
+            _d["last_ms"] = elapsed_ms
+            _d["last_ts"] = time.time()
+            _d["buckets"][self._m489_bucket_index(elapsed_ms)] += 1
+            _is_none = result is None
+            if _is_none:
+                _d["none_count"] += 1
+                _d["none_streak"] += 1
+            else:
+                _d["none_streak"] = 0
+            if error:
+                _d["error_count"] += 1
+            if elapsed_ms < 1.0 and _is_none:
+                _d["lt1ms_streak"] += 1
+            else:
+                _d["lt1ms_streak"] = 0
+        if self._m489_idle_on():
+            self._m489_check_idle(_key, _d)
+
+    def _m489_check_idle(self, key, d):
+        _n = d["n"]
+        if _n < 2:
+            return
+        _lt1 = d["buckets"][0] + d["buckets"][1]
+        _lt1_ratio = (_lt1 / _n) if _n else 0.0
+        _none_ratio = (d["none_count"] / _n) if _n else 0.0
+        _susp = False
+        if d["lt1ms_streak"] >= 20 and d["none_streak"] >= 20:
+            _susp = True
+        elif _n >= 20 and _lt1_ratio > 0.9 and _none_ratio > 0.9:
+            _susp = True
+        if _susp and not d.get("_idle_warned"):
+            d["_idle_warned"] = True
+            _module_logger.warning(
+                f"[空转可疑] {key[0]}/{key[1]}: 连续 {d['lt1ms_streak']} 次<1ms且None, "
+                f"n={_n}, p50≈{self._m489_pctl(d, 50):.3f}ms, "
+                f"p95≈{self._m489_pctl(d, 95):.3f}ms")
+            with self._m489_idle_lock:
+                self._idle_suspects[key] = self._m489_idle_entry(key, d)
+
+    @staticmethod
+    def _m489_pctl(d, p):
+        _order = [0.5, 1.0, 5.0, 20.0, 100.0, 500.0, 500.0]
+        _n = d["n"]
+        if _n == 0:
+            return 0.0
+        _target = p / 100.0 * _n
+        _cum = 0
+        for _i in range(7):
+            _bc = d["buckets"][_i]
+            if _cum + _bc >= _target and _bc > 0:
+                _frac = (_target - _cum) / _bc
+                _lo = 0.0 if _i == 0 else _order[_i - 1]
+                _hi = _order[_i]
+                return _lo + (_hi - _lo) * _frac
+            _cum += _bc
+        return _order[-1]
+
+    @staticmethod
+    def _m489_idle_entry(key, d):
+        _verdict = "ghost" if d["none_streak"] >= 20 else "idle"
+        return {
+            "organ": key[0], "event": key[1], "count": d["n"],
+            "p50_ms": round(InfoField._m489_pctl(d, 50), 4),
+            "p95_ms": round(InfoField._m489_pctl(d, 95), 4),
+            "max_ms": round(d["max_ms"], 4),
+            "lt1ms_streak": d["lt1ms_streak"], "none_streak": d["none_streak"],
+            "verdict": _verdict,
+        }
+
+    def get_idle_subscribers(self, top: int = 5):
+        """★489-3：返回当前空转可疑 top N（门控；关则 []）。"""
+        if not self._m489_idle_on():
+            return []
+        with self._m489_idle_lock:
+            _items = list(self._idle_suspects.values())
+        _items.sort(key=lambda x: (x["verdict"] != "ghost",
+                                   -(x["lt1ms_streak"] + x["none_streak"])))
+        return _items[:top]
+
+    def get_handler_stats(self, top: int = 50):
+        """★489-1：返回每(器官,事件)耗时统计（门控；关则 {}）。"""
+        if not self._m489_timing_on():
+            return {}
+        with self._handler_stats_lock:
+            _out = {}
+            for _k, _d in self._handler_stats.items():
+                _out[f"{_k[0]}/{_k[1]}"] = {
+                    "n": _d["n"], "sum_ms": round(_d["sum_ms"], 3),
+                    "max_ms": round(_d["max_ms"], 3),
+                    "buckets": list(_d["buckets"]),
+                    "none_count": _d["none_count"], "error_count": _d["error_count"],
+                    "last_ms": round(_d["last_ms"], 3),
+                    "p50_ms": round(self._m489_pctl(_d, 50), 4),
+                    "p95_ms": round(self._m489_pctl(_d, 95), 4),
+                }
+            return _out
 
     # ========== ★登顶路线图-协调层：死数据/幽灵监听审计 ==========
 

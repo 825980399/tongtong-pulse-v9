@@ -9318,6 +9318,10 @@ ENABLE_M487_DEQUEUE_TTL = True     # 487-5：出队时按 timestamp_ns 丢弃过
 # 全部出厂默认 False（回滚态）：关掉即逐字回到旧行为，零回归。灰度由星轨裁决。
 ENABLE_M488_EVENT_LEDGER = True  # 488-1：事件账本（matched/handled/dropped[4原因] 按 event_type 计数 + 60s 落盘 event_ledger_*.jsonl + 幽灵丢失告警）
 ENABLE_M488_FANOUT_STAT = True   # 488-2：扇出统计（每事件平均扇出系数 + 7天滑动基线 + 2x/10min 告警 + health_snapshot 暴露）
+# ── 489 批开关（handler耗时埋点 + 空转判定）──
+# 全部出厂默认 False（回滚态）：关掉即逐字回到旧行为，零回归。灰度由星轨裁决。
+ENABLE_M489_HANDLER_TIMING = False  # 489-1：handler 计时 + 返回值带出 + 按(器官,事件)7桶统计
+ENABLE_M489_IDLE_DETECT = False     # 489-3：空转判定（连续<1ms+None 或 占比>90% → WARNING + 快照 top5）
 # ── 485-7 baseline=0 禁入自动审批 ──
 # ★出厂默认 False（同上，随灰度一并裁决）。False ⇒ A1 内联自动审批与 _m85 本地
 #   低风险放行不查 baseline（逐字回改前；B 通道 _m101 与老化 _m94 早已查，不受影响）。
