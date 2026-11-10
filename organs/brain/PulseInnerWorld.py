@@ -13086,6 +13086,7 @@ class PulseInnerWorld(
     def set_framework_ref(self, ref) -> None:
         """写入框架引用（供自动升级窗口检查使用）。"""
         self._framework_ref = ref
+        type(self)._instance = self   # 493.6-2c：注册主实例，供 action_executor 取器官实例
 
     def get_pending_extra_state(self) -> dict[str, Any]:
         """

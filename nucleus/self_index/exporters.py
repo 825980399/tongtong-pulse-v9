@@ -301,64 +301,67 @@ def derive_body_relations(event_subscribers: dict) -> list[dict]:
 # 57 器官别名表（来源：烛微 493 第二阶段前置分析 §2.2 全量逐行核对；一个不漏）。
 # 性质：策展静态表（非代码动态推导）。任务书纪律明令禁止「硬猜别名映射」，
 # 故直接采用烛微核实后的清单；后续由样本增长补充，不在本批自动生成。
-ORGAN_ALIAS_TABLE: dict[str, list[str]] = {
-    "血管": ["血管", "血液循环", "血流", "循环监测"],
-    "心脏": ["心脏", "心", "心跳", "心率", "起搏", "heart"],
-    "肾": ["肾", "肾脏", "过滤", "排泄", "清理"],
-    "肝": ["肝", "肝脏", "代谢", "融合", "知识代谢"],
-    "肺": ["肺", "肺部", "呼吸", "语言模型", "外脑", "渠道"],
-    "胃": ["胃", "消化", "消化器官", "吃进", "知识消化"],
-    "代码学习": ["代码学习", "学代码", "读代码", "代码理解"],
-    "大脑皮层": ["皮层", "大脑", "思考", "对话主链", "cortex"],
-    "主动交互": ["主动", "主动说话", "发起对话", "initiative"],
-    "内在世界": ["内在世界", "内心", "沉思", "推理", "思考"],
-    "兴趣模型": ["兴趣", "爱好", "好奇"],
-    "前额叶": ["前额叶", "反思", "复盘"],
-    "风险感知": ["风险", "危险", "谨慎"],
-    "语义理解器": ["语义", "理解", "意图", "QICA"],
-    "精神核心": ["精神", "核心", "意志"],
-    "潜意识": ["潜意识", "直觉", "灵感", "取种"],
-    "设备管理器": ["设备", "硬件管理"],
-    "紧急处理": ["紧急", "急救", "告警处理"],
-    "能量代谢": ["能量", "代谢", "体力"],
-    "全局学习器": ["全局学习", "学习"],
-    "硬件启动器": ["启动", "开机"],
-    "健康监控": ["健康", "体检", "监控"],
-    "推理引擎": ["推理引擎", "推理"],
-    "指标采集器": ["指标", "采集", "metrics", "监控数据"],
-    "动机循环": ["动机", "驱动"],
-    "本体感知": ["本体", "身体感知", "proprioception"],
-    "脊髓": ["脊髓", "反射", "巡检"],
-    "应激轴": ["应激", "压力", "应急"],
-    "系统管理器": ["系统管理", "框架管理", "总控"],
-    "激素": ["激素", "情绪", "心情", "emotion"],
-    "神经递质": ["神经递质", "神经", "信号"],
-    "情感羁绊": ["羁绊", "亲密", "关系"],
-    "共同决策": ["共同决策", "协商", "同意"],
-    "DNA修复": ["DNA", "修复", "自愈"],
-    "进化": ["进化", "演化", "升级"],
-    "养育": ["养育", "培养"],
-    "生育伦理": ["生育", "伦理审查"],
-    "伦理": ["伦理", "道德", "价值观"],
-    "成长": ["成长", "进步"],
-    "叙事自我": ["叙事", "故事", "自传", "记忆线"],
-    "人格内核": ["人格", "性格", "人设"],
-    "自我认知": ["自我认知", "自我意识", "自省"],
-    "宪法守护": ["宪法", "规则", "底线", "守护"],
-    "骨髓": ["骨髓", "造血"],
-    "皮肤": ["皮肤", "屏障", "边界"],
-    "胸腺": ["胸腺", "免疫训练"],
-    "白细胞": ["白细胞", "免疫", "杀毒", "异常检测"],
-    "代码沙箱": ["沙箱", "代码执行", "安全执行"],
-    "控制器": ["控制器", "动作", "执行", "手"],
-    "文件消化器": ["文件", "文档", "解析"],
-    "双手": ["双手", "手", "操作"],
-    "双腿": ["双腿", "腿", "探索"],
-    "嘴巴": ["嘴", "嘴巴", "说话", "输出", "TTS"],
-    "耳朵": ["耳朵", "听", "语音输入"],
-    "眼睛": ["眼睛", "看", "视觉", "摄像头"],
-    "触觉": ["触觉", "硬件", "传感器"],
-    "视觉皮层": ["视觉皮层", "识图", "OCR"],
+# 493.6-1 三层别名表（名称 / 功能 / 系统）。来源：烛微 §2.2 逐行核对 + 493.6 功能词补全。
+# 性质：策展静态表。func 层覆盖 6 个冲突词（记忆/代谢/思考/推理/手/视觉）及运动/免疫等，
+#       使「管运动的→控制器/双手/双腿」「管免疫的→骨髓/胸腺/白细胞」「看东西的→视觉皮层」等可命中。
+ORGAN_ALIAS_TABLE: dict[str, dict] = {
+    "血管":       {"name": ["血管", "血液循环", "血流"],            "func": ["循环监测"],                  "sys": ["循环系统"]},
+    "心脏":       {"name": ["心脏", "心", "心跳", "心率", "起搏"],  "func": ["heart"],                     "sys": ["循环系统", "血液系统"]},
+    "肾":         {"name": ["肾", "肾脏"],                          "func": ["过滤", "排泄", "清理"],       "sys": ["泌尿系统", "血液系统"]},
+    "肝":         {"name": ["肝", "肝脏"],                          "func": ["代谢", "融合", "知识代谢"],   "sys": ["代谢系统", "消化系统"]},
+    "肺":         {"name": ["肺", "肺部"],                          "func": ["呼吸", "语言模型", "外脑", "渠道"], "sys": ["呼吸系统"]},
+    "胃":         {"name": ["胃"],                                  "func": ["消化", "消化器官", "吃进", "知识消化"], "sys": ["消化系统"]},
+    "代码学习":   {"name": ["代码学习"],                            "func": ["学代码", "读代码", "代码理解"], "sys": ["学习系统"]},
+    "大脑皮层":   {"name": ["皮层", "大脑"],                        "func": ["思考", "对话主链", "cortex"], "sys": ["大脑系统", "神经系统"]},
+    "主动交互":   {"name": ["主动交互"],                            "func": ["主动", "发起对话", "initiative"], "sys": ["意识系统"]},
+    "内在世界":   {"name": ["内在世界", "内心"],                    "func": ["沉思", "推理", "思考", "记忆"], "sys": ["大脑系统", "意识系统"]},
+    "兴趣模型":   {"name": ["兴趣模型"],                            "func": ["兴趣", "爱好", "好奇"],       "sys": ["情绪系统"]},
+    "前额叶":     {"name": ["前额叶"],                              "func": ["反思", "复盘"],               "sys": ["大脑系统"]},
+    "风险感知":   {"name": ["风险感知"],                            "func": ["风险", "危险", "谨慎"],       "sys": ["决策系统"]},
+    "语义理解器": {"name": ["语义理解器", "QICA"],                  "func": ["语义", "理解", "意图"],       "sys": ["大脑系统"]},
+    "精神核心":   {"name": ["精神核心"],                            "func": ["精神", "核心", "意志"],       "sys": ["意识系统"]},
+    "潜意识":     {"name": ["潜意识"],                              "func": ["直觉", "灵感", "取种"],       "sys": ["意识系统"]},
+    "设备管理器": {"name": ["设备管理器"],                          "func": ["设备", "硬件管理"],           "sys": ["运动系统"]},
+    "紧急处理":   {"name": ["紧急处理"],                            "func": ["紧急", "急救", "告警处理"],   "sys": ["应急系统"]},
+    "能量代谢":   {"name": ["能量代谢"],                            "func": ["能量", "代谢", "体力"],       "sys": ["代谢系统"]},
+    "全局学习器": {"name": ["全局学习器"],                          "func": ["全局学习", "学习"],           "sys": ["学习系统"]},
+    "硬件启动器": {"name": ["硬件启动器"],                          "func": ["启动", "开机"],               "sys": ["运动系统"]},
+    "健康监控":   {"name": ["健康监控"],                            "func": ["健康", "体检", "监控"],       "sys": ["健康系统"]},
+    "推理引擎":   {"name": ["推理引擎"],                            "func": ["推理引擎", "推理"],           "sys": ["大脑系统"]},
+    "指标采集器": {"name": ["指标采集器"],                          "func": ["指标", "采集", "metrics", "监控数据"], "sys": ["监测系统"]},
+    "动机循环":   {"name": ["动机循环"],                            "func": ["动机", "驱动"],               "sys": ["决策系统"]},
+    "本体感知":   {"name": ["本体感知"],                            "func": ["本体", "身体感知", "proprioception"], "sys": ["运动系统", "身体系统"]},
+    "脊髓":       {"name": ["脊髓"],                                "func": ["反射", "巡检"],               "sys": ["神经系统"]},
+    "应激轴":     {"name": ["应激轴"],                              "func": ["应激", "压力", "应急"],       "sys": ["内分泌系统"]},
+    "系统管理器": {"name": ["系统管理器"],                          "func": ["系统管理", "框架管理", "总控"], "sys": ["管理系统"]},
+    "激素":       {"name": ["激素"],                                "func": ["激素", "情绪", "心情", "emotion"], "sys": ["内分泌系统", "情绪系统"]},
+    "神经递质":   {"name": ["神经递质"],                            "func": ["神经递质", "神经", "信号"],   "sys": ["神经系统"]},
+    "情感羁绊":   {"name": ["情感羁绊"],                            "func": ["羁绊", "亲密", "关系"],       "sys": ["情绪系统"]},
+    "共同决策":   {"name": ["共同决策"],                            "func": ["共同决策", "协商", "同意"],   "sys": ["决策系统"]},
+    "DNA修复":    {"name": ["DNA修复"],                             "func": ["DNA", "修复", "自愈"],        "sys": ["基因系统"]},
+    "进化":       {"name": ["进化"],                                "func": ["进化", "演化", "升级"],       "sys": ["基因系统"]},
+    "养育":       {"name": ["养育"],                                "func": ["养育", "培养"],               "sys": ["养育系统"]},
+    "生育伦理":   {"name": ["生育伦理"],                            "func": ["生育", "伦理审查"],           "sys": ["伦理系统"]},
+    "伦理":       {"name": ["伦理"],                                "func": ["伦理", "道德", "价值观"],     "sys": ["伦理系统"]},
+    "成长":       {"name": ["成长"],                                "func": ["成长", "进步"],               "sys": ["成长系统"]},
+    "叙事自我":   {"name": ["叙事自我"],                            "func": ["叙事", "故事", "自传", "记忆线", "记忆"], "sys": ["记忆系统", "意识系统"]},
+    "人格内核":   {"name": ["人格内核"],                            "func": ["人格", "性格", "人设"],       "sys": ["意识系统"]},
+    "自我认知":   {"name": ["自我认知"],                            "func": ["自我认知", "自我意识", "自省", "记忆"], "sys": ["意识系统", "记忆系统"]},
+    "宪法守护":   {"name": ["宪法守护"],                            "func": ["宪法", "规则", "底线", "守护"], "sys": ["伦理系统"]},
+    "骨髓":       {"name": ["骨髓"],                                "func": ["骨髓", "造血", "免疫"],       "sys": ["血液系统", "免疫系统"]},
+    "皮肤":       {"name": ["皮肤"],                                "func": ["皮肤", "屏障", "边界"],       "sys": ["身体系统"]},
+    "胸腺":       {"name": ["胸腺"],                                "func": ["胸腺", "免疫训练", "免疫"],   "sys": ["免疫系统"]},
+    "白细胞":     {"name": ["白细胞"],                              "func": ["白细胞", "免疫", "杀毒", "异常检测"], "sys": ["免疫系统"]},
+    "代码沙箱":   {"name": ["代码沙箱"],                            "func": ["沙箱", "代码执行", "安全执行"], "sys": ["执行系统"]},
+    "控制器":     {"name": ["控制器"],                              "func": ["控制器", "动作", "执行", "运动", "手"], "sys": ["运动系统"]},
+    "文件消化器": {"name": ["文件消化器"],                          "func": ["文件", "文档", "解析"],       "sys": ["消化系统"]},
+    "双手":       {"name": ["双手"],                                "func": ["双手", "手", "操作", "运动"],  "sys": ["运动系统"]},
+    "双腿":       {"name": ["双腿"],                                "func": ["双腿", "腿", "探索", "运动"],  "sys": ["运动系统"]},
+    "嘴巴":       {"name": ["嘴", "嘴巴"],                          "func": ["说话", "输出", "TTS"],        "sys": ["输出系统"]},
+    "耳朵":       {"name": ["耳朵"],                                "func": ["耳朵", "听", "语音输入"],     "sys": ["听觉系统"]},
+    "眼睛":       {"name": ["眼睛"],                                "func": ["眼睛", "看", "视觉", "摄像头"], "sys": ["视觉系统"]},
+    "触觉":       {"name": ["触觉"],                                "func": ["触觉", "硬件", "传感器"],     "sys": ["触觉系统", "身体系统"]},
+    "视觉皮层":   {"name": ["视觉皮层"],                            "func": ["视觉皮层", "识图", "OCR", "视觉"], "sys": ["视觉系统", "大脑系统"]},
 }
 
 # 归一化去除的语气 / 指代词（保留语义字）
@@ -398,43 +401,87 @@ def _cosine(a: dict, b: dict) -> float:
 
 
 def link_organ(query: str) -> dict | None:
-    """自然语言指称 → 器官（493.5-2 核心）。
+    """自然语言指称 → 器官（493.5-2 / 493.6-1 三层打分消歧）。
 
     返回：
       {"organ": name, "score": float, "match": "exact"|"fuzzy"}  命中
       {"candidates": [{"organ":name,"score":float}, ...]}           歧义（需澄清）
       None                                                                无候选（走大模型）
-    算法（<3ms，本地无依赖）：① 精确别名子串命中；② 字符 n-gram 余弦模糊
-      （top1≥0.72 且 top1-top2≥0.10 才返回；分差不足→澄清；都低→None）。
+    规则（493.6-1）：① 功能词命中且唯一器官 → 直接答；② 多器官功能命中 → 澄清
+          （覆盖冲突词：记忆/代谢/思考/推理/手/视觉）；③ 名称层命中（0.55）→ 直接答；
+          ④ 余弦兜底（<3ms，无依赖）。
     """
     q = _normalize(query)
     if not q:
         return None
-    # ① 精确别名命中
-    hits: list[str] = []
-    for _organ, _als in ORGAN_ALIAS_TABLE.items():
-        for _al in _als:
+    # ① 功能词匹配（强信号：唯一即直答，多即澄清）
+    _func_hits: list[str] = []
+    for _organ, _L in ORGAN_ALIAS_TABLE.items():
+        if any(_a and (_a.lower() in q or q in _a.lower()) for _a in _L.get("func", [])):
+            _func_hits.append(_organ)
+    if len(_func_hits) == 1:
+        return {"organ": _func_hits[0], "score": 1.0, "match": "exact"}
+    if len(_func_hits) > 1:
+        return {"candidates": [{"organ": _h, "score": 1.0} for _h in _func_hits[:3]]}
+    # ② 名称层匹配
+    _name_hits: list[str] = []
+    for _organ, _L in ORGAN_ALIAS_TABLE.items():
+        if any(_a and (_a.lower() in q or q in _a.lower()) for _a in _L.get("name", [])):
+            _name_hits.append(_organ)
+    if len(_name_hits) == 1:
+        return {"organ": _name_hits[0], "score": 1.0, "match": "exact"}
+    if len(_name_hits) > 1:
+        return {"candidates": [{"organ": _h, "score": 1.0} for _h in _name_hits[:3]]}
+    # ③ 系统层 + 字符 n-gram 余弦兜底
+    _scored: list[tuple[str, float]] = []
+    for _organ, _L in ORGAN_ALIAS_TABLE.items():
+        _best = 0.0
+        for _al in (_L.get("name", []) + _L.get("func", []) + _L.get("sys", [])):
+            _sc = _cosine(_char_ngrams(q), _char_ngrams(_al))
+            if _sc > _best:
+                _best = _sc
+        if _best > 0:
+            _scored.append((_organ, _best))
+    if not _scored:
+        return None
+    _scored.sort(key=lambda x: -x[1])
+    _t1, _s1 = _scored[0]
+    _t2, _s2 = _scored[1] if len(_scored) > 1 else (None, 0.0)
+    if _s1 >= 0.72 and (_s1 - _s2) >= 0.10:
+        return {"organ": _t1, "score": round(_s1, 3), "match": "fuzzy"}
+    if _s1 < 0.72:
+        return None
+    return {"candidates": [{"organ": _o, "score": round(_s, 3)} for _o, _s in _scored[:3]]}
+
+
+def _link_organ_legacy(query: str) -> dict | None:
+    """493.5 旧路径（精确别名子串 + 余弦模糊），供 ENABLE_M4936_DISAMBIGUATION 关闭时回退。"""
+    q = _normalize(query)
+    if not q:
+        return None
+    _hits: list[str] = []
+    for _organ, _L in ORGAN_ALIAS_TABLE.items():
+        for _al in (_L.get("name", []) + _L.get("func", []) + _L.get("sys", [])):
             if _al and (_al.lower() in q or q in _al.lower()):
-                hits.append(_organ)
+                _hits.append(_organ)
                 break
-    if len(hits) == 1:
-        return {"organ": hits[0], "score": 1.0, "match": "exact"}
-    if len(hits) > 1:
-        return {"candidates": [{"organ": _h, "score": 1.0} for _h in hits[:3]]}
-    # ② 模糊 n-gram 余弦
+    if len(_hits) == 1:
+        return {"organ": _hits[0], "score": 1.0, "match": "exact"}
+    if len(_hits) > 1:
+        return {"candidates": [{"organ": _h, "score": 1.0} for _h in _hits[:3]]}
     _qv = _char_ngrams(q)
     _scored: list[tuple[str, float]] = []
-    for _organ, _als in ORGAN_ALIAS_TABLE.items():
+    for _organ, _L in ORGAN_ALIAS_TABLE.items():
         _best = 0.0
-        for _al in _als:
+        for _al in (_L.get("name", []) + _L.get("func", []) + _L.get("sys", [])):
             _sc = _cosine(_qv, _char_ngrams(_al))
             if _sc > _best:
                 _best = _sc
         if _best > 0:
             _scored.append((_organ, _best))
-    _scored.sort(key=lambda x: -x[1])
     if not _scored:
         return None
+    _scored.sort(key=lambda x: -x[1])
     _t1, _s1 = _scored[0]
     _t2, _s2 = _scored[1] if len(_scored) > 1 else (None, 0.0)
     if _s1 >= 0.72 and (_s1 - _s2) >= 0.10:
@@ -467,14 +514,14 @@ ACTION_WHITELIST: list[dict] = [
     {"action_id": "organ.locate", "organ": "Self-Index", "kind": "read",
      "impl": {"type": "self_index", "target": "export_organ_aliases", "file": "nucleus/self_index/exporters.py", "line": 0},
      "params": {"name": "器官名/别名"}, "preconditions": ["self_index_on"], "risk": 0, "idempotent": True,
-     "verify": {"type": "has_key", "key": "file"}, "source": "curated", "status": "ready"},
+     "verify": {"type": "has_key", "key": "aliases"}, "source": "curated", "status": "ready"},
     {"action_id": "organ.stats", "organ": "通用", "kind": "read",
      "impl": {"type": "method", "target": "PulseX.get_stats", "file": "organs/*/PulseX.py", "line": 0},
      "params": {"organ": "器官名"}, "preconditions": ["organ_online"], "risk": 0, "idempotent": True,
      "verify": {"type": "has_key", "key": "organ"}, "source": "curated", "status": "ready"},
     {"action_id": "organ.inflight", "organ": "信息场", "kind": "read",
      "impl": {"type": "method", "target": "InfoField.get_organ_inflight", "file": "nucleus/field/InfoField.py", "line": 0},
-     "params": {"organ": "器官名"}, "preconditions": ["field_online"], "risk": 0, "idempotent": True,
+     "params": {"organ_name": "器官名"}, "preconditions": ["field_online"], "risk": 0, "idempotent": True,
      "verify": {"type": "int_ge", "key": "inflight", "ge": 0}, "source": "curated", "status": "ready"},
     {"action_id": "layer.backpressure", "organ": "信息场", "kind": "read",
      "impl": {"type": "method", "target": "InfoField.get_backpressure_stats", "file": "nucleus/field/InfoField.py", "line": 2690},

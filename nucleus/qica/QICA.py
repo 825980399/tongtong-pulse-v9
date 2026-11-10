@@ -1141,6 +1141,15 @@ class QICA(BasePulseOrgan):
         anchor["sentence_type"] = self._detect_sentence_type(raw_text)
         anchor["entities"] = self._extract_entities(raw_text)
 
+        # 493.6-1：自然语言指称消歧（器官级）。异常安全，失败不影响主路由。
+        try:
+            from nucleus.self_index.exporters import link_organ as _lo
+            _da = _lo(anchor.get("raw_input", ""))
+            if _da is not None:
+                anchor["organ_disambiguation"] = _da
+        except Exception as _e:
+            silent_exc(_e, where="QICA.organ_disambiguation", level="debug")
+
         # ★P2-7补全：三路语义信号真正纳入决策（此前算出即弃，从不参与路由）。
         # 放在所有提前 return 之前，确保空输入/无匹配分支也能生效。
         # 1. 否定句语义反转风险高 → 强制走推理，避免关键词匹配误判意图

@@ -137,10 +137,13 @@ def _name_to_module(organs, name):
 
 
 def _answer_alias(query, organs) -> str | None:
-    """493.5-2/5：自然语言指称 → 器官（link_organ 模糊匹配）。"""
+    """493.5-2/5/493.6-1：自然语言指称 → 器官（link_organ 三层消歧；开关关回 legacy）。"""
     try:
-        from nucleus.self_index.exporters import link_organ
-        _r = link_organ(query)
+        import config as _cfg
+        from nucleus.self_index.exporters import link_organ, _link_organ_legacy
+        _fn = link_organ if bool(getattr(_cfg, "ENABLE_M4936_DISAMBIGUATION", True)) \
+            else _link_organ_legacy
+        _r = _fn(query)
     except Exception as _e:
         silent_exc(_e, where="_answer_alias", level="debug")
         return None
@@ -176,6 +179,69 @@ def _answer_module_call(mg, mod_a, mod_b) -> str | None:
     return None
 
 
+def _answer_repeat() -> str | None:
+    """493.6-4：再说一遍刚才的话 → lung.dialog_history 取最后一条回复。"""
+    try:
+        from nucleus.self_index.action_executor import execute_action
+        _r = execute_action("lung.dialog_history", {"n": 1})
+        if _r.get("ok"):
+            _hist = _r.get("result") or []
+            if isinstance(_hist, list) and _hist:
+                _last = _hist[-1]
+                _txt = _last.get("reply") or _last.get("content") or _last.get("text") or ""
+                if _txt:
+                    return f"刚才我说的是：「{_txt}」"
+    except Exception as _e:
+        silent_exc(_e, where="_answer_repeat", level="debug")
+    return None
+
+
+def _answer_backpressure(query) -> str | None:
+    """493.6-4：L2 队列多深 → layer.backpressure（因果类「为什么满」必须 fallback）。"""
+    _m = re.search(r"L([1-7])", query)
+    _layer = _m.group(1) if _m else "L2"
+    try:
+        from nucleus.self_index.action_executor import execute_action
+        _r = execute_action("layer.backpressure", {"layer": _layer})
+        if _r.get("ok"):
+            _s = _r.get("result") or {}
+            if isinstance(_s, dict):
+                return (f"L{_layer} 当前队列深度 {_s.get('depth')}，"
+                        f"上限 {_s.get('limit')}（背压比 {_s.get('ratio')}）。")
+    except Exception as _e:
+        silent_exc(_e, where="_answer_backpressure", level="debug")
+    return None
+
+
+def _inflight_of(organ_name, organs):
+    """在 organs_runtime 列表里按名取在途任务数。"""
+    for _o in (organs or []):
+        if str(_o.get("name") or "") == organ_name:
+            _v = _o.get("inflight")
+            return _v
+    return None
+
+
+def _answer_alias_state(query, organs) -> str | None:
+    """493.6-4：指称 + 状态（「管消化的忙不忙」）→ 消歧 + inflight。"""
+    try:
+        import config as _cfg
+        from nucleus.self_index.exporters import link_organ, _link_organ_legacy
+        _fn = link_organ if bool(getattr(_cfg, "ENABLE_M4936_DISAMBIGUATION", True)) \
+            else _link_organ_legacy
+        _r = _fn(query)
+    except Exception as _e:
+        silent_exc(_e, where="_answer_alias_state", level="debug")
+        return None
+    if not _r or "organ" not in _r:
+        return None
+    _name = _r["organ"]
+    _inf = _inflight_of(_name, organs)
+    if _inf is not None:
+        return f"{_name} 当前在途任务数 {_inf}。"
+    return f"我暂时拿不到 {_name} 的在途任务数（埋点未就绪）。"
+
+
 def self_query_fastpath(query) -> str | None:
     """自我查询 fast path 入口。
 
@@ -199,6 +265,19 @@ def self_query_fastpath(query) -> str | None:
     except Exception as _e:
         silent_exc(_e, where="self_query_fastpath", level="debug")
         return None
+
+    # 0) 复读：再说一遍刚才的话（严格本地，不调大模型）
+    if re.search(r"再说一遍|重复.*(刚才|上面|之前|的话)|刚才.*(说|讲|回)|刚刚.*(说|讲|回)", _q):
+        _rep = _answer_repeat()
+        if _rep:
+            return _rep
+
+    # 0b) 背压：L2 队列多深（因果「为什么满」不命中，走 fallback）
+    if (re.search(r"L[1-7].*(队列|积压|背压|深度|多深|多长)|队列.*(多深|多长|深度)|(背压|积压).*L[1-7]", _q)
+            and not re.search(r"为什么|怎么|原因|会满|会爆|会崩", _q)):
+        _bp = _answer_backpressure(_q)
+        if _bp:
+            return _bp
 
     # 1) 器官计数
     if re.search(r"器官.*(多少|几个|几只)|(多少|几个|几只).*器官", _q) \
@@ -264,6 +343,13 @@ def self_query_fastpath(query) -> str | None:
             _loc = f"，代码路径 {_o.get('file')}" if _o.get("file") else ""
             return f"{_o.get('name')} 是{_describe_organ(_o)}{_loc}。"
 
+    # 6a) 指称 + 状态（「管消化的忙不忙」）→ 消歧到器官并查在途
+    if (re.search(r"管[一-龥]{1,6}的|负责[一-龥]{1,6}的|的器官", _q)
+            and re.search(r"忙|在途|处理多少|在跑|有多少.*任务|任务.*多少|忙不忙", _q)):
+        _st = _answer_alias_state(_q, _organs)
+        if _st:
+            return _st
+
     # 6) 指称别名（「管消化的」「管说话的」「看东西的」「负责X的器官」）
     if re.search(r"管[一-龥]{1,6}的|负责[一-龥]{1,6}的|的器官|哪个器官|什么器官", _q):
         _ans = _answer_alias(_q, _organs)
@@ -285,7 +371,7 @@ def self_query_fastpath(query) -> str | None:
             if _v is not None:
                 return f"{_nm} 当前队列深度 {_v}。"
             return f"我暂时拿不到 {_nm} 的队列深度。"
-    if re.search(r"哪个渠道|什么渠道|最近.*渠道|现在.*回答.*渠道|用的.*渠道|在.*渠道", _q):
+    if re.search(r"哪个渠道|什么渠道|最近.*渠道|现在.*回答.*渠道|用的.*渠道|在.*渠道|哪个模型|什么模型|用的.*模型|刚才.*模型|最近.*模型", _q):
         _lc = _or.get("last_channel")
         if _lc:
             return f"最近一次回答用的是「{_lc}」渠道。"
