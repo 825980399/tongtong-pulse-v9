@@ -161,6 +161,9 @@ def test_lung_call_via_channels_no_available_returns_none(monkeypatch):
 
 def test_lung_call_via_channels_success(monkeypatch):
     """渠道调用成功 → 返回文本 + 健康度记为成功。"""
+    # ★491-2：健康账本改为进程级单例，用例间需清理（与 m480 测试同惯例）
+    from nucleus.llm import channel_health as _CH491
+    _CH491.reset_channel_health()
     lung = _bare_lung()
     import config
     monkeypatch.setattr(config, "get_active_channels",
@@ -176,6 +179,9 @@ def test_lung_call_via_channels_success(monkeypatch):
 
 def test_lung_call_via_channels_failover(monkeypatch):
     """首个渠道失败 → 自动轮询下一个成功（含健康度失败记录）。"""
+    # ★491-2：健康账本改为进程级单例，用例间需清理（与 m480 测试同惯例）
+    from nucleus.llm import channel_health as _CH491
+    _CH491.reset_channel_health()
     lung = _bare_lung()
     import config
     monkeypatch.setattr(config, "get_active_channels",

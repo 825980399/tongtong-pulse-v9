@@ -9350,6 +9350,23 @@ M490_DEDUP_TTL_BY_EVENT = {
     SystemEvent.ALARM: 30.0,           # 告警类：防重复但不丢升级
     VascularEvent.SILENT_ORGAN: 30.0,
 }
+# ── 491 批开关（渠道熔断 + Trace补全 + 死锁检测）──
+# 每刀独立开关，关掉任一开关即逐字回到改前行为。
+# 491-6/491-7 出厂默认关（观测一轮再开），其余按任务书默认开。
+ENABLE_M491_TRACE_STEP_COUNT = True          # 491-5：step_count 自动推断 + evidence_count 透传 + stats 两字段
+ENABLE_M491_STRUCTURED_HTTP_ERROR = True     # 491-1：HTTPError 结构化（status_code/error_type/body_head）
+ENABLE_M491_UNIFIED_HEALTH_TRACKER = True    # 491-2：PulseLung 与 channel_client 共用进程级健康单例
+ENABLE_M491_CHANNEL_STATE_PERSIST = True     # 491-3：渠道状态落盘 + 选路跳过 exhausted
+ENABLE_M491_MONTHLY_REVIVE = True            # 491-4：每月15号最小探测复活
+ENABLE_M491_DEADLOCK_DETECT = False          # 491-6：死锁等待图（默认关，绝不自动重启）
+ENABLE_M491_SMART_CHANNEL_ROTATE = False     # 491-7：智能渠道轮换排序（默认关）
+
+M491_MONTHLY_RESET_DAY = 15                  # 491-4：本地日期的复活探测日
+M491_MONTHLY_DEAD_AFTER = 3                  # 491-4：连续 N 月探测失败 → dead
+M491_HTTP_EXHAUST_THRESHOLD = 3              # 491-3：连续 N 次额度错 → exhausted
+M491_RATE_LIMIT_REVIVE_SEC = 60.0            # 491-3：限流自动恢复窗口（秒）
+M491_WAIT_EDGE_MIN_MS = 1.0                  # 491-6：与 479 同阈值，只在等待≥1ms 时记边
+M491_SLOW_HANDLER_SEC = 30.0                 # 491-6：单器官等待超过该秒数判慢 handler
 # ── 485-7 baseline=0 禁入自动审批 ──
 # ★出厂默认 False（同上，随灰度一并裁决）。False ⇒ A1 内联自动审批与 _m85 本地
 #   低风险放行不查 baseline（逐字回改前；B 通道 _m101 与老化 _m94 早已查，不受影响）。

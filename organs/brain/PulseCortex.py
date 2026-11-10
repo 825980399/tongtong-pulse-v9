@@ -1681,11 +1681,18 @@ class PulseCortex(BasePulseOrgan):
             _m426_lat = None
             if isinstance(ctx, dict) and ctx.get("timestamp"):
                 _m426_lat = round((time.time() - float(ctx["timestamp"])) * 1000, 1)
+            # ★491-5：把 payload 里的证据数透传进 trace。上游目前不带该键 ⇒ 落 None，
+            #   不填假 0；关开关时传 None，_finish_one 只在非 None 时合并 ⇒ 逐字回改前。
+            import config as _m491_cfg
+            _m491_ec = (payload.get("evidence_count")
+                        if bool(getattr(_m491_cfg, "ENABLE_M491_TRACE_STEP_COUNT", True))
+                        else None)
             _m426_tr.finish(
                 correlation_id,
                 method=method,
                 answer_preview=(answer if isinstance(answer, str) else ""),
                 latency_ms=_m426_lat,
+                evidence_count=_m491_ec,
             )
         except Exception as _m426_e:
             self._log_ignored_exception(_m426_e, "426刀5 对话过程收口")

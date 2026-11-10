@@ -295,6 +295,15 @@ def _finish_one(correlation_id: str, stage: str = "finished", **fields) -> dict 
     if _m454_state.get("plan") or _m454_state.get("step_results"):
         _rec.setdefault("plan", _m454_state.get("plan"))
         _rec.setdefault("step_results", _m454_state.get("step_results"))
+    # ★491-5：step_count 缺失时从 step_results 推导；两者都空保持 None + reason，
+    #   绝不填假 0（沿用 452 批「不填假 0」纪律）。关开关时整段不执行。
+    if bool(_cfg("ENABLE_M491_TRACE_STEP_COUNT", True)):
+        if _rec.get("step_count") is None:
+            _steps = _rec.get("step_results")
+            if isinstance(_steps, list) and _steps:
+                _rec["step_count"] = len(_steps)
+        if _rec.get("step_count") is None and not _rec.get("step_results"):
+            _rec.setdefault("reason", "no_multi_step")
     # 端到端耗时：调用方没给就从开记录那一刻算（内层推理耗时只是其中一段）
     if _rec.get("latency_ms") is None and _rec.get("_t0"):
         try:
@@ -337,7 +346,10 @@ def finish(correlation_id: str, **fields) -> dict | None:
 
 
 def stats() -> dict:
-    """只读自检：pending 条数、今天写了几行、开关状态。"""
+    """只读自检：pending 条数、今天写了几行、开关状态。
+
+    ★491-5：开关开时多读一遍当天 jsonl，统计 step_count 空值占比与非空条数。
+    """
     _path = out_path()
     _n = 0
     try:
@@ -348,7 +360,32 @@ def stats() -> dict:
                         _n += 1
     except Exception as _e:
         silent_exc(_e, where="dialogue_process_trace::stats", level="debug")
-    return {"enabled": enabled(), "pending": len(_pending), "path": _path, "lines": _n}
+    _out = {"enabled": enabled(), "pending": len(_pending),
+            "path": _path, "lines": _n}
+    if bool(_cfg("ENABLE_M491_TRACE_STEP_COUNT", True)):
+        _none = 0
+        _nonzero = 0
+        try:
+            if os.path.exists(_path):
+                with open(_path, "r", encoding="utf-8", errors="ignore") as _f:
+                    for _line in _f:
+                        if not _line.strip():
+                            continue
+                        try:
+                            _sc = json.loads(_line).get("step_count")
+                        except Exception as _e_row:
+                            silent_exc(_e_row, where="dialogue_process_trace::stats:row",
+                                       level="debug")
+                            _sc = None
+                        if _sc is None:
+                            _none += 1
+                        else:
+                            _nonzero += 1
+        except Exception as _e:
+            silent_exc(_e, where="dialogue_process_trace::stats:491", level="debug")
+        _out["step_count_none_ratio"] = round(_none / _n, 4) if _n else 0.0
+        _out["step_count_nonzero"] = _nonzero
+    return _out
 
 
 def _retention_days() -> int:

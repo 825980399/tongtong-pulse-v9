@@ -1352,6 +1352,31 @@ class InfoField(SilentLogMixin):
             return True
         return False
 
+    @staticmethod
+    def _m491_deadlock_on() -> bool:
+        """★491-6 总开关（出厂默认 False）；关时零行为、零开销。"""
+        return bool(getattr(_cfg, "ENABLE_M491_DEADLOCK_DETECT", False))
+
+    def _m491_emit_ring_alarm(self, ring) -> None:
+        """★491-6：锁外发死锁环告警（L0 生命线）；只告警，绝不自动重启。"""
+        try:
+            from nucleus.const import SystemEvent
+            self.publish({
+                "event_type": SystemEvent.ALARM,
+                "source_organ": "InfoField",
+                "payload": {
+                    "type": "deadlock_wait_graph_ring",
+                    "level": "L0",
+                    "ring": [int(x) for x in ring],
+                    "ts_ns": time.time_ns(),
+                },
+                "priority": 9,
+                "layer": _PULSE_LAYER_L0,
+                "ttl_ns": 5_000_000_000,
+            })
+        except Exception as _e:
+            silent_exc(_e, where="InfoField::_m491_emit_ring_alarm", level="debug")
+
     def _m436_organ_lock(self, organ_name: str) -> "threading.RLock":
         """★436刀2：取（或建）该器官的执行锁。同器官互斥、跨器官互不影响。
 
@@ -1409,15 +1434,45 @@ class InfoField(SilentLogMixin):
                 #   ★锁本身**不能删**：436刀2 原注释写明它是为修「同器官重入竞态」加
                 #   （器官内部状态/队列非线程安全），删了直接退回已知 bug。
                 _lk = self._m436_organ_lock(organ_name)
+                # ★491-6：死锁等待图（默认关；关时只多一次 bool 判断，不建字典/不取栈）。
+                #   等待边必须在 acquire **之前**写 —— 真死锁时 acquire 永不返回。
+                _m491_on = self._m491_deadlock_on()
+                _m491_ring = None
+                if _m491_on:
+                    try:
+                        from nucleus import m491_deadlock as _m491_dl
+                        _res491 = _m491_dl.note_wait_start(
+                            organ_name, _m491_dl.owner_of(organ_name))
+                        _m491_ring = (_res491 or {}).get("ring")
+                    except Exception as _e491d:
+                        silent_exc(_e491d, where="InfoField::_dispatch_handler:491start",
+                                   level="debug")
                 _wt0 = time.perf_counter()
                 _lk.acquire()
                 _wait_ms = (time.perf_counter() - _wt0) * 1000.0
                 if _wait_ms >= 1.0:
                     self._m479_note_lock_wait(organ_name, _wait_ms)
+                if _m491_on:
+                    try:
+                        from nucleus import m491_deadlock as _m491_dl
+                        _m491_dl.note_wait_end(organ_name, _wait_ms)
+                    except Exception as _e491e:
+                        silent_exc(_e491e, where="InfoField::_dispatch_handler:491end",
+                                   level="debug")
                 try:
                     self._call_handler_safe(pulse, handler, organ_name, pulse.get("event_type", ""))
                 finally:
+                    if _m491_on:
+                        try:
+                            from nucleus import m491_deadlock as _m491_dl
+                            _m491_dl.note_released(organ_name)
+                        except Exception as _e491r:
+                            silent_exc(_e491r, where="InfoField::_dispatch_handler:491release",
+                                       level="debug")
                     _lk.release()
+                # ★491-6：环告警在锁外发（照 BasePulseOrgan 锁外发射纪律），绝不自动重启。
+                if _m491_ring:
+                    self._m491_emit_ring_alarm(_m491_ring)
             else:
                 self._call_handler_safe(pulse, handler, organ_name, pulse.get("event_type", ""))
             # ★483刀3：事后计量 overrun（异常路径不计 —— 没有「跑完」这个事实）。

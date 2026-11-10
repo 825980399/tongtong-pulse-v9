@@ -80,8 +80,12 @@ def pick_channel(channel: dict | None = None, model: str | None = None,
 
 def call_channel(channel: dict, prompt: str, *, api_key: str | None = None,
                  timeout: float | None = None, max_tokens: int = 1024,
-                 system: str = "") -> dict:
+                 system: str = "", is_probe: bool = False) -> dict:
     """单次渠道调用（发一次 HTTP，不做轮询/重试）。
+
+    ★491-4：`is_probe=True` 表示月度复活探测，此时跳过渠道状态记账与健康
+    上报，避免探针失败把刚复活的状态打回 exhausted、或污染成功率。
+    默认 False ⇒ 逐字回到改前行为。
 
     Returns:
         {"ok": bool, "text": str|None, "usage": dict, "channel": str,
@@ -178,8 +182,45 @@ def call_channel(channel: dict, prompt: str, *, api_key: str | None = None,
             except Exception as _m360fe:
                 silent_exc(_m360fe, where="channel_client::call_channel 埋点 finish", level="debug")
         silent_exc(exc, where="channel_client::call_channel", level="debug")
+        # ★491-1：HTTPError 结构化。关开关时整段不执行，_out 仍是原来的 6 个键。
+        #   只把响应体前 512B 放进返回字典，绝不写进日志；Authorization 头不参与。
+        try:
+            import config as _cfg491
+            _on491 = bool(getattr(_cfg491, "ENABLE_M491_STRUCTURED_HTTP_ERROR", False))
+        except Exception as _e491c:
+            silent_exc(_e491c, where="channel_client::call_channel:491cfg", level="debug")
+            _on491 = False
+        if _on491:
+            _code491 = int(getattr(exc, "code", 0) or 0)
+            try:
+                _head491 = bytes(exc.read(512) or b"").decode(
+                    "utf-8", errors="replace")
+            except Exception as _e491r:
+                silent_exc(_e491r, where="channel_client::call_channel:491body",
+                           level="debug")
+                _head491 = ""
+            _out["status_code"] = _code491
+            _out["error_type"] = {
+                403: "quota_exhausted",
+                429: "rate_limited",
+                401: "auth_fail",
+                402: "auth_fail",
+            }.get(_code491, "http_error")
+            _out["body_head"] = _head491
         _out["error"] = "HTTP %s" % exc.code
-        _report_health(_name, False, 0.0)
+        # ★491-3：把 HTTP 错误按状态码记进渠道状态账本（独立开关，纯旁路）。
+        #   429 是临时限流，绝不误标额度耗尽；探测请求不记账（491-4）。
+        if not is_probe:
+            try:
+                import config as _cfg491s
+                if bool(getattr(_cfg491s, "ENABLE_M491_CHANNEL_STATE_PERSIST", False)):
+                    from nucleus.llm.channel_state_store import mark_http_error
+                    mark_http_error(_name, int(getattr(exc, "code", 0) or 0),
+                                    str(_out.get("error_type") or ""))
+            except Exception as _e491s:
+                silent_exc(_e491s, where="channel_client::call_channel:491state",
+                           level="debug")
+            _report_health(_name, False, 0.0)
         return _out
     except Exception as exc:
         if _m360_rid:

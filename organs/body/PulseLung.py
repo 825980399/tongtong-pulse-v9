@@ -957,8 +957,23 @@ class PulseLung(BasePulseOrgan):
     #   - 下游调用方零改动：lambda 仍是 lung.call_llm(prompt, task_type=...)。
 
     def _get_channel_health(self):
-        """惰性构造渠道健康度跟踪器（参数取自配置）。"""
+        """惰性构造渠道健康度跟踪器（参数取自配置）。
+
+        ★491-2：开关开时直接返回进程级单例，与 channel_client._report_health
+        共用同一本账；关开关时逐字回到下面未改动的自建实例分支。
+        单例由 channel_health._build_tracker_from_config() 读同一份
+        config.REMOTE_API_CHANNELS["health"] 构造 ⇒ 3 次 / 300s 阈值不变。
+        """
         if getattr(self, "_channel_health", None) is None:
+            try:
+                import config as _cfg491u
+                if bool(getattr(_cfg491u, "ENABLE_M491_UNIFIED_HEALTH_TRACKER", False)):
+                    from nucleus.llm.channel_health import get_channel_health
+                    self._channel_health = get_channel_health()
+                    return self._channel_health
+            except Exception as _e491u:
+                self._log(LogLevel.DEBUG,
+                          f"[渠道] 单例健康度不可用，回落自建: {type(_e491u).__name__}")
             try:
                 import config as _cfg
                 _h = (_cfg.REMOTE_API_CHANNELS or {}).get("health", {}) or {}
@@ -1045,6 +1060,44 @@ class PulseLung(BasePulseOrgan):
                               f"（{_h.get('circuit_break_seconds', 300)}秒后重试）")
         except Exception as _exc:
             self._log(LogLevel.DEBUG, f"[渠道] 健康度更新异常: {type(_exc).__name__}")
+        # ★491-7：记近 200 次成功率滑窗；491-3：成功即恢复渠道状态。
+        # 两处都是独立开关控制的纯旁路，关掉时 helper 首行即返回。
+        try:
+            from nucleus.llm import channel_smart_rotate as _m491_rot
+            _m491_rot.record(channel_name, success)
+        except Exception as _e491r:
+            silent_exc(_e491r, where="organs.body.PulseLung::_update_channel_health:491",
+                       level="debug")
+        if success:
+            try:
+                from nucleus.llm import channel_state_store as _m491_st
+                _m491_st.mark_success(channel_name)
+            except Exception as _e491s:
+                silent_exc(_e491s, where="organs.body.PulseLung::_update_channel_health:491s",
+                           level="debug")
+
+    def _m491_smart_rotate(self, candidates: list) -> list:
+        """★491-7：状态 ok → 剩余额度 → 近200次成功率 → 原 priority 排序。
+
+        开关默认关；关时原样返回同一列表对象（逐字回改前顺序）。
+        """
+        try:
+            from nucleus.llm import channel_smart_rotate as _m491_rot
+            if not _m491_rot.on():
+                return candidates
+            from nucleus.llm import channel_state_store as _m491_st
+            _quota = None
+            try:
+                from nucleus.llm.ChannelQuotaMonitor import get_channel_quota_monitor
+                _quota = get_channel_quota_monitor()
+            except Exception as _e491q:
+                silent_exc(_e491q, where="organs.body.PulseLung::_m491_smart_rotate:quota",
+                           level="debug")
+            return _m491_rot.order(candidates, state_store=_m491_st, quota=_quota)
+        except Exception as _e491:
+            silent_exc(_e491, where="organs.body.PulseLung::_m491_smart_rotate",
+                       level="debug")
+            return candidates
 
     def _build_channel_messages(self, prompt: str, history: list | None = None,
                                image_b64: str | None = None) -> list:
@@ -2513,6 +2566,16 @@ class PulseLung(BasePulseOrgan):
         #   注：USER_DIALOG_PREFER_PAID=False（360 刀0-1）时该函数原样返回；
         #   显式切回 True 时付费置顶**覆盖**上面的统一排序（开关语义优先）。
         _candidates = self._prefer_paid_channels(_candidates, caller=caller)
+        # ★491-3 / 491-4 / 491-7：三刀共用这一处选路挂钩，各自独立开关。
+        #   关掉任一开关 ⇒ 对应 helper 原样返回，_candidates 逐字回到改前顺序。
+        try:
+            from nucleus.llm import channel_state_store as _m491_store
+            _m491_store.tick_monthly_revive()          # 491-4：幂等，同月只跑一次
+            _candidates = _m491_store.filter_candidates(_candidates)  # 491-3
+        except Exception as _e491s:
+            silent_exc(_e491s, where="organs.body.PulseLung::_call_via_channels:491",
+                       level="debug")
+        _candidates = self._m491_smart_rotate(_candidates)   # 491-7（默认关）
 
         _health = self._get_channel_health()
         _mgr = self._channel_concurrency()
