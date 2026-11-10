@@ -134,7 +134,7 @@ class PulseTouch(BasePulseOrgan):
         self._gpu_usage_cache = {}
         self._last_alarm_time = 0.0
         self._last_gpu_available = 0.0
-        self._next_timer = 0.0
+        self._next_snapshot_timer = None  # 488-0：专存 threading.Timer，不再用 float 哨兵（避免 is_alive() 炸）
 
     # ========== 硬件检测 ==========
 
@@ -597,9 +597,9 @@ class PulseTouch(BasePulseOrgan):
     def _on_system_stop(self) -> dict[str, Any]:
         self._booted = False
         self._stop_gpu_probe()
-        if self._next_timer:
-            self._next_timer.cancel()
-            self._next_timer = None
+        if isinstance(self._next_snapshot_timer, threading.Timer):
+            self._next_snapshot_timer.cancel()
+        self._next_snapshot_timer = None
         return {"status": "stopped"}
 
     def _on_snapshot(self) -> dict[str, Any]:
@@ -858,12 +858,29 @@ class PulseTouch(BasePulseOrgan):
     # ========== 定时器 ==========
 
     def _schedule_next_snapshot(self):
-        self._next_timer = threading.Timer(
-            self._snapshot_interval,
-            self._trigger_snapshot
-        )
-        self._next_timer.daemon = True
-        self._next_timer.start()
+            # 快照执行中不重复调度，避免并发重入
+            if getattr(self, "_snapshot_in_progress", False):
+                return
+            # 已有存活定时器时直接返回，防止重复触发与定时器泄漏
+            existing = getattr(self, "_next_snapshot_timer", None)
+            # 488-0：本变量只存 threading.Timer 对象（改名自 _next_timer），
+            # 调 is_alive()/cancel() 前必须 isinstance 守卫，否则残留 float/None 会抛 AttributeError。
+            if isinstance(existing, threading.Timer) and existing.is_alive():
+                return
+            # 校验调度间隔，避免 None/非数值/负数导致 Timer 抛出运行时异常
+            interval = getattr(self, "_snapshot_interval", None)
+            if not isinstance(interval, (int, float)) or interval < 0:
+                return
+            # 校验回调可调用，避免属性缺失引发 AttributeError
+            callback = getattr(self, "_trigger_snapshot", None)
+            if not callable(callback):
+                return
+            # 清理已失效的旧定时器，再创建新的守护线程定时器
+            if isinstance(existing, threading.Timer):
+                existing.cancel()
+            self._next_snapshot_timer = threading.Timer(interval, callback)
+            self._next_snapshot_timer.daemon = True
+            self._next_snapshot_timer.start()
 
     def _trigger_snapshot(self):
         if not self.is_running:

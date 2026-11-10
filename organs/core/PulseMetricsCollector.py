@@ -2875,6 +2875,13 @@ class PulseMetricsCollector(BasePulseOrgan):
                 },
                 "active_conditions": field_stats.get("active_conditions", 0),
             }
+            # ★488-2：扇出统计暴露（门控 ENABLE_M488_FANOUT_STAT；关则 get_fanout_stats 返回 {}）
+            import config as _cfg488
+            if getattr(_cfg488, "ENABLE_M488_FANOUT_STAT", False):
+                try:
+                    snapshot["info_field"]["event_fanout"] = self.info_field.get_fanout_stats()
+                except Exception as _e:
+                    silent_exc(_e, where="PulseMetricsCollector::_build_observability_snapshot::fanout", level="debug")
 
         # ★434刀4：把分层队列背压（L0/L1/L2/L3 四层队列深度 + 上限 + 拒收数）接进快照，
         #   让生产可观测面第一次能看到四层队列水位（此前 get_backpressure_stats 零调用）。

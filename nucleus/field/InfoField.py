@@ -319,6 +319,20 @@ class InfoField(SilentLogMixin):
         self._event_publish_count: dict[str, int] = {}     # event_type → 发布次数（死数据判定）
         self._event_unmatched_count: dict[str, int] = {}   # event_type → 无条件匹配次数
 
+        # ★488-1：事件账本（门控 ENABLE_M488_EVENT_LEDGER）
+        self._event_matched_count: dict[str, int] = {}
+        self._event_handled_count: dict[str, int] = {}
+        self._event_dropped: dict[str, dict[str, int]] = {}
+        self._m488_lock = threading.Lock()
+        self._m488_timer = None
+        # ★488-2：扇出统计（门控 ENABLE_M488_FANOUT_STAT）
+        self._fanout_current: dict[str, float] = {}
+        self._fanout_baseline: dict[str, float] = {}
+        self._fanout_high_since: dict[str, float] = {}
+        self._m488_fanout_lock = threading.Lock()
+        self._m488_load_fanout_baseline()
+        self._m488_start_ledger_timer()
+
         # ===== v9.5: 分层异步调度线程池 =====
         self._layer_pools: dict[str, ThreadPoolExecutor] = {}
         self._layer_disabled: dict[str, bool] = {}
@@ -866,6 +880,7 @@ class InfoField(SilentLogMixin):
             if _m484_expired:
                 with self._lock:
                     self._total_expired += 1
+                self._m488_record_drop(event_type, "ttl_publish")
                 _trace_route_matched(pulse_id, 0, 0, False, "expired")
                 return {"status": "expired", "pulse_id": pulse_id,
                         "reason": f"脉冲已过期 (TTL={ttl_ns}ns, 已过{now_ns - timestamp_ns}ns)"}
@@ -892,6 +907,7 @@ class InfoField(SilentLogMixin):
             if action == _STORM_REJECT:
                 with self._lock:
                     self._total_storm_blocked += 1
+                self._m488_record_drop(event_type, "storm")
                 _trace_route_matched(pulse_id, 0, 0, False, "storm_blocked")
                 return {"status": "storm_blocked", "pulse_id": pulse_id, "reason": "脉冲风暴，已拒绝"}
             elif action == _STORM_AGGREGATE:
@@ -902,6 +918,7 @@ class InfoField(SilentLogMixin):
                 if layer not in (_PULSE_LAYER_L0, _PULSE_LAYER_L1) and random.random() < 0.3:
                     with self._lock:
                         self._total_storm_blocked += 1
+                    self._m488_record_drop(event_type, "storm")
                     _trace_route_matched(pulse_id, 0, 0, False, "storm_blocked")
                     return {"status": "storm_blocked", "pulse_id": pulse_id, "reason": "风暴聚合降载"}
             elif action == _STORM_THROTTLE:
@@ -910,6 +927,7 @@ class InfoField(SilentLogMixin):
                 if layer not in (_PULSE_LAYER_L0, _PULSE_LAYER_L1) and random.random() < 0.5:
                     with self._lock:
                         self._total_storm_blocked += 1
+                    self._m488_record_drop(event_type, "storm")
                     _trace_route_matched(pulse_id, 0, 0, False, "storm_blocked")
                     return {"status": "storm_blocked", "pulse_id": pulse_id, "reason": "风暴限流降载"}
 
@@ -1093,6 +1111,10 @@ class InfoField(SilentLogMixin):
                                 _lock_wait_by_name.get("dispatch.total_handled", 0.0)
                                 + (time.time() - _lock_acquire_start) * 1000.0)
                             self._total_handled += 1
+                            if self._m488_ledger_on() or self._m488_fanout_on():
+                                with self._m488_lock:
+                                    self._event_handled_count[event_type] = (
+                                        self._event_handled_count.get(event_type, 0) + 1)
                         # ★R7修复：同步兜底路径同样必须刷新器官活跃时间。
                         #   _organ_last_active 是血管沉默检测的唯一数据源
                         #   （PulseBloodVessel.py:186-195 合并后用于判定），
@@ -1123,6 +1145,10 @@ class InfoField(SilentLogMixin):
                         _lock_wait_by_name.get("dispatch.total_handled", 0.0)
                         + (time.time() - _lock_acquire_start) * 1000.0)
                     self._total_handled += 1
+                    if self._m488_ledger_on() or self._m488_fanout_on():
+                        with self._m488_lock:
+                            self._event_handled_count[event_type] = (
+                                self._event_handled_count.get(event_type, 0) + 1)
                 # ★R7修复：同 RuntimeError 兜底路径，此处也需刷新器官活跃时间，
                 #   否则池缺失期间所有器官的 _organ_last_active 停滞，
                 #   会被血管沉默检测误判（详见上方同标记注释）。
@@ -1151,6 +1177,11 @@ class InfoField(SilentLogMixin):
                 + (time.time() - _lock_acquire_start) * 1000.0)
             if matched_organs:
                 self._total_matched += 1
+                if self._m488_ledger_on() or self._m488_fanout_on():
+                    with self._m488_lock:
+                        self._event_matched_count[event_type] = (
+                            self._event_matched_count.get(event_type, 0)
+                            + len(matched_organs))
             else:
                 self._total_unmatched += 1
             # ★登顶路线图-协调层：审计统计（零侵入，仅计数）
@@ -1286,6 +1317,7 @@ class InfoField(SilentLogMixin):
                 with self._lock:
                     self._total_expired_at_dequeue = getattr(
                         self, "_total_expired_at_dequeue", 0) + 1
+                self._m488_record_drop(_et, "ttl_dequeue")
             except Exception as _e:
                 silent_exc(_e, where="InfoField::_m487_dequeue_ttl_drop", level="debug")
             return True
@@ -1377,6 +1409,11 @@ class InfoField(SilentLogMixin):
             #   这是全框架最热的一处自增——每个器官每处理完一个脉冲都要走一次。
             with self._handled_lock:
                 self._total_handled += 1
+                if self._m488_ledger_on() or self._m488_fanout_on():
+                    _et = pulse.get("event_type", "")
+                    with self._m488_lock:
+                        self._event_handled_count[_et] = (
+                            self._event_handled_count.get(_et, 0) + 1)
             # ★P1修复：记录器官接收脉冲活跃时间（供血管沉默检测）
             try:
                 self._organ_last_active[organ_name] = time.time()
@@ -2286,6 +2323,7 @@ class InfoField(SilentLogMixin):
         if _hard_mult and _depth >= _limit * _hard_mult:
             self._layer_rejected_count[layer] = (
                 self._layer_rejected_count.get(layer, 0) + 1)
+            self._m488_record_drop(event_type, "reject_layer")
             _hard_rejected = self._layer_rejected_count[layer]
             self._m483_note_reject_ts(layer)
             if _hard_rejected == 1 or _hard_rejected % 100 == 0:
@@ -3280,6 +3318,182 @@ class InfoField(SilentLogMixin):
                 "adaptive_pool_size": self._adaptive_pool_size,
                 "active_tasks": self._active_task_count,
                 "processed_cache_size": len(self._processed_pulses),
+            }
+
+    # ========== ★488 批：事件账本与扇出统计（门控，默认关） ==========
+
+    def _m488_ledger_on(self) -> bool:
+        return bool(getattr(_cfg, "ENABLE_M488_EVENT_LEDGER", False))
+
+    def _m488_fanout_on(self) -> bool:
+        return bool(getattr(_cfg, "ENABLE_M488_FANOUT_STAT", False))
+
+    def _m488_record_drop(self, event_type: str, reason: str) -> None:
+        """★488-1：记录一次丢弃（4 类原因：ttl_publish/ttl_dequeue/reject_layer/storm）。"""
+        if not self._m488_ledger_on():
+            return
+        with self._m488_lock:
+            _d = self._event_dropped.setdefault(event_type, {})
+            _d[reason] = _d.get(reason, 0) + 1
+
+    def _m488_start_ledger_timer(self) -> None:
+        if not (self._m488_ledger_on() or self._m488_fanout_on()):
+            return
+        try:
+            self._m488_timer = threading.Timer(60.0, self._m488_ledger_loop)
+            self._m488_timer.daemon = True
+            self._m488_timer.start()
+        except Exception as _e:
+            silent_exc(_e, where="InfoField::_m488_start_ledger_timer", level="debug")
+
+    def _m488_ledger_loop(self) -> None:
+        try:
+            self._m488_write_ledger()
+        finally:
+            if self._m488_ledger_on() or self._m488_fanout_on():
+                self._m488_start_ledger_timer()
+
+    def _m488_write_ledger(self) -> None:
+        if self._m488_ledger_on():
+            try:
+                self._m488_write_ledger_file()
+            except Exception as _e:
+                silent_exc(_e, where="InfoField::_m488_write_ledger::ledger", level="debug")
+        if self._m488_fanout_on():
+            try:
+                self._m488_compute_fanout()
+            except Exception as _e:
+                silent_exc(_e, where="InfoField::_m488_write_ledger::fanout", level="debug")
+
+    def _m488_compute_ledger(self) -> dict[str, Any]:
+        """★488-1：聚合当前账本（不落盘），供落盘与测试共用。"""
+        with self._m488_lock:
+            _matched = dict(self._event_matched_count)
+            _handled = dict(self._event_handled_count)
+            _dropped = {_k: dict(_v) for _k, _v in self._event_dropped.items()}
+        _emitted = dict(self._event_publish_count)
+        _ledger: dict[str, Any] = {}
+        for _et in (set(_emitted) | set(_matched) | set(_handled) | set(_dropped)):
+            _m = _matched.get(_et, 0)
+            _h = _handled.get(_et, 0)
+            _e = _emitted.get(_et, 0)
+            _dr = _dropped.get(_et, {})
+            _dr_total = sum(_dr.values())
+            _ledger[_et] = {
+                "emitted": _e,
+                "matched": _m,
+                "handled": _h,
+                "dropped": _dr,
+                "ghost_loss": max(0, _m - _h - _dr_total),
+            }
+        return _ledger
+
+    def _m488_write_ledger_file(self) -> None:
+        _ledger = self._m488_compute_ledger()
+        for _et, _row in _ledger.items():
+            if _row["ghost_loss"] > 0:
+                _module_logger.warning(
+                    f"[事件账本·幽灵丢失] {_et}: matched={_row['matched']} "
+                    f"handled={_row['handled']} dropped={sum(_row['dropped'].values())} "
+                    f"⇒ 幽灵丢失 {_row['ghost_loss']}（应投递-实处理-已声明丢弃>0）"
+                )
+        try:
+            from nucleus.data.write_guard import guard_write
+            _path = os.path.join("data", "monitor", f"event_ledger_{time.strftime('%Y%m%d')}.jsonl")
+            if not guard_write(_path, explicit=False):
+                return
+        except Exception as _e:
+            silent_exc(_e, where="InfoField::_m488_write_ledger_file::guard", level="debug")
+            return
+        _ts = time.time()
+        _dir = os.path.dirname(_path)
+        try:
+            os.makedirs(_dir, exist_ok=True)
+        except Exception as _e:
+            silent_exc(_e, where="InfoField::_m488_write_ledger_file::makedirs", level="debug")
+        _out = {"ts": _ts, "ledger": _ledger}
+        try:
+            with open(_path, "a", encoding="utf-8") as _f:
+                _f.write(json.dumps(_out, ensure_ascii=False) + "\n")
+        except Exception as _e:
+            silent_exc(_e, where="InfoField::_m488_write_ledger_file", level="debug")
+
+    def _m488_load_fanout_baseline(self) -> None:
+        try:
+            _bpath = os.path.join("data", "monitor", "fanout_baseline.json")
+            if os.path.exists(_bpath):
+                with open(_bpath, encoding="utf-8") as _bf:
+                    _b = json.load(_bf)
+                if isinstance(_b, dict):
+                    with self._m488_fanout_lock:
+                        self._fanout_baseline = {str(_k): float(_v) for _k, _v in _b.items()}
+        except Exception as _e:
+            silent_exc(_e, where="InfoField::_m488_load_fanout_baseline", level="debug")
+
+    def _m488_top_subscribers(self, event_type: str) -> list:
+        try:
+            _res = []
+            for _cid, _cond in getattr(self, "_conditions", {}).items():
+                if isinstance(_cond, dict) and _cond.get("event_type") == event_type:
+                    _o = _cond.get("organ") or _cond.get("organ_name")
+                    if _o:
+                        _res.append(str(_o))
+            return _res[:10]
+        except Exception as _e:
+            silent_exc(_e, where="InfoField::_m488_top_subscribers", level="debug")
+            return []
+
+    def _m488_compute_fanout(self) -> None:
+        """★488-2：每事件平均扇出系数 = matched/emitted；维护 7 天滑动基线（EWMA），
+        当前超基线 2 倍且持续 ≥10 分钟 ⇒ WARNING（附新增订阅者）。"""
+        with self._m488_lock:
+            _matched = dict(self._event_matched_count)
+        _emitted = dict(self._event_publish_count)
+        _now = time.time()
+        _events = set(_matched) | set(_emitted)
+        with self._m488_fanout_lock:
+            for _et in _events:
+                _m = _matched.get(_et, 0)
+                _e = _emitted.get(_et, 0)
+                _coef = (_m / _e) if _e > 0 else 0.0
+                _base = self._fanout_baseline.get(_et)
+                _base = _coef if _base is None else _base * 0.99 + _coef * 0.01
+                self._fanout_baseline[_et] = _base
+                self._fanout_current[_et] = _coef
+                if _base > 0 and _coef > 2.0 * _base:
+                    if self._fanout_high_since.get(_et) is None:
+                        self._fanout_high_since[_et] = _now
+                    elif _now - self._fanout_high_since[_et] >= 600:
+                        _subs = self._m488_top_subscribers(_et)
+                        _module_logger.warning(
+                            f"[扇出统计·翻倍告警] {_et}: 当前扇出 {_coef:.2f} 超 7天基线 "
+                            f"{_base:.2f} 的 2 倍，持续≥10分钟。新增订阅者(前若干): {_subs}"
+                        )
+                else:
+                    self._fanout_high_since.pop(_et, None)
+        try:
+            from nucleus.data.write_guard import guard_write
+            _bpath = os.path.join("data", "monitor", "fanout_baseline.json")
+            if not guard_write(_bpath, explicit=False):
+                return
+            with open(_bpath, "w", encoding="utf-8") as _bf:
+                json.dump(self._fanout_baseline, _bf, ensure_ascii=False)
+        except Exception as _e:
+            silent_exc(_e, where="InfoField::_m488_compute_fanout::persist", level="debug")
+
+    def get_fanout_stats(self) -> dict[str, Any]:
+        """★488-2：health_snapshot 暴露每事件当前扇出系数 + 7天基线 + 翻倍持续秒数。"""
+        if not self._m488_fanout_on():
+            return {}
+        with self._m488_fanout_lock:
+            return {
+                _et: {
+                    "current": round(self._fanout_current.get(_et, 0.0), 3),
+                    "baseline_7d": round(self._fanout_baseline.get(_et, 0.0), 3),
+                    "high_for_sec": int(time.time() - self._fanout_high_since[_et])
+                    if self._fanout_high_since.get(_et) else 0,
+                }
+                for _et in (set(self._fanout_current) | set(self._fanout_baseline))
             }
 
     # ========== ★登顶路线图-协调层：死数据/幽灵监听审计 ==========

@@ -9310,10 +9310,14 @@ ENABLE_M485_ISSUE_MATCH_GATE = False
 # ── 487 批开关（背压死循环拆除 + 对话链埋点 + 出队 TTL）──
 # 全部出厂默认 False（回滚态）：关掉即逐字回到旧行为，零回归。灰度由星轨裁决。
 # 487-3 复用 486 命名空间（对话链埋点属 486 系列可观测性补全）。
-ENABLE_M486_DIALOG_TRACE = False   # 对话链 6 节点 cid 串联埋点 + dialog_latency_*.jsonl
-ENABLE_M487_UNPAUSE_DIGEST = False  # 487-1：CRITICAL 也绝不暂停 stomach_digest（消费类）
-ENABLE_M487_WORKER_FLOOR = False    # 487-2：critical 每层 worker 下限提到 2（不抽到 1/0）
-ENABLE_M487_DEQUEUE_TTL = False     # 487-5：出队时按 timestamp_ns 丢弃过期 tick 类脉冲
+ENABLE_M486_DIALOG_TRACE = True   # 对话链 6 节点 cid 串联埋点 + dialog_latency_*.jsonl
+ENABLE_M487_UNPAUSE_DIGEST = True  # 487-1：CRITICAL 也绝不暂停 stomach_digest（消费类）
+ENABLE_M487_WORKER_FLOOR = True    # 487-2：critical 每层 worker 下限提到 2（不抽到 1/0）
+ENABLE_M487_DEQUEUE_TTL = True     # 487-5：出队时按 timestamp_ns 丢弃过期 tick 类脉冲
+# ── 488 批开关（事件账本与扇出统计）──
+# 全部出厂默认 False（回滚态）：关掉即逐字回到旧行为，零回归。灰度由星轨裁决。
+ENABLE_M488_EVENT_LEDGER = False  # 488-1：事件账本（matched/handled/dropped[4原因] 按 event_type 计数 + 60s 落盘 event_ledger_*.jsonl + 幽灵丢失告警）
+ENABLE_M488_FANOUT_STAT = False   # 488-2：扇出统计（每事件平均扇出系数 + 7天滑动基线 + 2x/10min 告警 + health_snapshot 暴露）
 # ── 485-7 baseline=0 禁入自动审批 ──
 # ★出厂默认 False（同上，随灰度一并裁决）。False ⇒ A1 内联自动审批与 _m85 本地
 #   低风险放行不查 baseline（逐字回改前；B 通道 _m101 与老化 _m94 早已查，不受影响）。
