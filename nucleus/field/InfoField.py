@@ -20,6 +20,7 @@ import time
 import traceback
 from collections import OrderedDict, deque
 from collections.abc import Callable
+from nucleus._silent_except import silent_exc
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -436,6 +437,7 @@ class InfoField(SilentLogMixin):
         #   从而精准递减 _organ_concurrent_count，而非暴力 clear。
         #   结构：{layer_tag: {organ_name: count}}
         self._layer_organ_inflight: dict[str, dict[str, int]] = {}
+        self._last_channel: str | None = None   # 493.5-4：最近一次应答渠道（由 PulseLung 写入）
 
         # ===== v9.5: CPU亲和预埋 =====
         self._cpu_affinity_enabled = PULSE_LAYER.get("cpu_affinity_enabled", False)
@@ -3759,6 +3761,53 @@ class InfoField(SilentLogMixin):
         if ms < 500.0:
             return 5
         return 6
+
+    # ── 493.5-4 运行态埋点只读 getter（不修改既有逻辑）──
+    def get_organ_inflight(self, organ_name: str) -> int:
+        """按器官查在途任务数（数据源 _layer_organ_inflight，P2-87 已在采集）。"""
+        try:
+            for _layer, _d in (self._layer_organ_inflight or {}).items():
+                if isinstance(_d, dict):
+                    _c = _d.get(organ_name)
+                    if _c:
+                        return int(_c)
+        except Exception as _e:
+            silent_exc(_e, where="InfoField.get_organ_inflight", level="debug")
+        return 0
+
+    def get_organ_handler_stats(self, organ_name: str) -> dict:
+        """按器官聚合 489 handler_stats → {success_rate, avg_latency_ms}。"""
+        try:
+            _n = 0
+            _sum = 0.0
+            _err = 0
+            with self._handler_stats_lock:
+                for (_o, _ev), _d in self._handler_stats.items():
+                    if _o == organ_name and isinstance(_d, dict):
+                        _n += _d.get("n", 0)
+                        _sum += _d.get("sum_ms", 0.0)
+                        _err += _d.get("error_count", 0)
+            if _n > 0:
+                return {"success_rate": round((_n - _err) / _n, 3),
+                        "avg_latency_ms": round(_sum / _n, 2)}
+        except Exception as _e:
+            silent_exc(_e, where="InfoField.get_organ_handler_stats", level="debug")
+        return {"success_rate": None, "avg_latency_ms": None}
+
+    def set_last_channel(self, name: str) -> None:
+        """493.5-4：由 PulseLung._call_channel 写入最近渠道。"""
+        try:
+            self._last_channel = name
+        except Exception as _e:
+            silent_exc(_e, where="InfoField.set_last_channel", level="debug")
+
+    def get_last_channel(self) -> str | None:
+        """493.5-4：读取最近一次应答渠道。"""
+        try:
+            return self._last_channel
+        except Exception as _e:
+            silent_exc(_e, where="InfoField.get_last_channel", level="debug")
+            return None
 
     def _m489_note_handler_stat(self, organ_name, event_type, elapsed_ms, result, error=False):
         if not self._m489_stat_on():

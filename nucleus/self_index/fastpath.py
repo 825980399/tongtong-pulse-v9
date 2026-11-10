@@ -44,6 +44,19 @@ def _find_organ(organs, kw):
     return None
 
 
+def _find_module(mg, kw):
+    """在模块图节点里按模块名/文件路径模糊匹配（代码指称回退）。"""
+    if not mg:
+        return None
+    _kw = str(kw).lower()
+    for _n in mg.get("nodes", []) or []:
+        _m = str(_n.get("module") or "").lower()
+        _f = str(_n.get("file") or "").lower()
+        if _kw in _m or _kw in _f:
+            return _n
+    return None
+
+
 def _describe_organ(organ) -> str:
     _t = organ.get("type") or "未知"
     _hc = "核心" if organ.get("is_core") else "非核心"
@@ -100,6 +113,69 @@ def _answer_relation(events, kw_a, kw_b) -> str | None:
     return None
 
 
+def _load_module_graph_cached() -> dict | None:
+    """493.5-5：只读已落盘的模块图（不触发重建，避免实时路径 10s 重建）。"""
+    try:
+        import json
+        import os
+        _p = os.path.join("data", "self_index", "module_graph.json")
+        if os.path.isfile(_p):
+            with open(_p, encoding="utf-8", errors="replace") as _f:
+                return json.load(_f)
+    except Exception as _e:
+        silent_exc(_e, where="_load_module_graph_cached", level="debug")
+    return None
+
+
+def _name_to_module(organs, name):
+    for _o in organs:
+        if str(_o.get("name") or "") == name:
+            _f = _o.get("file") or ""
+            if _f.endswith(".py"):
+                return _f[:-3].replace("/", ".")
+    return None
+
+
+def _answer_alias(query, organs) -> str | None:
+    """493.5-2/5：自然语言指称 → 器官（link_organ 模糊匹配）。"""
+    try:
+        from nucleus.self_index.exporters import link_organ
+        _r = link_organ(query)
+    except Exception as _e:
+        silent_exc(_e, where="_answer_alias", level="debug")
+        return None
+    if _r is None:
+        return None
+    if "candidates" in _r:
+        _c = "、".join(c["organ"] for c in _r["candidates"][:3])
+        return (f"你指的可能是这几个器官：{_c}？说得更具体点"
+                f"（比如「管消化的器官」「看东西的器官」）。")
+    _organ = _r["organ"]
+    _o = _find_organ(organs, _organ)
+    if _o:
+        return _answer_organ_location(_o)
+    return f"你说的是「{_organ}」这个器官（位置暂未索引）。"
+
+
+def _answer_module_call(mg, mod_a, mod_b) -> str | None:
+    """493.5-5：查两模块间是否有边。"""
+    if not mg:
+        return None
+    _edges = mg.get("edges", []) or []
+    _found = []
+    for _e in _edges:
+        _f = _e.get("from")
+        _t = _e.get("to")
+        if (_f == mod_a and _t == mod_b) or (_f == mod_b and _t == mod_a):
+            _found.append(_e)
+    if _found:
+        _parts = [f"{_e.get('kind')} 边（{_e.get('from')} → {_e.get('to')}）"
+                  for _e in _found[:5]]
+        return (f"我查了模块图：{mod_a} 与 {mod_b} 之间有 {len(_found)} 条连接——"
+                + "；".join(_parts) + "。")
+    return None
+
+
 def self_query_fastpath(query) -> str | None:
     """自我查询 fast path 入口。
 
@@ -119,6 +195,7 @@ def self_query_fastpath(query) -> str | None:
         _organs = _or.get("organs", []) or []
         _ev = _store.events() or {}
         _events = _ev.get("events", {}) or {}
+        _mg = _load_module_graph_cached()   # 493.5-5：读已落盘模块图（不触发重建）
     except Exception as _e:
         silent_exc(_e, where="self_query_fastpath", level="debug")
         return None
@@ -145,6 +222,10 @@ def self_query_fastpath(query) -> str | None:
     if _m:
         _kw = _m.group(1) or _m.group(2) or _m.group(3)
         _o = _find_organ(_organs, _kw)
+        if _o is None:
+            _mo = _find_module(_mg, _kw)
+            if _mo:
+                return f"{_kw} 模块在代码路径 {_mo.get('file')}（模块 {_mo.get('module')}）。"
         if _o:
             return _answer_organ_location(_o)
         return None  # 代码指称查不到 ⇒ 不硬答
@@ -155,6 +236,9 @@ def self_query_fastpath(query) -> str | None:
             continue
         _o = _find_organ(_organs, _w)
         if not _o:
+            _mo = _find_module(_mg, _w)
+            if _mo:
+                return f"{_w} 模块在代码路径 {_mo.get('file')}（模块 {_mo.get('module')}）。"
             continue
         if re.search(r"怎么连|关系|关联|连接|用到|用到会怎样", _q):
             # 关系型：尝试找另一模块共同事件
@@ -179,5 +263,59 @@ def self_query_fastpath(query) -> str | None:
         if _o:
             _loc = f"，代码路径 {_o.get('file')}" if _o.get("file") else ""
             return f"{_o.get('name')} 是{_describe_organ(_o)}{_loc}。"
+
+    # 6) 指称别名（「管消化的」「管说话的」「看东西的」「负责X的器官」）
+    if re.search(r"管[一-龥]{1,6}的|负责[一-龥]{1,6}的|的器官|哪个器官|什么器官", _q):
+        _ans = _answer_alias(_q, _organs)
+        if _ans:
+            return _ans
+
+    # 7) 运行态：在途 / 队列 / 渠道（遍历器官名，避免中文贪婪吃掉修饰词）
+    for _o in _organs:
+        _nm = str(_o.get("name") or "")
+        if not _nm or _nm not in _q:
+            continue
+        if re.search(r"忙|在途|任务|还在跑|有没有.*做|多少.*任务", _q):
+            _v = _o.get("inflight")
+            if _v is not None:
+                return f"{_nm} 当前在途任务数 {_v}。"
+            return f"我暂时拿不到 {_nm} 的在途任务数（埋点未就绪）。"
+        if re.search(r"队列|积压|排队", _q):
+            _v = _o.get("queue_depth")
+            if _v is not None:
+                return f"{_nm} 当前队列深度 {_v}。"
+            return f"我暂时拿不到 {_nm} 的队列深度。"
+    if re.search(r"哪个渠道|什么渠道|最近.*渠道|现在.*回答.*渠道|用的.*渠道|在.*渠道", _q):
+        _lc = _or.get("last_channel")
+        if _lc:
+            return f"最近一次回答用的是「{_lc}」渠道。"
+        return "我暂时没记录到最近使用的应答渠道。"
+
+    # 8) 模块调用 / 依赖（「XX调用YY吗」「XX依赖什么」）
+    _mc = re.search(
+        r"([一-龥A-Za-z_]{1,12})\s*(?:调用|依赖|用到|和|与)\s*([一-龥A-Za-z_]{1,12})"
+        r"\s*(?:吗|？|\?|怎么|关系|调用|依赖|连接)", _q)
+    if _mc:
+        _ma = _name_to_module(_organs, _mc.group(1))
+        _mb = _name_to_module(_organs, _mc.group(2))
+        if _ma and _mb:
+            _ans = _answer_module_call(_mg, _ma, _mb)
+            if _ans:
+                return _ans
+            return (f"我查了模块图：{_mc.group(1)} 与 {_mc.group(2)} 之间"
+                    f"暂时没有直接登记的调用/依赖边。")
+        if _ma and re.search(r"依赖|用到|调用", _q):
+            _outs = [e for e in (_mg or {}).get("edges", []) if e.get("from") == _ma]
+            if _outs:
+                _tos = "、".join(sorted({e.get("to") for e in _outs[:6]}))
+                return f"{_mc.group(1)} 直接连接（调用/注入/事件）的模块有：{_tos}。"
+
+    # 9) 眼睛 / 视觉状态
+    if re.search(r"眼睛|视觉", _q) and re.search(r"状态|在干嘛|现在|如何|情况", _q):
+        _o = _find_organ(_organs, "眼睛")
+        if _o:
+            return (f"{_o.get('name')}（视觉感官器官）负责采集视觉输入，"
+                    f"代码路径 {_o.get('file')}；实时画面我看不到原始像素，"
+                    f"这是我的感官层职责。")
 
     return None

@@ -9396,6 +9396,12 @@ ENABLE_M4925_UNIFIED_CHANNEL_HEALTH_ALL_PATH = True  # 492.5-1：统一健康账
 ENABLE_M493_SELF_INDEX = True                 # 493-1：统一 Self-Index 导出总开关（只读导出器官/事件/意图/连接关系）
 ENABLE_M493_SELF_QUERY_FASTPATH = True        # 493-5：自我查询 fast path（自我指称/代码指称本地答，不调大模型）
 
+# ── 493.5 批 指称链接 + 模块图 + 动作库（493 延续：只读导出 + 查询 + 轻埋点） ──
+ENABLE_M4935_MODULE_GRAPH = True              # 493.5-1：四类边模块图（import/inject/call/event）构建
+ENABLE_M4935_ORGAN_ALIASES = True             # 493.5-2：57 器官指称链接表 + 模糊匹配
+ENABLE_M4935_ACTION_LIBRARY = True            # 493.5-3：自我动作库白名单（30 动作，写类 blocked）
+ENABLE_M4935_RUNTIME_FILL = True              # 493.5-4：运行态埋点补全（inflight/last_channel/success_rate 等）
+
 # ── 485-7 baseline=0 禁入自动审批 ──
 # ★出厂默认 False（同上，随灰度一并裁决）。False ⇒ A1 内联自动审批与 _m85 本地
 #   低风险放行不查 baseline（逐字回改前；B 通道 _m101 与老化 _m94 早已查，不受影响）。

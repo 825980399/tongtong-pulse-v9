@@ -197,6 +197,7 @@ class PulseLung(BasePulseOrgan):
         #   T1/T2/T3：按渠道独立并发（可调信号量）+ 并发满即切换 + 动态调整
         #   T5：多轮对话历史（修复第三方报告 P0-9）；T6：阶段性进度提示
         self._channel_conc = None            # 惰性构造（避免 import 期依赖）
+        self._last_channel = None             # 493.5-4：最近应答渠道（同时写入 InfoField）
         self._channel_conc_lock = threading.Lock()
         from collections import deque as _deque
         self._dialog_history = _deque(maxlen=10)   # 轮数由 config 动态调整
@@ -1209,6 +1210,10 @@ class PulseLung(BasePulseOrgan):
         except (TypeError, ValueError):
             return _global
 
+    def get_last_channel(self) -> str | None:
+        """493.5-4：最近一次应答渠道。"""
+        return self._last_channel
+
     def _call_channel(self, channel: dict, prompt: str, **kwargs) -> str | None:
         """统一渠道调用接口：经适配器构造请求 → POST → 解析响应。
 
@@ -1218,6 +1223,15 @@ class PulseLung(BasePulseOrgan):
         if not isinstance(channel, dict):
             return None
         _name = channel.get("name", "?")
+        # 493.5-4：记录最近应答渠道（实例 + 同步写入 InfoField 供 Self-Index 读取）
+        self._last_channel = _name
+        try:
+            from nucleus.field.InfoField import get_info_field
+            _if = get_info_field()
+            if _if is not None:
+                _if.set_last_channel(_name)
+        except Exception as _e:
+            self._log(LogLevel.DEBUG, f"[渠道] 记录 last_channel 失败: {type(_e).__name__}")
         _api_url = channel.get("api_url", "")
         _api_key = channel.get("api_key", "")
         _model = channel.get("model", "")
