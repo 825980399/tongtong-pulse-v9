@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 
 from nucleus._silent_except import silent_exc
@@ -98,7 +99,8 @@ def export_event_subscribers() -> dict:
                     _events.setdefault(_et, []).append({
                         "organ": _organ,
                         "handler": _handler_name,
-                        # 事件账本无延迟埋点，诚实标 null（待 493-8 调用图补齐）
+                        # 事件账本无延迟埋点，诚实标 null（493.10-4：与调用图无关，
+                        # 不随模块图落地而自动补齐；原注释的批次指引已过期）
                         "avg_latency_ms": None,
                     })
     except Exception as _e:
@@ -180,7 +182,7 @@ def export_organs_runtime() -> dict:
                 silent_exc(_e, where="exporters.export_organs_runtime:fill", level="debug")
         _organs_out.append({
             "name": _name,
-            "file": _it.get("file_path"),          # 代码路径（行号待 493-8 CallGraphAnalyzer 补齐）
+            "file": _it.get("file_path"),          # 代码路径（行号见 module_graph.json 的边，493.10-4 清理过期指引）
             "type": _it.get("type"),
             "is_core": _it.get("is_core"),
             "is_brain_organ": _it.get("is_brain_organ"),
@@ -372,6 +374,32 @@ _STOP = set("的了我那个这各个里是叫哪谁你他它她管负责地方�
 _CAUSE_STOP = ("为什么", "原因", "怎么会", "怎么就", "原理", "为啥", "为何",
                "怎么导致", "根源", "由于")
 
+# 493.10-2：模块 token veto。这些是代码模块名/类名/文件路径，**不是器官名**，
+# 不得参与器官别名匹配（否则 PulseCortex 会被 func 层别名 "cortex" 绑成「大脑皮层」）。
+_MODULE_TOKEN_RE = re.compile(
+    r"(?:Pulse[A-Za-z0-9_]*|InfoField|QICA|[A-Za-z_][A-Za-z0-9]*_[A-Za-z0-9_]+"
+    r"|[A-Za-z0-9_./\\-]+\.py|[A-Za-z0-9_]+/[A-Za-z0-9_/]+)",
+    re.IGNORECASE)
+
+
+def is_module_token(s: str) -> bool:
+    """493.10-2：判断 token 是否为模块/类名/文件路径（而非器官中文名）。"""
+    if not s:
+        return False
+    _s = str(s)
+    if not re.search(r"[A-Za-z_]", _s):   # 纯中文（胃/肝/肺）一律不是模块 token
+        return False
+    return bool(_MODULE_TOKEN_RE.search(_s))
+
+
+def _m49310_on() -> bool:
+    try:
+        import config
+        return bool(getattr(config, "ENABLE_M49310_MODULE_GRAPH_CONSUME", False))
+    except Exception as _e:
+        silent_exc(_e, where="exporters._m49310_on", level="debug")
+        return False
+
 
 def _normalize(q: str) -> str:
     import re
@@ -440,7 +468,13 @@ def link_organ(query: str) -> dict | None:
     # ① 因果/原因停用词 → 跳过消歧（493.8-2）
     if any(_w in str(query) for _w in _CAUSE_STOP):
         return None
-    q = _normalize(query)
+    # 493.10-2：模块 token veto —— 把 Pulse*/InfoField/QICA/下划线模块名/文件路径
+    # 从匹配输入里剔除，避免功能层别名（如 cortex）把模块名绑成器官。
+    # 器官中文名（胃/肝/肺）不含 ASCII，不受影响，照常命中。关总闸 → 逐字回 493.9。
+    _match_input = str(query)
+    if _m49310_on():
+        _match_input = _MODULE_TOKEN_RE.sub(" ", _match_input)
+    q = _normalize(_match_input)
     if not q:
         return None
     # ② 名称层匹配（493.8-2：名称层优先于功能层；仅匹配「器官名出现在 query」，
@@ -567,10 +601,17 @@ ACTION_WHITELIST: list[dict] = [
      # 493.9-5：真实返回键为 events/fanout/event_count，从无 "subscribers" 键 ⇒ verify 恒失败
      "verify": {"type": "has_key", "key": "events"}, "source": "curated", "status": "ready"},
     {"action_id": "module.imports", "organ": "Self-Index", "kind": "read",
-     "impl": {"type": "module_graph", "target": "build_module_graph", "file": "nucleus/self_index/module_graph.py", "line": 0},
+     # 493.10-5：filter_target 只在 ENABLE_M49310_MODULE_GRAPH_CONSUME 开时由执行层
+     #   改派到 export_module_edges（按 module 参数过滤），关则仍走 build_module_graph
+     #   → 逐字回 493.9；两张描述符内容不因开关而改变。
+     "impl": {"type": "module_graph", "target": "build_module_graph", "file": "nucleus/self_index/module_graph.py", "line": 0,
+              "filter_target": "export_module_edges"},
      "params": {"module": "模块名"}, "preconditions": ["graph_on"], "risk": 0, "idempotent": True,
      # 493.9-5：build_module_graph() 返回 {version,generated_at,nodes,edges}（dict），非 list
-     "verify": {"type": "is_dict"}, "source": "curated", "status": "ready"},
+     # 493.10-5：收紧型校验 module_edges（matched=False 判失败），不放过空表；关总闸时
+     #   执行层按 is_dict 口径校验（见 action_executor._verify 的开关分支）。
+     "verify": {"type": "is_dict"}, "filtered_verify": {"type": "module_edges"},
+     "source": "curated", "status": "ready"},
     {"action_id": "module.calls", "organ": "Self-Index", "kind": "read",
      "impl": {"type": "module_graph", "target": "build_module_graph", "file": "nucleus/self_index/module_graph.py", "line": 0},
      "params": {"module_a": "模块", "module_b": "模块"}, "preconditions": ["graph_on"], "risk": 0, "idempotent": True,

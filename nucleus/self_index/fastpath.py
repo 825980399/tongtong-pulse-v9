@@ -310,23 +310,186 @@ def _answer_alias(query, organs) -> str | None:
     return f"你说的是「{_organ}」这个器官（位置暂未索引）。"
 
 
+# ══════════ 493.10-1/3：模块图真实消费 ══════════
+#: 关系词（任务书 493.10-1）；命中即优先走模块图，不得被位置分支截走
+_REL_WORDS_RE = re.compile(
+    r"怎么连|怎么关联|如何连|怎么接|怎么交互|怎么通信|关联|连接|关系|"
+    r"调用|依赖|用到|被谁|谁调用|谁依赖|谁用到")
+#: 关系问句里的非实体英文词（避免把「怎么」类词当模块名）
+_REL_TOKEN_STOP = frozenset({
+    "the", "and", "how", "what", "who", "which", "connect", "relation",
+    "call", "import", "inject", "event", "module", "between"})
+
+
+def _m49310_on() -> bool:
+    """493.10 刀1-5 总闸（关 → 逐字回 493.9）。"""
+    try:
+        import config
+        return bool(getattr(config, "ENABLE_M49310_MODULE_GRAPH_CONSUME", False))
+    except Exception as _e:
+        silent_exc(_e, where="fastpath._m49310_on", level="debug")
+        return False
+
+
+def _short_module(m) -> str:
+    """完整点分模块名 → 末段（organs.brain.PulseCortex → PulseCortex）。"""
+    return str(m or "").split(".")[-1]
+
+
+def _basename(path) -> str:
+    return str(path or "").replace("\\", "/").split("/")[-1]
+
+
+def _render_module_edge(e) -> str:
+    """493.10-3：渲染单条边 —— kind + 事件名 + 起点文件:行 + 终点文件:行。
+
+    `to_line` 为空（import/inject/call 共 4721 条）时明确写「目标行未解析」，
+    绝不编造行号，也不留空。
+    """
+    _kind = str(e.get("kind") or "未知")
+    _head = _kind + " 边"
+    if e.get("event"):
+        _head += f" {e.get('event')}"
+    if e.get("via"):
+        _head += f"（via {e.get('via')}）"
+    _ff = _basename(e.get("from_file"))
+    _fl = e.get("from_line")
+    _src = f"{_ff}:{_fl}" if _ff and _fl is not None else \
+           (f"{_ff}:起点行未解析" if _ff else "起点未解析")
+    _tf = _basename(e.get("to_file"))
+    _tl = e.get("to_line")
+    if _tl is None or not _tf:
+        _dst = "目标行未解析"
+    else:
+        _dst = f"{_tf}:{_tl}"
+    return f"{_head}（{_src} → {_dst}）"
+
+
+def _render_module_edges(label, edges, prefix="我查了模块图") -> str:
+    """把一批边渲染成可读回答（最多 5 条，附真实总数）。"""
+    _parts = [_render_module_edge(e) for e in edges[:5]]
+    _more = f"（仅列前 5 条）" if len(edges) > 5 else ""
+    return (f"{prefix}：{label} 之间有 {len(edges)} 条连接{_more}——"
+            + "；".join(_parts) + "。")
+
+
+def _resolve_module_terms(mg, organs, token) -> set:
+    """把 query 实体 token 解析成模块图 from/to 可能出现的完整模块名集合。"""
+    _terms: set = set()
+    _t = str(token or "").lower()
+    if not _t:
+        return _terms
+    for _n in (mg or {}).get("nodes", []) or []:
+        _m = str(_n.get("module") or "")
+        _f = str(_n.get("file") or "")
+        _ml = _m.lower()
+        _short = _short_module(_m).lower()
+        _stem = _basename(_f)[:-3].lower() if _f.endswith(".py") else ""
+        if (_t == _short or _t == _stem or _t == _ml
+                or _t in _ml.split(".")
+                or (len(_t) >= 4 and (_t in _ml or _t in _f.lower()))):
+            _terms.add(_m)
+    # 中文器官名 → 代码点分路径（胃 → organs.body.PulseStomach）
+    _om = _name_to_module(organs, token)
+    if _om:
+        _terms.add(_om)
+    return _terms
+
+
+def _edges_between(mg, terms_a, terms_b) -> list:
+    _out = []
+    for _e in (mg or {}).get("edges", []) or []:
+        _f, _t = _e.get("from"), _e.get("to")
+        if (_f in terms_a and _t in terms_b) or (_f in terms_b and _t in terms_a):
+            _out.append(_e)
+    return _out
+
+
+def _edges_into(mg, terms) -> list:
+    """「被谁调用/谁依赖」→ 入边（to 命中目标）。"""
+    return [_e for _e in (mg or {}).get("edges", []) or []
+            if _e.get("to") in terms]
+
+
+def _answer_module_relation(query, mg, events, organs) -> str | None:
+    """493.10-1：关系问法优先消费模块图（不得被位置分支截走）。
+
+    返回答案字符串；未检测到关系问法 / 无法构成实体对 → None（交回原链路）。
+    图里无连接边时如实说「未找到直接连接边」，不编造、不回退到位置话术。
+    """
+    if not _m49310_on() or not _REL_WORDS_RE.search(query):
+        return None
+    # ① 实体提取：英文/下划线模块 token + 中文器官名（去重、保序）
+    _tokens: list = []
+    for _t in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", query):
+        _tl = _t.lower()
+        if len(_t) >= 3 and _tl not in _REL_TOKEN_STOP and _t not in _tokens:
+            _tokens.append(_t)
+    for _o in organs or []:
+        _nm = str(_o.get("name") or "")
+        if _nm and _nm in query and _nm not in _tokens:
+            _tokens.append(_nm)
+    if not _tokens:
+        return None
+
+    # ② 双实体：查双向边 → 事件订阅关系回退 → 如实说无连接
+    if len(_tokens) >= 2:
+        _a, _b = _tokens[0], _tokens[1]
+        _ta = _resolve_module_terms(mg, organs, _a)
+        _tb = _resolve_module_terms(mg, organs, _b)
+        _found = _edges_between(mg, _ta, _tb)
+        if _found:
+            return _render_module_edges(f"{_a} ↔ {_b}", _found)
+        _rel = _answer_relation(events, _a, _b)
+        if _rel:
+            return _rel
+        return (f"我查了模块图：{_a} 与 {_b} 之间未找到直接连接边"
+                f"（事件订阅表里也没有共同事件）。")
+
+    # ③ 单实体 + 「被谁调用」→ 查入边
+    if re.search(r"被谁|谁调用|谁依赖|谁用到", query):
+        _a = _tokens[0]
+        _ta = _resolve_module_terms(mg, organs, _a)
+        _ins = _edges_into(mg, _ta)
+        if _ins:
+            _parts = [_render_module_edge(_e) for _e in _ins[:5]]
+            _more = "（仅列前 5 条）" if len(_ins) > 5 else ""
+            return (f"我查了模块图：{_a} 有 {len(_ins)} 条入边{_more}——"
+                    + "；".join(_parts) + "。")
+        return f"我查了模块图：未找到指向 {_a} 的调用/注入边。"
+    return None
+
+
 def _answer_module_call(mg, mod_a, mod_b) -> str | None:
-    """493.5-5：查两模块间是否有边。"""
+    """493.5-5 / 493.10-3：查两模块间是否有边，渲染含事件名与行号。"""
     if not mg:
         return None
-    _edges = mg.get("edges", []) or []
     _found = []
-    for _e in _edges:
+    for _e in mg.get("edges", []) or []:
         _f = _e.get("from")
         _t = _e.get("to")
         if (_f == mod_a and _t == mod_b) or (_f == mod_b and _t == mod_a):
             _found.append(_e)
     if _found:
-        _parts = [f"{_e.get('kind')} 边（{_e.get('from')} → {_e.get('to')}）"
-                  for _e in _found[:5]]
-        return (f"我查了模块图：{mod_a} 与 {mod_b} 之间有 {len(_found)} 条连接——"
-                + "；".join(_parts) + "。")
+        return _render_module_edges(f"{mod_a} 与 {mod_b}", _found)
     return None
+
+
+def _action_result_usable(r) -> bool:
+    """493.10-8：调用方取 result 前必须确认「验证通过」，不能只看裸 ok。
+
+    新契约（ENABLE_M49310_HONEST_RETURN 开）：ok 已等于验证通过，verified.ok 一致；
+    旧契约（关）：ok=True 可能掩盖 verified.ok=False —— 故仍显式校验 verified.ok，
+    两代契约下都不会拿坏数据拼答案。
+    """
+    if not isinstance(r, dict) or not r.get("ok"):
+        return False
+    _v = r.get("verified")
+    if _v is None:
+        return True          # 无验证信息（如 blocked 之外路径）→ 沿用 ok
+    if isinstance(_v, dict) and _v.get("ok") is False:
+        return False
+    return True
 
 
 def _answer_repeat() -> str | None:
@@ -334,7 +497,7 @@ def _answer_repeat() -> str | None:
     try:
         from nucleus.self_index.action_executor import execute_action
         _r = execute_action("lung.dialog_history", {"n": 1})
-        if _r.get("ok"):
+        if _action_result_usable(_r):
             _hist = _r.get("result") or []
             if isinstance(_hist, list) and _hist:
                 _last = _hist[-1]
@@ -353,7 +516,7 @@ def _answer_backpressure(query) -> str | None:
     try:
         from nucleus.self_index.action_executor import execute_action
         _r = execute_action("layer.backpressure", {"layer": _layer})
-        if _r.get("ok"):
+        if _action_result_usable(_r):
             _s = _r.get("result") or {}
             if isinstance(_s, dict):
                 # 493.7-2.3：get_backpressure_stats 返回按层分桶，取对应层
@@ -488,6 +651,14 @@ def self_query_fastpath_explain(query) -> dict:
         _set(_answer_organ_count(_organs), "organ.count", 0.95, intent="count")
         return _explain
 
+    # 1.5) ★493.10-1：关系问法优先消费模块图 —— 必须在位置/描述分支之前，
+    #      否则「A 和 B 怎么连」会被分支 3/4 截走，答成「模块在代码路径…」。
+    #      关总闸 → 不执行，逐字回 493.9（含原 2) 关系对分支）。
+    _rel_ans = _answer_module_relation(_q, _mg, _events, _organs)
+    if _rel_ans:
+        _set(_rel_ans, "module.relation", 0.85, intent="relation")
+        return _explain
+
     # 2) 关系对「A 和/与 B 怎么连/关系/关联/连接」
     _rel = re.search(
         r"([一-龥A-Za-z_]{1,12})\s*(?:和|与|跟|及)\s*([一-龥A-Za-z_]{1,12})"
@@ -542,10 +713,10 @@ def self_query_fastpath_explain(query) -> dict:
                     if _ans:
                         _set(_ans, "relation", 0.8, organ=_o.get("name"), intent="relation")
                         return _explain
-            _set((f"我在 Self-Index 里查到 {_o.get('name')}（{_o.get('file')}），"
-                  f"但本批尚未索引模块级调用关系（待 493-8 调用图补齐），"
-                  f"暂时说不清它的调用链路。"),
-                 "relation.unknown", 0.6, organ=_o.get("name"), intent="relation")
+            # 493.10-4：删除指向未来批次的过期话术 —— 模块图已落盘
+            # 468 节点 / 5282 边，直接给边结果，无连接时如实说没找到。
+            _set(f"我查了模块图：{_o.get('name')} 未找到直接连接边。",
+                 "relation.none", 0.6, organ=_o.get("name"), intent="relation")
             return _explain
         _set(_answer_organ_location(_o), "organ.location", 0.85,
              organ=_o.get("name"), intent="location")
@@ -619,7 +790,7 @@ def self_query_fastpath_explain(query) -> dict:
                 _set(_ans, "module.call", 0.7, intent="module_call")
                 return _explain
             _set(f"我查了模块图：{_mc.group(1)} 与 {_mc.group(2)} 之间"
-                 f"暂时没有直接登记的调用/依赖边。",
+                 f"未找到直接连接边。",
                  "module.call.none", 0.6, intent="module_call")
             return _explain
         if _ma and re.search(r"依赖|用到|调用", _q):

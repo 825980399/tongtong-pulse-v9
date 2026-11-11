@@ -246,3 +246,66 @@ def build_module_graph(root: str | None = None) -> dict:
         "nodes": list(nodes.values()),
         "edges": list(edges.values()),
     }
+
+
+def _load_graph_from_disk() -> dict | None:
+    """只读已落盘模块图（不触发重建，避免实时路径 10s 重算）。"""
+    try:
+        import json
+        _p = os.path.join("data", "self_index", "module_graph.json")
+        if os.path.isfile(_p):
+            with open(_p, encoding="utf-8", errors="replace") as _f:
+                return json.load(_f)
+    except Exception as _e:
+        silent_exc(_e, where="module_graph._load_graph_from_disk", level="debug")
+    return None
+
+
+def export_module_edges(module: str | None = None) -> dict:
+    """493.10-5：`module.imports` 的过滤版入口。
+
+    传 ``module``（如 ``"PulseLung"`` / ``"nucleus.field.InfoField"`` /
+    ``"pulse_inner_world_support"``）→ 只返回该模块的**出边 + 入边**，
+    不再吐 468 节点全图；不传 → 返回全图**摘要**（计数 + 按 kind 分桶，不含全量边）。
+
+    返回结构恒含 ``matched``：找不到该模块 / 无任何相关边 → ``matched=False``，
+    由描述符 verify（收紧型 ``module_edges``）诚实判失败，绝不放过空表。
+    """
+    _g = _load_graph_from_disk()
+    if not _g:
+        return {"module": module, "matched": False, "edges": [],
+                "reason": "模块图未落盘或不可读"}
+    _edges = _g.get("edges") or []
+    _nodes = _g.get("nodes") or []
+    if not module:
+        _by_kind: dict[str, int] = {}
+        for _e in _edges:
+            _k = str(_e.get("kind") or "unknown")
+            _by_kind[_k] = _by_kind.get(_k, 0) + 1
+        return {"module": None, "matched": True, "scope": "summary",
+                "node_count": len(_nodes), "edge_count": len(_edges),
+                "by_kind": _by_kind, "edges": [],
+                "note": "未传 module，返回全图摘要（不吐全量节点/边）"}
+    _m = str(module).strip().lower()
+    _terms: set = set()
+    for _n in _nodes:
+        _full = str(_n.get("module") or "")
+        _file = str(_n.get("file") or "")
+        _short = _full.split(".")[-1].lower()
+        _stem = os.path.splitext(os.path.basename(_file))[0].lower()
+        if (_m == _short or _m == _stem or _m == _full.lower()
+                or _m in _full.lower().split(".")
+                or (len(_m) >= 4 and (_m in _full.lower() or _m in _file.lower()))):
+            _terms.add(_full)
+    if not _terms:
+        return {"module": module, "matched": False, "edges": [],
+                "reason": f"模块图中未找到匹配模块: {module}"}
+    _related = [_e for _e in _edges
+                if _e.get("from") in _terms or _e.get("to") in _terms]
+    _out = [_e for _e in _related if _e.get("from") in _terms]
+    _in = [_e for _e in _related if _e.get("to") in _terms]
+    return {"module": module, "matched": bool(_related), "scope": "filtered",
+            "resolved_modules": sorted(_terms), "edge_count": len(_related),
+            "out_edge_count": len(_out), "in_edge_count": len(_in),
+            "edges": _related[:200], "truncated": len(_related) > 200,
+            "version": _g.get("version")}

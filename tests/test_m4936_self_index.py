@@ -100,10 +100,19 @@ def test_m4936_exec_read_verify_fail(monkeypatch, tmp_path):
     monkeypatch.setattr(ae, "_AUDIT_PATH", str(tmp_path / "action_audit.jsonl"))
     from nucleus.self_index.action_executor import execute_action
     r = execute_action("stomach.stats", {"organ": "胃"})
-    assert r["ok"] is True                       # 方法执行成功
+    # ★493.10-6 返回契约诚实化（破坏性变更，本断言同步更新）：
+    #   ok 现在等于「验证通过」；「方法跑通」另由 executed=True 表示。
+    assert r["ok"] is False                      # 验证失败 ⇒ ok=False（不再假通过）
+    assert r["executed"] is True                  # 方法确实跑通了
     assert r["verified"].get("ok") is False       # 验证失败（空 dict）
     _rows = (tmp_path / "action_audit.jsonl").read_text(encoding="utf-8").strip().splitlines()
     assert any("stomach.stats" in row for row in _rows)
+    # 关 493.10 总闸 → 逐字回 493.9 旧契约（ok=True 掩盖验证失败）
+    import config as _cfg
+    monkeypatch.setattr(_cfg, "ENABLE_M49310_HONEST_RETURN", False, raising=False)
+    r_old = execute_action("stomach.stats", {"organ": "胃"})
+    assert r_old["ok"] is True
+    assert "executed" not in r_old
 
 
 def test_m4936_exec_control_no_pulsecore():

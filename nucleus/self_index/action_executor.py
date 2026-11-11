@@ -16,6 +16,18 @@ import inspect
 from nucleus._silent_except import silent_exc
 
 _AUDIT_PATH = os.path.join("data", "monitor", "action_audit.jsonl")
+#: 493.10-7 进程代（启动时间戳）：同一进程内恒定，区分「本次启动」与历史样本
+_PROC_GEN = round(time.time(), 3)
+
+
+def _assembly_flag() -> bool:
+    """493.10-7：是否带框架装配（PulseCore._instance 存在 = 生产运行态样本）。"""
+    try:
+        from nucleus.pulse.PulseCore import PulseCore
+        return getattr(PulseCore, "_instance", None) is not None
+    except Exception as _e:
+        silent_exc(_e, where="action_executor._assembly_flag", level="debug")
+        return False
 
 
 def _action_exec_on() -> bool:
@@ -97,6 +109,47 @@ def _m4939_read_fix_on() -> bool:
     except Exception as _e:
         silent_exc(_e, where="action_executor._m4939_read_fix_on", level="debug")
         return False
+
+
+def _m49310_module_on() -> bool:
+    """493.10 刀1-5 总闸（关 → 逐字回 493.9）。"""
+    try:
+        import config
+        return bool(getattr(config, "ENABLE_M49310_MODULE_GRAPH_CONSUME", False))
+    except Exception as _e:
+        silent_exc(_e, where="action_executor._m49310_module_on", level="debug")
+        return False
+
+
+def _m49310_honest_on() -> bool:
+    """493.10 刀6-8 总闸（关 → 逐字回 493.9 的 ok=True 契约）。"""
+    try:
+        import config
+        return bool(getattr(config, "ENABLE_M49310_HONEST_RETURN", False))
+    except Exception as _e:
+        silent_exc(_e, where="action_executor._m49310_honest_on", level="debug")
+        return False
+
+
+def _m49310_effective(a, params):
+    """493.10-5：开关开时把带 filter_target 的动作改派到过滤版入口 + 收紧型 verify。
+
+    返回 (effective_action, effective_params)；关总闸 → 原样返回（逐字回 493.9）。
+    """
+    _impl = a.get("impl") or {}
+    _ft = _impl.get("filter_target")
+    _fv = a.get("filtered_verify")
+    if not (_m49310_module_on() and _ft and _fv):
+        return a, params       # 关总闸 → 原样 build_module_graph 全图（逐字回 493.9）
+    _a2 = dict(a)
+    _impl2 = dict(_impl)
+    _impl2["target"] = _ft     # 不传 module → export_module_edges() 返回全图摘要
+    _a2["impl"] = _impl2
+    # 只有确实按 module 过滤时才用收紧型校验（空表诚实失败）；
+    # 不传 module 是摘要（edges 为空但有 node_count/edge_count），仍走 is_dict。
+    if (params or {}).get("module"):
+        _a2["verify"] = _fv
+    return _a2, params
 
 
 def _resolve_callable(a, params):
@@ -190,21 +243,31 @@ def execute_action(action_id, params=None, timeout_ms=500):
 
 
 def _exec_read(a, params, timeout_ms):
-    _fn, _reason = _resolve_callable(a, params)
+    # 493.10-5：总闸开且传了 module → 改派到过滤版入口 + 收紧型 verify
+    _a, _params = _m49310_effective(a, params)
+    _fn, _reason = _resolve_callable(_a, _params)
     if _fn is None:
         return {"ok": False, "reason": _reason, "blocked": True,
                 "action_id": a.get("action_id")}
     try:
-        _result = _fn(**_safe_params(_fn, params))
-        _verified = _verify(a, _result)
-        _audit(a, params, _verified, ok=_verified.get("ok", False))
+        _result = _fn(**_safe_params(_fn, _params))
+        _verified = _verify(_a, _result)
+        _audit(_a, _params, _verified, ok=_verified.get("ok", False))
+        # 493.10-6：把「方法跑通」与「验证通过」分开。关总闸 → 逐字回 493.9（ok=True）。
+        if _m49310_honest_on():
+            return {"ok": bool(_verified.get("ok", False)), "executed": True,
+                    "result": _result, "verified": _verified, "blocked": False,
+                    "action_id": a.get("action_id")}
         return {"ok": True, "result": _result, "verified": _verified, "blocked": False,
                 "action_id": a.get("action_id")}
     except Exception as _e:
         silent_exc(_e, where="action_executor.read", level="debug")
-        _audit(a, params, {"ok": False, "error": type(_e).__name__}, ok=False)
-        return {"ok": False, "reason": f"执行异常: {type(_e).__name__}", "blocked": False,
-                "action_id": a.get("action_id")}
+        _audit(_a, _params, {"ok": False, "error": type(_e).__name__}, ok=False)
+        _r = {"ok": False, "reason": f"执行异常: {type(_e).__name__}", "blocked": False,
+              "action_id": a.get("action_id")}
+        if _m49310_honest_on():
+            _r["executed"] = False
+        return _r
 
 
 def _exec_control(a, params, timeout_ms):
@@ -227,12 +290,21 @@ def _exec_control(a, params, timeout_ms):
         _after = traffic_counts()
         _verified = _verify_control_delta(_before, _after, _target)
         _audit(a, params, _verified, ok=_verified.get("consumed", False))
+        # 493.10-6：ok 必须等于「真消费」；emitted=True 只表示事件已发出，
+        # 不准用 ok 冒充已消费。关总闸 → 逐字回 493.9（ok=True）。
+        if _m49310_honest_on():
+            return {"ok": bool(_verified.get("consumed", False)), "emitted": True,
+                    "emitted_target": _target, "verified": _verified, "blocked": False,
+                    "action_id": a.get("action_id")}
         return {"ok": True, "emitted": _target, "verified": _verified, "blocked": False,
                 "action_id": a.get("action_id")}
     except Exception as _e:
         silent_exc(_e, where="action_executor.control", level="debug")
-        return {"ok": False, "reason": f"事件发射异常: {type(_e).__name__}", "blocked": False,
-                "action_id": a.get("action_id")}
+        _r = {"ok": False, "reason": f"事件发射异常: {type(_e).__name__}", "blocked": False,
+              "action_id": a.get("action_id")}
+        if _m49310_honest_on():
+            _r["emitted"] = False
+        return _r
 
 
 def _verify(a, result):
@@ -271,6 +343,19 @@ def _verify(a, result):
               (_t == "is_list" and isinstance(result, list) and len(result) > 0) or \
               (_t == "is_str" and isinstance(result, str) and result != "")
         return {"ok": _ok, "reason": None if _ok else f"类型/空不符: {_t}"}
+    if _t == "module_edges":
+        # 493.10-5 收紧型：过滤结果必须 matched=True 且确实有边，空表诚实判失败。
+        # 这是**新增更严校验**，不放宽任何既有类型（任务书纪律 3）。
+        if not isinstance(result, dict):
+            return {"ok": False, "reason": "过滤结果非 dict"}
+        if result.get("matched") is not True:
+            return {"ok": False,
+                    "reason": f"空表/未匹配: {result.get('reason') or 'matched=False'}"}
+        if int(result.get("edge_count", 0) or 0) <= 0:
+            return {"ok": False, "reason": "无相关边（edge_count=0）"}
+        if not result.get("edges"):
+            return {"ok": False, "reason": "edges 为空表"}
+        return {"ok": True}
     return _empty_check(result)
 
 
@@ -309,6 +394,12 @@ def _audit(a, params, verified, ok):
             "verified": verified,
             "params": params,
         }
+        # 493.10-7：补 pid / proc_gen / assembly，下一轮核验不再猜「生产还是测试样本」。
+        # 关总闸 → 不写这三字段（逐字回 493.9 审计格式）。
+        if _m49310_honest_on():
+            _row["pid"] = os.getpid()
+            _row["proc_gen"] = _PROC_GEN
+            _row["assembly"] = _assembly_flag()
         os.makedirs(os.path.dirname(_AUDIT_PATH), exist_ok=True)
         with open(_AUDIT_PATH, "a", encoding="utf-8") as _f:
             _f.write(json.dumps(_row, ensure_ascii=False) + "\n")

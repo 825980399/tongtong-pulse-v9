@@ -9439,6 +9439,12 @@ M4939_FORCE_OFFLINE_LOCAL = False
 # 保持关闭（493.9-8 裁决）：ENABLE_M493_SELF_QUERY_FASTPATH / LEARNED_ALIASES /
 #   CANDIDATE_LEARNING / COLD_START / DIGEST_FUSION —— 影子样本不足，等指称 bug 修完攒一周再评估
 
+# ── 493.10 批 模块图真实消费 + 返回契约诚实化 ──
+# 纪律：两个总闸默认 True（任务书 §二.1）；关 → 逐字回 493.9 状态。
+# 正式 fastpath 主笔 ENABLE_M493_SELF_QUERY_FASTPATH 本批结束仍 False（影子观测继续）。
+ENABLE_M49310_MODULE_GRAPH_CONSUME = True   # 刀1-5 总闸：关系路由/模块 veto/边渲染/过期话术/参数过滤
+ENABLE_M49310_HONEST_RETURN = True          # 刀6-8 总闸：ok=验证通过 + audit 三字段 + 调用方看 verified
+
 # ── 485-7 baseline=0 禁入自动审批 ──
 # ★出厂默认 False（同上，随灰度一并裁决）。False ⇒ A1 内联自动审批与 _m85 本地
 #   低风险放行不查 baseline（逐字回改前；B 通道 _m101 与老化 _m94 早已查，不受影响）。
