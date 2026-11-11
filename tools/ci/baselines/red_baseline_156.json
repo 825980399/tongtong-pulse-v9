@@ -2,7 +2,7 @@
  "generated_at_head": "af37ab50654a1c9f84ee9fce59b756eea234757e",
  "generated_at": "2026-10-31T15:57",
  "methodology": "片2隔离：逐文件单跑 pytest 收集 FAILED；known_fail=隔离失败∩近似全量(155基线∪隔离∪种子污染)；pollution_set=烛微A-3五节点(隔离验证全绿)；isolation_only 剔除。框架停机干净窗。B156-5 re-anchor：新增 tests/test_b156_5_freq_closed_loop.py（15 节点）致 collect 4456→4471，非回归。B156-6 re-anchor：B156-插 tests/test_lung_trace_m40.py 与 B156-6 tests/test_b156_6_log_isolation.py 新增测试共致 collect 4471→4479，非回归。B156-7 re-anchor：tests/test_b156_7_phase18_consumer.py（+4 节点）致 4479→4483；B156-8 re-anchor：tests/test_b156_8_except_pass_pilot.py（+1 节点）致 4483→4484，均非回归；第160批上A 刀4 新增 tests/test_dialog_sanitize_m160.py（10 节点）致 collect 4545→4555，非回归。第160批上A 刀5 新增 tests/test_identity_seed_mission_m160.py（6 节点→实测+5）致 collect 4555→4560，非回归。第160批下上 刀0 新增 tests/test_pollution_tagger_placeholder_m160b.py（11 节点）致 collect 4560→4571，非回归。第160批下上 刀0 灰度开关回归用例 +3 致 collect 4571→4574，非回归；第160批下下 刀2 新增 tests/test_m160_dual_merge.py（5 节点）致 collect 4597→4602，非回归；第160批下下 刀4 新增 tests/test_m160_rebuild_parquet.py（3 节点）致 collect 4602→4605，非回归（本次重锚）。; 2026-10-05 6.1 重锚：剔除 11 项已转绿（复验 50 passed），104 仍红保留; 2026-10-05 第161批段C C1 归零重锚：known_fail 104→14（剔 90 项已转绿，逐文件隔离+干净环境实测）；pollution_set 5 项亦全绿但按裁定保留；14 项仍红逐项红说明见 red_baseline_notes.known_fail_red_reasons；2026-10-07 第167批 C1 重锚：test_lazy_snapshot_m9::test_lazy_vs_full_equivalence 复验转绿（162批刀2 iter_nodes 走线已缓解，167 C1 补 __iter__ 闭环），known_fail 10→9 非回归；collect_baseline 4928 不变；2026-10-09 173批段C收口补锚（星轨，框架停机干净窗）：172批刀1-7 五文件（test_main_loop_pulse_knife1_m172/test_influxdb_rss_knife2_m172/test_metrics_memory_knife3_m172/test_quit_patch_gate_knife4_m172/test_face_welcome_shadow_exit_m172）+174刀1（test_influxdb_connect_wiring_m174）入库后未重锚，collect 实测 4928→5119（+191，六文件全绿非回归）；known_fail 9 不变、pollution 5 不变",
- "collect_baseline": 7756,
+ "collect_baseline": 7853,
  "known_fail": [
   "tests/test_dialog_guard_m15.py::TestSourceWiring::test_head_no_e402_pattern",
   "tests/test_experience_summary_hemostasis_m47.py::TestProductionNotTouched::test_50_production_pool_still_loadable",
@@ -302,6 +302,7 @@
   "356 批阶段B重锚：6129 → 6140（+11）。增量 100% 来自 tests/test_m356_batch.py 追加的刀11/12/14/15/16 用例（单写者仲裁3+日志轮转3+键迁移2+对账2+EventBus1），算术自洽 6129+11=6140，与 GATE_COLLECT_LEVEL=full 实测 6140 完全一致（收集错误 0）；known_fail 9 / pollution_set 5 未动。",
   {
    "reanchor_408": "第408批（2026-10-31）重锚：① **406 报的 9 条「基线外既有红」全部修绿**（不是加进基线，是真修）：`test_pcl_risk_threshold_m54::test_06` 与 `test_patch_auto_approve_m53::test_40` 改成 AST 判定（原实现是字符串/子串扫描，把 `config.py` 的说明文字与 `tools/ci/replay_conditional_writes.py` 的回放数据串当成违规）；`test_evolution_learning_m85::test_31` 改夹具（306刀2 后 `problem_fixed` 一律重派生，裸 True 被派生成 None ⇒ 分母 0，改用 `reprobe_verdict`）；`test_m372_b3_fixed_trigger::test_03` 期望表补 `stale` 迁移；`test_corefile_no_autoapprove_m80` ×5 改夹具（`modified_code` 必须是 def，否则被 284刀5 判结构缺陷整条作废；`issue_type` 必须是已登记族，否则被 372刀1 fail-closed 到中风险）。② **新增 2 条**：m37 的 `TestOrganLogGovernance::test_31/32` —— 408 才发现（406 只跑了 `TestNoE402Regression`），根因是 PulseHands 的自测块被插件化改动删除，与 37 批判据正面冲突，属待裁题（详见 known_fail_red_reasons）。known_fail 9 → 11。③ **`test_experience_summary_hemostasis_m47::test_50` 保留**：本次实测绿，但基线既定「不按偶发绿回收，避免抖动」策略未变。④ **collect 6140 → 8669**：本批新增 51 节点（k1 13 + k2 25 + k3 12 + m404 补 1），其余 2529 为 356~407 批累计新增（`--collect-only -q` 实测 8669、收集错误 0、无删除节点），非回归。★这条读数自 356 批之后就没跟上过，属基线维护欠账，本次一并归位。⑤ pollution_set 5 条未动。"
-  }
- ]
+  },
+  "493.8 批重锚（2026-11-11）：collect_baseline 7756 → 7853（+97）。增量 100% 来自新增 nucleus/self_index/learned_alias.py 与 nucleus/self_index/alias_labeler.py 两模块（语义层自学习闭环骨架）及 tests/test_m4938_alias_learning.py（--collect-only 实测 +97 节点），算术自洽 7756+97=7853；known_fail 9 / pollution_set 5 未动（本批未触及），非回归。CI 基线件单独一笔 [ci-gate-change]。"
+]
 }
