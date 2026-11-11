@@ -239,10 +239,16 @@ def offline_layered_answer(query: str, survival_fn=None) -> dict:
     if _cfg_on("ENABLE_M4939_OFFLINE_LAYER_ORDER") and len(_q) <= 80 \
             and _t == "self_body":
         try:
-            from nucleus.self_index.fastpath import self_query_fastpath_explain
+            from nucleus.self_index.fastpath import (
+                self_query_fastpath_explain, record_self_query_shadow)
             _ex = self_query_fastpath_explain(_q)
             _a = _ex.get("answer")
             _conf = _ex.get("confidence")
+            # ★493.11-5：断网本地这一大类也要落影子，否则误答率统计漏样本
+            if _cfg_on("ENABLE_M49311_SHADOW_FIELDS"):
+                record_self_query_shadow(
+                    _q, _ex, source_path="offline_local",
+                    error_reason=None if _a else "L0_no_match")
             if _a and _conf is not None and float(_conf) >= 0.7:
                 _out.update(answer=TAG_INDEX + " " + str(_a), layer="L0",
                             tag=TAG_INDEX)

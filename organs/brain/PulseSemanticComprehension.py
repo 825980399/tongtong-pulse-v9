@@ -210,6 +210,9 @@ class PulseSemanticComprehension(BasePulseOrgan):
         content = payload.get("content", "")
         user_name = payload.get("user_name", "用户")
         correlation_id = payload.get("correlation_id", "")
+        # ★493.11-2：稳定会话键（QICA 按此分桶，避免 A 的「它呢」绑到 B 的上一轮）
+        session_id = (payload.get("session_id") or payload.get("user_id")
+                      or user_name or "用户")
 
         # ★主线第25批 T1/P2-160 第二道防线：同一轮只分类一次
         if not self._claim_classify_once(correlation_id):
@@ -242,7 +245,8 @@ class PulseSemanticComprehension(BasePulseOrgan):
             self._classify_count += 1
 
             # 1. 本地分类（调用QICA）
-            local_result = self._local_classify(content, user_name, correlation_id)
+            local_result = self._local_classify(content, user_name, correlation_id,
+                                                session_id)
             local_intent = local_result.get("intent_type", "一般对话")
             local_method = local_result.get("suggested_method", "knowledge_retrieve")
             local_paths = local_result.get("knowledge_paths", ["/知识"])
@@ -338,8 +342,9 @@ class PulseSemanticComprehension(BasePulseOrgan):
             }, priority=7, layer="L2")
             return {"status": "fallback", "intent_type": "一般对话", "confidence": 0.3}
 
-    def _local_classify(self, content: str, user_name: str, correlation_id: str) -> dict:
-        """调用QICA进行本地分类"""
+    def _local_classify(self, content: str, user_name: str, correlation_id: str,
+                        session_id: str = "") -> dict:
+        """调用QICA进行本地分类（493.11-2：带稳定 session_id 分桶）"""
         if not self.qica:
             # QICA未注入，返回兜底
             return {
@@ -358,6 +363,7 @@ class PulseSemanticComprehension(BasePulseOrgan):
                 "content": content,
                 "user_name": user_name,
                 "correlation_id": correlation_id,
+                "session_id": session_id,          # 493.11-2
             })
             # result 是返回的 dict，包含 channel, intent_type 等
             return result

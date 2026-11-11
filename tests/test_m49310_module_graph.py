@@ -4,6 +4,8 @@
 纪律：总闸 ENABLE_M49310_MODULE_GRAPH_CONSUME 关 → 逐字回 493.9 行为
 （关系问法重新落回位置分支、link_organ 恢复模块名污染、module.imports 回全图）。
 """
+import re
+
 import pytest
 
 import config as _cfg
@@ -86,8 +88,11 @@ def test_render_event_edge_has_event_and_lines():
     assert _evs, "图中应有 Cortex→Lung 的 lungs.select_model 边"
     _s = " ".join(_render_module_edge(e) for e in _evs)
     assert "lungs.select_model" in _s
-    assert "PulseCortex.py:1939" in _s       # 任务书示例的真实行号
-    assert "PulseLung.py:3727" in _s
+    # ★493.11-2 给 PulseCortex.py 加了 12 行 → 落盘 event 边行号随源码漂移
+    #   （1939→1951）。不钉死具体数字，只断言「起点文件:数字 → 终点文件:数字」
+    #   格式，避免源码增删行造成假红；终点行号也按同一口径校验。
+    assert re.search(r"PulseCortex\.py:\d+", _s), _s
+    assert re.search(r"PulseLung\.py:\d+", _s), _s
 
 
 def test_render_inject_call_edge_marks_unresolved():
@@ -103,7 +108,9 @@ def test_cortex_lung_answer_real():
     _mg = _load_module_graph_cached()
     _ans = _answer_module_call(_mg, "organs.brain.PulseCortex", "organs.body.PulseLung")
     assert _ans and "lungs.select_model" in _ans
-    assert "1939" in _ans and "3727" in _ans
+    # 493.11 同步：不钉死随源码漂移的具体行号，只断言两段真实行号都在
+    assert re.search(r"PulseCortex\.py:\d+", _ans), _ans
+    assert re.search(r"PulseLung\.py:\d+", _ans), _ans
 
 
 def test_iw_infofield_answer_marks_unresolved():

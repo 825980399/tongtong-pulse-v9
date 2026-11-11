@@ -86,11 +86,45 @@ def fastpath_should_skip(content) -> bool:
     return False
 
 
-def record_self_query_shadow(content, explain) -> None:
+#: 493.11-5：进程代（影子日志与 action_audit 各自独立，同进程内一致）
+_SHADOW_PROC_GEN = None
+
+
+def _shadow_proc_gen():
+    global _SHADOW_PROC_GEN
+    if _SHADOW_PROC_GEN is None:
+        import time as _t
+        _SHADOW_PROC_GEN = round(_t.time(), 3)
+    return _SHADOW_PROC_GEN
+
+
+def _guard_reason(content) -> str | None:
+    """493.11-5：指出被哪条 guard 跳过（would_answer=null 时必须有原因）。"""
+    _s = str(content or "").strip()
+    if len(_s) > 80 or "\n" in _s:
+        return "long_text_or_newline"
+    if any(_w in _s for _w in _CAUSAL_WORDS):
+        return "causal_or_judgment_word"
+    if (_CODE_BLOCK.search(_s)
+            or re.search(r"\d{4}[-/]\d{1,2}[-/]\d{1,2}", _s)
+            or re.search(r"https?://|www\.", _s)
+            or re.search(r"[A-Za-z]:[\\/]|/\w+/\w+", _s)
+            or re.search(r"\.\w{2,4}\b", _s)):
+        return "code_or_url_or_timestamp"
+    if not any(_k in _s for _k in _SELF_KW) and not _has_organ_ref(_s):
+        return "no_self_reference"
+    return None
+
+
+def record_self_query_shadow(content, explain, *, session_id=None,
+                             source_path="cortex", guard_reason=None,
+                             error_reason=None) -> None:
     """493.7-4 影子日志：fastpath 照常计算但不答、不 emit，仅落盘 self_query_shadow.jsonl。
 
-    explain 为 self_query_fastpath_explain 的返回 dict（含 would_answer / action_id /
-    organ / confidence / elapsed_ms / skipped_by_guard）。
+    493.11-5 新增字段：session_id / proc_gen / source_path / guard_reason /
+    error_reason / expect_organ / labeled_correct（后两者留空供人工标注）。
+    ``would_answer=null`` 的行**必须**带 guard_reason 或 error_reason，不准静默空。
+    开关 ENABLE_M49311_SHADOW_FIELDS 关 → 逐字回 493.10（只写原有字段）。
     """
     try:
         import os
@@ -122,6 +156,29 @@ def record_self_query_shadow(content, explain) -> None:
             "label": _label,
             "self_ref": _self_ref,
         }
+        try:
+            import config as _cfg11
+            _fields_on = bool(getattr(_cfg11, "ENABLE_M49311_SHADOW_FIELDS", False))
+        except Exception as _e:
+            silent_exc(_e, where="record_self_query_shadow.fields_cfg", level="debug")
+            _fields_on = False
+        if _fields_on:
+            _gr = guard_reason
+            if _gr is None and explain.get("skipped_by_guard"):
+                _gr = _guard_reason(content) or "guard_skipped"
+            _er = error_reason
+            if not _ans and not _gr and not _er:
+                # 不静默空：无答案且无 guard ⇒ 记为「fastpath 未命中」
+                _er = "fastpath_no_match"
+            _row.update({
+                "session_id": session_id,
+                "proc_gen": _shadow_proc_gen(),
+                "source_path": source_path,
+                "guard_reason": _gr,
+                "error_reason": _er,
+                "expect_organ": None,       # 人工标注留空
+                "labeled_correct": None,    # 人工标注留空
+            })
         os.makedirs(os.path.dirname(_path), exist_ok=True)
         with open(_path, "a", encoding="utf-8") as _f:
             _f.write(json.dumps(_row, ensure_ascii=False) + "\n")
@@ -676,6 +733,17 @@ def self_query_fastpath_explain(query) -> dict:
         r"(?:哪|什么位置|哪里|文件|路径|代码)", _q)
     if _m:
         _kw = _m.group(1) or _m.group(2) or _m.group(3)
+        # ★493.11-1：补 493.10-2 遗漏 —— 位置分支走 _find_organ（按文件路径匹配），
+        #   模块名如 PulseCortex 会被绑成「大脑皮层」。先判模块 token，是则答模块位置，
+        #   不走器官描述。复用 493.10 总闸（关 → 逐字回 493.9）。
+        if _m49310_on():
+            from nucleus.self_index.exporters import is_module_token
+            if is_module_token(_kw):
+                _mo = _find_module(_mg, _kw)
+                if _mo:
+                    _set(f"{_kw} 模块在代码路径 {_mo.get('file')}（模块 {_mo.get('module')}）。",
+                         "module.location", 0.85, intent="location")
+                    return _explain
         _o = _find_organ(_organs, _kw)
         if _o is None:
             _mo = _find_module(_mg, _kw)
@@ -694,6 +762,15 @@ def self_query_fastpath_explain(query) -> dict:
     for _w in re.findall(rf"{_TOKEN}", _q):
         if len(_w) < 3:
             continue
+        # 493.11-1：分支4 同理，模块 token 先答模块位置，不被器官化
+        if _m49310_on():
+            from nucleus.self_index.exporters import is_module_token
+            if is_module_token(_w):
+                _mo = _find_module(_mg, _w)
+                if _mo:
+                    _set(f"{_w} 模块在代码路径 {_mo.get('file')}（模块 {_mo.get('module')}）。",
+                         "module.location", 0.85, intent="location")
+                    return _explain
         _o = _find_organ(_organs, _w)
         if not _o:
             _mo = _find_module(_mg, _w)

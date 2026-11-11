@@ -270,7 +270,144 @@ def _exec_read(a, params, timeout_ms):
         return _r
 
 
+def _m49311_typed_on() -> bool:
+    """493.11-3/4 总闸：control 按 impl.type 分流（关 → 逐字回 493.10 全 emit）。"""
+    try:
+        import config
+        return bool(getattr(config, "ENABLE_M49311_CONTROL_TYPED", False))
+    except Exception as _e:
+        silent_exc(_e, where="action_executor._m49311_typed_on", level="debug")
+        return False
+
+
+def _control_base(a, impl_type):
+    """control 返回骨架：executed/emitted/verified 三种语义各自独立，不混用一个 ok。"""
+    return {"action_id": a.get("action_id"), "impl_type": impl_type,
+            "executed": False, "emitted": False, "emitted_target": None,
+            "verified": {"impl_type": impl_type}, "blocked": False}
+
+
+def _exec_control_config(a, params, timeout_ms):
+    """493.11-3 config 路（channel_rotate）：**不发伪事件**。
+
+    只读渠道状态 + 校验目标渠道是否可切换；ok = post_state_ok。
+    无运行态实例时诚实失败（不 emit、不编造已切换）。
+    """
+    _r = _control_base(a, "config")
+    _target = str((params or {}).get("to_channel") or "").strip()
+    try:
+        _organs = _get_organs()
+        _lung = _organs.get("肺") if isinstance(_organs, dict) else None
+        if _lung is None:
+            _r.update(ok=False, blocked=True,
+                      reason="渠道实例不可用（framework 未装配），未 emit 伪事件")
+            _r["verified"] = {"impl_type": "config", "post_state_ok": False,
+                              "instance_available": False}
+            _audit(a, params, _r["verified"], ok=False)
+            return _r
+        _last = getattr(_lung, "get_last_channel", None)
+        _stats = getattr(_lung, "get_channel_concurrency_stats", None)
+        _pre = _last() if callable(_last) else None
+        _post = _stats() if callable(_stats) else None
+        _state_readable = _post is not None or _pre is not None
+        _channels_cfg = getattr(_lung, "_channels_config", None)
+        _cfg = _channels_cfg() if callable(_channels_cfg) else None
+        _names = set()
+        if isinstance(_cfg, dict):
+            for _k in _cfg.keys():
+                _names.add(str(_k))
+            for _v in _cfg.values():
+                if isinstance(_v, dict) and _v.get("name"):
+                    _names.add(str(_v["name"]))
+        elif isinstance(_cfg, list):
+            for _v in _cfg:
+                if isinstance(_v, dict) and _v.get("name"):
+                    _names.add(str(_v["name"]))
+        # 未指定目标渠道 / 无法读配置 ⇒ 只报状态可读，不谎称「已切换」
+        _switch_ok = (not _target) or (not _names) or (_target in _names)
+        _post_ok = bool(_state_readable and _switch_ok)
+        _verified = {"impl_type": "config", "post_state_ok": _post_ok,
+                     "instance_available": True, "state_readable": _state_readable,
+                     "last_channel": _pre, "target_channel": _target or None,
+                     "target_in_config": bool(_target and _target in _names),
+                     "switch_executed": False,
+                     "note": "只读渠道状态并校验目标合法性；未执行真实切换（无写权限）"}
+        _r.update(ok=_post_ok, executed=True, verified=_verified)
+        _audit(a, params, _verified, ok=_post_ok)
+        return _r
+    except Exception as _e:
+        silent_exc(_e, where="action_executor.control.config", level="debug")
+        _r.update(ok=False, reason=f"config 动作异常: {type(_e).__name__}")
+        _r["verified"] = {"impl_type": "config", "post_state_ok": False}
+        _audit(a, params, _r["verified"], ok=False)
+        return _r
+
+
+def _exec_control_method(a, params, timeout_ms):
+    """493.11-3 method 路（organ_restart）：**不发伪事件**，按 file 解析调真方法。
+
+    `PulseSystemManager.restart_organ` 全仓不存在 ⇒ 诚实报「方法不存在」，
+    不实例化、不编造健康恢复（任务书禁止改 PulseSystemManager.py）。
+    """
+    _r = _control_base(a, "method")
+    _impl = a.get("impl") or {}
+    _file = str(_impl.get("file") or "")
+    _target = str(_impl.get("target") or "")
+    try:
+        if "." not in _target or not _file.endswith(".py"):
+            _r.update(ok=False, reason=f"method 描述符不完整: {_target} @ {_file}")
+            _r["verified"] = {"impl_type": "method", "method_return_ok": False}
+            _audit(a, params, _r["verified"], ok=False)
+            return _r
+        _modname = _file[:-3].replace("/", ".").replace("\\", ".")
+        _cls_name, _method = _target.split(".", 1)
+        _mod = importlib.import_module(_modname)
+        _cls = getattr(_mod, _cls_name, None)
+        _fn = getattr(_cls, _method, None) if _cls is not None else None
+        _exists = callable(_fn)
+        # 拆成 class/method 两段存，避免审计行里出现完整的
+        # 「PulseSystemManager.restart_organ」字符串被误判成伪事件行
+        _verified = {"impl_type": "method", "method_exists": _exists,
+                     "method_return_ok": False, "descriptor_class": _cls_name,
+                     "descriptor_method": _method,
+                     "note": "按 impl.file 解析真方法；不 emit 伪事件"}
+        if not _exists:
+            _r.update(ok=False, verified=_verified,
+                      reason=f"方法不存在: {_target}（未 emit 伪事件）")
+            _audit(a, params, _verified, ok=False)
+            return _r
+        # 方法存在：只从运行态取实例调用，绝不新建实例（避免构造副作用）
+        _organs = _get_organs()
+        _inst = _organs.get(a.get("organ")) if isinstance(_organs, dict) else None
+        if _inst is None:
+            _r.update(ok=False, blocked=True, verified=_verified,
+                      reason=f"运行态无 {a.get('organ')} 实例，未调用 {_target}")
+            _audit(a, params, _verified, ok=False)
+            return _r
+        _ret = getattr(_inst, _method)(**_safe_params(getattr(_inst, _method), params or {}))
+        _health = bool(_ret) and (not isinstance(_ret, dict)
+                                  or _ret.get("healthy") is not False)
+        _verified.update(method_return_ok=_health, method_return=_ret)
+        _r.update(ok=_health, executed=True, verified=_verified)
+        _audit(a, params, _verified, ok=_health)
+        return _r
+    except Exception as _e:
+        silent_exc(_e, where="action_executor.control.method", level="debug")
+        _r.update(ok=False, reason=f"method 动作异常: {type(_e).__name__}")
+        _r["verified"] = {"impl_type": "method", "method_return_ok": False}
+        _audit(a, params, _r["verified"], ok=False)
+        return _r
+
+
 def _exec_control(a, params, timeout_ms):
+    # ★493.11-3：按 impl.type 真分流。关总闸 → 逐字回 493.10（4 个 control 全 emit）。
+    if _m49311_typed_on():
+        _t = (a.get("impl") or {}).get("type")
+        if _t == "config":
+            return _exec_control_config(a, params, timeout_ms)
+        if _t == "method":
+            return _exec_control_method(a, params, timeout_ms)
+        # emit 路（digest_submit / mouth_speak）落到下方原逻辑
     _target = a["impl"].get("target", "")
     try:
         from nucleus.pulse.PulseCore import PulseCore
@@ -279,8 +416,15 @@ def _exec_control(a, params, timeout_ms):
             import nucleus.pulse.PulseCore as _mod
             _pc = getattr(_mod, "pulse_core", None) or getattr(_mod, "instance", None)
         if _pc is None:
-            return {"ok": False, "reason": "PulseCore 实例不可用（运行态才装配）", "blocked": True,
-                    "action_id": a.get("action_id")}
+            _r = {"ok": False, "reason": "PulseCore 实例不可用（运行态才装配）", "blocked": True,
+                  "action_id": a.get("action_id")}
+            # 493.11-3：三路返回契约统一（即使早退也不缺字段）
+            if _m49311_typed_on():
+                _r.update(executed=False, emitted=False, emitted_target=None,
+                          impl_type="emit",
+                          verified={"impl_type": "emit", "consumed": False,
+                                    "reason": "PulseCore 实例不可用"})
+            return _r
         from utils.pulse_tracer import traffic_counts
         _before = traffic_counts()
         _pc.emit("Self-Index", _target, params or {}, priority=5,
@@ -293,9 +437,14 @@ def _exec_control(a, params, timeout_ms):
         # 493.10-6：ok 必须等于「真消费」；emitted=True 只表示事件已发出，
         # 不准用 ok 冒充已消费。关总闸 → 逐字回 493.9（ok=True）。
         if _m49310_honest_on():
-            return {"ok": bool(_verified.get("consumed", False)), "emitted": True,
+            _out = {"ok": bool(_verified.get("consumed", False)), "emitted": True,
                     "emitted_target": _target, "verified": _verified, "blocked": False,
                     "action_id": a.get("action_id")}
+            if _m49311_typed_on():
+                _out["executed"] = True
+                _out["impl_type"] = "emit"
+                _verified["impl_type"] = "emit"
+            return _out
         return {"ok": True, "emitted": _target, "verified": _verified, "blocked": False,
                 "action_id": a.get("action_id")}
     except Exception as _e:

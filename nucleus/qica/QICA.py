@@ -18,6 +18,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 import threading
+from collections import OrderedDict, deque
 from typing import Any
 
 import config
@@ -285,6 +286,11 @@ class QICA(BasePulseOrgan):
         self._context_history: list[dict[str, Any]] = []  # [{task_type, raw_text, entities, ...}]
         self._context_lock = threading.Lock()
         self._max_context_history = 5  # 保留最近 5 轮
+        # ★493.11-2：会话分桶。保留上面的 legacy list（快照格式、开关关、旧调用、__global__
+        #   桶都用），新增 dict[session_id -> (deque, last_write_ts)]。开关默认 False/影子。
+        self._session_histories: OrderedDict[str, tuple] = OrderedDict()
+        self._m49311_max_sessions = int(getattr(config, "M49311_MAX_SESSIONS", 256) or 256)
+        self._m49311_ttl = int(getattr(config, "M49311_SESSION_TTL_SEC", 1800) or 1800)
         self._domain_knowledge = {
             # ── 技术架构 ──
             "脉冲场": "/技术/架构",
@@ -512,6 +518,8 @@ class QICA(BasePulseOrgan):
         raw_text = payload.get("content", "")
         user_name = payload.get("user_name", "用户")  # noqa: F841
         correlation_id = payload.get("correlation_id", "")  # noqa: F841
+        # ★493.11-2：稳定 session key（不随 correlation_id 每轮变化）
+        session_id = self._m49311_session_id(payload)
 
         self._classify_count += 1
 
@@ -522,9 +530,9 @@ class QICA(BasePulseOrgan):
         anchor = self._i_classify(anchor)
 
         # ★本地语义理解增强：上下文辅助（追问/指代消解）+ 意图特征向量 + 记录上下文
-        anchor = self._context_assist(raw_text, anchor)
+        anchor = self._context_assist(raw_text, anchor, session_id)
         anchor["intent_vector"] = self._build_intent_vector(anchor)
-        self._record_context(anchor)
+        self._record_context(anchor, session_id)
         # ★P1-45：统一意图精修后处理（覆盖关键词/融合/默认三条路径）
         anchor = self._apply_intent_refine(raw_text, anchor)
         # ★预埋PHASE18数据：推理模式使用信号（灰度，关闭时 no-op）
@@ -818,6 +826,12 @@ class QICA(BasePulseOrgan):
                 _snapshot["context_history"] = [
                     dict(_c) for _c in self._context_history
                 ]
+            # 493.11-2：会话分桶一并持久化（deque → list，ts 保留）
+            if self._m49311_session_on() and getattr(self, "_session_histories", None):
+                _snapshot["session_histories"] = {
+                    _sid: {"history": [dict(_c) for _c in _dq], "ts": _ts}
+                    for _sid, (_dq, _ts) in self._session_histories.items()
+                }
         return _snapshot
 
     def load_state_snapshot(self, state: dict[str, Any]):
@@ -856,6 +870,21 @@ class QICA(BasePulseOrgan):
                         self._context_history.append(dict(_c))
                 if len(self._context_history) > self._max_context_history:
                     self._context_history = self._context_history[-self._max_context_history:]
+        # 493.11-2：恢复会话分桶（只在开关开时，避免污染关态）
+        _sessions = state.get("session_histories")
+        if self._m49311_session_on() and isinstance(_sessions, dict):
+            with self._context_lock:
+                for _sid, _payload in _sessions.items():
+                    if not isinstance(_payload, dict):
+                        continue
+                    _rows = _payload.get("history") or []
+                    _dq = deque((dict(_r) for _r in _rows
+                                 if isinstance(_r, dict)),
+                                maxlen=self._max_context_history)
+                    self._session_histories[str(_sid)] = (
+                        _dq, float(_payload.get("ts") or time_mod.time()))
+                    if len(self._session_histories) > self._m49311_max_sessions:
+                        self._session_histories.popitem(last=False)
 
 
     # ========== Q环节：接收锚定 ==========
@@ -986,7 +1015,69 @@ class QICA(BasePulseOrgan):
             "intent_semantic_sig": [_neg, _q, _imp, _ent],
         }
 
-    def _context_assist(self, raw_text: str, anchor: dict[str, Any]) -> dict[str, Any]:
+    # ══════════ 493.11-2：会话分桶 ══════════
+    @staticmethod
+    def _m49311_session_on() -> bool:
+        """独立开关：会话隔离（默认 False/影子；关 → 逐字回 493.10 全局 list 行为）。"""
+        try:
+            return bool(getattr(config, "ENABLE_M49311_SESSION_ISOLATION", False))
+        except Exception as _e:
+            silent_exc(_e, where="QICA._m49311_session_on", level="debug")
+            return False
+
+    @staticmethod
+    def _m49311_session_id(payload: dict) -> str:
+        """稳定 session key：session_id > user_id > user_name > __global__。"""
+        for _k in ("session_id", "user_id", "user_name"):
+            _v = payload.get(_k) if isinstance(payload, dict) else None
+            if _v and str(_v).strip() and str(_v).strip() != "用户":
+                return str(_v).strip()
+        return "__global__"
+
+    def _m49311_bucket(self, session_id: str):
+        """取该会话的 deque（LRU 命中移到末尾）；带 TTL 清理 + 256 上限淘汰。
+
+        仅开关开时调用；__global__ 是独立桶，绝不作为其他会话的兜底。
+        """
+        _now = time_mod.time()
+        _maxn = getattr(self, "_m49311_max_sessions", 256)
+        _ttl = getattr(self, "_m49311_ttl", 1800)
+        _buckets = getattr(self, "_session_histories", None)
+        if _buckets is None:
+            _buckets = OrderedDict()
+            self._session_histories = _buckets
+        # ① TTL：清掉 30 分钟无写入的会话
+        for _sid in list(_buckets.keys()):
+            if _now - _buckets[_sid][1] > _ttl:
+                _buckets.pop(_sid, None)
+        # ② LRU：超上限淘汰最久未用（OrderedDict 头部）
+        while len(_buckets) >= _maxn and session_id not in _buckets:
+            _buckets.popitem(last=False)
+        if session_id not in _buckets:
+            _buckets[session_id] = (deque(maxlen=self._max_context_history), _now)
+        else:
+            _dq, _ = _buckets[session_id]
+            _buckets[session_id] = (_dq, _now)
+        _buckets.move_to_end(session_id)
+        return _buckets[session_id][0]
+
+    def _m49311_history(self, session_id):
+        """读当前会话历史（list 副本）；开关关 → legacy 全局 list（493.10 行为）。"""
+        if not self._m49311_session_on():
+            return list(self._context_history)
+        return list(self._m49311_bucket(session_id))
+
+    def _m49311_record(self, row: dict, session_id) -> None:
+        """写当前会话历史；开关关 → legacy 全局 list（493.10 行为）。"""
+        if not self._m49311_session_on():
+            self._context_history.append(row)
+            if len(self._context_history) > self._max_context_history:
+                self._context_history = self._context_history[-self._max_context_history:]
+            return
+        self._m49311_bucket(session_id).append(row)
+
+    def _context_assist(self, raw_text: str, anchor: dict[str, Any],
+                        session_id: str | None = None) -> dict[str, Any]:
         """上下文辅助：用最近 N 轮分类结果辅助当前分类（追问/指代消解/意图连贯性）。
 
         规则（轻量、不强行改意图，仅做信号增强）：
@@ -996,8 +1087,11 @@ class QICA(BasePulseOrgan):
                提示下游可回看上轮实体。
             3. 意图连贯性：若当前与上轮意图一致，置信度小幅上浮。
         """
+        # 493.11-2：按 session 取历史；开关关 → 全局 list（逐字回 493.10）
+        _sid = session_id or anchor.get("session_id") or "__global__"
         with self._context_lock:
-            _history = list(self._context_history)
+            _history = self._m49311_history(_sid)
+        anchor["session_id"] = _sid
         anchor["context_assisted"] = False
         anchor["has_anaphora"] = any(_p in raw_text for _p in ("它", "这个", "那个", "那", "这"))
         # ===== 493.9-7：上下文指代最小消解（独立开关，关 → 逐字回 493.8）=====
@@ -1070,8 +1164,10 @@ class QICA(BasePulseOrgan):
             _cur = [float(_x) for _x in _vec.get("intent_semantic_sig", [])]
             if not _cur:
                 return 0.0
+            # 493.11-2：意图向量连贯性也必须按会话取，否则 A 的向量会串到 B
+            _sid = anchor.get("session_id") or "__global__"
             with self._context_lock:
-                _hist = list(self._context_history)
+                _hist = self._m49311_history(_sid)
             if not _hist:
                 return 0.0
             _cands = []
@@ -1091,10 +1187,15 @@ class QICA(BasePulseOrgan):
             silent_exc(e, where="nucleus.qica.QICA::_intent_vector_match L969", level="debug")
             return 0.0
 
-    def _record_context(self, anchor: dict[str, Any]) -> None:
-        """把本次分类结果写入上下文记忆（容量受控，线程安全）。"""
+    def _record_context(self, anchor: dict[str, Any],
+                        session_id: str | None = None) -> None:
+        """把本次分类结果写入上下文记忆（容量受控，线程安全）。
+
+        493.11-2：按 session 分桶；开关关 → 全局 list（逐字回 493.10）。
+        """
+        _sid = session_id or anchor.get("session_id") or "__global__"
         with self._context_lock:
-            self._context_history.append({
+            self._m49311_record({
                 "task_type": anchor.get("task_type", ""),
                 "raw_text": anchor.get("raw_input", ""),
                 "entities": list(anchor.get("entities", [])),
@@ -1106,9 +1207,7 @@ class QICA(BasePulseOrgan):
                 "intent_semantic_sig": list(
                     (anchor.get("intent_vector") or {}).get("intent_semantic_sig", [])
                 ) if isinstance(anchor.get("intent_vector"), dict) else [],
-            })
-            if len(self._context_history) > self._max_context_history:
-                self._context_history = self._context_history[-self._max_context_history:]
+            }, _sid)
 
 
     def _has_negation(self, text: str) -> bool:

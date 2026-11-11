@@ -880,6 +880,10 @@ class PulseCortex(BasePulseOrgan):
         """收到聊天消息，发射分类请求脉冲给QICA（L1实时交互层）"""
         content = payload.get("content", "")
         user_name = payload.get("user_name", "用户")
+        # ★493.11-2：稳定会话标识 —— 优先上游 session_id/user_id，否则用 user_name
+        #   （跨轮稳定；绝不用每轮变化的 correlation_id 当会话键）。
+        session_id = (payload.get("session_id") or payload.get("user_id")
+                      or user_name or "用户")
         file_paths = payload.get("file_paths", [])
         code_blocks = payload.get("code_blocks", [])
         # ★492-4：合成流量判据（is_synthetic 或 acc 测试桩），随消息上下文透传到
@@ -987,11 +991,15 @@ class PulseCortex(BasePulseOrgan):
                 if _skipped:
                     if _shadow_on:
                         record_self_query_shadow(
-                            content, {"answer": None, "skipped_by_guard": True})
+                            content, {"answer": None, "skipped_by_guard": True},
+                            session_id=session_id, source_path="cortex",
+                            guard_reason="m4937_guard")
                 else:
                     _explain = self_query_fastpath_explain(content)
                     if _shadow_on:
-                        record_self_query_shadow(content, _explain)
+                        record_self_query_shadow(
+                            content, _explain, session_id=session_id,
+                            source_path="cortex")
                     if _fp_on and _explain.get("answer"):
                         self._emit(MouthEvent.SPEAK, {
                             "content": _explain["answer"],
@@ -1045,6 +1053,7 @@ class PulseCortex(BasePulseOrgan):
                 "content": content,
                 "user_name": user_name,
                 "correlation_id": correlation_id,
+                "session_id": session_id,          # 493.11-2：稳定会话键
             }, priority=7, layer="L1")
             self._m487_dialog_trace("semantic_classify", "L1", "emit", correlation_id)
             return {
@@ -1737,6 +1746,9 @@ class PulseCortex(BasePulseOrgan):
                 "content": _ctx.get("content", ""),
                 "user_name": _ctx.get("user_name", "用户"),
                 "correlation_id": _cid,
+                # 493.11-2：排队会话从暂存 ctx 取，缺则用 user_name 兜底（稳定）
+                "session_id": (_ctx.get("session_id") or _ctx.get("user_id")
+                               or _ctx.get("user_name") or "用户"),
             }, priority=7, layer="L1")
             self._log(LogLevel.INFO,
                      f"对话队列: 派发排队会话 cid={_cid[:16]}（剩余 {len(self._dialog_queue)}）")

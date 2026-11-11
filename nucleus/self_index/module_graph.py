@@ -23,18 +23,32 @@ from nucleus.self_index import exporters
 # self.ATTR → 目标模块全名（属性调用消解：self.info_field.publish → InfoField.publish）
 INJECT_MAP: dict[str, str] = {
     "info_field": "nucleus.field.InfoField",
-    "pulse_core": "nucleus.core.PulseCore",
-    "node_pool": "nucleus.PulseNodePool",
-    "knowledge_tree": "nucleus.knowledge.KnowledgeTree",
+    # ★493.11-6：修正 6 条错路径（任务书列 5 条，实测另有 hormones 1 条）。
+    #   这些模块名同时是 call 边 `to` 与 call_graph 节点 `module` 的对齐键，
+    #   写错会导致目标侧无法定位 file/line。修改后需重新落盘 module_graph.json。
+    "pulse_core": "nucleus.pulse.PulseCore",              # 原 nucleus.core.PulseCore（无此文件）
+    "node_pool": "nucleus.mnemosyne.PulseNodePool",       # 原 nucleus.PulseNodePool
+    "knowledge_tree": "nucleus.mnemosyne.KnowledgeTree",  # 原 nucleus.knowledge.KnowledgeTree
     "qica": "nucleus.qica.QICA",
     "cortex": "organs.brain.PulseCortex",
     "lung": "organs.body.PulseLung",
-    "mouth": "organs.output.PulseMouth",
+    "mouth": "organs.motor.PulseMouth",                   # 原 organs.output.PulseMouth
     "inner_world": "organs.brain.PulseInnerWorld",
-    "hormones": "organs.body.PulseHormones",
+    "hormones": "organs.endocrine.PulseHormones",         # 原 organs.body.PulseHormones（实测补充）
     "self_awareness": "organs.identity.PulseSelfAwareness",
     "narrative_self": "organs.identity.PulseNarrativeSelf",
-    "resonance_engine": "nucleus.resonance.ResonanceEngine",
+    "resonance_engine": "nucleus.synapsys.ResonanceEngine",  # 原 nucleus.resonance.ResonanceEngine
+}
+
+#: 493.11-6：旧（错误）模块名 → 新（正确）模块名，用于给已落盘的
+#: module_graph.json 历史边做**读取期**对齐（不重写落盘文件里的 to 字段）。
+INJECT_MAP_LEGACY_FIX: dict[str, str] = {
+    "nucleus.core.PulseCore": "nucleus.pulse.PulseCore",
+    "nucleus.PulseNodePool": "nucleus.mnemosyne.PulseNodePool",
+    "nucleus.knowledge.KnowledgeTree": "nucleus.mnemosyne.KnowledgeTree",
+    "organs.output.PulseMouth": "organs.motor.PulseMouth",
+    "organs.body.PulseHormones": "organs.endocrine.PulseHormones",
+    "nucleus.resonance.ResonanceEngine": "nucleus.synapsys.ResonanceEngine",
 }
 
 _SCAN_SUBDIRS = ("nucleus", "organs", "functions", "base")
@@ -213,7 +227,8 @@ def build_module_graph(root: str | None = None) -> dict:
             key = (module, to_mod, kind, attr, method or "")
             if key not in edges:
                 edges[key] = {"from": module, "to": to_mod, "kind": kind,
-                              "via": attr, "from_file": _rel, "from_line": line,
+                              "via": attr, "method": method,  # 493.11-6
+                              "from_file": _rel, "from_line": line,
                               "to_file": None, "to_line": None, "count": 0}
             edges[key]["count"] += 1
             if to_mod not in nodes:
@@ -240,12 +255,129 @@ def build_module_graph(root: str | None = None) -> dict:
                                   "to_file": trel, "to_line": tline, "count": 0}
                 edges[key]["count"] += 1
 
+    _out_edges = list(edges.values())
+    # ★493.11-6：生成时即补 call 边目标行号（复用 graph_latest.json，不重建 call graph）
+    enrich_call_edges(_out_edges)
     return {
         "version": "493.5.graph.v1",
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "nodes": list(nodes.values()),
-        "edges": list(edges.values()),
+        "edges": _out_edges,
     }
+
+
+def _m49311_call_lines_on() -> bool:
+    """493.11-6 开关（关 → 逐字回 493.10：call 边 to_line 全 None）。"""
+    try:
+        import config
+        return bool(getattr(config, "ENABLE_M49311_CALL_LINES", False))
+    except Exception as _e:
+        silent_exc(_e, where="module_graph._m49311_call_lines_on", level="debug")
+        return False
+
+
+def _load_call_graph_index() -> dict:
+    """复用 data/call_graph/graph_latest.json（不重建 call graph）。
+
+    返回 {(module, method_name): (file, line)}；同名方法多定义取第一个，
+    用 file 与修正后的 INJECT_MAP 目标模块路径互相校验。
+    """
+    _idx: dict = {}
+    try:
+        import json
+        _p = os.path.join("data", "call_graph", "graph_latest.json")
+        if not os.path.isfile(_p):
+            return _idx
+        with open(_p, encoding="utf-8", errors="replace") as _f:
+            _g = json.load(_f)
+        for _n in _g.get("nodes", []) or []:
+            _mod = str(_n.get("module") or "")
+            _name = str(_n.get("name") or "")
+            _file, _line = _n.get("file"), _n.get("line")
+            if _mod and _name and _file and _line is not None:
+                _idx.setdefault((_mod, _name), (_file, int(_line)))
+    except Exception as _e:
+        silent_exc(_e, where="module_graph._load_call_graph_index", level="debug")
+    return _idx
+
+
+def _infer_call_method(edge: dict) -> str | None:
+    """从边里已有的 method 字段，或 from_file:from_line 源码行解析 `self.<via>.<method>(`。"""
+    _m = edge.get("method")
+    if _m:
+        return str(_m)
+    _f, _ln, _via = edge.get("from_file"), edge.get("from_line"), edge.get("via")
+    if not _f or not _ln or not _via or not os.path.isfile(_f):
+        return None
+    try:
+        import re
+        with open(_f, encoding="utf-8", errors="replace") as _fh:
+            _lines = _fh.read().splitlines()
+        if not (0 < int(_ln) <= len(_lines)):
+            return None
+        _src = _lines[int(_ln) - 1]
+        _hit = re.search(r"self\." + re.escape(str(_via)) + r"\.(\w+)\s*\(", _src)
+        return _hit.group(1) if _hit else None
+    except Exception as _e:
+        silent_exc(_e, where="module_graph._infer_call_method", level="debug")
+        return None
+
+
+def enrich_call_edges(edges: list) -> dict:
+    """493.11-6：给 call 边补 method / to_file / to_line。
+
+    - 命中 call_graph 节点 → 写真实 file:line（**绝不编行号**）；
+    - 未命中 → 保留 to_line=None，写 ``reason="no_call_graph_node"``；
+    - import / inject 边**不动**（模块级/装配级无语义）。
+    """
+    _stats = {"total": len(edges), "call": 0, "resolved": 0,
+              "unresolved": 0, "no_method": 0}
+    if not _m49311_call_lines_on():
+        return _stats
+    _idx = _load_call_graph_index()
+    for _e in edges:
+        if _e.get("kind") != "call":
+            continue
+        _stats["call"] += 1
+        _method = _infer_call_method(_e)
+        if _method:
+            _e["method"] = _method
+        else:
+            _stats["no_method"] += 1
+        _to = INJECT_MAP_LEGACY_FIX.get(str(_e.get("to") or ""), _e.get("to"))
+        _hit = _idx.get((_to, _method)) if _method else None
+        if _hit is None and _method:
+            # 退路：按末段类名 + 方法名找（兼容 graph 里 module 前缀差异）
+            _cls = str(_to).split(".")[-1]
+            for (_m, _n), _v in _idx.items():
+                if _m.split(".")[-1] == _cls and _n == _method:
+                    _hit = _v
+                    break
+        if _hit:
+            _e["to_file"], _e["to_line"] = _hit
+            _e.pop("reason", None)
+            _stats["resolved"] += 1
+        else:
+            _e["to_file"] = None
+            _e["to_line"] = None
+            _e["reason"] = "no_call_graph_node"
+            _stats["unresolved"] += 1
+    return _stats
+
+
+def enrich_module_graph_file() -> dict:
+    """一次性补齐已落盘 module_graph.json 的 call 边行号（写回原文件）。"""
+    import json
+    _p = os.path.join("data", "self_index", "module_graph.json")
+    if not os.path.isfile(_p):
+        return {"error": "module_graph.json 不存在"}
+    with open(_p, encoding="utf-8", errors="replace") as _f:
+        _g = json.load(_f)
+    _stats = enrich_call_edges(_g.get("edges", []) or [])
+    _g["call_lines_enriched"] = True
+    with open(_p, "w", encoding="utf-8", newline="\n") as _f:
+        json.dump(_g, _f, ensure_ascii=False, indent=1)
+    return _stats
 
 
 def _load_graph_from_disk() -> dict | None:

@@ -9445,6 +9445,16 @@ M4939_FORCE_OFFLINE_LOCAL = False
 ENABLE_M49310_MODULE_GRAPH_CONSUME = True   # 刀1-5 总闸：关系路由/模块 veto/边渲染/过期话术/参数过滤
 ENABLE_M49310_HONEST_RETURN = True          # 刀6-8 总闸：ok=验证通过 + audit 三字段 + 调用方看 verified
 
+# ── 493.11 批 会话隔离 + control 类型分流 + 影子字段补齐 ──
+# 纪律：会话隔离独立开关**默认先 False/影子**，验证通过后再开，不一步切主；其余默认开。
+ENABLE_M49311_SESSION_ISOLATION = False      # 刀2（P0）：QICA 上下文按 session 分桶（默认影子关）
+ENABLE_M49311_CONTROL_TYPED = True           # 刀3-4：control 按 impl.type 分 emit/config/method
+ENABLE_M49311_SHADOW_FIELDS = True           # 刀5：影子日志字段补齐 + 断网路径落影子
+ENABLE_M49311_CALL_LINES = True              # 刀6：call 边 to_line 补齐（复用 graph_latest.json）
+#: 会话分桶容量（任务书：全局上限 256，单会话 5 轮，30 分钟无写入清理）
+M49311_MAX_SESSIONS = 256
+M49311_SESSION_TTL_SEC = 1800
+
 # ── 485-7 baseline=0 禁入自动审批 ──
 # ★出厂默认 False（同上，随灰度一并裁决）。False ⇒ A1 内联自动审批与 _m85 本地
 #   低风险放行不查 baseline（逐字回改前；B 通道 _m101 与老化 _m94 早已查，不受影响）。
