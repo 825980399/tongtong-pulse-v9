@@ -410,6 +410,24 @@ def _merge_candidate_into_overlay(ov: dict, cand: dict) -> None:
             })
 
 
+def _row_date_str(ts) -> str:
+    """493.12-4：影子 ts 归一化为 YYYY-MM-DD。
+
+    兼容两种来源：真实影子是 float（如 1794352372.817）→ fromtimestamp；
+    测试/历史影子是 ISO 字符串（如 2026-11-11T00:00:00）→ 直接取日期段。
+    旧实现 ``str(ts).find(date)`` 对 float 永远失败 → date 过滤完全失效。
+    """
+    try:
+        return datetime.datetime.fromtimestamp(float(ts)).strftime("%Y-%m-%d")
+    except (ValueError, TypeError):
+        _s = str(ts or "")
+        if "T" in _s:
+            _s = _s.split("T", 1)[0]
+        if re.match(r"^\d{4}-\d{2}-\d{2}$", _s):
+            return _s
+        return ""
+
+
 def fuse_shadow_to_overlay(shadow_path: str = None, date: str = None) -> int:
     """读取影子日志（按日期或全量），抽取候选并合并进 overlay quarantine。
 
@@ -433,8 +451,11 @@ def fuse_shadow_to_overlay(shadow_path: str = None, date: str = None) -> int:
                     _row = json.loads(_line)
                 except Exception:
                     continue
-                if date and str(_row.get("ts", "")).find(date) < 0:
-                    continue
+                if date:
+                    # ★493.12-4：真实影子 ts 是 float（如 1794352372.817），
+                    #   str(ts).find(date) 永远匹配不到 → 改成按日期归一化比较。
+                    if _row_date_str(_row.get("ts")) != date:
+                        continue
                 _cands = extract_candidates_from_shadow_row(_row)
                 for _c in _cands:
                     _merge_candidate_into_overlay(_ov, _c)
@@ -533,5 +554,186 @@ def metrics() -> dict:
             "digest_fusion": _cfg_on("ENABLE_M4938_DIGEST_FUSION"),
             "safety_boundary": _cfg_on("ENABLE_M4938_SAFETY_BOUNDARY"),
             "alias_veto": _cfg_on("ENABLE_M4938_ALIAS_VETO"),
+        },
+    }
+
+
+# =============================================================================
+# 493.12-4/5：dry-run 独立候选管线（只写候选文件，绝不写 overlay / 不 promote / 不改 link_organ）
+# =============================================================================
+_DRYRUN_SHADOW_EVERY = 100          # 每 100 条影子触发一次抽取
+_DRYRUN_COUNTER = 0
+_SEED_VETO_DONE = False
+
+
+def _dryrun_candidates_path() -> str:
+    return os.path.join("data", "self_index", "alias_candidates_dryrun.jsonl")
+
+
+def _dryrun_existing_keys() -> set:
+    """已写入 dryrun.jsonl 的去重键（query|organ|label）。"""
+    _keys: set = set()
+    try:
+        if os.path.isfile(_dryrun_candidates_path()):
+            with open(_dryrun_candidates_path(), "r", encoding="utf-8") as _f:
+                for _line in _f:
+                    _line = _line.strip()
+                    if not _line:
+                        continue
+                    try:
+                        _r = json.loads(_line)
+                    except Exception:
+                        continue
+                    _keys.add(f"{_r.get('query')}|{_r.get('organ')}|{_r.get('label')}")
+    except Exception as _e:
+        silent_exc(_e, where="learned_alias._dryrun_existing_keys", level="debug")
+    return _keys
+
+
+def _scan_dryrun_candidates(shadow_path: str = None) -> list:
+    """扫描影子日志，抽出所有候选（含是否被 veto 拦截）。**不写任何文件**。
+
+    复用 493.8-4 的候选抽取口径（CANDIDATE_LEARNING 开 → 返回 list）；
+    每条候选附 ``vetoed`` 标记（veto 命中则 True，不应进 dryrun 文件）。
+    """
+    if shadow_path is None:
+        shadow_path = os.path.join("data", "monitor", "self_query_shadow.jsonl")
+    _all: list = []
+    if not os.path.isfile(shadow_path):
+        return _all
+    try:
+        with open(shadow_path, "r", encoding="utf-8") as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if not _line:
+                    continue
+                try:
+                    _row = json.loads(_line)
+                except Exception:
+                    continue
+                for _c in extract_candidates_from_shadow_row(_row):
+                    _c = dict(_c)
+                    _c["vetoed"] = is_vetoed(
+                        query=_c.get("query"), organ=_c.get("organ"))
+                    _all.append(_c)
+    except Exception as _e:
+        silent_exc(_e, where="learned_alias._scan_dryrun_candidates", level="debug")
+    return _all
+
+
+def extract_and_append_dryrun(shadow_path: str = None, max_new: int = None) -> int:
+    """读影子日志 → 抽候选 → append 到 dryrun.jsonl；**不写 overlay、不 promote**。
+
+    去重（已写入的 query|organ|label 不再写）；veto 命中的候选丢弃不进文件。
+    返回本次新增行数。开关 ENABLE_M49312_DRYRUN_CANDIDATES 关 → 0。
+    """
+    if not _cfg_on("ENABLE_M49312_DRYRUN_CANDIDATES"):
+        return 0
+    _ensure_seed_veto()
+    _cands = _scan_dryrun_candidates(shadow_path)
+    _existing = _dryrun_existing_keys()
+    _rows = []
+    for _c in _cands:
+        if _c.get("vetoed"):
+            continue
+        _k = f"{_c.get('query')}|{_c.get('organ')}|{_c.get('label')}"
+        if _k in _existing:
+            continue
+        _existing.add(_k)
+        _rows.append(_c)
+    if max_new:
+        _rows = _rows[-max_new:]
+    if _rows:
+        try:
+            os.makedirs(os.path.dirname(_dryrun_candidates_path()), exist_ok=True)
+            with open(_dryrun_candidates_path(), "a", encoding="utf-8") as _f:
+                for _c in _rows:
+                    _rec = {_k2: _c[_k2] for _k2 in
+                            ("query", "organ", "label", "confidence",
+                             "action_id", "source") if _k2 in _c}
+                    _f.write(json.dumps(_rec, ensure_ascii=False) + "\n")
+        except Exception as _e:
+            silent_exc(_e, where="learned_alias.extract_and_append_dryrun",
+                       level="debug")
+            return 0
+    return len(_rows)
+
+
+def _maybe_trigger_dryrun() -> int:
+    """每 _DRYRUN_SHADOW_EVERY 条影子触发一次抽取（开关关 → 0）。
+
+    由 fastpath.record_self_query_shadow 在每次写影子后调用。
+    """
+    global _DRYRUN_COUNTER
+    if not _cfg_on("ENABLE_M49312_DRYRUN_CANDIDATES"):
+        return 0
+    _DRYRUN_COUNTER += 1
+    if _DRYRUN_COUNTER >= _DRYRUN_SHADOW_EVERY:
+        _DRYRUN_COUNTER = 0
+        return extract_and_append_dryrun()
+    return 0
+
+
+def _ensure_seed_veto() -> None:
+    """493.12-5：确保一条真实负例 veto（「肺」不得被学成「肝」）已存在（幂等）。"""
+    global _SEED_VETO_DONE
+    if _SEED_VETO_DONE:
+        return
+    _SEED_VETO_DONE = True
+    try:
+        if not _cfg_on("ENABLE_M4938_ALIAS_VETO"):
+            return
+        _v = load_veto()
+        for _e in _v.get("vetoes", []):
+            if _e.get("reason") == "seed_49312_肺不得学成肝":
+                return
+        _v.setdefault("vetoes", []).append({
+            "query": _norm_key("肺其实是肝"),
+            "organ": "肝",
+            "reason": "seed_49312_肺不得学成肝",
+            "at": _now_iso(),
+        })
+        save_veto(_v)
+    except Exception as _e:
+        silent_exc(_e, where="learned_alias._ensure_seed_veto", level="debug")
+
+
+def metrics_dryrun() -> dict:
+    """493.12-5：dry-run 观测指标。
+
+    - candidate_rows_total / distinct_queries / by_label：来自扫描影子候选
+    - quarantine_hits_ge3 / promotion_ready：(query,organ) 命中次数 ≥ 阈值
+    - veto_blocked：被 veto 拦下的候选数
+    - online_answer_delta：**恒为 0**（dry-run 仅 append 候选文件，绝不改
+      link_organ / overlay / 线上回答——这是本批的硬约束验收点）
+    """
+    _cands = _scan_dryrun_candidates()
+    _total = len(_cands)
+    _veto_blocked = sum(1 for _c in _cands if _c.get("vetoed"))
+    _distinct = len(set(str(_c.get("query")) for _c in _cands))
+    _by_label: dict = {}
+    for _c in _cands:
+        _l = _c.get("label") or "unknown"
+        _by_label[_l] = _by_label.get(_l, 0) + 1
+    _groups: dict = {}
+    for _c in _cands:
+        _k = (str(_c.get("query")), str(_c.get("organ")))
+        _groups[_k] = _groups.get(_k, 0) + 1
+    _ge3 = sum(1 for _v in _groups.values() if _v >= MIN_QUARANTINE_HITS)
+    _promo = sum(1 for _v in _groups.values()
+                 if _v >= MIN_QUARANTINE_HITS
+                 and _days_since(_now_iso()[:10]) >= MIN_QUARANTINE_DAYS)
+    return {
+        "candidate_rows_total": _total,
+        "distinct_queries": _distinct,
+        "by_label": _by_label,
+        "quarantine_hits_ge3": _ge3,
+        "veto_blocked": _veto_blocked,
+        "promotion_ready": _promo,
+        "online_answer_delta": 0,
+        "switches": {
+            "dryrun_candidates": _cfg_on("ENABLE_M49312_DRYRUN_CANDIDATES"),
+            "learned_aliases": _cfg_on("ENABLE_M4938_LEARNED_ALIASES"),
+            "digest_fusion": _cfg_on("ENABLE_M4938_DIGEST_FUSION"),
         },
     }

@@ -9416,7 +9416,7 @@ ENABLE_M4937_SELF_QUERY_SHADOW = True         # 493.7-4：影子模式（fastpat
 # 绝不 emit 事件、绝不新增/启用写权限、绝不新增 action_id。
 ENABLE_M4938_SHADOW_LABEL = True              # 493.9-8：打开（影子日志四类标注，纯只读备数据）
 ENABLE_M4938_LEARNED_ALIASES = False          # 493.8-3：learned overlay 合并进 link_organ
-ENABLE_M4938_CANDIDATE_LEARNING = False       # 493.8-4：候选抽取 + 用户纠正解析
+ENABLE_M4938_CANDIDATE_LEARNING = True        # 493.8-4：候选抽取 + 用户纠正解析（493.12 dry-run 抽取依赖其返回 list；不写 overlay）
 ENABLE_M4938_COLD_START = False               # 493.8-5：冷启动提取器
 ENABLE_M4938_DIGEST_FUSION = False            # 493.8-6：digest 融合 + 日终 promoter
 ENABLE_M4938_SAFETY_BOUNDARY = True           # 493.9-8：打开（上限/veto 保护闸，防污染必须先开）
@@ -9454,6 +9454,14 @@ ENABLE_M49311_CALL_LINES = True              # 刀6：call 边 to_line 补齐（
 #: 会话分桶容量（任务书：全局上限 256，单会话 5 轮，30 分钟无写入清理）
 M49311_MAX_SESSIONS = 256
 M49311_SESSION_TTL_SEC = 1800
+
+# ── 493.12 批 跨模块语义问答 + dry-run 管线 ──
+# 纪律：主笔 ENABLE_M493_SELF_QUERY_FASTPATH 仍 False；LEARNED_ALIASES 仍 False
+#       （dry-run 只写候选文件，不读不合并）。四刀默认全开。
+ENABLE_M49312_GUARD_LAYERED = True             # 刀1：guard 因果词分层（哲学词仍跳过/模块关系词放行）
+ENABLE_M49312_REL_EXPAND = True                # 刀2：关系词表扩展（协作/影响/效果/传出/…）
+ENABLE_M49312_MODULE_EXACT = True              # 刀3：模块名精确匹配优先（QICA→QICA.py）
+ENABLE_M49312_DRYRUN_CANDIDATES = True         # 刀4：dry-run 候选文件（每 100 条影子触发抽取，不写 overlay）
 
 # ── 485-7 baseline=0 禁入自动审批 ──
 # ★出厂默认 False（同上，随灰度一并裁决）。False ⇒ A1 内联自动审批与 _m85 本地

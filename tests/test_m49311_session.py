@@ -181,8 +181,13 @@ def test_switch_final_state():
     """全局纪律：会话隔离默认影子关；主笔与 4938 四开关仍关。"""
     assert _cfg.ENABLE_M49311_SESSION_ISOLATION is False
     assert _cfg.ENABLE_M493_SELF_QUERY_FASTPATH is False
+    # 493.12：CANDIDATE_LEARNING 需为 True（dry-run 抽取依赖其返回 list；不写文件）
+    assert _cfg.ENABLE_M4938_CANDIDATE_LEARNING is True
     for _s in ["ENABLE_M4938_LEARNED_ALIASES",
-               "ENABLE_M4938_CANDIDATE_LEARNING",
                "ENABLE_M4938_COLD_START",
                "ENABLE_M4938_DIGEST_FUSION"]:
         assert getattr(_cfg, _s) is False, _s
+    # 493.12 四刀开关默认全开
+    for _s in ["ENABLE_M49312_GUARD_LAYERED", "ENABLE_M49312_REL_EXPAND",
+               "ENABLE_M49312_MODULE_EXACT", "ENABLE_M49312_DRYRUN_CANDIDATES"]:
+        assert getattr(_cfg, _s) is True, _s

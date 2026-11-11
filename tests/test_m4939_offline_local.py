@@ -355,9 +355,15 @@ def test_switch_final_state():
     assert _cfg.ENABLE_M4938_SHADOW_LABEL is True            # 裁决打开
     assert _cfg.ENABLE_M4938_SAFETY_BOUNDARY is True
     assert _cfg.ENABLE_M4938_ALIAS_VETO is True
-    for _s in ["ENABLE_M4938_LEARNED_ALIASES", "ENABLE_M4938_CANDIDATE_LEARNING",
+    # 493.12：CANDIDATE_LEARNING 需为 True（dry-run 抽取依赖其返回 list；不写文件）
+    assert _cfg.ENABLE_M4938_CANDIDATE_LEARNING is True
+    for _s in ["ENABLE_M4938_LEARNED_ALIASES",
                "ENABLE_M4938_COLD_START", "ENABLE_M4938_DIGEST_FUSION"]:
         assert getattr(_cfg, _s) is False, _s
+    # 493.12 四刀开关默认全开
+    for _s in ["ENABLE_M49312_GUARD_LAYERED", "ENABLE_M49312_REL_EXPAND",
+               "ENABLE_M49312_MODULE_EXACT", "ENABLE_M49312_DRYRUN_CANDIDATES"]:
+        assert getattr(_cfg, _s) is True, _s
 
 
 def test_issue_trend_gate_never_exit2():
