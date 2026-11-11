@@ -456,6 +456,8 @@ class QICA(BasePulseOrgan):
             "元认知报告": {"method": "meta_cognitive_report", "paths": ["/自我/状态", "/自我/架构"]},
             # [243批] 子代理(subagent) 通电槽位：与 IntentChannels 同步登记，避免落入 knowledge_retrieve 残差桶
             "子代理任务": {"method": "multi_step_execute", "paths": ["/自我/状态", "/技术"]},
+            # ★493.9-4：与 IntentChannels.INTENT_TO_METHOD 同步（第二份实例副本）
+            "自我查询": {"method": "self_index", "paths": ["/自我"]},
         }
         # ===== 映射结束 =====
 
@@ -686,6 +688,10 @@ class QICA(BasePulseOrgan):
             "context_assisted": anchor.get("context_assisted", False),
             "context_similarity": anchor.get("context_similarity", 0.0),
             "has_anaphora": anchor.get("has_anaphora", False),
+            # ★493.9-4/7：把「写入即弃」的消歧结果与指代消解带出，供 Cortex 消费。
+            # 开关关时字段仍带出（值同 493.8 的 None），行为回退由 Cortex 侧开关决定。
+            "organ_disambiguation": anchor.get("organ_disambiguation"),
+            "anaphora_resolved": anchor.get("anaphora_resolved"),
         }, priority=7, layer="L2")
 
         # ★第六批 任务2.1 关键修复：补全返回字段
@@ -994,6 +1000,31 @@ class QICA(BasePulseOrgan):
             _history = list(self._context_history)
         anchor["context_assisted"] = False
         anchor["has_anaphora"] = any(_p in raw_text for _p in ("它", "这个", "那个", "那", "这"))
+        # ===== 493.9-7：上下文指代最小消解（独立开关，关 → 逐字回 493.8）=====
+        # 只在上轮 organ_disambiguation / 上轮命中器官**唯一**时绑定；多候选标注澄清；
+        # 无上轮器官则**不猜**（不写 anaphora_resolved）。
+        try:
+            import config as _c4939
+            _anaphora_on = (bool(getattr(_c4939, "ENABLE_M4939_OFFLINE_LOCAL", False))
+                            and bool(getattr(_c4939, "ENABLE_M4939_ANAPHORA_RESOLVE", False)))
+        except Exception as _e4939:
+            silent_exc(_e4939, where="QICA._context_assist.anaphora_cfg", level="debug")
+            _anaphora_on = False
+        if _anaphora_on and anchor["has_anaphora"] and _history:
+            _prev_dis = _history[-1].get("organ_disambiguation")
+            _prev_res = _history[-1].get("anaphora_resolved")
+            _src = _prev_dis or _prev_res
+            if isinstance(_src, dict) and _src.get("organ"):
+                anchor["anaphora_resolved"] = {
+                    "organ": _src["organ"], "from": "prev_turn"}
+            elif isinstance(_src, dict) and _src.get("candidates"):
+                # 多候选 → 只标注需澄清，不硬绑定
+                _cs = [c.get("organ") for c in _src["candidates"]
+                       if isinstance(c, dict) and c.get("organ")]
+                if _cs:
+                    anchor["anaphora_resolved"] = {
+                        "candidates": _cs[:3], "from": "prev_turn",
+                        "need_clarify": True}
         if not _history:
             return anchor
         _prev = _history[-1]
@@ -1067,6 +1098,9 @@ class QICA(BasePulseOrgan):
                 "task_type": anchor.get("task_type", ""),
                 "raw_text": anchor.get("raw_input", ""),
                 "entities": list(anchor.get("entities", [])),
+                # ★493.9-7：保存上轮命中器官，供下一轮「它/那个」指代消解回看
+                "organ_disambiguation": anchor.get("organ_disambiguation"),
+                "anaphora_resolved": anchor.get("anaphora_resolved"),
                 "channel": anchor.get("channel", "fast"),
                 "intent_vector": dict(anchor.get("intent_vector", {}) or {}),
                 "intent_semantic_sig": list(

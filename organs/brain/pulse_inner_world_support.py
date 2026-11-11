@@ -178,6 +178,18 @@ class PulseInnerWorldSupportMixin:
     def _rule_reason(self, question: str, user_name: str = "", guidance: dict | None = None) -> str | None:
         q = question.strip().lower()
 
+        # ===== 493.9-3：断网本地基本应答模板（L1），仅离线态生效 =====
+        # 联网时 offline_local.local_basic_template 直接返回 None ⇒ 逐字回退 493.8 全部分支，
+        # 不抢正常联网对话。模板覆盖问候/身份/能力/状态，身份类基于 Self-Index 真实数据。
+        try:
+            from nucleus.self_index.offline_local import local_basic_template as _m4939_tpl
+            _tpl, _conf = _m4939_tpl(question)
+            if _tpl:
+                return _tpl
+        except Exception as _e4939:
+            from nucleus._silent_except import silent_exc as _se4939
+            _se4939(_e4939, where="_rule_reason.m4939_template", level="debug")
+
         # ===== 第一步：元问题快速拦截（在is_question检查之前）=====
         # 这些元问题不管有没有问号都应该直接回答，不能走搜索
         _meta_phrases = [
@@ -1521,8 +1533,15 @@ class PulseInnerWorldSupportMixin:
         """
         动态构建"你是谁"（告诉对方他们的身份）的回答。
         根据关系光谱动态调整语气和深度。
+
+        493.9-3：user_name 为空时不得输出「你是，我们正在对话中。」这种破碎句
+        （rule_reason 公开封装默认 user_name="" ⇒ 直调必现），统一回落到「你」。
         """
+        _who = str(user_name or "").strip()
+        user_name = _who or "你"
         if guidance is None:
+            if not _who:
+                return "我还没记下你的名字，不过我们正在对话中，你可以告诉我该怎么称呼你。"
             return f"你是{user_name}，我们正在对话中。"
 
         rel_type = guidance.get("relationship_type", "stranger")

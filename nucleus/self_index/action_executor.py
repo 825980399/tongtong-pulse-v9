@@ -88,6 +88,17 @@ def _import_callable(target: str):
     return None, f"无法解析可调用对象: {target}"
 
 
+def _m4939_read_fix_on() -> bool:
+    """493.9-5 独立开关：read 动作生产口径修复（关 → 逐字回 493.8 行为）。"""
+    try:
+        import config
+        return (bool(getattr(config, "ENABLE_M4939_OFFLINE_LOCAL", False))
+                and bool(getattr(config, "ENABLE_M4939_READ_ACTION_FIX", False)))
+    except Exception as _e:
+        silent_exc(_e, where="action_executor._m4939_read_fix_on", level="debug")
+        return False
+
+
 def _resolve_callable(a, params):
     """按 impl.type 解析可调用的 (函数/方法, None) 或 (None, reason)。"""
     _impl = a.get("impl") or {}
@@ -95,12 +106,21 @@ def _resolve_callable(a, params):
     _target = _impl.get("target", "")
     if _type == "method":
         _organs = _get_organs()
-        if _organs is None:
-            return None, "器官实例不可用（framework 未装配）"
         _oname = params.get("organ") or a.get("organ")
-        _inst = _organs.get(_oname)
+        _inst = _organs.get(_oname) if isinstance(_organs, dict) else None
+        # 493.9-5：InfoField 不进 framework.organs 字典（它是 framework.info_field 属性），
+        #   真实单例入口是 get_info_field()；生产装配后据此拿到真实实例，无头时诚实 blocked。
+        if _inst is None and _m4939_read_fix_on() \
+                and _target.startswith("InfoField."):
+            try:
+                from nucleus.field.InfoField import get_info_field
+                _inst = get_info_field()
+            except Exception as _e:
+                silent_exc(_e, where="_resolve_callable.get_info_field", level="debug")
+                _inst = None
         if _inst is None:
-            return None, f"找不到器官实例: {_oname}"
+            return None, ("器官实例不可用（framework 未装配）" if _organs is None
+                          else f"找不到器官实例: {_oname}")
         _method = _target.rsplit(".", 1)[-1]
         _fn = getattr(_inst, _method, None)
         if not callable(_fn):
@@ -113,7 +133,37 @@ def _resolve_callable(a, params):
     if "." not in _target and _file.endswith(".py"):
         _mod = _file[:-3].replace("/", ".").replace("\\", ".")
         _qualified = f"{_mod}.{_target}"
-    return _import_callable(_qualified)
+    _fn, _reason = _import_callable(_qualified)
+    if _fn is not None:
+        return _fn, None
+    # 493.9-5：含点 target（如 "SelfIndexStore.build"）原本被当成模块名 import 必失败。
+    #   按 impl.file 还原模块后逐级 getattr，末尾若是类则惰性实例化取 bound method。
+    if _m4939_read_fix_on() and "." in _target and _file.endswith(".py"):
+        _fn2, _reason2 = _resolve_from_file(_file, _target)
+        if _fn2 is not None:
+            return _fn2, None
+        return None, _reason2
+    return None, _reason
+
+
+def _resolve_from_file(file_rel: str, target: str):
+    """493.9-5：按 impl.file 还原模块 + 逐级 getattr；末端类惰性实例化取实例方法。"""
+    try:
+        _modname = file_rel[:-3].replace("/", ".").replace("\\", ".")
+        _mod = importlib.import_module(_modname)
+        _parts = target.split(".")
+        _obj = _mod
+        for _i, _seg in enumerate(_parts):
+            _obj = getattr(_obj, _seg)
+            if isinstance(_obj, type) and _i + 1 < len(_parts):
+                # 类：无参惰性实例化（SelfIndexStore() 等），继续取实例方法
+                _obj = _obj()
+        if callable(_obj):
+            return _obj, None
+        return None, f"目标不可调用: {target}"
+    except Exception as _e:
+        silent_exc(_e, where="_resolve_from_file", level="debug")
+        return None, f"按 file 解析失败: {target}: {type(_e).__name__}"
 
 
 def execute_action(action_id, params=None, timeout_ms=500):

@@ -538,7 +538,10 @@ def export_organ_aliases() -> dict:
 ACTION_WHITELIST: list[dict] = [
     # ── 只读（可直接本地执行） ──
     {"action_id": "self.count_organs", "organ": "Self-Index", "kind": "read",
-     "impl": {"type": "self_index", "target": "SelfIndexStore.build", "file": "nucleus/self_index/store.py", "line": 0},
+     # 493.9-5：原 target="SelfIndexStore.build" 被当成模块名 import → 必失败 blocked；
+     #   且 build() 返回值根本不含 organ_count（只有 organs/events/intents/body_relations）。
+     #   改用真实导出器 export_organs_runtime()（返回含 organ_count=57），verify 语义不变。
+     "impl": {"type": "self_index", "target": "export_organs_runtime", "file": "nucleus/self_index/exporters.py", "line": 116},
      "params": {}, "preconditions": ["self_index_on"], "risk": 0, "idempotent": True,
      "verify": {"type": "int_gt", "key": "organ_count", "gt": 0}, "source": "curated", "status": "ready"},
     {"action_id": "organ.locate", "organ": "Self-Index", "kind": "read",
@@ -561,19 +564,21 @@ ACTION_WHITELIST: list[dict] = [
     {"action_id": "event.subscribers", "organ": "Self-Index", "kind": "read",
      "impl": {"type": "self_index", "target": "export_event_subscribers", "file": "nucleus/self_index/exporters.py", "line": 0},
      "params": {"event": "事件名"}, "preconditions": ["self_index_on"], "risk": 0, "idempotent": True,
-     "verify": {"type": "has_key", "key": "subscribers"}, "source": "curated", "status": "ready"},
+     # 493.9-5：真实返回键为 events/fanout/event_count，从无 "subscribers" 键 ⇒ verify 恒失败
+     "verify": {"type": "has_key", "key": "events"}, "source": "curated", "status": "ready"},
     {"action_id": "module.imports", "organ": "Self-Index", "kind": "read",
      "impl": {"type": "module_graph", "target": "build_module_graph", "file": "nucleus/self_index/module_graph.py", "line": 0},
      "params": {"module": "模块名"}, "preconditions": ["graph_on"], "risk": 0, "idempotent": True,
-     "verify": {"type": "is_list"}, "source": "curated", "status": "ready"},
+     # 493.9-5：build_module_graph() 返回 {version,generated_at,nodes,edges}（dict），非 list
+     "verify": {"type": "is_dict"}, "source": "curated", "status": "ready"},
     {"action_id": "module.calls", "organ": "Self-Index", "kind": "read",
      "impl": {"type": "module_graph", "target": "build_module_graph", "file": "nucleus/self_index/module_graph.py", "line": 0},
      "params": {"module_a": "模块", "module_b": "模块"}, "preconditions": ["graph_on"], "risk": 0, "idempotent": True,
-     "verify": {"type": "is_list"}, "source": "curated", "status": "ready"},
+     "verify": {"type": "is_dict"}, "source": "curated", "status": "ready"},
     {"action_id": "module.events", "organ": "Self-Index", "kind": "read",
      "impl": {"type": "module_graph", "target": "build_module_graph", "file": "nucleus/self_index/module_graph.py", "line": 0},
      "params": {"module": "模块名"}, "preconditions": ["graph_on"], "risk": 0, "idempotent": True,
-     "verify": {"type": "is_list"}, "source": "curated", "status": "ready"},
+     "verify": {"type": "is_dict"}, "source": "curated", "status": "ready"},
     {"action_id": "channel.stats", "organ": "肺", "kind": "read",
      "impl": {"type": "method", "target": "PulseLung.get_channel_concurrency_stats", "file": "organs/body/PulseLung.py", "line": 1840},
      "params": {}, "preconditions": ["lung_online"], "risk": 0, "idempotent": True,

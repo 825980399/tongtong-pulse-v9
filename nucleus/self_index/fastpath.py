@@ -129,16 +129,68 @@ def record_self_query_shadow(content, explain) -> None:
         silent_exc(_e, where="record_self_query_shadow", level="debug")
 
 
+def _organ_alias_match_on() -> bool:
+    """493.9-1 独立开关：_find_organ 别名/中文名/类名三路匹配（关 → 回 493.8 行为）。"""
+    try:
+        import config as _cfg
+        return (bool(getattr(_cfg, "ENABLE_M4939_OFFLINE_LOCAL", False))
+                and bool(getattr(_cfg, "ENABLE_M4939_FASTPATH_ORGAN_ALIAS", False)))
+    except Exception as _e:
+        silent_exc(_e, where="_organ_alias_match_on", level="debug")
+        return False
+
+
 def _find_organ(organs, kw):
-    """在器官清单里模糊匹配关键词（name 包含 / file 包含，大小写不敏感）。"""
+    """在器官清单里模糊匹配关键词（493.9-1 三路：name/file 子串 + 别名表 name/func/sys + 消歧一致性）。
+
+    第一路：name 包含 / file 包含（大小写不敏感）—— 覆盖中文名「胃」、类名「PulseStomach」、
+            代码路径「organs/body/PulseStomach.py」。
+    第二路：ORGAN_ALIAS_TABLE 的 name/func/sys 三层别名 —— 覆盖「管消化的」「看东西的」等功能指称。
+    第三路：link_organ 唯一命中 → 按器官中文名回表 —— 保证「消歧命中了但查不到器官」不出现。
+    """
     if not kw:
         return None
     _kw = kw.strip()
+    # 第一路：name / file 子串
     for _o in organs:
         _n = str(_o.get("name") or "")
         _f = str(_o.get("file") or "")
         if _kw in _n or _kw.lower() in _f.lower():
             return _o
+    if not _organ_alias_match_on():
+        return None
+    _k = _kw.lower()
+    # 第二路：别名表三路（name / func / sys）
+    try:
+        _hit_names: list[str] = []
+        for _name, _L in ORGAN_ALIAS_TABLE.items():
+            if not isinstance(_L, dict):
+                continue
+            for _layer in ("name", "func", "sys"):
+                for _a in (_L.get(_layer) or []):
+                    _al = str(_a or "").lower()
+                    if _al and (_k in _al or _al in _k):
+                        _hit_names.append(_name)
+                        break
+                else:
+                    continue
+                break
+        if len(_hit_names) == 1:
+            for _o in organs:
+                if str(_o.get("name") or "") == _hit_names[0]:
+                    return _o
+    except Exception as _e:
+        silent_exc(_e, where="_find_organ.alias", level="debug")
+    # 第三路：link_organ 唯一命中 → 回表（消歧一致性）
+    try:
+        from nucleus.self_index.exporters import link_organ as _lo
+        _r = _lo(_kw)
+        if _r and "organ" in _r:
+            for _o in organs:
+                if str(_o.get("name") or "") == _r["organ"]:
+                    return _o
+    except Exception as _e:
+        silent_exc(_e, where="_find_organ.link", level="debug")
     return None
 
 
@@ -356,17 +408,53 @@ def self_query_fastpath_explain(query) -> dict:
         return _explain
     _q = str(query).strip()
     _t0 = _time.time()
+    _or: dict = {}
+    _organs: list = []
+    _events: dict = {}
+    _mg = None
+    # 493.9-1 真 bug 修复：原实现把四个数据源装进**单一大 try**，任一源异常
+    # （如重启后 events()/module_graph 瞬时不可用）就直接 return 空 explain，
+    # 表现为影子日志「胃在哪 elapsed_ms=0 / organ=null / would_answer=null」。
+    # 现逐项独立容错：单个源失败只降级该源，器官清单在就能答位置。
     try:
-        from nucleus.self_index.store import SelfIndexStore
-        _store = SelfIndexStore()
-        _or = _store.organs_runtime() or {}
-        _organs = _or.get("organs", []) or []
-        _ev = _store.events() or {}
-        _events = _ev.get("events", {}) or {}
-        _mg = _load_module_graph_cached()   # 493.5-5：读已落盘模块图（不触发重建）
+        import config as _cfg
+        _defensive = (bool(getattr(_cfg, "ENABLE_M4939_OFFLINE_LOCAL", False))
+                      and bool(getattr(_cfg, "ENABLE_M4939_FASTPATH_DEFENSIVE", False)))
     except Exception as _e:
-        silent_exc(_e, where="self_query_fastpath", level="debug")
-        return _explain
+        silent_exc(_e, where="self_query_fastpath.defensive_cfg", level="debug")
+        _defensive = False
+    if not _defensive:
+        # 关 → 逐字回退 493.8 行为（单一大 try）
+        try:
+            from nucleus.self_index.store import SelfIndexStore
+            _store = SelfIndexStore()
+            _or = _store.organs_runtime() or {}
+            _organs = _or.get("organs", []) or []
+            _ev = _store.events() or {}
+            _events = _ev.get("events", {}) or {}
+            _mg = _load_module_graph_cached()
+        except Exception as _e:
+            silent_exc(_e, where="self_query_fastpath", level="debug")
+            return _explain
+    else:
+        try:
+            from nucleus.self_index.store import SelfIndexStore
+            _store = SelfIndexStore()
+            _or = _store.organs_runtime() or {}
+            _organs = _or.get("organs", []) or []
+        except Exception as _e:
+            silent_exc(_e, where="self_query_fastpath.organs_runtime", level="debug")
+        try:
+            from nucleus.self_index.store import SelfIndexStore
+            _ev = SelfIndexStore().events() or {}
+            _events = _ev.get("events", {}) or {}
+        except Exception as _e:
+            silent_exc(_e, where="self_query_fastpath.events", level="debug")
+        _mg = _load_module_graph_cached()   # 内部已自带容错
+        # 器官清单彻底为空 → 无法做任何本地索引应答，诚实落空（不编）
+        if not _organs:
+            _explain["elapsed_ms"] = (_time.time() - _t0) * 1000
+            return _explain
 
     def _set(answer, action_id, confidence, organ=None, intent=None):
         _explain.update(answer=answer, action_id=action_id,
@@ -494,7 +582,7 @@ def self_query_fastpath_explain(query) -> dict:
         _nm = str(_o.get("name") or "")
         if not _nm or _nm not in _q:
             continue
-        if re.search(r"忙|在途|任务|还在跑|有没有.*做|多少.*任务", _q):
+        if re.search(r"忙|在途|任务|还在跑|有没有.*做|多少.*任务|并发数|并发|负载", _q):
             _v = _o.get("inflight")
             if _v is not None:
                 _set(f"{_nm} 当前在途任务数 {_v}。", "organ.inflight", 0.85,

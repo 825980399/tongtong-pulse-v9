@@ -1072,6 +1072,42 @@ class PulseCortex(BasePulseOrgan):
             from nucleus._silent_except import silent_exc
             silent_exc(_e, where="PulseCortex::_m487_dialog_trace", level="debug")
 
+    def _m4939_organ_route(self, payload: dict, content: str, classify_fn) -> dict | None:
+        """493.9-4/7：按 QICA 消歧结果决定本地应答（纯决策，不 emit）。
+
+        返回 {content, reasoning_path, status, organ} 或 None（回原链路，不阻断）。
+        - 多候选 / 指代需澄清 ⇒ 问一句，不硬答；
+        - 唯一命中 + 自我/位置/状态题 ⇒ self_index 本地查，查不到回原链路；
+        - 因果比较题（「比较胃和肝」）⇒ 不误路由，交 deep。
+        """
+        _da = payload.get("organ_disambiguation")
+        _ar = payload.get("anaphora_resolved")
+        _qtype = classify_fn(content)
+        _comparison = bool(re.search(r"比较|对比|区别|差异", str(content)))
+        if (isinstance(_da, dict) and _da.get("candidates")) or (
+                isinstance(_ar, dict) and _ar.get("need_clarify")):
+            _cs = [c.get("organ") for c in (_da or {}).get("candidates", [])
+                   if isinstance(c, dict) and c.get("organ")]
+            _cs = _cs or (_ar or {}).get("candidates", [])
+            if _cs:
+                return {"content": "[本地应答] 你指的可能是：" + "、".join(_cs[:3])
+                                   + "？说具体一点我再帮你查。",
+                        "reasoning_path": "self_index_clarify",
+                        "status": "self_index_clarify"}
+        elif not _comparison and _qtype in ("self_body", "greeting"):
+            _organ = (_da or {}).get("organ") if isinstance(_da, dict) else None
+            _organ = _organ or ((_ar or {}).get("organ")
+                                if isinstance(_ar, dict) else None)
+            if _organ:
+                from nucleus.self_index.fastpath import (
+                    self_query_fastpath_explain as _m4939_explain)
+                _ex = _m4939_explain(content)
+                if _ex.get("answer"):
+                    return {"content": "[本地索引·实时] " + str(_ex["answer"]),
+                            "reasoning_path": "self_index",
+                            "status": "self_index_local", "organ": _organ}
+        return None
+
     def _on_classify_result(self, payload: dict) -> dict[str, Any] | None:
         """收到QICA的分类结果，继续路由"""
         correlation_id = payload.get("correlation_id", "")
@@ -1086,6 +1122,32 @@ class PulseCortex(BasePulseOrgan):
 
         content = ctx["content"]
         user_name = ctx["user_name"]
+
+        # ===== 493.9-4：QICA organ_disambiguation → self_index 本地查询分支 =====
+        # 唯一命中 + 自我指称/位置/状态词 ⇒ 本地查（不调大模型）；多候选 ⇒ 澄清；
+        # None / 因果比较 / 查不到 ⇒ 原链路不变、不阻断。只在断网态生效（联网不抢答）。
+        try:
+            import config as _c4939r
+            if (bool(getattr(_c4939r, "ENABLE_M4939_OFFLINE_LOCAL", False))
+                    and bool(getattr(_c4939r, "ENABLE_M4939_ORGAN_ROUTE", False))):
+                from nucleus.self_index.offline_local import (
+                    classify_query_type as _m4939_cls, offline_active as _m4939_off)
+                if _m4939_off():
+                    _route = self._m4939_organ_route(payload, content, _m4939_cls)
+                    if _route:
+                        self._emit(MouthEvent.SPEAK, {
+                            "content": _route["content"],
+                            "source": "cortex",
+                            "user_name": str(user_name or "用户"),
+                            "reasoning_path": _route["reasoning_path"],
+                            "correlation_id": correlation_id,
+                        }, priority=8, layer="L1")
+                        self._m487_dialog_trace(
+                            _route["reasoning_path"], "L1", "emit", correlation_id)
+                        return {"status": _route["status"], "answered": True,
+                                "organ": _route.get("organ")}
+        except Exception as _e4939r:
+            self._log_ignored_exception(_e4939r, "493.9-4 organ_disambiguation route")
 
         # ===== ★v22.0重构：接收QICA深度意图分析结果 =====
         _suggested_method = payload.get("suggested_method", "knowledge_retrieve")
@@ -1486,13 +1548,32 @@ class PulseCortex(BasePulseOrgan):
             return False
 
     def _m485_canned_reply(self) -> str:
-        """★485刀1：canned 话术（逐字固定，断网时模型不可用不许生成）。"""
+        """★485刀1：canned 话术（逐字固定，断网时模型不可用不许生成）。
+
+        493.9-2：在**不改出口调用点与降级窗口**的前提下分流话术——按问句类型
+        （问候 / 自我身体 / 因果比较）选不同话术，全部打 [本地应答] 标记；
+        无法分类 → 逐字回落 485 原常量（保证既有逐字断言回归）。
+        """
         try:
             import config as _cfg485
-            return str(getattr(_cfg485, "M485_OFFLINE_CANNED_REPLY", "") or "")
+            _default = str(getattr(_cfg485, "M485_OFFLINE_CANNED_REPLY", "") or "")
         except Exception as _e:
             silent_exc(_e, where="PulseCortex::_m485_canned_reply", level="debug")
-            return ""
+            _default = ""
+        try:
+            import config as _c4939
+            if not (bool(getattr(_c4939, "ENABLE_M4939_OFFLINE_LOCAL", False))
+                    and bool(getattr(_c4939, "ENABLE_M4939_CANNED_CLASSIFY", False))):
+                return _default
+            from nucleus.self_index.offline_local import canned_reply_for
+            _q = str(getattr(self, "_m4939_last_query", "") or "")
+            # 自我/身体类：附带 L0/L1 已查到的本地结果（接 fastpath/read 动作结果）
+            _local_ans = getattr(self, "_m4939_last_local_answer", None)
+            _typed = canned_reply_for(_q, local_answer=_local_ans, default_reply=_default)
+            return _typed if _typed else _default
+        except Exception as _e:
+            silent_exc(_e, where="PulseCortex::_m485_canned_reply.classify", level="debug")
+            return _default
 
     def _m485_delegate_timeout_sec(self) -> float:
         """★485刀2：单次委派等待上限 —— 判定启用 ⇒ 12s（任务书）；否则沿用 458 口径。"""
@@ -1946,6 +2027,32 @@ class PulseCortex(BasePulseOrgan):
                 }
         user_name = ctx["user_name"]
 
+        # ===== 493.9-6 断网兜底分层 L0→L1→L2→L3（开关控；关 → 逐字回 493.8）=====
+        # 记录本轮 query / 本地结果，供 L3 分类型 canned 分流（493.9-2）。
+        # **只在断网降级窗口生效**：联网时 answer=None 也要留给外脑委派，绝不抢答。
+        try:
+            import config as _c4939
+            if bool(getattr(_c4939, "ENABLE_M4939_OFFLINE_LOCAL", False)):
+                _q4939 = str((ctx or {}).get("content") or payload.get("question") or "")
+                self._m4939_last_query = _q4939
+                self._m4939_last_local_answer = None
+                if (bool(getattr(_c4939, "ENABLE_M4939_OFFLINE_LAYER_ORDER", False))
+                        and answer is None and self._m485_fallback_enabled()
+                        and not payload.get("is_background_learning", False)
+                        and _q4939 and self._m485_llm_degraded()):
+                    from nucleus.self_index.offline_local import offline_layered_answer
+                    _lz = offline_layered_answer(_q4939)   # L0/L1；L2 由下方 485 原链承担
+                    _la = _lz.get("answer")
+                    if _la:
+                        self._m4939_last_local_answer = _la
+                        answer = _la
+                        method = "offline_local_" + str(_lz.get("layer"))
+                        self._log(LogLevel.INFO,
+                                  f"[493.9-6] 分层本地应答命中 layer={_lz.get('layer')} "
+                                  f"cid={str(correlation_id)[:16]} yields={_lz.get('yields')}")
+        except Exception as _e4939:
+            self._log_ignored_exception(_e4939, "493.9-6 offline_layered_answer")
+
         # ★485刀1（T-断网兜底出口重构）：answer 为空 ⇒ 本地 Symbolic→Causal→Analogy
         #   链先行（判据只看 answer，ctx 不再当门槛——改前离线链被 `ctx is None`
         #   关在门里，真实断网形态 ctx 有值 ⇒ 链一次都跑不到，只能委派已死外脑）。
@@ -1954,7 +2061,18 @@ class PulseCortex(BasePulseOrgan):
         if answer is None and self._m485_fallback_enabled() \
                 and not payload.get("is_background_learning", False):
             _m485_q = str((ctx or {}).get("content") or payload.get("question") or "")
-            if _m485_q:
+            # 493.9-6 让位：L2 symbolic survival 只处理形式化题，不碰自我/状态/问候题
+            # （那些已由 L0/L1 处理或应交给 L3 明确拒答；开关关 → 逐字回 493.8）
+            _l2_skip = False
+            try:
+                import config as _c4939_l2
+                if bool(getattr(_c4939_l2, "ENABLE_M4939_OFFLINE_LOCAL", False)) \
+                        and bool(getattr(_c4939_l2, "ENABLE_M4939_OFFLINE_LAYER_ORDER", False)):
+                    from nucleus.self_index.offline_local import classify_query_type as _cls4939
+                    _l2_skip = _cls4939(_m485_q) in ("self_body", "greeting")
+            except Exception as _e4939_l2:
+                self._log_ignored_exception(_e4939_l2, "493.9-6 L2 yield check")
+            if _m485_q and not _l2_skip:
                 _m485_off = self._compute_offline_survival(_m485_q)
                 if _m485_off:
                     answer = _m485_off

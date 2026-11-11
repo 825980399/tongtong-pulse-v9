@@ -9414,13 +9414,30 @@ ENABLE_M4937_SELF_QUERY_SHADOW = True         # 493.7-4：影子模式（fastpat
 # ── 493.8 批 语义层自学习闭环骨架 ──
 # 全部默认 False；关 → 完整回退 493.7 行为。仅写 learned overlay / veto 两个 JSON，
 # 绝不 emit 事件、绝不新增/启用写权限、绝不新增 action_id。
-ENABLE_M4938_SHADOW_LABEL = False             # 493.8-1：影子日志四类标注
+ENABLE_M4938_SHADOW_LABEL = True              # 493.9-8：打开（影子日志四类标注，纯只读备数据）
 ENABLE_M4938_LEARNED_ALIASES = False          # 493.8-3：learned overlay 合并进 link_organ
 ENABLE_M4938_CANDIDATE_LEARNING = False       # 493.8-4：候选抽取 + 用户纠正解析
 ENABLE_M4938_COLD_START = False               # 493.8-5：冷启动提取器
 ENABLE_M4938_DIGEST_FUSION = False            # 493.8-6：digest 融合 + 日终 promoter
-ENABLE_M4938_SAFETY_BOUNDARY = False          # 493.8-7：安全边界（上限/veto 生效）
-ENABLE_M4938_ALIAS_VETO = False               # 493.8-7：veto 表开关
+ENABLE_M4938_SAFETY_BOUNDARY = True           # 493.9-8：打开（上限/veto 保护闸，防污染必须先开）
+ENABLE_M4938_ALIAS_VETO = True                # 493.9-8：打开（veto 生效）
+
+# ── 493.9 批 断网本地应答兜底 + 真 bug 修复 ──
+# 纪律：所有新行为有独立开关；总闸关 → 完整回退 493.8 状态。
+# 本批正式 fastpath 主笔 ENABLE_M493_SELF_QUERY_FASTPATH 仍保持 False（影子观测继续）。
+ENABLE_M4939_OFFLINE_LOCAL = True             # 总闸（关 → 以下 8 项全部回退 493.8）
+ENABLE_M4939_FASTPATH_ORGAN_ALIAS = True      # 刀1：_find_organ 三路别名/中文名/类名匹配 + link_organ 一致性
+ENABLE_M4939_FASTPATH_DEFENSIVE = True        # 刀1：数据加载逐项容错（修「单一大 try 全灭」真 bug）
+ENABLE_M4939_CANNED_CLASSIFY = True           # 刀2：分类型 canned 话术（无法分类 → 回落原常量）
+ENABLE_M4939_LOCAL_TEMPLATE = True            # 刀3：rule_reason 本地模板（仅离线态生效，不抢联网对话）
+ENABLE_M4939_ORGAN_ROUTE = True               # 刀4：QICA organ_disambiguation → Cortex self_index 路由
+ENABLE_M4939_READ_ACTION_FIX = True           # 刀5：read 动作生产口径修复（描述符 + executor 兜底）
+ENABLE_M4939_OFFLINE_LAYER_ORDER = True       # 刀6：断网兜底 L0→L1→L2→L3 分层顺序与让位
+ENABLE_M4939_ANAPHORA_RESOLVE = True          # 刀7：上下文指代最小消解（它/那个 绑定上轮器官）
+# 单测/演练注入钩子：强制认定处于断网态（默认 False，生产由降级窗口文件判据）
+M4939_FORCE_OFFLINE_LOCAL = False
+# 保持关闭（493.9-8 裁决）：ENABLE_M493_SELF_QUERY_FASTPATH / LEARNED_ALIASES /
+#   CANDIDATE_LEARNING / COLD_START / DIGEST_FUSION —— 影子样本不足，等指称 bug 修完攒一周再评估
 
 # ── 485-7 baseline=0 禁入自动审批 ──
 # ★出厂默认 False（同上，随灰度一并裁决）。False ⇒ A1 内联自动审批与 _m85 本地
