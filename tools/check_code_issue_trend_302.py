@@ -29,7 +29,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+
+# 493.8-8：把仓库根加入 sys.path，使脚本（位于 tools/）能 `import nucleus`。
+# 运行方式 `python tools/check_code_issue_trend_302.py` 时 sys.path[0]=tools/，
+# 仓库根不在路径上，会导致 ModuleNotFoundError: nucleus 而崩溃（环境 bug）。
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+_REPO_ROOT = os.path.dirname(_SCRIPT_DIR)  # tools/ → 项目根
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
 DEFAULT_MAX_HIGH = 0
 # ★第303批 刀3：起步阈值由 60 收紧为 48（现值 44）。

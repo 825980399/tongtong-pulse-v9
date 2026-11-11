@@ -137,6 +137,7 @@ class KnowledgeEvent:
 class DigestEvent:
     """消化相关事件"""
     KNOWLEDGE = "digest.knowledge"
+    SHADOW_LABEL = "digest.shadow_label"  # 493.8-1：影子日志四类标注事件常量（定义占位，本批不 emit）
 
 
 class ChatEvent:

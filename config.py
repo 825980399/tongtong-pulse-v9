@@ -9411,6 +9411,17 @@ ENABLE_M4937_FASTPATH_GUARD = True            # 493.7-1：误答前置排除闸�
 ENABLE_M4937_SELF_QUERY_SHADOW = True         # 493.7-4：影子模式（fastpath 照常计算但不答、不 emit，仅写 self_query_shadow.jsonl）
 # 注：ENABLE_M493_SELF_QUERY_FASTPATH 本批保持 False（纪律：止血期不实际回答，只上影子观测）
 
+# ── 493.8 批 语义层自学习闭环骨架 ──
+# 全部默认 False；关 → 完整回退 493.7 行为。仅写 learned overlay / veto 两个 JSON，
+# 绝不 emit 事件、绝不新增/启用写权限、绝不新增 action_id。
+ENABLE_M4938_SHADOW_LABEL = False             # 493.8-1：影子日志四类标注
+ENABLE_M4938_LEARNED_ALIASES = False          # 493.8-3：learned overlay 合并进 link_organ
+ENABLE_M4938_CANDIDATE_LEARNING = False       # 493.8-4：候选抽取 + 用户纠正解析
+ENABLE_M4938_COLD_START = False               # 493.8-5：冷启动提取器
+ENABLE_M4938_DIGEST_FUSION = False            # 493.8-6：digest 融合 + 日终 promoter
+ENABLE_M4938_SAFETY_BOUNDARY = False          # 493.8-7：安全边界（上限/veto 生效）
+ENABLE_M4938_ALIAS_VETO = False               # 493.8-7：veto 表开关
+
 # ── 485-7 baseline=0 禁入自动审批 ──
 # ★出厂默认 False（同上，随灰度一并裁决）。False ⇒ A1 内联自动审批与 _m85 本地
 #   低风险放行不查 baseline（逐字回改前；B 通道 _m101 与老化 _m94 早已查，不受影响）。

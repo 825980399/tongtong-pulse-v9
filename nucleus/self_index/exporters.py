@@ -368,6 +368,10 @@ ORGAN_ALIAS_TABLE: dict[str, dict] = {
 # 归一化去除的语气 / 指代词（保留语义字）
 _STOP = set("的了我那个这各个里是叫哪谁你他它她管负责地方有在怎么什么哪吗呢吧啊呀哦")
 
+# 493.8-2：因果/原因问法的「不要消歧」停用集（命中 → link_organ 直接 return None）
+_CAUSE_STOP = ("为什么", "原因", "怎么会", "怎么就", "原理", "为啥", "为何",
+               "怎么导致", "根源", "由于")
+
 
 def _normalize(q: str) -> str:
     import re
@@ -376,14 +380,22 @@ def _normalize(q: str) -> str:
     return "".join(ch for ch in q if ch not in _STOP)
 
 
+_NGRAM_CACHE: dict[str, dict] = {}         # 493.8-2：ngram 向量缓存（相同串不重复计算）
+
+
 def _char_ngrams(s: str, n: int = 2) -> dict:
-    """字符 unigram + bigram 向量（无依赖、<1ms 级）。"""
+    """字符 unigram + bigram 向量（无依赖、<1ms 级；带缓存）。"""
     s = s.lower()
+    _cached = _NGRAM_CACHE.get(s)
+    if _cached is not None:
+        return _cached
     grams: dict[str, int] = {}
     for i in range(len(s)):
         grams[s[i]] = grams.get(s[i], 0) + 1
         if i + 1 < len(s):
             grams[s[i:i + 2]] = grams.get(s[i:i + 2], 0) + 1
+    if len(_NGRAM_CACHE) < 8192:
+        _NGRAM_CACHE[s] = grams
     return grams
 
 
@@ -402,20 +414,46 @@ def _cosine(a: dict, b: dict) -> float:
 
 
 def link_organ(query: str) -> dict | None:
-    """自然语言指称 → 器官（493.5-2 / 493.6-1 三层打分消歧）。
+    """自然语言指称 → 器官（493.5-2 / 493.6-1 三层打分消歧 + 493.8 自学习合并）。
 
     返回：
-      {"organ": name, "score": float, "match": "exact"|"fuzzy"}  命中
-      {"candidates": [{"organ":name,"score":float}, ...]}           歧义（需澄清）
+      {"organ": name, "score": float, "match": "exact"|"fuzzy"|"learned"}  命中
+      {"candidates": [{"organ":name,"score":float}, ...]}                  歧义（需澄清）
       None                                                                无候选（走大模型）
-    规则（493.6-1）：① 功能词命中且唯一器官 → 直接答；② 多器官功能命中 → 澄清
-          （覆盖冲突词：记忆/代谢/思考/推理/手/视觉）；③ 名称层命中（0.55）→ 直接答；
-          ④ 余弦兜底（<3ms，无依赖）。
+    规则（493.8 重排）：
+      ⓪ learned overlay 最高优先（仅 ENABLE_M4938_LEARNED_ALIASES 开启时生效）；
+      ① 因果/原因停用词命中 → 直接 None（不要硬消歧一个因果关系）；
+      ② 名称层匹配（493.8-2：名称层优先于功能层）；
+      ③ 功能词匹配（唯一即直答，多即澄清，覆盖冲突词）；
+      ④ 系统层 + 字符 n-gram 余弦兜底（带缓存）。
     """
+    if not query or not str(query).strip():
+        return None
+    # ⓪ learned overlay 合并（493.8-3，开关控制；关 → None 不介入）
+    try:
+        from nucleus.self_index.learned_alias import maybe_overlay_alias
+        _ov = maybe_overlay_alias(query)
+        if _ov:
+            return _ov
+    except Exception as _e:
+        silent_exc(_e, where="link_organ.overlay", level="debug")
+    # ① 因果/原因停用词 → 跳过消歧（493.8-2）
+    if any(_w in str(query) for _w in _CAUSE_STOP):
+        return None
     q = _normalize(query)
     if not q:
         return None
-    # ① 功能词匹配（强信号：唯一即直答，多即澄清）
+    # ② 名称层匹配（493.8-2：名称层优先于功能层；仅匹配「器官名出现在 query」，
+    #    避免反向包含误伤，如「消化」⊆「文件消化器」名导致「管消化的」错配）
+    _name_hits: list[str] = []
+    for _organ, _L in ORGAN_ALIAS_TABLE.items():
+        if any(_a and (_a.lower() in q) for _a in _L.get("name", [])):
+            _name_hits.append(_organ)
+    if len(_name_hits) == 1:
+        return {"organ": _name_hits[0], "score": 1.0, "match": "exact"}
+    if len(_name_hits) > 1:
+        return {"candidates": [{"organ": _h, "score": 1.0} for _h in _name_hits[:3]]}
+    # ③ 功能词匹配（强信号：唯一即直答，多即澄清）
     _func_hits: list[str] = []
     for _organ, _L in ORGAN_ALIAS_TABLE.items():
         if any(_a and (_a.lower() in q or q in _a.lower()) for _a in _L.get("func", [])):
@@ -424,16 +462,7 @@ def link_organ(query: str) -> dict | None:
         return {"organ": _func_hits[0], "score": 1.0, "match": "exact"}
     if len(_func_hits) > 1:
         return {"candidates": [{"organ": _h, "score": 1.0} for _h in _func_hits[:3]]}
-    # ② 名称层匹配
-    _name_hits: list[str] = []
-    for _organ, _L in ORGAN_ALIAS_TABLE.items():
-        if any(_a and (_a.lower() in q or q in _a.lower()) for _a in _L.get("name", [])):
-            _name_hits.append(_organ)
-    if len(_name_hits) == 1:
-        return {"organ": _name_hits[0], "score": 1.0, "match": "exact"}
-    if len(_name_hits) > 1:
-        return {"candidates": [{"organ": _h, "score": 1.0} for _h in _name_hits[:3]]}
-    # ③ 系统层 + 字符 n-gram 余弦兜底
+    # ④ 系统层 + 字符 n-gram 余弦兜底
     _scored: list[tuple[str, float]] = []
     for _organ, _L in ORGAN_ALIAS_TABLE.items():
         _best = 0.0

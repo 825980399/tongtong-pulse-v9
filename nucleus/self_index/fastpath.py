@@ -98,6 +98,18 @@ def record_self_query_shadow(content, explain) -> None:
         import time as _t
         _path = os.path.join("data", "monitor", "self_query_shadow.jsonl")
         _ans = explain.get("answer")
+        # 493.8-1：影子日志扩字段 label / self_ref（四类标注；开关关 → 不计算、字段留 None）
+        _label = None
+        _self_ref = None
+        try:
+            import config as _cfg
+            if bool(getattr(_cfg, "ENABLE_M4938_SHADOW_LABEL", False)):
+                from nucleus.self_index.alias_labeler import (
+                    label_shadow_row, compute_self_ref)
+                _label = label_shadow_row(explain)
+                _self_ref = compute_self_ref(str(content))
+        except Exception as _e:
+            silent_exc(_e, where="record_self_query_shadow.label", level="debug")
         _row = {
             "ts": round(_t.time(), 3),
             "query": str(content),
@@ -107,6 +119,8 @@ def record_self_query_shadow(content, explain) -> None:
             "confidence": explain.get("confidence"),
             "elapsed_ms": explain.get("elapsed_ms"),
             "skipped_by_guard": explain.get("skipped_by_guard", False),
+            "label": _label,
+            "self_ref": _self_ref,
         }
         os.makedirs(os.path.dirname(_path), exist_ok=True)
         with open(_path, "a", encoding="utf-8") as _f:
