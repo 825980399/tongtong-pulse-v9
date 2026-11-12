@@ -70,16 +70,18 @@ def test_effect_section_hit_returns_effect_line():
     assert "证据：" in out, out
 
 
-def test_effect_section_no_card_honest_downgrade():
-    # 有边但无效果卡 + 问效果词 → 诚实降级（不编后果）
+def test_effect_section_no_card_human_note():
+    # 493.15-1：有边但无效果卡 + 问效果词 → 基于边方向给一句人话说明（不编效果）
     found = [{
         "from": "nucleus.self_index.exporters",
         "to": "data.self_index.module_graph.json",
         "kind": "call", "via": None, "event": None,
     }]
     out = fp._effect_section(found, "exporters 应用到 module_graph 会怎样")
-    assert out, "应附诚实降级话术"
-    assert "不能推断" in out or "没有沉淀" in out or "没有" in out, out
+    assert out, "应附人话说明"
+    # 有边 → 说明连接真实存在（不编效果）
+    assert "这些边意味着" in out, out
+    assert "不编" in out, out
 
 
 def test_effect_section_stale_only_structure():

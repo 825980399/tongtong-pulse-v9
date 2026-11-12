@@ -1698,6 +1698,31 @@ class QICA(BasePulseOrgan):
             "last": dict(getattr(self, "_m360_absorb_last", {}) or {}),
         }
 
+    def _m49315_absorb_record(self, rule: dict, result: str) -> None:
+        """493.15-5：最小留痕——每次实际吸收一条规则，记录时间/证据来源/结果/规则ID。
+
+        不改动吸收主逻辑（domain_knowledge / concept_correction / 纠正关系边）；
+        仅追加一条可追溯记录到 self._m49315_absorb_trace，并累加
+        self._m49315_absorb_applied（从 0 起，可复算），供证据消化口径统计。
+        """
+        try:
+            if not hasattr(self, "_m49315_absorb_trace"):
+                self._m49315_absorb_trace: list = []
+                self._m49315_absorb_applied: int = 0
+            self._m49315_absorb_trace.append({
+                "ts": time_mod.time(),
+                "rule_id": (rule.get("id") or rule.get("rule_id")
+                            or f"{rule.get('type', '')}:{rule.get('concept', '')}"),
+                "type": rule.get("type", ""),
+                "concept": rule.get("concept", ""),
+                "path": rule.get("path") or rule.get("correct_path", ""),
+                "source": rule.get("source") or "growth_distill",
+                "result": result,
+            })
+            self._m49315_absorb_applied += 1
+        except Exception as _e:
+            silent_exc(_e, where="QICA._m49315_absorb_record", level="debug")
+
     def absorb_growth_rules(self, rules: list[dict[str, Any]]) -> int:
         """
         ★v25.0修复：吸收成长对比日志蒸馏出的规则。
@@ -1733,6 +1758,7 @@ class QICA(BasePulseOrgan):
                     if not (len(_concept) <= 2 and ("/身份/" in _path or "/自我/" in _path)):
                         if _concept not in self._domain_knowledge or _rule.get("confidence", 0.5) >= 0.7:
                             self._domain_knowledge[_concept] = _path
+                            self._m49315_absorb_record(_rule, "applied")
                             _absorbed += 1
                         else:
                             _bump("low_confidence")
@@ -1755,6 +1781,7 @@ class QICA(BasePulseOrgan):
                     if _path and not (len(_concept) <= 2 and ("/身份/" in _path or "/自我/" in _path)):
                         if _concept not in self._domain_knowledge or _rule.get("confidence", 0.5) >= 0.7:
                             self._domain_knowledge[_concept] = _path
+                            self._m49315_absorb_record(_rule, "applied")
                             _absorbed += 1
                         else:
                             _bump("low_confidence")
@@ -1778,6 +1805,7 @@ class QICA(BasePulseOrgan):
                     _node.add_semantic_relation(
                         _correct_node.node_id, "correction",
                         round(_rule.get("confidence", 0.6), 3), "qica_growth")
+                    self._m49315_absorb_record(_rule, "applied_correction_edge")
                     _absorbed += 1
             elif _type in ("domain_knowledge", "concept_correction"):
                 # ★360刀15：类型认识但字段不全（缺 concept/path）⇒ 不是「类型不支持」

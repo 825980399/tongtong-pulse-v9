@@ -1,7 +1,7 @@
-"""493.14 批单测：效果卡扩面 / dry-run 指标口径 / 影子字段 / pending 审查 / get_last_organ。
+"""493.14/493.15 批单测：效果卡扩面与输出收口 / dry-run 指标口径 / 影子字段 / pending 审查 / get_last_organ / absorb 留痕。
 
 纪律：主笔 ENABLE_M493_SELF_QUERY_FASTPATH 仍 False；LEARNED_ALIASES 仍 False。
-本文件只验 493.14 各刀的子能力，不打开主笔。
+本文件只验各刀的子能力，不打开主笔。
 """
 import json
 import os
@@ -149,3 +149,46 @@ def test_get_last_organ_qica_explicit_binds():
         "context_organ": "胃", "context_organ_age": 3,
     })
     assert a["anaphora_resolved"]["organ"] == "胃"
+
+
+# ── 493.15 刀1：效果卡输出收口（effect_card_hit / 去重 / 纯结构边人话说明）──
+def test_explain_always_has_effect_card_hit_field():
+    # 每条输出都有 effect_card_hit 字段（True/False）
+    for _q in ("你好", "器官有多少个", "胃在哪"):
+        _ex = fp.self_query_fastpath_explain(_q)
+        assert "effect_card_hit" in _ex, _q
+        assert isinstance(_ex["effect_card_hit"], bool)
+    # 命中卡的关系问法 → True（真实模块图 QICA→大脑皮层 有卡）
+    _ex2 = fp.self_query_fastpath_explain("QICA 怎么把话传给大脑皮层")
+    assert _ex2.get("effect_card_hit") is True, _ex2
+
+
+def test_effect_section_dedup_no_repeat():
+    # 同一 (from,to) 的 4 条边只输出 1 条效果文本（不再重复 3 次）
+    _found = [{"from": "nucleus.qica.QICA", "to": "organs.brain.PulseCortex"}] * 4
+    _out = fp._effect_section(_found, "QICA 怎么把话传给大脑皮层")
+    assert _out.count("效果：") == 1, _out
+
+
+def test_effect_section_human_note_pure_structure():
+    # 有边无卡 + 问协作 → 基于边方向给一句人话说明（不编效果）
+    _found = [{"from": "organs.body.PulseLung", "to": "organs.body.PulseStomach"}]
+    _out = fp._effect_section(_found, "肺和胃怎么协作")
+    assert "这些边意味着" in _out, _out
+    assert "具体运行效果" in _out  # 诚实：不编效果数据
+
+
+# ── 493.15 刀5：absorb 最小留痕 ──
+def test_absorb_growth_rules_leaves_trace():
+    q = QICA()
+    _before = getattr(q, "_m49315_absorb_applied", 0)
+    _n = q.absorb_growth_rules([
+        {"type": "domain_knowledge", "concept": "曈曈的作息", "path": "/日常/作息",
+         "confidence": 0.9, "source": "growth_distill"},
+    ])
+    assert _n == 1
+    assert q._m49315_absorb_applied == _before + 1
+    _trace = q._m49315_absorb_trace[-1]
+    assert _trace["result"] == "applied"
+    assert _trace["source"] == "growth_distill"
+    assert "ts" in _trace and "rule_id" in _trace

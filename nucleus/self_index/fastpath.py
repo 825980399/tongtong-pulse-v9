@@ -710,24 +710,36 @@ def _is_effect_card_stale(card) -> bool:
 
 
 def _effect_section(found, query) -> str:
-    """493.13-2：边命中效果卡 → 追加「效果：…（证据：…）」；有边无卡且问效果 → 诚实降级。
+    """493.13-2 / 493.15-1：边命中效果卡 → 追加「效果：…（证据：…）」；同一 (from,to) 只列一次（去重）。
 
+    有边无卡且问协作/关系/怎么连/影响 → 基于边方向补一句人话说明（不编具体效果）。
     过期卡（stale_after_days 超期）→ 跳过，只答结构边（不编旧效果）。
     """
     if not found or not _m49313_effect_cards_on():
         return ""
     _cards = _load_effect_cards()
     _lines = []
+    _seen: set = set()
     for _e in found:
-        _c = _match_effect_card(_cards, _e.get("from"), _e.get("to"),
-                                _e.get("event") or _e.get("via"))
+        _f, _t = _e.get("from"), _e.get("to")
+        if (_f, _t) in _seen:
+            continue  # 493.15-1：同 (from,to) 的卡只输出一次，避免重复 3 次
+        _c = _match_effect_card(_cards, _f, _t, _e.get("event") or _e.get("via"))
         if _c and not _is_effect_card_stale(_c):
+            _seen.add((_f, _t))
             _lines.append(f"效果：{_c['effect']}（证据：{_c.get('evidence')}）")
     if _lines:
         return "\n" + "\n".join(_lines)
-    if _EFFECT_WORDS_RE.search(query or ""):
-        return ("\n这些边说明模块间有调用/事件联系，但我现在没有沉淀的「效果」数据"
-                "（effects_cards 未登记该 from→to→event），不能推断运行后果。")
+    # 493.15-1：有边无卡，且用户问协作/关系/怎么连/影响 → 给一句基于边方向的人话说明
+    _rel_intent = (_EFFECT_WORDS_RE.search(query or "")
+                   or _rel_words_re().search(query or ""))
+    if _rel_intent:
+        _fpairs = [(_e.get("from"), _e.get("to")) for _e in found]
+        _n = len(found)
+        _a = _short_module(_fpairs[0][0]) if _fpairs else "上游模块"
+        _b = _short_module(_fpairs[0][1]) if _fpairs else "下游模块"
+        return ("\n这些边意味着：%s 的输出/事件会传送给 %s 并由其处理"
+                "（共 %d 条连接）。具体运行效果我还没沉淀数据，不编。" % (_a, _b, _n))
     return ""
 
 
@@ -909,7 +921,8 @@ def self_query_fastpath_explain(query) -> dict:
     """
     import time as _time
     _explain = {"answer": None, "action_id": None, "organ": None,
-                "confidence": None, "intent": None, "elapsed_ms": 0}
+                "confidence": None, "intent": None, "elapsed_ms": 0,
+                "effect_card_hit": False}  # 493.15-1：是否命中效果卡（供机械统计命中率）
     if not query or not str(query).strip():
         return _explain
     _q = str(query).strip()
@@ -1000,6 +1013,8 @@ def self_query_fastpath_explain(query) -> dict:
     _rel_ans = _answer_module_relation(_q, _mg, _events, _organs)
     if _rel_ans:
         _set(_rel_ans, "module.relation", 0.85, intent="relation")
+        # 493.15-1：关系路径命中效果卡 → 标记（文本含「效果：」即卡命中）
+        _explain["effect_card_hit"] = ("效果：" in _rel_ans)
         return _explain
 
     # 2) 关系对「A 和/与 B 怎么连/关系/关联/连接」
