@@ -11107,13 +11107,36 @@ class PulseInnerWorld(
             silent_exc(e, where="organs.brain.PulseInnerWorld::_identity_lookup L10225", level="debug")
             return ""
     def _record_conversation(self, question: str, answer: str, user_name: str,
-                              method: str, confidence: float):
+                              method: str, confidence: float,
+                              organ: str = None, organ_confidence: float = None,
+                              entities: list = None):
         """
         记录一次对话到记忆库。
 
         降低门槛：有实质内容的对话（答案长度≥15字，置信度≥0.3）。
         对大模型回复放宽限制，确保对话记忆更丰富。
+
+        493.13-3：记录时附「器官」上下文。优先用 Cortex 传来的 organ_disambiguation，
+        否则用 link_organ(question) 生成候选器官（精确/模糊命中取 organ，歧义取 candidates）。
+        旧 50 条记忆不补该字段（ContextSnapshot 向后兼容，缺字段视为无器官上下文）。
         """
+        # ★493.13-3：解析本次对话的器官上下文
+        _organ = organ
+        _organ_conf = organ_confidence
+        _entities = entities
+        if _organ is None:
+            try:
+                from nucleus.self_index.exporters import link_organ
+                _r = link_organ(question)
+                if isinstance(_r, dict):
+                    if _r.get("organ"):
+                        _organ = _r["organ"]
+                        _organ_conf = _organ_conf if _organ_conf is not None \
+                            else float(_r.get("score", 0.0))
+                    elif _r.get("candidates"):
+                        _entities = [str(_c) for _c in _r["candidates"]]
+            except Exception as _e:
+                silent_exc(_e, where="_record_conversation.organ", level="debug")
         # ★第九批 3.2：身份声明抽取放在所有门槛之前——
         #   用户说「小林就是<CREATOR>也就是你的父亲」时回答往往很短，
         #   若放在记录门槛之后，这类短对话会被跳过，身份永远学不到。
@@ -11183,6 +11206,10 @@ class PulseInnerWorld(
             "emotion": _emotion,
             "relationship_type": _rel_type,
             "closeness": round(_closeness, 2),
+            # ★493.13-3：器官上下文（长程指代接线用）
+            "organ": _organ,
+            "organ_confidence": _organ_conf,
+            "entities": _entities,
         }
 
         with self._conversation_memory_lock:
@@ -13011,6 +13038,38 @@ class PulseInnerWorld(
         return _immune_check(node_value, node_keywords, _self_nodes)
 
     # ========== P3-1 公开访问器（消除跨模块私有穿透，规则14/AP1） ==========
+    def get_last_organ(self, user_name: str, max_age_s: int = 86400) -> dict | None:
+        """493.13-4：返回该用户最近一次**带 organ** 的对话记忆的器官上下文。
+
+        用于长程指代接线：用户说「它呢」时，Cortex 用上一次带器官的话题（如「胃」）
+        作为上下文注入 QICA。只返回最近一条有 organ 的记忆（当前轮若 organ=None 自动跳过），
+        且在 max_age_s 内；逾期返回 None。
+        """
+        try:
+            import time as _t
+            _now = _t.time()
+            _user = user_name or "用户"
+            _mem = [m for m in getattr(self, '_conversation_memory', [])
+                    if m.get("user_name") == _user]
+            for _e in reversed(_mem):
+                _org = _e.get("organ")
+                if not _org:
+                    continue
+                _ts = _e.get("ts") if _e.get("ts") is not None else _e.get("timestamp")
+                try:
+                    _age = _now - float(_ts)
+                except Exception:
+                    _age = 9e9
+                if _age > max_age_s:
+                    continue
+                return {"organ": _org,
+                        "ts": _ts,
+                        "confidence": _e.get("organ_confidence"),
+                        "age_s": _age}
+        except Exception as _e:
+            silent_exc(_e, where="get_last_organ", level="debug")
+        return None
+
     def get_conversation_memory(self) -> list[dict[str, Any]]:
         """返回对话记忆副本。"""
         return list(getattr(self, '_conversation_memory', []))

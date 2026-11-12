@@ -14,6 +14,8 @@
 """
 from __future__ import annotations
 
+import json
+import os
 import re
 
 from nucleus._silent_except import silent_exc
@@ -653,6 +655,75 @@ def _m49312_module_exact_on() -> bool:
         return False
 
 
+# ── 493.13-2 效果卡命中 ──
+def _m49313_effect_cards_on() -> bool:
+    """493.13-2 开关：关系路由命中效果卡（关 → 逐字回 493.12 纯结构边）。"""
+    try:
+        import config as _cfg
+        return bool(getattr(_cfg, "ENABLE_M49313_EFFECT_CARDS", False))
+    except Exception as _e:
+        silent_exc(_e, where="_m49313_effect_cards_on", level="debug")
+        return False
+
+
+def _load_effect_cards() -> list:
+    """读取 data/self_index/effects_cards.json（带 file:line 证据的效果卡）。"""
+    _p = os.path.join("data", "self_index", "effects_cards.json")
+    try:
+        if os.path.isfile(_p):
+            with open(_p, encoding="utf-8", errors="replace") as _f:
+                return json.load(_f)
+    except Exception as _e:
+        silent_exc(_e, where="_load_effect_cards", level="debug")
+    return []
+
+
+def _match_effect_card(cards, frm, to, event) -> dict | None:
+    """按 (from,to,event) 精确，再退化 (from,to) 匹配效果卡。"""
+    for _c in cards:
+        if (_c.get("from") == frm and _c.get("to") == to
+                and (_c.get("event") == event or not _c.get("event"))):
+            return _c
+    for _c in cards:
+        if _c.get("from") == frm and _c.get("to") == to:
+            return _c
+    return None
+
+
+def _is_effect_card_stale(card) -> bool:
+    """generated_at + stale_after_days 判定是否过期（过期则只答结构边）。"""
+    try:
+        from datetime import datetime as _dt
+        _g = card.get("generated_at")
+        _d = int(card.get("stale_after_days", 90))
+        _gd = _dt.strptime(str(_g), "%Y-%m-%d").date()
+        return (_dt.today().date() - _gd).days > _d
+    except Exception:
+        return False
+
+
+def _effect_section(found, query) -> str:
+    """493.13-2：边命中效果卡 → 追加「效果：…（证据：…）」；有边无卡且问效果 → 诚实降级。
+
+    过期卡（stale_after_days 超期）→ 跳过，只答结构边（不编旧效果）。
+    """
+    if not found or not _m49313_effect_cards_on():
+        return ""
+    _cards = _load_effect_cards()
+    _lines = []
+    for _e in found:
+        _c = _match_effect_card(_cards, _e.get("from"), _e.get("to"),
+                                _e.get("event") or _e.get("via"))
+        if _c and not _is_effect_card_stale(_c):
+            _lines.append(f"效果：{_c['effect']}（证据：{_c.get('evidence')}）")
+    if _lines:
+        return "\n" + "\n".join(_lines)
+    if _EFFECT_WORDS_RE.search(query or ""):
+        return ("\n这些边说明模块间有调用/事件联系，但我现在没有沉淀的「效果」数据"
+                "（effects_cards 未登记该 from→to→event），不能推断运行后果。")
+    return ""
+
+
 def _answer_module_relation(query, mg, events, organs) -> str | None:
     """493.10-1：关系问法优先消费模块图（不得被位置分支截走）。
 
@@ -691,7 +762,8 @@ def _answer_module_relation(query, mg, events, organs) -> str | None:
         _tb = _resolve_module_terms(mg, organs, _b)
         _found = _edges_between(mg, _ta, _tb)
         if _found:
-            return _render_module_edges(f"{_a} ↔ {_b}", _found) + _honest_effect_note(query)
+            return (_render_module_edges(f"{_a} ↔ {_b}", _found)
+                    + _honest_effect_note(query) + _effect_section(_found, query))
         _rel = _answer_relation(events, _a, _b)
         if _rel:
             return _rel + (_honest_effect_note(query, no_edge=True) or "")
@@ -718,7 +790,7 @@ def _answer_module_relation(query, mg, events, organs) -> str | None:
         _all.sort(key=lambda _e: 0 if _e.get("kind") != "import" else 1)
         if _all:
             return (_render_module_edges(f"{_a} 的相关连接", _all)
-                    + _honest_effect_note(query))
+                    + _honest_effect_note(query) + _effect_section(_all, query))
         return (f"我查了模块图：{_a} 暂未登记到与其它模块的连接边。"
                 + _honest_effect_note(query, no_edge=True))
     return None

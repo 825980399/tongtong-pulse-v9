@@ -1049,11 +1049,18 @@ class PulseCortex(BasePulseOrgan):
         # 发射分类请求脉冲给语义理解器（v24.0修改）
         if self.qica is not None:  # 条件可改为 if self.semantic_comprehension is not None
             _m383_note_semantic_upstream()
+            # ★493.13-4：长程指代接线 —— 取上一次带 organ 的对话器官作为上下文注入
+            _ctx_organ = self._m49313_context_organ(user_name)
             self._emit(Event.SEMANTIC_CLASSIFY, {
                 "content": content,
                 "user_name": user_name,
                 "correlation_id": correlation_id,
                 "session_id": session_id,          # 493.11-2：稳定会话键
+                # 493.13-4：显式上下文器官（取代弱信号 history[-1] 兜底）
+                "context_organ": _ctx_organ["organ"] if _ctx_organ else None,
+                "context_organ_age": round(_ctx_organ["age_s"]) if _ctx_organ else None,
+                "context_organ_confidence": (_ctx_organ.get("confidence")
+                                             if _ctx_organ else None),
             }, priority=7, layer="L1")
             self._m487_dialog_trace("semantic_classify", "L1", "emit", correlation_id)
             return {
@@ -1067,6 +1074,25 @@ class PulseCortex(BasePulseOrgan):
             return self._route_by_intent(correlation_id, intent, content, user_name,
                                         file_paths=file_paths,
                                         code_blocks=code_blocks)
+
+    def _m49313_context_organ(self, user_name: str) -> dict | None:
+        """493.13-4：从内在世界取上一次带 organ 的对话器官（长程指代上下文）。
+
+        开关 ENABLE_M49313_LONG_CONTEXT 关 → 返回 None（逐字回 493.12）。
+        仅当 self.inner_world 已装配时生效；本地降级无 inner_world 时返回 None。
+        """
+        try:
+            import config as _cfg
+            if not bool(getattr(_cfg, "ENABLE_M49313_LONG_CONTEXT", False)):
+                return None
+            _iw = getattr(self, "inner_world", None)
+            if _iw is None or not hasattr(_iw, "get_last_organ"):
+                return None
+            return _iw.get_last_organ(user_name or "用户")
+        except Exception as _e:
+            from nucleus._silent_except import silent_exc
+            silent_exc(_e, where="PulseCortex::_m49313_context_organ", level="debug")
+            return None
 
     def _m487_dialog_trace(self, event: str, layer: str, phase: str, cid: str = "",
                           is_synthetic: bool = False) -> None:
@@ -1742,13 +1768,20 @@ class PulseCortex(BasePulseOrgan):
                 continue
             self._active_correlation_id = _cid
             _m383_note_semantic_upstream()
+            _q_user = _ctx.get("user_name", "用户")
+            _ctx_organ = self._m49313_context_organ(_q_user)
             self._emit(Event.SEMANTIC_CLASSIFY, {
                 "content": _ctx.get("content", ""),
-                "user_name": _ctx.get("user_name", "用户"),
+                "user_name": _q_user,
                 "correlation_id": _cid,
                 # 493.11-2：排队会话从暂存 ctx 取，缺则用 user_name 兜底（稳定）
                 "session_id": (_ctx.get("session_id") or _ctx.get("user_id")
                                or _ctx.get("user_name") or "用户"),
+                # 493.13-4：显式上下文器官（长程指代接线）
+                "context_organ": _ctx_organ["organ"] if _ctx_organ else None,
+                "context_organ_age": round(_ctx_organ["age_s"]) if _ctx_organ else None,
+                "context_organ_confidence": (_ctx_organ.get("confidence")
+                                             if _ctx_organ else None),
             }, priority=7, layer="L1")
             self._log(LogLevel.INFO,
                      f"对话队列: 派发排队会话 cid={_cid[:16]}（剩余 {len(self._dialog_queue)}）")

@@ -9463,6 +9463,10 @@ ENABLE_M49312_REL_EXPAND = True                # 刀2：关系词表扩展（协
 ENABLE_M49312_MODULE_EXACT = True              # 刀3：模块名精确匹配优先（QICA→QICA.py）
 ENABLE_M49312_DRYRUN_CANDIDATES = True         # 刀4：dry-run 候选文件（每 100 条影子触发抽取，不写 overlay）
 
+# ── 493.13 批 效果卡与长程指代接线 ──
+ENABLE_M49313_EFFECT_CARDS = True              # 刀2：关系路由命中效果卡（结构边+效果，未命中诚实降级）
+ENABLE_M49313_LONG_CONTEXT = True             # 刀4：get_last_organ + Cortex 注入 context_organ（长程指代）
+
 # ── 485-7 baseline=0 禁入自动审批 ──
 # ★出厂默认 False（同上，随灰度一并裁决）。False ⇒ A1 内联自动审批与 _m85 本地
 #   低风险放行不查 baseline（逐字回改前；B 通道 _m101 与老化 _m94 早已查，不受影响）。

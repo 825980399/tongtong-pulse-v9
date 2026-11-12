@@ -34,6 +34,7 @@ __all__ = [
     "attempt_ts",
     "dedup_history",
     "dedup_stats",
+    "find_pending_duplicates",
     "fix_detail_consistency",
     "fix_details_in_history",
     "merge_group",
@@ -409,9 +410,53 @@ def upsert_by_id(hist: Any, now: float | None = None) -> tuple:
             continue
         _out[_pos[_id]] = merge_group(_g, now=now)
         _merged_ids.append(_id)
-    return _out, {
+    return     _out, {
         "before": len(hist),
         "after": len(_out),
         "merged": len(_merged_ids),
         "merged_ids": _merged_ids,
     }
+
+
+# ======================================================================
+# ★493.13-6：pending_patches 去重键（自然键，非 id）
+# ----------------------------------------------------------------------
+# 病因：pending_patches 里同一处问题常被 LLM 以不同 id 重复登记
+#   （如 `config._watch_config_file` 被登记 4 次，id 各异但 file/method/
+#   issue_type 完全相同）。旧去重只按 `id`，这些永远判不重 → 队列膨胀、
+#   重复施工。→ 改为 **自然键 (file, method, issue_type, 7 天窗口)**。
+# 本组纯函数（不读盘/不写盘），落盘由调用方负责。
+def find_pending_duplicates(patches: Any, window_days: float = 7.0) -> dict:
+    """493.13-6：用自然键 (file, method, issue_type) + 7 天窗口找 pending 重复。
+
+    Args:
+        patches: pending_patches.json 解析出的 list。
+        window_days: 同一 (file, method, issue_type) 在多少天内算重复（默认 7）。
+
+    Returns:
+        ``{dup_id: keeper_id}`` —— 被判定为重复的 patch id → 保留的 patch id。
+        保留规则：同键组里 ``generated_at``（回退 saved_at）最早者为 keeper，
+        其余判重。组内仅 1 条或不同键组互不干扰。
+    """
+    _W = float(window_days) * 86400.0
+    _groups: dict = {}
+    for _p in (patches or []):
+        if not isinstance(_p, dict):
+            continue
+        _f = str(_p.get("file") or "").strip()
+        _m = str(_p.get("method") or "").strip()
+        _it = str(_p.get("issue_type") or "").strip()
+        if not (_f or _m or _it):
+            continue
+        _groups.setdefault((_f, _m, _it), []).append(_p)
+    _dups: dict = {}
+    for _key, _items in _groups.items():
+        if len(_items) < 2:
+            continue
+        _items_sorted = sorted(
+            _items,
+            key=lambda _r: float(_r.get("generated_at") or _r.get("saved_at") or 0))
+        _keeper_id = str(_items_sorted[0].get("id") or "")
+        for _r in _items_sorted[1:]:
+            _dups[str(_r.get("id") or "")] = _keeper_id
+    return _dups

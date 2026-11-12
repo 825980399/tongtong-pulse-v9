@@ -520,11 +520,20 @@ class QICA(BasePulseOrgan):
         correlation_id = payload.get("correlation_id", "")  # noqa: F841
         # ★493.11-2：稳定 session key（不随 correlation_id 每轮变化）
         session_id = self._m49311_session_id(payload)
+        # ★493.13-4/5：Cortex 显式注入的上下文器官（长程指代接线）。
+        #   代替弱信号 history[-1].organ_disambiguation 兜底，优先用显式字段。
+        context_organ = payload.get("context_organ")
+        context_organ_age = payload.get("context_organ_age")
+        context_organ_confidence = payload.get("context_organ_confidence")
 
         self._classify_count += 1
 
         # Q环节：创建anchor
         anchor = self._q_receive(raw_text)
+        # ★493.13-5：把显式上下文器官搬进 anchor（_context_assist 消费）
+        anchor["context_organ"] = context_organ
+        anchor["context_organ_age"] = context_organ_age
+        anchor["context_organ_confidence"] = context_organ_confidence
 
         # I环节：意图分类
         anchor = self._i_classify(anchor)
@@ -1094,6 +1103,26 @@ class QICA(BasePulseOrgan):
         anchor["session_id"] = _sid
         anchor["context_assisted"] = False
         anchor["has_anaphora"] = any(_p in raw_text for _p in ("它", "这个", "那个", "那", "这"))
+        # ===== 493.13-5：显式上下文器官（长程指代接线，优先于弱信号 history[-1]）=====
+        # 仅当用户用「它/这个/那个」等代词（has_anaphora）时，用 Cortex 注入的
+        # context_organ（来自用户最近一次带 organ 的对话记忆，如「胃」）绑定指代，
+        # 取代 493.9-7 的 history[-1] 兜底弱信号。开关关 → 不绑定，逐字回 493.12。
+        try:
+            import config as _c13
+            _long_ctx_on = bool(getattr(_c13, "ENABLE_M49313_LONG_CONTEXT", False))
+        except Exception:
+            _long_ctx_on = False
+        if _long_ctx_on:
+            _ctx_org = anchor.get("context_organ")
+            if _ctx_org and anchor["has_anaphora"]:
+                anchor["anaphora_resolved"] = {
+                    "organ": _ctx_org,
+                    "from": "context_organ_explicit",
+                    "age_s": anchor.get("context_organ_age"),
+                    "confidence": anchor.get("context_organ_confidence"),
+                }
+                anchor["context_organ_resolved"] = {
+                    "organ": _ctx_org, "from": "context_organ_explicit"}
         # ===== 493.9-7：上下文指代最小消解（独立开关，关 → 逐字回 493.8）=====
         # 只在上轮 organ_disambiguation / 上轮命中器官**唯一**时绑定；多候选标注澄清；
         # 无上轮器官则**不猜**（不写 anaphora_resolved）。
@@ -1104,7 +1133,7 @@ class QICA(BasePulseOrgan):
         except Exception as _e4939:
             silent_exc(_e4939, where="QICA._context_assist.anaphora_cfg", level="debug")
             _anaphora_on = False
-        if _anaphora_on and anchor["has_anaphora"] and _history:
+        if _anaphora_on and anchor["has_anaphora"] and _history and not anchor.get("anaphora_resolved"):
             _prev_dis = _history[-1].get("organ_disambiguation")
             _prev_res = _history[-1].get("anaphora_resolved")
             _src = _prev_dis or _prev_res
