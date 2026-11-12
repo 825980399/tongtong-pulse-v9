@@ -1957,5 +1957,35 @@
   "match": "493.14 新增（prod 兜底）",
   "scope": "prod",
   "reason": "493.14 dry-run 指标口径：基于落盘文件判定 promotion_ready 时文件读取兜底（不阻断指标采集）"
+ },
+ {
+  "path": "nucleus/qica/QICA.py",
+  "qualname": "_m49315_absorb_record",
+  "nth": 0,
+  "sha16": "d74ff0ee8da3b980",
+  "tname": "Exception",
+  "kind": "pass",
+  "has_log": false,
+  "has_reraise": false,
+  "lineno": 1741,
+  "legacy_lineno": 0,
+  "match": "493.16 变更（absorb 留痕落盘兜底）",
+  "scope": "prod",
+  "reason": "493.16 规则级证据账：absorb 留痕追加写 jsonl，文件/加载兜底不阻断吸收主链路"
+ },
+ {
+  "path": "nucleus/qica/QICA.py",
+  "qualname": "_m49315_load_absorb_trace",
+  "nth": 0,
+  "sha16": "e256ee8e7aff6957",
+  "tname": "Exception",
+  "kind": "cont",
+  "has_log": false,
+  "has_reraise": false,
+  "lineno": 1763,
+  "legacy_lineno": 0,
+  "match": "493.16 新增（absorb 证据账加载兜底）",
+  "scope": "prod",
+  "reason": "493.16 加载已落盘 absorb_trace.jsonl，文件缺失/损坏兜底返回空列表"
  }
 ]
