@@ -121,7 +121,8 @@ def test_check_alignment_detects_missing(tmp_path):
     assert len(stat["missing_rule_ids"]) == 3
 
 
-def test_reconcile_repairs_and_idempotent(tmp_path):
+def test_reconcile_readonly_no_write(tmp_path):
+    # 493.21 刀1 方案A：reconcile 改纯只读报告，不再强制对齐/注入条目。
     at = tmp_path / "absorb_trace.jsonl"
     with open(at, "w", encoding="utf-8") as f:
         for r in _RULES:
@@ -129,22 +130,22 @@ def test_reconcile_repairs_and_idempotent(tmp_path):
     vl = tmp_path / "vl.json"
     vl.write_text(json.dumps({"entries": []}, ensure_ascii=False), encoding="utf-8")
     hub = VerificationLearningHub(file_path=str(vl))
-    r1 = lr.reconcile(at_path=str(at), vl_path=str(vl), hub=hub)
-    assert r1["before"]["bidirectional"] == 0
-    assert r1["after"]["bidirectional"] == 3, r1["after"]
-    assert len(r1["repaired"]) == 3
-    # 幂等：复跑不重复登记
-    hub2 = VerificationLearningHub(file_path=str(vl))
-    r2 = lr.reconcile(at_path=str(at), vl_path=str(vl), hub=hub2)
-    assert r2["after"]["bidirectional"] == 3
-    assert r2["repaired"] == [], "已对齐应零动作"
-    # 双向核对：at.vl_id → vl.id，vl.absorb_trace_id → at.rule_id
-    at_rows = _rows(str(at))
-    vl_rows = json.loads(vl.read_text(encoding="utf-8"))["entries"]
-    by_id = {e["id"]: e for e in vl_rows}
-    for a in at_rows:
-        v = by_id.get(a["verification_learning_id"])
-        assert v and v["absorb_trace_id"] == a["rule_id"]
+    before_vl = vl.read_text(encoding="utf-8")
+    before_at = at.read_text(encoding="utf-8")
+    r = lr.reconcile(at_path=str(at), vl_path=str(vl), hub=hub)
+    assert r["policy"] == "two_independent_ledgers"
+    assert r["repaired"] == [], "只读：永不注入"
+    assert r["after"] == r["before"], "只读：不改变状态"
+    # 两本账一个字节都没被写
+    assert vl.read_text(encoding="utf-8") == before_vl
+    assert at.read_text(encoding="utf-8") == before_at
+    # 跑多次 record() 也不影响 absorb_trace（两账独立、不互相覆盖）
+    for i in range(10):
+        hub.record(organ="qica", task_type="t", input_summary=f"q{i}",
+                   local_result={}, confidence=0.9, relevance_score=0.9,
+                   needs_verification=False)
+    assert at.read_text(encoding="utf-8") == before_at
+    assert len(_rows(str(at))) == 3
 
 
 def test_hub_save_preserves_absorb_trace_id(tmp_path):
@@ -158,15 +159,19 @@ def test_hub_save_preserves_absorb_trace_id(tmp_path):
     assert all("absorb_trace_id" in e for e in saved)
 
 
-def test_disk_ledgers_bidirectional():
-    # 磁盘快照：对账当下 3/3（活体覆盖时以 CLI 复跑自愈，见交付报告）
+def test_disk_ledgers_independent():
+    # 493.21 刀1 方案A：两本账独立，不强求双向对齐；关联字段允许 None。
     if not (os.path.isfile(_AT) and os.path.isfile(lr._VL_REL)):
         return
     at_rows = lr.load_applied_rules()
     vl_rows = json.load(open(lr._VL_REL, encoding="utf-8")).get("entries", [])
     stat = lr.check_alignment(at_rows, vl_rows)
     assert stat["applied_rules"] >= 3
-    # 不硬断言 bidirectional（活体旧代码周期性覆盖），机制由 tmp 测试严格覆盖
+    # 只读核对不写任何文件
+    r = lr.reconcile(at_path=_AT, vl_path=lr._VL_REL)
+    assert r["repaired"] == [] and r["policy"] == "two_independent_ledgers"
+    assert all(x.get("verification_learning_id") is None for x in at_rows), \
+        "493.21 后 absorb_trace 不强求 vl_id（允许 None）"
 
 
 # ── 刀3：影子记录提速 / session 通用兜底 ─────────────────────────
@@ -234,4 +239,6 @@ def test_disk_dryrun_grew_and_no_promote():
     assert len(rows) >= 5, f"file_rows 仅 {len(rows)}"
     m = la.metrics_dryrun()
     assert m.get("online_answer_delta") == 0, "不得 promote / 改线上回答"
-    assert m.get("promotion_ready") == 0
+    # 493.21 刀3：不再输出恒 0 的 promotion_ready 假指标
+    assert "promotion_ready" not in m
+    assert "no_promote" in m.get("promotion_status", "")

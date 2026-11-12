@@ -124,14 +124,13 @@ def test_disk_two_ledgers_linked():
         return
     at_rows = [json.loads(l) for l in open(at, encoding="utf-8").read().splitlines()
                if l.strip()]
-    # 磁盘快照：absorb_trace 侧交叉引用字段健全且格式合法（vl_ 前缀）。
-    # 双向逻辑由本文件 test_two_ledgers_bidirectional_trace（tmp 隔离）严格覆盖；
-    # 磁盘侧不硬断言「vl 当下一定有对应条目」——活体旧代码会周期性用进程内
-    # 短列表覆盖 verification_learning.json（任务书背景「代码没进生产」），
-    # 硬断言会 flaky。这里只验机制，恢复/重建由一次性对账脚本负责。
+    # 493.21 刀1 方案A：两本账天然不同粒度/不同来源，改为独立记录、不强求双向
+    # ID 对齐，关联字段允许 None（493.18 的「强制 vl_ 前缀」口径已废止）。
+    # 双向逻辑由本文件 test_two_ledgers_bidirectional_trace（tmp 隔离）覆盖，
+    # 磁盘侧只验「absorb_trace 仍有真实规则」。
     assert at_rows, "absorb_trace 应有真实规则"
-    assert all(str(r.get("verification_learning_id", "")).startswith("vl_")
-               for r in at_rows), [r.get("verification_learning_id") for r in at_rows]
+    assert all("verification_learning_id" in r for r in at_rows), \
+        "交叉引用字段应保留（值允许 None）"
 
 
 # ── 刀3：offline_local session 生产兜底（不污染磁盘）─────────────

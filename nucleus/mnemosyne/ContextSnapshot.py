@@ -53,7 +53,11 @@ class ContextSnapshot(SilentLogMixin):
         self._code_progress_path = os.path.join(base_dir, "code_progress.json")
 
         # 容量配置
-        self._max_conversation_per_user = 50       # 每个用户最多保留50条对话记忆
+        # 493.21 刀4：单用户上限 50→80。实测 50 上限已满时，新的真实记忆虽成功
+        # append，但立即被按 timestamp 倒序截断挤掉最旧一条 ⇒ 磁盘条数恒 50，
+        # 「58 天没有真实增长」在面板上不可见。放宽上限让真实数据供给可累积增长
+        # （不回填旧记忆、不改隐私判据、不改主笔；全局 500 上限不变）。
+        self._max_conversation_per_user = 80       # 每个用户最多保留80条对话记忆
         self._max_conversation_total = 500          # 所有用户总计最多500条
         self._max_inference_trace_load = 500         # 加载时最多恢复500条推理链
         self._max_inference_trace_save = 1000        # 保存时最多保留1000条
@@ -199,6 +203,11 @@ class ContextSnapshot(SilentLogMixin):
 
                 should_persist = self._should_persist_conversation(user_name, self_awareness)
                 if not should_persist:
+                    # 493.21 刀4：不再静默拒绝——留 DEBUG 可观测，便于定位
+                    # 「内存写了但磁盘不落」（访客/用户/stranger 按隐私规则不持久化）。
+                    _module_logger.debug(
+                        "对话记忆未落盘(隐私判据): user=%s relationship=%s",
+                        user_name, self._get_relationship_type(user_name, self_awareness))
                     return False
 
                 existing = self._load_json_safe(self._conversation_path, {"users": {}})

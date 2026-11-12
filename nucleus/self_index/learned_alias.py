@@ -772,14 +772,20 @@ def _dryrun_file_promotion_ready() -> int:
 
 
 def metrics_dryrun() -> dict:
-    """493.14-2：dry-run 观测指标（口径对齐）。
+    """493.14-2 / 493.21-3：dry-run 观测指标（口径对齐）。
 
     - shadow_raw_candidates（原 candidate_rows_total，改名）：每次重新扫描影子日志的候选数
     - file_rows：落盘候选文件 alias_candidates_dryrun.jsonl 的真实行数（不可变落盘）
-    - promotion_ready：**改为基于 file_rows**（落盘证据，而非每次重扫影子）
     - veto_blocked：被 veto 拦下的候选数
     - online_answer_delta：**恒为 0**（dry-run 仅 append 候选文件，绝不改
       link_organ / overlay / 线上回答——这是本批的硬约束验收点）
+
+    ★493.21 刀3 方案A：**移除 promotion_ready 误导指标**。该值恒为 0 且数学上
+    永远走不到（(query,organ) 需同键≥3 行、但写入按 query|organ|label 去重；
+    且 `_days_since(_now_iso()[:10])` 对"今天"恒 0、`>= 2` 永不成立）。
+    493 阶段明确**不做 dry-run → promote**，先攒数据；只保留记录功能，不做晋升
+    判定，用 `promotion_status` 明确标注状态而非给一个永远为 0 的假数字。
+    `_dryrun_file_promotion_ready()` 函数本体保留（不删死代码），仅不再进面板。
     """
     _cands = _scan_dryrun_candidates()
     _total = len(_cands)
@@ -797,7 +803,8 @@ def metrics_dryrun() -> dict:
         "by_label": _by_label,
         "quarantine_hits_ge3": _file_rows,  # 落盘行数即累计命中组数（同 query,organ 去重）
         "veto_blocked": _veto_blocked,
-        "promotion_ready": _dryrun_file_promotion_ready(),  # 基于 file_rows
+        # 493.21 刀3：不再输出 promotion_ready 假指标，明确标注 493 阶段不 promote
+        "promotion_status": "disabled_in_493_no_promote",
         "online_answer_delta": 0,
         "switches": {
             "dryrun_candidates": _cfg_on("ENABLE_M49312_DRYRUN_CANDIDATES"),

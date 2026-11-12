@@ -49,10 +49,12 @@ def test_effect_section_hits_new_card():
 # ── 刀2：dry-run 指标口径 ──
 def test_metrics_dryrun_schema_and_online_zero():
     m = la.metrics_dryrun()
-    # 改名后的键 + 新增 file_rows / promotion_ready
+    # 改名后的键 + 新增 file_rows
     assert "shadow_raw_candidates" in m, "candidate_rows_total 应改名为 shadow_raw_candidates"
     assert "file_rows" in m, "应新增 file_rows（落盘行数）"
-    assert "promotion_ready" in m, "应基于 file_rows 的 promotion_ready"
+    # 493.21 刀3：移除恒为 0 的 promotion_ready 误导指标，改用明确状态标注
+    assert "promotion_ready" not in m, "493 阶段不 promote，不应再有假数字指标"
+    assert "493" in m.get("promotion_status", "") or "no_promote" in m.get("promotion_status", "")
     assert m["online_answer_delta"] == 0, "dry-run 绝不改线上回答（硬约束）"
 
 

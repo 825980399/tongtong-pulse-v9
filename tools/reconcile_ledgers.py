@@ -1,16 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""493.20 刀2：两套账对账 CLI（可反复运行、幂等）。
+"""两套账**只读核对** CLI（493.21 方案A；493.20 版为「对账并修复」，已停用修复）。
 
 用法（项目根下）：
-    python tools/reconcile_ledgers.py              # 核对并修复
-    python tools/reconcile_ledgers.py --check-only # 只核对不修复
+    python tools/reconcile_ledgers.py
 
-交付后**重启曈曈加载新代码**后跑一次，即可验证两套账关联不再丢失；
-若活体旧代码又覆盖了 verification_learning.json，随时重跑本脚本即自愈。
-数据文件不进 git，仅改盘。
+★493.21 刀1：两本账（absorb_trace 记 QICA 吸收的规则 / verification_learning
+记验证枢纽的学习事件）天然不同粒度、不同来源，**不再做强制双向 ID 对齐**。
+vl 的 record() 全量 _save() 会覆盖外部注入条目，反复修反复丢。因此本脚本
+只打印只读核对报告，不写任何文件；`verification_learning_id` /
+`absorb_trace_id` 允许为 None。两本账各自独立工作、不互相覆盖。
 """
-import argparse
 import json
 import os
 import sys
@@ -21,31 +21,15 @@ from nucleus.mnemosyne import ledger_reconcile as lr  # noqa: E402
 
 
 def main():
-    ap = argparse.ArgumentParser(description="两套账对账")
-    ap.add_argument("--check-only", action="store_true", help="只核对不修复")
-    args = ap.parse_args()
-
-    at_rows = lr.load_applied_rules()
-    vl_path = lr._VL_REL
-    vl_entries = []
-    if os.path.isfile(vl_path):
-        vl_entries = json.load(open(vl_path, encoding="utf-8")).get("entries", [])
-    before = lr.check_alignment(at_rows, vl_entries)
-    print("=== 对账前 ===")
-    print(json.dumps(before, ensure_ascii=False, indent=2))
-
-    if args.check_only:
-        return 0 if not before["missing_rule_ids"] else 1
-
     result = lr.reconcile()
-    print("=== 修复 ===")
-    print("repaired:", result["repaired"])
-    print("=== 对账后 ===")
-    print(json.dumps(result["after"], ensure_ascii=False, indent=2))
-    ok = (result["after"]["bidirectional"] == result["after"]["applied_rules"]
-          and not result["after"]["missing_rule_ids"])
-    print("结论:", "PASS 3/3 双向ID对齐" if ok else "FAIL 仍有未对齐")
-    return 0 if ok else 1
+    stat = result["before"]
+    print("=== 两套账只读核对（493.21 方案A：不做强制对齐）===")
+    print(json.dumps(stat, ensure_ascii=False, indent=2))
+    print("policy:", result["policy"])
+    print("note:", result["note"])
+    print("说明: 双向=%d/%d 仅作观测；关联字段允许 None，两本账独立记录不互相覆盖"
+          % (stat["bidirectional"], stat["applied_rules"]))
+    return 0
 
 
 if __name__ == "__main__":

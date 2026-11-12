@@ -141,6 +141,23 @@ def record_shadow_compare(suggestion: dict, path: str = None) -> int:
     _pp = suggestion.get("primary_paths") or list(_BASELINE_PATHS)
     _sp = suggestion.get("shadow_paths") or []
     _primary = _pp[0] if _pp else None
+    # 493.21 刀2：按 (query, rule_id) 去重，同一 query 的同一规则不重复写
+    _seen = set()
+    if os.path.isfile(_p):
+        try:
+            with open(_p, encoding="utf-8") as _f:
+                for _line in _f:
+                    _line = _line.strip()
+                    if not _line:
+                        continue
+                    try:
+                        _old = json.loads(_line)
+                    except Exception:
+                        continue
+                    _seen.add((_old.get("query"), _old.get("rule_id")))
+        except Exception as _e:
+            silent_exc(_e, where="shadow_rules.record_shadow_compare.dedup",
+                       level="debug")
     try:
         _d = os.path.dirname(_p)
         if _d:
@@ -148,6 +165,10 @@ def record_shadow_compare(suggestion: dict, path: str = None) -> int:
         _n = 0
         with open(_p, "a", encoding="utf-8") as _f:
             for _r in _rules:
+                _key = (suggestion.get("query"), _r.get("rule_id"))
+                if _key in _seen:
+                    continue
+                _seen.add(_key)
                 _shadow = _r.get("path") or (_sp[0] if _sp else None)
                 _rec = {
                     "ts": round(time.time(), 3),
