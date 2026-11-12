@@ -13044,6 +13044,11 @@ class PulseInnerWorld(
         用于长程指代接线：用户说「它呢」时，Cortex 用上一次带器官的话题（如「胃」）
         作为上下文注入 QICA。只返回最近一条有 organ 的记忆（当前轮若 organ=None 自动跳过），
         且在 max_age_s 内；逾期返回 None。
+
+        493.20 修复：「最近」按 **ts 时间戳取最大值**，不再依赖列表物理顺序。
+        实测活体 493.20 期间重排并截断 conversation_memory.json（55→50 条、
+        5 条 organ 记忆顺序被反转），旧实现 ``reversed(_mem)`` 会误取到最老的
+        「肾」而非最近的「胃」。按时间戳取最新才符合语义，且对活体重排鲁棒。
         """
         try:
             import time as _t
@@ -13051,21 +13056,27 @@ class PulseInnerWorld(
             _user = user_name or "用户"
             _mem = [m for m in getattr(self, '_conversation_memory', [])
                     if m.get("user_name") == _user]
-            for _e in reversed(_mem):
+            _best = None  # (ts_float, entry)
+            for _e in _mem:
                 _org = _e.get("organ")
                 if not _org:
                     continue
                 _ts = _e.get("ts") if _e.get("ts") is not None else _e.get("timestamp")
                 try:
-                    _age = _now - float(_ts)
+                    _ts_f = float(_ts)
                 except Exception:
-                    _age = 9e9
-                if _age > max_age_s:
                     continue
-                return {"organ": _org,
-                        "ts": _ts,
+                if _now - _ts_f > max_age_s:
+                    continue
+                if _best is None or _ts_f > _best[0]:
+                    _best = (_ts_f, _e)
+            if _best is not None:
+                _ts_f, _e = _best
+                return {"organ": _e.get("organ"),
+                        "ts": (_e.get("ts") if _e.get("ts") is not None
+                               else _e.get("timestamp")),
                         "confidence": _e.get("organ_confidence"),
-                        "age_s": _age}
+                        "age_s": _now - _ts_f}
         except Exception as _e:
             silent_exc(_e, where="get_last_organ", level="debug")
         return None

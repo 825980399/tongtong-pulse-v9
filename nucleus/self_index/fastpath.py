@@ -245,6 +245,9 @@ def record_self_query_shadow(content, explain, *, session_id=None,
             "skipped_by_guard": explain.get("skipped_by_guard", False),
             "label": _label,
             "self_ref": _self_ref,
+            # 493.20 刀1：影子规则建议真的写进影子行（命中填建议，不命中 None）。
+            # 493.19 只在 explain 里有、record 没写进 _row ⇒ 影子日志 0 条带该字段。
+            "shadow_suggestion": explain.get("shadow_suggestion"),
         }
         try:
             import config as _cfg11
@@ -260,9 +263,13 @@ def record_self_query_shadow(content, explain, *, session_id=None,
             if not _ans and not _gr and not _er:
                 # 不静默空：无答案且无 guard ⇒ 记为「fastpath 未命中」
                 _er = "fastpath_no_match"
+            _pg = _shadow_proc_gen()
             _row.update({
-                "session_id": session_id,
-                "proc_gen": _shadow_proc_gen(),
+                # 493.20 刀3：通用兜底——任何来源（cortex/offline/直连）都不写 null。
+                # 493.18 只在 offline_local 调用前兜底；这里在 writer 层统一兜底，
+                # 不覆盖显式传入的真实 session_id（只补 None）。
+                "session_id": session_id or f"{source_path}:{_pg}",
+                "proc_gen": _pg,
                 "source_path": source_path,
                 "guard_reason": _gr,
                 "error_reason": _er,

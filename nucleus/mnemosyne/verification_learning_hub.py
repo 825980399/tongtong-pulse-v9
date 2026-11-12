@@ -151,9 +151,14 @@ class VerificationLearningHub:
             # 493.17 刀1 兜底：写出前保证每条 entry 都带 applied。
             # 活体若仍是 493.16 前旧代码、写入不带 applied 的条目，新代码
             # 每次保存都会补齐（配合 _load 回填 → 重启后 applied 自愈落地）。
+            # 493.20 刀2：同时保证 absorb_trace_id 键存在（不凭空填值，
+            # 但旧代码写入的不带该键的条目补 None，避免两套账交叉引用字段
+            # 在重启加载新代码后再次"整表覆盖"时整个键消失）。
             for _e in self._entries:
                 if "applied" not in _e:
                     _e["applied"] = bool(_e.get("remediation_triggered", False))
+                if "absorb_trace_id" not in _e:
+                    _e["absorb_trace_id"] = None
             snapshot = {
                 "version": "v1.0",
                 "updated_at": time.time(),

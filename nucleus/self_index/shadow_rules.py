@@ -124,20 +124,48 @@ def build_shadow_suggestion(query, primary_paths=None,
         return None
 
 
-def record_shadow_compare(suggestion: dict, path: str = None) -> bool:
-    """把「主笔路径 vs 影子路径」对比记录追加到影子日志 jsonl（不 emit）。"""
+def record_shadow_compare(suggestion: dict, path: str = None) -> int:
+    """把「主笔路径 vs 影子路径」对比记录追加到影子日志 jsonl（不 emit）。
+
+    493.20 刀1 格式修复：**每条规则一条记录**，顶层带
+    `rule_id` / `primary_path` / `shadow_path`（单数字段，任务书验收口径），
+    同时保留 493.19 的 `primary_paths` / `shadow_paths` 复数结构（向后兼容）。
+    返回实际写入的记录数（无建议/无规则 → 0）。
+    """
     if not suggestion:
-        return False
+        return 0
+    _rules = suggestion.get("rules") or []
+    if not _rules:
+        return 0
     _p = path or _SHADOW_COMPARE_REL
+    _pp = suggestion.get("primary_paths") or list(_BASELINE_PATHS)
+    _sp = suggestion.get("shadow_paths") or []
+    _primary = _pp[0] if _pp else None
     try:
         _d = os.path.dirname(_p)
         if _d:
             os.makedirs(_d, exist_ok=True)
-        _rec = dict(suggestion)
-        _rec["ts"] = round(time.time(), 3)
+        _n = 0
         with open(_p, "a", encoding="utf-8") as _f:
-            _f.write(json.dumps(_rec, ensure_ascii=False) + "\n")
-        return True
+            for _r in _rules:
+                _shadow = _r.get("path") or (_sp[0] if _sp else None)
+                _rec = {
+                    "ts": round(time.time(), 3),
+                    "query": suggestion.get("query"),
+                    # 493.20：单数顶层字段（任务书验收）
+                    "rule_id": _r.get("rule_id"),
+                    "primary_path": _primary,
+                    "shadow_path": _shadow,
+                    "changed": bool(suggestion.get("changed")),
+                    # 493.19 复数结构保留（向后兼容）
+                    "primary_paths": _pp,
+                    "shadow_paths": _sp,
+                    "rules": _rules,
+                    "note": suggestion.get("note"),
+                }
+                _f.write(json.dumps(_rec, ensure_ascii=False) + "\n")
+                _n += 1
+        return _n
     except Exception as _e:
         silent_exc(_e, where="shadow_rules.record_shadow_compare", level="debug")
-        return False
+        return 0

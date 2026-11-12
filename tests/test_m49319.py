@@ -76,12 +76,16 @@ def test_shadow_suggestion_respects_real_primary_paths():
 def test_record_shadow_compare(tmp_path):
     p = tmp_path / "compare.jsonl"
     sug = sr.build_shadow_suggestion("晚上好", rules=_RULES)
-    assert sr.record_shadow_compare(sug, str(p)) is True
+    # 493.20：返回写入条数（int），每规则一条；新增单数顶层字段
+    assert sr.record_shadow_compare(sug, str(p)) == 1
     rows = [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines() if l.strip()]
-    assert rows[0]["primary_paths"] == ["/知识"]
+    assert rows[0]["primary_paths"] == ["/知识"]  # 复数兼容保留
     assert rows[0]["shadow_paths"][0] == "/情感/问候"
+    assert rows[0]["primary_path"] == "/知识"  # 493.20 单数
+    assert rows[0]["shadow_path"] == "/情感/问候"
+    assert rows[0]["rule_id"] == "semantic_lesson:def0edf132"
     assert "ts" in rows[0]
-    assert sr.record_shadow_compare(None, str(p)) is False  # 无建议不写
+    assert sr.record_shadow_compare(None, str(p)) == 0  # 无建议不写
 
 
 def test_explain_has_shadow_suggestion_but_answer_unchanged():
