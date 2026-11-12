@@ -1897,5 +1897,50 @@
   "match": "493.12 dry-run 管线兜底（read/scan 失败不阻断影子写入）",
   "scope": "prod",
   "reason": "493.12-4/5 dry-run 候选扫描与去重读取兜底；不写 overlay、不影响线上"
+ },
+ {
+  "path": "nucleus/self_index/fastpath.py",
+  "qualname": "_is_effect_card_stale",
+  "nth": 0,
+  "sha16": "e706fa9325ded821",
+  "tname": "Exception",
+  "kind": "ret",
+  "has_log": false,
+  "has_reraise": false,
+  "lineno": 0,
+  "legacy_lineno": 0,
+  "match": "493.13 新增（prod 兜底）",
+  "scope": "prod",
+  "reason": "493.13 效果卡过期判定兜底（日期解析失败不阻断效果卡命中）"
+ },
+ {
+  "path": "nucleus/qica/QICA.py",
+  "qualname": "_context_assist",
+  "nth": 0,
+  "sha16": "4177d68fbe62c615",
+  "tname": "Exception",
+  "kind": "assign",
+  "has_log": false,
+  "has_reraise": false,
+  "lineno": 0,
+  "legacy_lineno": 0,
+  "match": "493.13 新增（prod 兜底）",
+  "scope": "prod",
+  "reason": "493.13 长程指代显式 context_organ 消费；config 开关读取兜底（不阻断分类主链路）"
+ },
+ {
+  "path": "organs/brain/PulseInnerWorld.py",
+  "qualname": "get_last_organ",
+  "nth": 0,
+  "sha16": "dbb705d4a4c142fe",
+  "tname": "Exception",
+  "kind": "assign",
+  "has_log": false,
+  "has_reraise": false,
+  "lineno": 0,
+  "legacy_lineno": 0,
+  "match": "493.13 新增（prod 兜底）",
+  "scope": "prod",
+  "reason": "493.13 get_last_organ 兜底（memory 列表异常不阻断长程指代上下文获取）"
  }
 ]
