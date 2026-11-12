@@ -1942,5 +1942,20 @@
   "match": "493.13 新增（prod 兜底）",
   "scope": "prod",
   "reason": "493.13 get_last_organ 兜底（memory 列表异常不阻断长程指代上下文获取）"
+ },
+ {
+  "path": "nucleus/self_index/learned_alias.py",
+  "qualname": "_dryrun_file_promotion_ready",
+  "nth": 0,
+  "sha16": "e256ee8e7aff6957",
+  "tname": "Exception",
+  "kind": "cont",
+  "has_log": false,
+  "has_reraise": false,
+  "lineno": 730,
+  "legacy_lineno": 0,
+  "match": "493.14 新增（prod 兜底）",
+  "scope": "prod",
+  "reason": "493.14 dry-run 指标口径：基于落盘文件判定 promotion_ready 时文件读取兜底（不阻断指标采集）"
  }
 ]
