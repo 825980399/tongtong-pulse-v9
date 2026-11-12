@@ -131,8 +131,45 @@ body { background: #0a0a0f; color: #d0d0d0; font-family: 'Microsoft YaHei', sans
             <!-- ★第94批 T-94c 方案A：全栈大模型占比（分母含搜索+消化） -->
             <div class="metric"><span class="metric-label">全栈大模型占比</span><span class="metric-value" id="llmdepOverall">--</span></div>
         </div>
+        <!-- ★493.22 刀4：回答来源三态占比饼图（真实 source 事件，按天/会话统计） -->
+        <div class="card">
+            <div class="card-title">🍰 回答来源占比（493.22）</div>
+            <div style="display:flex;align-items:center;gap:14px;padding:8px 0;">
+                <div id="asrPie" style="width:96px;height:96px;border-radius:50%;
+                     background:conic-gradient(#4caf50 0deg,#ff9800 0deg,#2196f3 0deg,#eee 0deg 360deg);"></div>
+                <div style="font-size:12px;line-height:1.8;">
+                    <div>🟢 自答 <span id="asrSelf">--</span></div>
+                    <div>🟠 本地+大模型 <span id="asrMix">--</span></div>
+                    <div>🔵 大模型直答 <span id="asrLlm">--</span></div>
+                    <div>样本 <span id="asrTotal">--</span> ｜ 按天/会话见接口</div>
+                </div>
+            </div>
+            <div class="metric"><span class="metric-label">按天</span><span class="metric-value" id="asrDay">--</span></div>
+            <div class="metric"><span class="metric-label">按会话</span><span class="metric-value" id="asrSess">--</span></div>
+        </div>
     </div>
     <script>
+    // ★493.22 刀4：拉取真实来源事件占比，画纯 CSS 饼图（无外部库、无编造）
+    function loadAnswerSource() {
+        fetch('/answer_source/stats').then(function (r) { return r.json(); }).then(function (d) {
+            var p = (d.overall && d.overall.percent) || {};
+            var selfP = p.self_only || 0, mixP = p.self_enhanced || 0, llmP = p.llm_only || 0;
+            var a1 = selfP * 3.6, a2 = (selfP + mixP) * 3.6, a3 = (selfP + mixP + llmP) * 3.6;
+            var pie = document.getElementById('asrPie');
+            if (pie) { pie.style.background = 'conic-gradient(#4caf50 0deg ' + a1 +
+                'deg, #ff9800 ' + a1 + 'deg ' + a2 + 'deg, #2196f3 ' + a2 +
+                'deg ' + a3 + 'deg, #eee ' + a3 + 'deg 360deg)'; }
+            var set = function (id, v) { var el = document.getElementById(id); if (el) { el.textContent = v; } };
+            set('asrSelf', selfP + '%'); set('asrMix', mixP + '%'); set('asrLlm', llmP + '%');
+            set('asrTotal', (d.overall && d.overall.total) || 0);
+            set('asrDay', Object.keys(d.by_day || {}).length + ' 天');
+            set('asrSess', Object.keys(d.by_session || {}).length + ' 会话');
+        }).catch(function () {});
+    }
+    if (typeof window !== 'undefined') {
+        loadAnswerSource();
+        setInterval(loadAnswerSource, 60000);
+    }
     function loadLLMDep() {
         fetch('/llmdep/data').then(function (r) { return r.json(); }).then(function (d) {
             var dv = d.derived || {};
@@ -856,6 +893,9 @@ class HealthHandler(BaseHTTPRequestHandler):
                 self._serve_jsonl('', 'self_inspector_history.jsonl')
             elif self.path == '/data/param_tuning':
                 self._serve_param_tuning_data()
+            # 493.22 刀4：回答来源三态占比（按天/按会话，供面板饼图）
+            elif self.path == '/answer_source/stats':
+                self._serve_answer_source_stats()
             else:
                 self.send_response(404)
                 self.end_headers()
@@ -952,6 +992,28 @@ class HealthHandler(BaseHTTPRequestHandler):
             self.send_response(500)
             self.end_headers()
             self.wfile.write(f'{{"error":"{e!s}"}}'.encode())
+
+    def _serve_answer_source_stats(self):
+        """493.22 刀4：回答来源三态占比（总体 / 按天 / 按会话），供面板饼图。"""
+        try:
+            from nucleus.self_index import answer_source as _as
+            _data = {"overall": _as.overall_stats(),
+                     "by_day": _as.stats_by_day(),
+                     "by_session": _as.stats_by_session(),
+                     "labels": dict(_as.CONSOLE_PREFIX)}
+            _payload = json.dumps(_data, ensure_ascii=False)
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.send_header('Cache-Control', 'no-cache')
+            self.end_headers()
+            self.wfile.write(_payload.encode('utf-8'))
+        except Exception as _e:
+            silent_exc(_e, where="health_ui._serve_answer_source_stats", level="debug")
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(b'{"overall":{"total":0,"counts":{},"percent":{}},'
+                             b'"by_day":{},"by_session":{},"labels":{}}')
 
     def _serve_json_file(self, subdir: str, filename: str):
         """统一提供 data/{subdir}/{filename} JSON 文件（★FIX: 消除 8 个重复 serve 方法）"""

@@ -188,7 +188,7 @@ def record_self_query_shadow(content, explain, *, session_id=None,
                              source_path="cortex", guard_reason=None,
                              error_reason=None, group=None,
                              variant_id=None, answer_a=None, answer_b=None,
-                             winner=None) -> None:
+                             winner=None, answer_source=None) -> None:
     """493.7-4 影子日志：fastpath 照常计算但不答、不 emit，仅落盘 self_query_shadow.jsonl。
 
     493.11-5 新增字段：session_id / proc_gen / source_path / guard_reason /
@@ -281,6 +281,10 @@ def record_self_query_shadow(content, explain, *, session_id=None,
                 "answer_a": answer_a,
                 "answer_b": answer_b,
                 "winner": winner,
+                # 493.22 刀4：回答来源三态，可选默认 None。
+                # writer 层无主笔/LLM 信号，绝不自行推断；由主笔链路按真实
+                # source 事件传入（见 answer_source.infer_answer_source）。
+                "answer_source": answer_source,
             })
         os.makedirs(os.path.dirname(_path), exist_ok=True)
         with open(_path, "a", encoding="utf-8") as _f:

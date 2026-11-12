@@ -85,12 +85,16 @@ def test_ten_records_do_not_overwrite_absorb_trace(tmp_path):
 
 
 def test_disk_ledgers_independent_no_forced_links():
+    # 493.22 方案B：trace→vl 允许单向引用（真实 vl_id），
+    # 但 vl→trace 不强求回指、不做双向对账；reconcile 始终只读。
     if not os.path.isfile(_AT):
         return
     at_rows = lr.load_applied_rules()
     assert len(at_rows) >= 3
-    assert all(r.get("verification_learning_id") is None for r in at_rows), \
-        "493.21 方案A：不强求双向 ID，允许 None"
+    assert all("verification_learning_id" in r for r in at_rows), \
+        "关联字段保留（单向引用或 None 均可）"
+    r = lr.reconcile(at_path=_AT)
+    assert r["repaired"] == [] and r["policy"] == "two_independent_ledgers"
 
 
 # ── 刀2：影子日志 shadow_suggestion + 3 规则定向触发 + compare 去重 ──

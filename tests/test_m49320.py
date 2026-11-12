@@ -160,7 +160,9 @@ def test_hub_save_preserves_absorb_trace_id(tmp_path):
 
 
 def test_disk_ledgers_independent():
-    # 493.21 刀1 方案A：两本账独立，不强求双向对齐；关联字段允许 None。
+    # 493.21 方案A / 493.22 方案B：两本账独立、不做双向对账；
+    # trace→vl 允许「单向引用」（493.22 恢复真实 vl_id），
+    # 也允许 None（不强求）；vl→trace 始终不强求回指。
     if not (os.path.isfile(_AT) and os.path.isfile(lr._VL_REL)):
         return
     at_rows = lr.load_applied_rules()
@@ -170,8 +172,8 @@ def test_disk_ledgers_independent():
     # 只读核对不写任何文件
     r = lr.reconcile(at_path=_AT, vl_path=lr._VL_REL)
     assert r["repaired"] == [] and r["policy"] == "two_independent_ledgers"
-    assert all(x.get("verification_learning_id") is None for x in at_rows), \
-        "493.21 后 absorb_trace 不强求 vl_id（允许 None）"
+    assert all("verification_learning_id" in x for x in at_rows), \
+        "关联字段应保留（单向引用或 None 均可）"
 
 
 # ── 刀3：影子记录提速 / session 通用兜底 ─────────────────────────

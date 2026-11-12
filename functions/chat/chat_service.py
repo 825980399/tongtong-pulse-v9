@@ -315,6 +315,19 @@ class ChatService:
 
         # 根据来源区分显示风格（★v30.0 P3优化：按语义分组，覆盖主动发起/代码执行/系统状态等）
         _icon = self._source_icon(source)
+        # ★493.22 刀4：按**真实 source** 判定回答来源三态并加控制台前缀。
+        # 判定不了来源（系统状态/代码/主动话题）时前缀为空、不编造假前缀；
+        # 同时落一条真实来源事件供面板按天/会话统计占比。
+        _prefix = ""
+        try:
+            from nucleus.self_index import answer_source as _as
+            _kind = _as.infer_answer_source(source)
+            _prefix = _as.console_prefix(source)
+            if _kind:
+                _as.record_answer_source_event(source, _kind,
+                                               session_id=payload.get("session_id"))
+        except Exception as _e:
+            silent_exc(_e, "chat_service.py:493.22.answer_source", level="debug")
         # ★2026-09-03新增：控制台输出后台日志，便于分析"输入→处理→输出"完整链路
         self._log(LogLevel.INFO, f"控制台输出: {content[:300]}{'...' if len(content) > 300 else ''} (来源={source}, 长度={len(content)})")
 
@@ -323,11 +336,12 @@ class ChatService:
         _push_reply(content, source)
 
         # 显示回复（包 try-except，GBK 场景降级 ASCII 占位，不中断 handler）
+        _head = (f"{'[异步]' if _is_unbound else ''}{_icon}{_prefix}").strip()
         try:
-            print(f"{'[异步]' + _icon if _is_unbound else _icon} 曈曈: {content}\n")
+            print(f"{_head} 曈曈: {content}\n")
         except UnicodeEncodeError:
             try:
-                print(f"[图标] 曈曈: {content}\n")
+                print(f"[图标]{_prefix} 曈曈: {content}\n")
             except Exception as _e:
                 silent_exc(_e, "chat_service.py:253", level="debug")
 

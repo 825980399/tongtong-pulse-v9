@@ -124,13 +124,23 @@ def build_shadow_suggestion(query, primary_paths=None,
         return None
 
 
-def record_shadow_compare(suggestion: dict, path: str = None) -> int:
+def record_shadow_compare(suggestion: dict, path: str = None,
+                          answer_b: str = None, answer_a: str = None,
+                          winner: str = None) -> int:
     """把「主笔路径 vs 影子路径」对比记录追加到影子日志 jsonl（不 emit）。
 
     493.20 刀1 格式修复：**每条规则一条记录**，顶层带
     `rule_id` / `primary_path` / `shadow_path`（单数字段，任务书验收口径），
     同时保留 493.19 的 `primary_paths` / `shadow_paths` 复数结构（向后兼容）。
     返回实际写入的记录数（无建议/无规则 → 0）。
+
+    493.22 刀3 A/B 真值（可选、默认 None，向后兼容）：
+      - `answer_b`：影子候选文本（would_answer 同源的本地 fastpath 候选，**真实可得**）；
+      - `answer_a`：主笔实际回答文本。当前 `ENABLE_M493_SELF_QUERY_FASTPATH=False`，
+        主笔实际回答走大模型且**未落盘**，取不到 ⇒ 如实为 None，不编造；
+      - `winner`：只有 answer_a/answer_b 都有真实文本时才能判；当前无真实双答案，
+        **恒为 None**（任务书「没有真实对比不要写假 winner」）。
+      要产生真对比，需主笔 emit 链路按同一 cid/session 落盘实际回答文本（后续批次）。
     """
     if not suggestion:
         return 0
@@ -183,6 +193,10 @@ def record_shadow_compare(suggestion: dict, path: str = None) -> int:
                     "shadow_paths": _sp,
                     "rules": _rules,
                     "note": suggestion.get("note"),
+                    # 493.22 刀3：A/B 真值字段，默认 None（不写假 winner）
+                    "answer_a": answer_a,
+                    "answer_b": answer_b,
+                    "winner": winner,
                 }
                 _f.write(json.dumps(_rec, ensure_ascii=False) + "\n")
                 _n += 1
