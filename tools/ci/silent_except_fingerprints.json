@@ -1932,16 +1932,16 @@
   "path": "organs/brain/PulseInnerWorld.py",
   "qualname": "get_last_organ",
   "nth": 0,
-  "sha16": "dbb705d4a4c142fe",
+  "sha16": "e256ee8e7aff6957",
   "tname": "Exception",
-  "kind": "assign",
+  "kind": "cont",
   "has_log": false,
   "has_reraise": false,
-  "lineno": 0,
+  "lineno": 13061,
   "legacy_lineno": 0,
-  "match": "493.13 新增（prod 兜底）",
+  "match": "493.20 变更（prod 兜底）",
   "scope": "prod",
-  "reason": "493.13 get_last_organ 兜底（memory 列表异常不阻断长程指代上下文获取）"
+  "reason": "493.20 get_last_organ 改按 ts 时间戳取最新；单条记忆时间戳解析失败则 continue 跳过该条（不阻断长程指代上下文获取）"
  },
  {
   "path": "nucleus/self_index/learned_alias.py",
