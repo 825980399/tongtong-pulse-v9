@@ -574,6 +574,10 @@ def metrics() -> dict:
 _DRYRUN_SHADOW_EVERY = 100          # 每 100 条影子触发一次抽取
 _DRYRUN_COUNTER = 0
 _SEED_VETO_DONE = False
+# 493.19 刀4：进程启动后首次写影子补一次全量回填（修「抽出来了但没落盘」）。
+# 根因：_DRYRUN_COUNTER 是进程内计数、重启归零，影子日志长期 <100 行 ⇒
+# extract_and_append_dryrun 从未被自动调用，文件停在测试手工写的 1 行。
+_DRYRUN_BACKFILL_DONE = False
 
 
 def _dryrun_candidates_path() -> str:
@@ -673,15 +677,23 @@ def _maybe_trigger_dryrun() -> int:
     """每 _DRYRUN_SHADOW_EVERY 条影子触发一次抽取（开关关 → 0）。
 
     由 fastpath.record_self_query_shadow 在每次写影子后调用。
+
+    493.19 刀4：首次调用补一次全量回填——把「已抽出但因 100 条门槛/计数器
+    重启归零而未落盘」的候选立即 append。仍不写 overlay / 不 promote /
+    不改 link_organ 与线上回答（复用 extract_and_append_dryrun 原逻辑）。
     """
-    global _DRYRUN_COUNTER
+    global _DRYRUN_COUNTER, _DRYRUN_BACKFILL_DONE
     if not _cfg_on("ENABLE_M49312_DRYRUN_CANDIDATES"):
         return 0
+    _n = 0
+    if not _DRYRUN_BACKFILL_DONE:
+        _DRYRUN_BACKFILL_DONE = True
+        _n = extract_and_append_dryrun()
     _DRYRUN_COUNTER += 1
     if _DRYRUN_COUNTER >= _DRYRUN_SHADOW_EVERY:
         _DRYRUN_COUNTER = 0
-        return extract_and_append_dryrun()
-    return 0
+        _n += extract_and_append_dryrun()
+    return _n
 
 
 def _ensure_seed_veto() -> None:

@@ -186,13 +186,28 @@ def _guard_reason(content) -> str | None:
 
 def record_self_query_shadow(content, explain, *, session_id=None,
                              source_path="cortex", guard_reason=None,
-                             error_reason=None) -> None:
+                             error_reason=None, group=None,
+                             variant_id=None, answer_a=None, answer_b=None,
+                             winner=None) -> None:
     """493.7-4 影子日志：fastpath 照常计算但不答、不 emit，仅落盘 self_query_shadow.jsonl。
 
     493.11-5 新增字段：session_id / proc_gen / source_path / guard_reason /
     error_reason / expect_organ / labeled_correct（后两者留空供人工标注）。
     ``would_answer=null`` 的行**必须**带 guard_reason 或 error_reason，不准静默空。
     开关 ENABLE_M49311_SHADOW_FIELDS 关 → 逐字回 493.10（只写原有字段）。
+
+    493.19 刀2 schema 前置：`group` / `variant_id` / `answer_a` / `answer_b` /
+    `winner` 五个可选字段，**默认 None、不填值**（本批只扩 schema，不跑真 A/B；
+    现有老行没有这些键，向后兼容，现有数据不受影响）。
+
+    ★493.19 刀2 分流点设计（本批不实现，下一批接真 A/B 时落这里）：
+      分流入口候选 A = PulseCortex.py:976-1011（每条 chat 的 fastpath 影子入口，
+      覆盖全量 chat、与 offline_active 无关）；候选 B = :2084-2092（断网降级
+      offline_local 链，正常态样本为 0，不适合做 A/B 主分流点）→ **应选 A**。
+      分桶：确定性 hash（复用 semantic_cache.py:1033 `int(hash_text(q)[:8],16)%100`
+      口径），按 session_id 稳定分桶避免同会话跨组；灰度比例 1% → 10% → 50%
+      逐级放量；影子态同时算 A/B 两候选但都不 emit，`winner` 由后续
+      labeled_correct 人工标注 + 显著性判定回填。
     """
     try:
         import os
@@ -253,10 +268,26 @@ def record_self_query_shadow(content, explain, *, session_id=None,
                 "error_reason": _er,
                 "expect_organ": None,       # 人工标注留空
                 "labeled_correct": None,    # 人工标注留空
+                # 493.19 刀2：A/B schema 前置，5 字段默认 None（本批不填值/不跑真A/B）
+                "group": group,
+                "variant_id": variant_id,
+                "answer_a": answer_a,
+                "answer_b": answer_b,
+                "winner": winner,
             })
         os.makedirs(os.path.dirname(_path), exist_ok=True)
         with open(_path, "a", encoding="utf-8") as _f:
             _f.write(json.dumps(_row, ensure_ascii=False) + "\n")
+        # ★493.19 刀1：命中影子规则时，把「主笔路径 vs 影子路径」对比落到影子日志
+        #   （纯记录，不改主笔答案/判定；不命中则不写，避免噪声）
+        try:
+            _ss = explain.get("shadow_suggestion")
+            if _ss:
+                from nucleus.self_index.shadow_rules import record_shadow_compare
+                record_shadow_compare(_ss)
+        except Exception as _e_ss:
+            silent_exc(_e_ss, where="record_self_query_shadow.shadow_compare",
+                       level="debug")
         # ★493.12-4：写影子后触发 dry-run 候选抽取（每 100 条一次，只 append 候选文件，
         #   不写 overlay / 不 promote / 不改线上回答，受 ENABLE_M49312_DRYRUN_CANDIDATES 控）
         try:
@@ -943,11 +974,19 @@ def self_query_fastpath_explain(query) -> dict:
     import time as _time
     _explain = {"answer": None, "action_id": None, "organ": None,
                 "confidence": None, "intent": None, "elapsed_ms": 0,
-                "effect_card_hit": False}  # 493.15-1：是否命中效果卡（供机械统计命中率）
+                "effect_card_hit": False,  # 493.15-1：是否命中效果卡（供机械统计命中率）
+                "shadow_suggestion": None}  # 493.19-1：影子规则建议（不影响主笔答案）
     if not query or not str(query).strip():
         return _explain
     _q = str(query).strip()
     _t0 = _time.time()
+    # 493.19 刀1：影子态建议——从 absorb_trace 的真实规则算「主笔路径 vs 影子路径」。
+    # 只填充 explain 字段，不改变任何主笔答案/判定/emit（纯影子）。
+    try:
+        from nucleus.self_index.shadow_rules import build_shadow_suggestion
+        _explain["shadow_suggestion"] = build_shadow_suggestion(_q)
+    except Exception as _e:
+        silent_exc(_e, where="self_query_fastpath.shadow_suggestion", level="debug")
     _or: dict = {}
     _organs: list = []
     _events: dict = {}

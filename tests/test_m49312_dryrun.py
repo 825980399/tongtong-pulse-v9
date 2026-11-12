@@ -31,9 +31,10 @@ def _isolate():
     for p, b in backups.items():
         shutil.copyfile(b, p)
         os.remove(b)
-    # 复位计数器，避免跨测试污染
+    # 复位计数器，避免跨测试污染（493.19 刀4 新增回填标志一并复位）
     la._DRYRUN_COUNTER = 0
     la._SEED_VETO_DONE = False
+    la._DRYRUN_BACKFILL_DONE = False
 
 
 def _write_shadow(path, rows):
@@ -125,6 +126,9 @@ def test_maybe_trigger_every_100(_isolate, tmp_path):
          "organ": "胃", "confidence": 0.9, "skipped_by_guard": False},
     ])
     la._DRYRUN_COUNTER = 0
+    # 493.19 刀4：本用例专测「每 100 条门槛」，隔离掉新增的「首次全量回填」
+    # （回填行为由 test_m49319.py::test_maybe_trigger_backfills_once 覆盖）
+    la._DRYRUN_BACKFILL_DONE = True
     triggered = 0
     for _ in range(99):
         triggered += la._maybe_trigger_dryrun()

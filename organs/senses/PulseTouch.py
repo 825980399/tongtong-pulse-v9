@@ -124,6 +124,9 @@ class PulseTouch(BasePulseOrgan):
         self._snapshot_count = 0
         self._gpu_probe_timer = None
         self._last_gpu_usage = 0.0
+        # 493.19 刀1附加 P2：GPU 探测连续超时退避（不改单次超时逻辑）
+        self._gpu_timeout_streak = 0
+        self._gpu_probe_backoff_until = 0.0
 
         # ★属性初始化完整性补全（自动审查添加）
         self._cached_camera_available = {}
@@ -535,8 +538,38 @@ class PulseTouch(BasePulseOrgan):
             self._gpu_probe_timer.start()
         finally:
             self._gpu_probe_in_progress = False
+    # 493.19 刀1附加 P2：连续超时退避阈值/时长（单测可 monkeypatch 类常量）
+    _M49319_TIMEOUT_STREAK_MAX = 3
+    _M49319_BACKOFF_SEC = 600.0  # 10 分钟
+
+    def _gpu_backoff_active(self) -> bool:
+        """493.19：是否处于退避窗口。到期放行一次试探（不预先清 streak，
+        成功才由 _gpu_note_success 重置 = 任务书「成功一次后重置计数器」）。"""
+        import time as _t
+        return _t.time() < getattr(self, "_gpu_probe_backoff_until", 0.0)
+
+    def _gpu_note_timeout(self) -> None:
+        """493.19：一次 TimeoutExpired → streak+1；达阈值进入 10 分钟退避。"""
+        import time as _t
+        self._gpu_timeout_streak = getattr(self, "_gpu_timeout_streak", 0) + 1
+        if self._gpu_timeout_streak >= self._M49319_TIMEOUT_STREAK_MAX:
+            self._gpu_probe_backoff_until = _t.time() + self._M49319_BACKOFF_SEC
+
+    def _gpu_note_success(self) -> None:
+        """493.19：探测成功（含非超时异常视为非超时族）→ 重置 streak 与退避。"""
+        self._gpu_timeout_streak = 0
+        self._gpu_probe_backoff_until = 0.0
+
     def _gpu_probe_once(self):
-        """在独立守护线程中运行 nvidia-smi（带超时），仅更新缓存，不阻塞任何脉冲线程。"""
+        """在独立守护线程中运行 nvidia-smi（带超时），仅更新缓存，不阻塞任何脉冲线程。
+
+        493.19 刀1附加 P2：连续 3 次 TimeoutExpired → 暂停探针 10 分钟（期间不再
+        启动 nvidia-smi）；定时唤醒照常，到期先放行一次试探，成功才重置计数器。
+        **不改**单次 timeout=5 / 后台线程 / 原 catch 三层兜底，只加退避。
+        """
+        if self._gpu_backoff_active():
+            return  # 退避期：连线程都不建，Timer 续排不受影响（_gpu_probe_loop）
+
         def _run():
             try:
                 import subprocess
@@ -550,7 +583,14 @@ class PulseTouch(BasePulseOrgan):
                     usage = float(parts[0].strip()) if len(parts) >= 1 else 0.0
                     mem = float(parts[1].strip()) if len(parts) >= 2 else 0.0
                     self._gpu_usage_cache = {"usage_percent": usage, "memory_usage_percent": mem}
+                self._gpu_note_success()  # 493.19：成功（含无输出）→ 重置
             except Exception as e:
+                # 493.19：仅 TimeoutExpired 计入退避；其余异常仍走原 warning 兜底
+                import subprocess as _sp
+                if isinstance(e, _sp.TimeoutExpired):
+                    self._gpu_note_timeout()
+                else:
+                    self._gpu_note_success()  # 非超时族不当作连续超时
                 silent_exc(e, "PulseTouch:534:GPU探测异常", level="warning")
         _t = threading.Thread(target=_run, daemon=True)
         _t.start()

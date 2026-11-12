@@ -59,14 +59,22 @@ def test_eight_queries_answered_locally():
 
 
 def test_honest_degradation_on_effect_questions():
-    # 效果类问法必须诚实降级（不编运行后果），不得答「幸福是什么」
+    # 493.16 刀1 后语义：效果类问法命中证据卡 → 给带 file:line 的证据化效果
+    # （不再重复发「无数据」降级）；未命中卡 → 诚实降级/人话说明。
+    # 两种都必须诚实：不编「幸福是什么」这类泛泛后果、不冒充确定效果。
     for q in [
         "Cortex 调用 Lung 会产生什么效果",
         "pulse_inner_world_support 应用到 InfoField 会怎样",
         "如果 InfoField 挂了会怎样",
     ]:
         ans = fp.self_query_fastpath_explain(q).get("answer") or ""
-        assert "不能推断" in ans, f"缺诚实降级: {q} -> {ans[:80]}"
+        assert ans, f"空答: {q}"
+        _honest = (("证据：" in ans and "效果" in ans)  # 有卡：证据化效果
+                   or "不能推断" in ans                 # 无卡：诚实降级
+                   or "不编" in ans                    # 纯结构边：人话说明
+                   or "没有" in ans)
+        assert _honest, f"缺诚实口径: {q} -> {ans[:90]}"
+        assert "幸福是什么" not in ans, f"不得落到泛泛 canned: {q}"
     # 哲学问法仍跳过，不会落到「幸福是什么」canned
     assert fp.self_query_fastpath_explain("幸福是什么").get("answer") is None
 
