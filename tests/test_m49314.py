@@ -185,20 +185,12 @@ def test_effect_section_human_note_pure_structure():
 
 
 # ── 493.15 刀5 / 493.16 刀2：absorb 留痕 ──
-def test_absorb_growth_rules_leaves_trace():
+def test_absorb_growth_rules_leaves_trace(tmp_path):
+    # 493.17：tmp 隔离（不污染生产 absorb_trace 的真实规则账）
+    _p = tmp_path / "absorb_trace.jsonl"
     q = QICA()
-    # 493.16：applied 跨重启从磁盘 absorb_trace.jsonl 累积，用磁盘基线比对
-    import os as _os, json as _json
-    _p = _os.path.join("data", "self_index", "absorb_trace.jsonl")
-    _baseline = 0
-    if _os.path.exists(_p):
-        for _l in open(_p, encoding="utf-8").read().splitlines():
-            _l = _l.strip()
-            if not _l:
-                continue
-            _r = _json.loads(_l)
-            if _r.get("result") in ("applied", "applied_correction_edge"):
-                _baseline += 1
+    q._m49317_absorb_trace_path = str(_p)
+    _baseline = q._m49317_applied_count_from_disk()  # 隔离文件初始为 0
     _n = q.absorb_growth_rules([
         {"type": "domain_knowledge", "concept": "曈曈的作息", "path": "/日常/作息",
          "confidence": 0.9, "source": "growth_distill"},

@@ -1713,9 +1713,8 @@ class QICA(BasePulseOrgan):
             import json as _json
             if not hasattr(self, "_m49315_absorb_trace"):
                 self._m49315_absorb_trace = self._m49315_load_absorb_trace()
-                self._m49315_absorb_applied = sum(
-                    1 for _r in self._m49315_absorb_trace
-                    if _r.get("result") in ("applied", "applied_correction_edge"))
+                # 493.17-4：applied 从落盘文件复算（跨重启累计，不靠进程内内存 dict）
+                self._m49315_absorb_applied = self._m49317_applied_count_from_disk()
             _entry = {
                 "ts": time_mod.time(),
                 "rule_id": (rule.get("id") or rule.get("rule_id")
@@ -1729,10 +1728,11 @@ class QICA(BasePulseOrgan):
             }
             self._m49315_absorb_trace.append(_entry)
             self._m49315_absorb_applied += 1
-            # 落盘 jsonl（追加写）
-            _p = _os.path.join("data", "self_index", "absorb_trace.jsonl")
+            # 落盘 jsonl（追加写）；493.17 支持路径注入（单测 tmp 隔离），生产默认值不变
+            _p = (getattr(self, "_m49317_absorb_trace_path", None)
+                  or _os.path.join("data", "self_index", "absorb_trace.jsonl"))
             try:
-                _os.makedirs(_os.path.dirname(_p), exist_ok=True)
+                _os.makedirs(_os.path.dirname(_p) or ".", exist_ok=True)
             except Exception:
                 pass
             with open(_p, "a", encoding="utf-8") as _f:
@@ -1741,11 +1741,16 @@ class QICA(BasePulseOrgan):
             silent_exc(_e, where="QICA._m49315_absorb_record", level="debug")
 
     def _m49315_load_absorb_trace(self) -> list:
-        """493.16-2：加载已落盘的 absorb 证据账（重启续算前提）。"""
+        """493.16-2 / 493.17-4：加载已落盘的 absorb 证据账（重启续算前提）。
+
+        493.17：路径可通过实例属性 `_m49317_absorb_trace_path` 注入（供单测 tmp 隔离），
+        默认仍为 data/self_index/absorb_trace.jsonl，生产行为不变。
+        """
         try:
             import os as _os
             import json as _json
-            _p = _os.path.join("data", "self_index", "absorb_trace.jsonl")
+            _p = (getattr(self, "_m49317_absorb_trace_path", None)
+                  or _os.path.join("data", "self_index", "absorb_trace.jsonl"))
             if not _os.path.exists(_p):
                 return []
             _out = []
@@ -1762,6 +1767,46 @@ class QICA(BasePulseOrgan):
         except Exception as _e:
             silent_exc(_e, where="QICA._m49315_load_absorb_trace", level="debug")
             return []
+
+    def _m49317_applied_count_from_disk(self) -> int:
+        """493.17 刀4：从落盘 absorb_trace.jsonl 复算 `result=applied*` 的条数。
+
+        不依赖进程内内存 dict；重启后由 `_m49315_absorb_record` 首次调用触发，
+        使 applied 计数 = 历史记录里已应用规则数（不丢历史）。
+        """
+        _rows = self._m49315_load_absorb_trace()
+        return sum(1 for _r in _rows
+                   if _r.get("result") in ("applied", "applied_correction_edge"))
+
+    def _m49317_probe_knowledge_paths(self, concept: str) -> list:
+        """493.17 刀3：探测「含该概念的 query」当前会被路由到哪些知识路径。
+
+        直接复用生产真实路径选择函数 `_resolve_knowledge_paths`（不模拟、不另造判定）。
+        未注入知识树/节点池的实例会走该函数的 default 分支，如实返回默认路径。
+        """
+        try:
+            return list(self._resolve_knowledge_paths(
+                "growth", ["/知识"], raw_input=str(concept or "")))
+        except Exception as _e:
+            silent_exc(_e, where="QICA._m49317_probe_knowledge_paths", level="debug")
+            return ["/知识"]
+
+    @staticmethod
+    def _m49317_behavior_delta(concept, path, before, after) -> str:
+        """493.17 刀2/刀3：把「吸收前 vs 吸收后」的可观测变化写成具体 downstream_delta。
+
+        不再只写「更新了dict」：记录领域知识表新增的具体条目 + 该概念 query 的
+        classify 知识路径前后对比（路径变化是 QICA 唯一真实可观测的下游行为）。
+        """
+        _b = "、".join(str(x) for x in before) or "空"
+        _a = "、".join(str(x) for x in after) or "空"
+        _base = ("QICA领域知识表新增具体条目「%s=%s」；" % (concept, path))
+        if before != after:
+            return (_base + "含「%s」的 query 的 classify 知识路径 "
+                    "吸收前[%s] → 吸收后[%s]（路径已变化）" % (concept, _b, _a))
+        return (_base + "含「%s」的 query 的 classify 知识路径 "
+                "吸收前[%s] → 吸收后[%s]（本实例未注入知识树/节点池，路径未变，如实记录）"
+                % (concept, _b, _a))
 
     def absorb_growth_rules(self, rules: list[dict[str, Any]]) -> int:
         """
@@ -1797,9 +1842,13 @@ class QICA(BasePulseOrgan):
                     # ★质量修复A2：2字内宽泛概念禁止注入身份/自我路径
                     if not (len(_concept) <= 2 and ("/身份/" in _path or "/自我/" in _path)):
                         if _concept not in self._domain_knowledge or _rule.get("confidence", 0.5) >= 0.7:
+                            # 493.17-3：真 absorb 链路内测「吸收前 vs 吸收后」路径变化
+                            _before = self._m49317_probe_knowledge_paths(_concept)
                             self._domain_knowledge[_concept] = _path
-                            self._m49315_absorb_record(_rule, "applied",
-                                f"QICA._domain_knowledge 更新条目: {_concept}={_path}")
+                            _after = self._m49317_probe_knowledge_paths(_concept)
+                            self._m49315_absorb_record(
+                                _rule, "applied",
+                                self._m49317_behavior_delta(_concept, _path, _before, _after))
                             _absorbed += 1
                         else:
                             _bump("low_confidence")
@@ -1821,9 +1870,13 @@ class QICA(BasePulseOrgan):
                     # ★质量修复A2：2字内宽泛概念禁止注入身份/自我路径
                     if _path and not (len(_concept) <= 2 and ("/身份/" in _path or "/自我/" in _path)):
                         if _concept not in self._domain_knowledge or _rule.get("confidence", 0.5) >= 0.7:
+                            # 493.17-3：真 absorb 链路内测「吸收前 vs 吸收后」路径变化
+                            _before = self._m49317_probe_knowledge_paths(_concept)
                             self._domain_knowledge[_concept] = _path
-                            self._m49315_absorb_record(_rule, "applied",
-                                f"QICA._domain_knowledge 更新条目: {_concept}={_path}")
+                            _after = self._m49317_probe_knowledge_paths(_concept)
+                            self._m49315_absorb_record(
+                                _rule, "applied",
+                                self._m49317_behavior_delta(_concept, _path, _before, _after))
                             _absorbed += 1
                         else:
                             _bump("low_confidence")

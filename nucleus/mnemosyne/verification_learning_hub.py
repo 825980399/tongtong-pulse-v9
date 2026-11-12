@@ -148,6 +148,12 @@ class VerificationLearningHub:
     def _save(self):
         try:
             os.makedirs(os.path.dirname(self._file_path), exist_ok=True)
+            # 493.17 刀1 兜底：写出前保证每条 entry 都带 applied。
+            # 活体若仍是 493.16 前旧代码、写入不带 applied 的条目，新代码
+            # 每次保存都会补齐（配合 _load 回填 → 重启后 applied 自愈落地）。
+            for _e in self._entries:
+                if "applied" not in _e:
+                    _e["applied"] = bool(_e.get("remediation_triggered", False))
             snapshot = {
                 "version": "v1.0",
                 "updated_at": time.time(),

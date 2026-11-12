@@ -61,25 +61,28 @@ def test_high_confidence_card_not_tagged():
 
 
 # ── 刀2：规则级证据账 ────────────────────────────────────────────────
-def test_absorb_trace_persisted_to_jsonl():
-    # absorb 留痕落盘 data/self_index/absorb_trace.jsonl，含 downstream_delta
+def test_absorb_trace_persisted_to_jsonl(tmp_path):
+    # 493.17：tmp 隔离（不污染生产 absorb_trace 的真实规则账）
+    p = tmp_path / "absorb_trace.jsonl"
     q = QICA()
+    q._m49317_absorb_trace_path = str(p)
     n = q.absorb_growth_rules([{
         "type": "domain_knowledge", "concept": "曈曈的作息_test49316",
         "path": "/日常/作息", "confidence": 0.9, "source": "growth_distill",
     }])
     assert n == 1
     trace = q._m49315_absorb_trace
-    # 对历史累积（jsonl 追加日志）鲁棒：按本测试 concept 命中判定
     hit = [e for e in trace
            if e.get("concept") == "曈曈的作息_test49316"
            and e.get("result") == "applied"]
     assert hit, "应有一条本测试的 absorb 记录"
-    assert "domain_knowledge" in hit[-1]["downstream_delta"], hit[-1]
-    # 落盘文件存在且含 downstream_delta 字段
-    p = os.path.join("data", "self_index", "absorb_trace.jsonl")
-    assert os.path.exists(p), "absorb_trace.jsonl 应已落盘"
-    lines = [l for l in open(p, encoding="utf-8").read().splitlines() if l.strip()]
+    # 493.17：delta 改为具体行为描述（含吸收前/后对比 + 具体条目），不再只写「更新dict」
+    _d = hit[-1]["downstream_delta"]
+    assert "吸收前" in _d and "吸收后" in _d, _d
+    assert "曈曈的作息_test49316=/日常/作息" in _d, _d
+    # 落盘文件含 downstream_delta 字段
+    assert p.exists(), "absorb_trace.jsonl 应已落盘"
+    lines = [l for l in p.read_text(encoding="utf-8").splitlines() if l.strip()]
     assert lines, "jsonl 非空"
     persisted = [json.loads(l) for l in lines]
     assert any(e.get("concept") == "曈曈的作息_test49316"

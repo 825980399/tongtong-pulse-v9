@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 import threading
 import unittest
 
@@ -24,6 +25,10 @@ def _mk_qica() -> QICA:
     q._domain_knowledge_lock = threading.RLock()
     q._intent_to_method = {}
     q._node_pool = None
+    q._knowledge_tree = None  # 493.17：路径探针需要（None → 走默认分支，如实记「未变」）
+    # 493.17：absorb 落盘隔离到临时目录，避免污染生产 absorb_trace 真实规则账
+    q._m49317_absorb_trace_path = os.path.join(
+        tempfile.gettempdir(), "m360_legacy_absorb_trace_test.jsonl")
     q._m360_absorb_reasons = {}
     q._m360_absorb_last = {}
     q._log = lambda *a, **k: None
