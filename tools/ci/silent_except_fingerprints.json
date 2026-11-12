@@ -1987,5 +1987,20 @@
   "match": "493.16 新增（absorb 证据账加载兜底）",
   "scope": "prod",
   "reason": "493.16 加载已落盘 absorb_trace.jsonl，文件缺失/损坏兜底返回空列表"
+ },
+ {
+  "path": "nucleus/self_index/shadow_rules.py",
+  "qualname": "record_shadow_compare",
+  "nth": 0,
+  "sha16": "e256ee8e7aff6957",
+  "tname": "Exception",
+  "kind": "cont",
+  "has_log": false,
+  "has_reraise": false,
+  "lineno": 127,
+  "legacy_lineno": 0,
+  "match": "493.21 新增（去重读取兜底）",
+  "scope": "prod",
+  "reason": "493.21 刀2 compare 按 query+rule_id 去重：读历史行单条解析失败则 continue 跳过（不阻断去重与写入）"
  }
 ]
