@@ -17,14 +17,14 @@ def _cards_path():
 
 
 def test_effects_cards_file_exists_and_count():
-    # 493.13-1：10-20 张高频卡
+    # 493.13-1：≥10 张高频卡（493.14 扩面后已远超 20，放宽上界）
     assert os.path.isfile(_cards_path()), "effects_cards.json 未生成"
     cards = json.load(open(_cards_path(), encoding="utf-8"))
-    assert 10 <= len(cards) <= 20, f"卡数 {len(cards)} 不在 10-20"
-    # 每张必须带 file:line 证据 + 效果文案
+    assert len(cards) >= 10, f"卡数 {len(cards)} 少于 10"
+    # 每张必须带 from/to + 效果文案 + file:line 证据（event 可选：
+    # 493.14 扩面的高频对可能无具体 event，仍可经 (from,to) 命中）
     for c in cards:
         assert c.get("from") and c.get("to"), c
-        assert c.get("event") or c.get("via"), c
         assert c.get("effect"), c
         assert c.get("evidence"), c
         assert c.get("stale_after_days"), c

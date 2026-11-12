@@ -48,15 +48,16 @@ def test_extract_appends_dryrun_not_overlay(_isolate, tmp_path):
         {"query": "胃在哪", "would_answer": "胃 在 organs.body.PulseStomach.py",
          "action_id": "organ.location", "organ": "胃", "confidence": 0.95,
          "skipped_by_guard": False},
+        # 493.14-2：关系类 query 不进 alias 候选池（「肝怎么连」被过滤）
         {"query": "肝怎么连", "would_answer": None, "action_id": None,
          "organ": "肝", "confidence": None, "skipped_by_guard": False},
     ])
     n = la.extract_and_append_dryrun(sp)
-    assert n == 2, n
+    assert n == 1, n  # 仅「胃在哪」入池，「肝怎么连」被关系类过滤
     assert os.path.isfile(_DRYRUN)
     lines = [json.loads(x) for x in open(_DRYRUN, encoding="utf-8").read().splitlines() if x.strip()]
-    assert len(lines) == 2
-    assert {x["organ"] for x in lines} == {"胃", "肝"}
+    assert len(lines) == 1
+    assert {x["organ"] for x in lines} == {"胃"}
     # overlay 不得被写（active=0）
     ov = la.load_overlay()
     assert all(not e.get("active") for e in ov.get("aliases", {}).values())

@@ -213,7 +213,8 @@ def local_basic_template(query: str) -> tuple[str | None, str]:
 # =============================================================================
 # 四、断网兜底分层顺序与让位（刀6：L0→L1→L2→L3）
 # =============================================================================
-def offline_layered_answer(query: str, survival_fn=None) -> dict:
+def offline_layered_answer(query: str, survival_fn=None,
+                            session_id=None) -> dict:
     """按 L0→L1→L2 顺序求解，返回 {answer, layer, tag, yields}。
 
     让位规则（任务书 :103）：
@@ -248,6 +249,7 @@ def offline_layered_answer(query: str, survival_fn=None) -> dict:
             if _cfg_on("ENABLE_M49311_SHADOW_FIELDS"):
                 record_self_query_shadow(
                     _q, _ex, source_path="offline_local",
+                    session_id=session_id,
                     error_reason=None if _a else "L0_no_match")
             if _a and _conf is not None and float(_conf) >= 0.7:
                 _out.update(answer=TAG_INDEX + " " + str(_a), layer="L0",

@@ -2086,7 +2086,10 @@ class PulseCortex(BasePulseOrgan):
                         and not payload.get("is_background_learning", False)
                         and _q4939 and self._m485_llm_degraded()):
                     from nucleus.self_index.offline_local import offline_layered_answer
-                    _lz = offline_layered_answer(_q4939)   # L0/L1；L2 由下方 485 原链承担
+                    # 493.14-3：把会话键传给影子记录，避免 session_id 全为 null
+                    _sid = (ctx.get("session_id") or correlation_id or "user")
+                    _lz = offline_layered_answer(
+                        _q4939, session_id=_sid)   # L0/L1；L2 由下方 485 原链承担
                     _la = _lz.get("answer")
                     if _la:
                         self._m4939_last_local_answer = _la

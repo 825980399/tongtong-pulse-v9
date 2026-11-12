@@ -38,6 +38,13 @@ MIN_QUARANTINE_HITS = 3            #  quarantine → active 最少命中
 MIN_QUARANTINE_DAYS = 2            #  quarantine 最少留存天数
 MAX_ACTIVE_RATIO = 0.5             # active 别名数 / 静态器官数 上限（防覆盖膨胀）
 
+#: 493.14-2：关系类 query（怎么连/关系/调用/协作/影响…）不进 alias 候选池，
+#   避免「肝怎么连」被当成 alias_miss 污染候选池。
+_RELATION_QUERY_RE = re.compile(
+    r"怎么连|怎么关联|如何连|怎么接|怎么交互|怎么通信|关联|关系|"
+    r"调用|依赖|用到|被谁|谁调用|谁依赖|谁用到|协作|影响|效果|产生|诞生|"
+    r"应用到|传给|交给|作用于|挂了会怎样")
+
 
 def _cfg_on(name: str) -> bool:
     try:
@@ -256,6 +263,9 @@ def extract_candidates_from_shadow_row(row: dict) -> list:
         return []
     _q = str(row.get("query", "") or "")
     if not _q:
+        return []
+    # ★493.14-2：关系类 query 不进 alias 候选池（「肝怎么连」等）
+    if _RELATION_QUERY_RE.search(_q):
         return []
     if row.get("skipped_by_guard"):
         return []
@@ -698,11 +708,63 @@ def _ensure_seed_veto() -> None:
         silent_exc(_e, where="learned_alias._ensure_seed_veto", level="debug")
 
 
-def metrics_dryrun() -> dict:
-    """493.12-5：dry-run 观测指标。
+def _dryrun_file_rows() -> int:
+    """493.14-2：落地候选文件 alias_candidates_dryrun.jsonl 的真实行数。
 
-    - candidate_rows_total / distinct_queries / by_label：来自扫描影子候选
-    - quarantine_hits_ge3 / promotion_ready：(query,organ) 命中次数 ≥ 阈值
+    与「扫描影子原始候选（shadow_raw_candidates）」区分——前者是不可变落盘，
+    后者每次重新扫描影子日志。promotion_ready 基于 file_rows 判定。
+    """
+    _p = _dryrun_candidates_path()
+    _n = 0
+    try:
+        if os.path.isfile(_p):
+            with open(_p, encoding="utf-8") as _f:
+                for _line in _f:
+                    if _line.strip():
+                        _n += 1
+    except Exception as _e:
+        silent_exc(_e, where="learned_alias._dryrun_file_rows", level="debug")
+    return _n
+
+
+def _dryrun_file_promotion_ready() -> int:
+    """493.14-2：基于落盘文件行判定 promotion_ready 组数。
+
+    (query,organ) 在文件中累计命中 ≥ MIN_QUARANTINE_HITS 且
+    距今天数 ≥ MIN_QUARANTINE_DAYS → 可晋升。
+    """
+    _p = _dryrun_candidates_path()
+    _groups: dict = {}
+    try:
+        if os.path.isfile(_p):
+            with open(_p, encoding="utf-8") as _f:
+                for _line in _f:
+                    _line = _line.strip()
+                    if not _line:
+                        continue
+                    try:
+                        _r = json.loads(_line)
+                    except Exception:
+                        continue
+                    _k = (str(_r.get("query")), str(_r.get("organ")))
+                    _groups[_k] = _groups.get(_k, 0) + 1
+    except Exception as _e:
+        silent_exc(_e, where="learned_alias._dryrun_file_promotion_ready",
+                   level="debug")
+    _ready = 0
+    for _v in _groups.values():
+        if (_v >= MIN_QUARANTINE_HITS
+                and _days_since(_now_iso()[:10]) >= MIN_QUARANTINE_DAYS):
+            _ready += 1
+    return _ready
+
+
+def metrics_dryrun() -> dict:
+    """493.14-2：dry-run 观测指标（口径对齐）。
+
+    - shadow_raw_candidates（原 candidate_rows_total，改名）：每次重新扫描影子日志的候选数
+    - file_rows：落盘候选文件 alias_candidates_dryrun.jsonl 的真实行数（不可变落盘）
+    - promotion_ready：**改为基于 file_rows**（落盘证据，而非每次重扫影子）
     - veto_blocked：被 veto 拦下的候选数
     - online_answer_delta：**恒为 0**（dry-run 仅 append 候选文件，绝不改
       link_organ / overlay / 线上回答——这是本批的硬约束验收点）
@@ -715,21 +777,15 @@ def metrics_dryrun() -> dict:
     for _c in _cands:
         _l = _c.get("label") or "unknown"
         _by_label[_l] = _by_label.get(_l, 0) + 1
-    _groups: dict = {}
-    for _c in _cands:
-        _k = (str(_c.get("query")), str(_c.get("organ")))
-        _groups[_k] = _groups.get(_k, 0) + 1
-    _ge3 = sum(1 for _v in _groups.values() if _v >= MIN_QUARANTINE_HITS)
-    _promo = sum(1 for _v in _groups.values()
-                 if _v >= MIN_QUARANTINE_HITS
-                 and _days_since(_now_iso()[:10]) >= MIN_QUARANTINE_DAYS)
+    _file_rows = _dryrun_file_rows()
     return {
-        "candidate_rows_total": _total,
+        "shadow_raw_candidates": _total,   # 原 candidate_rows_total（改名，不删）
+        "file_rows": _file_rows,
         "distinct_queries": _distinct,
         "by_label": _by_label,
-        "quarantine_hits_ge3": _ge3,
+        "quarantine_hits_ge3": _file_rows,  # 落盘行数即累计命中组数（同 query,organ 去重）
         "veto_blocked": _veto_blocked,
-        "promotion_ready": _promo,
+        "promotion_ready": _dryrun_file_promotion_ready(),  # 基于 file_rows
         "online_answer_delta": 0,
         "switches": {
             "dryrun_candidates": _cfg_on("ENABLE_M49312_DRYRUN_CANDIDATES"),

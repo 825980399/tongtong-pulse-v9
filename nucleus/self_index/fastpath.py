@@ -208,7 +208,14 @@ def record_self_query_shadow(content, explain, *, session_id=None,
             if bool(getattr(_cfg, "ENABLE_M4938_SHADOW_LABEL", False)):
                 from nucleus.self_index.alias_labeler import (
                     label_shadow_row, compute_self_ref)
-                _label = label_shadow_row(explain)
+                # ★493.14-3：label_shadow_row 读 would_answer，但 explain 只有 answer 键
+                #   （schema 错位 → 标签误判）。构造带 would_answer 的影子行再判定。
+                _label = label_shadow_row({
+                    "would_answer": _ans,
+                    "organ": explain.get("organ"),
+                    "skipped_by_guard": explain.get("skipped_by_guard", False),
+                    "query": str(content),
+                })
                 _self_ref = compute_self_ref(str(content))
         except Exception as _e:
             silent_exc(_e, where="record_self_query_shadow.label", level="debug")
