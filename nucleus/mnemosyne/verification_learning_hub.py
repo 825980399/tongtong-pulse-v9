@@ -280,10 +280,13 @@ class VerificationLearningHub:
                verification_result: dict | None = None,
                api_better: bool = False,
                lesson: str = "", remediation_triggered: bool = False,
-               origin: str = "") -> str:
+               origin: str = "", absorb_trace_id: str | None = None) -> str:
         """
         记录一次验证-学习事件。
         返回条目ID。
+
+        493.18 刀2：``absorb_trace_id`` 为两套账交叉引用（能对应上
+        absorb_trace 的 rule_id 才填，对应不上留 None，如实）。
         """
         with self._lock:
             entry_id = f"vl_{int(time.time()*1000)}_{len(self._entries)}"
@@ -303,6 +306,7 @@ class VerificationLearningHub:
                 "applied": bool(remediation_triggered),
                 "origin": (origin or "")[:64],
                 "timestamp": time.time(),
+                "absorb_trace_id": absorb_trace_id,  # 493.18 刀2 交叉引用
             }
             self._entries.append(entry)
             # ★主线C(C2)：接线 should_verify（统一验证决策，此前从未被调用的死代码）。

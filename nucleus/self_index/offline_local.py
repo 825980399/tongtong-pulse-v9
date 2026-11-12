@@ -38,6 +38,24 @@ def _cfg_on(name: str) -> bool:
         return False
 
 
+def _m49318_session_fallback() -> str:
+    """493.18 刀3：调用方未显式传 session_id 时的稳定非空兜底。
+
+    实证：影子日志 40 条 offline_local 行 session_id 全 null，根因不是 writer
+    丢字段、也不是 Cortex 生产调用方没传（``PulseCortex.py:2090`` 有
+    ``ctx.get("session_id") or correlation_id or "user"`` 兜底恒非空），而是
+    **测试/演练/直连调用**走 ``session_id=None`` 默认值。此类调用不该把 null
+    写进账：用进程级稳定键兜底（不冒充真实用户会话，明确标 offline_local 来源），
+    保证「新产生的 offline_local 影子行 session_id 非空」。
+    """
+    try:
+        from nucleus.self_index.fastpath import _shadow_proc_gen
+        return "offline_local:%s" % _shadow_proc_gen()
+    except Exception as _e:
+        silent_exc(_e, where="offline_local._m49318_session_fallback", level="debug")
+        return "offline_local:unknown"
+
+
 # =============================================================================
 # 一、问句分类（刀2 / 刀6 共用）
 # =============================================================================
@@ -247,9 +265,10 @@ def offline_layered_answer(query: str, survival_fn=None,
             _conf = _ex.get("confidence")
             # ★493.11-5：断网本地这一大类也要落影子，否则误答率统计漏样本
             if _cfg_on("ENABLE_M49311_SHADOW_FIELDS"):
+                # 493.18 刀3：显式传 session_id 原样保留；未传时不再写 null
                 record_self_query_shadow(
                     _q, _ex, source_path="offline_local",
-                    session_id=session_id,
+                    session_id=(session_id or _m49318_session_fallback()),
                     error_reason=None if _a else "L0_no_match")
             if _a and _conf is not None and float(_conf) >= 0.7:
                 _out.update(answer=TAG_INDEX + " " + str(_a), layer="L0",

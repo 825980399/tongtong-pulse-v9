@@ -147,13 +147,20 @@ def test_verify_control_delta_consumed():
 
 # ── PulseCore 单例注册（493.7-2.1）──
 def test_pulsecore_singleton_registered():
+    # 493.18：构造单例会污染全局 PulseCore._instance，导致后续套件
+    # （test_m4936_exec_control_no_pulsecore）误判「运行态已装配」。
+    # 手动保存/恢复为 None，且保证 _instance 属性始终存在（避免后续用例
+    # setattr 无 raising=False 时找不到属性）。不改断言语义。
+    from nucleus.pulse.PulseCore import PulseCore
+    _orig = getattr(PulseCore, "_instance", None)
     try:
-        from nucleus.pulse.PulseCore import PulseCore
         _pc = PulseCore()
         assert PulseCore._instance is _pc
     except Exception as _e:
         # 无运行态装配时构造失败属环境限制，不视为实现回归
         assert "PulseCore" in type(_e).__name__ or True
+    finally:
+        PulseCore._instance = _orig  # 恢复（None 时属性仍在，值=None）
 
 
 # ── 执行层全状态（493.7-3 集成）──

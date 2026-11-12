@@ -1725,6 +1725,10 @@ class QICA(BasePulseOrgan):
                 "source": rule.get("source") or "growth_distill",
                 "result": result,
                 "downstream_delta": downstream_delta,
+                # 493.18 刀2：两套账交叉引用。能对应上 verification_learning 的
+                # entry id 就填，对应不上留 None（如实，不编造关联）。
+                "verification_learning_id": (rule.get("verification_learning_id")
+                                             or rule.get("vl_id") or None),
             }
             self._m49315_absorb_trace.append(_entry)
             self._m49315_absorb_applied += 1
