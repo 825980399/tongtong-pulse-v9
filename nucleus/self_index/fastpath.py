@@ -512,10 +512,23 @@ def _rel_words_re() -> "re.Pattern":
 _EFFECT_WORDS_RE = re.compile(r"影响|效果|产生|诞生|会怎样|会做|应用|作用|后果|副作用|挂了")
 
 
-def _honest_effect_note(query, no_edge=False) -> str:
-    """493.12-2：效果类问法诚实降级话术（无运行效果数据，不编）。"""
+def _honest_effect_note(query, no_edge=False, found=None) -> str:
+    """493.12-2：效果类问法诚实降级话术（无运行效果数据，不编）。
+
+    493.16-1：若 found 里存在可命中的效果卡，则不再发「无效果数据」降级
+    （效果会由 _effect_section 用 file:line 证据给出），避免自相矛盾。
+    """
     if not _EFFECT_WORDS_RE.search(query or ""):
         return ""
+    # 有卡 → 下方 _effect_section 会给证据化效果，跳过「无数据」降级
+    # （_load_effect_cards / _match_effect_card 均为缓存纯函数，与 _effect_section 同款，无需 try）
+    if found:
+        _cs = _load_effect_cards()
+        for _e in found:
+            _c = _match_effect_card(_cs, _e.get("from"), _e.get("to"),
+                                    _e.get("event") or _e.get("via"))
+            if _c and not _is_effect_card_stale(_c):
+                return ""
     if no_edge:
         return ("模块图只记录结构调用关系，不记录运行效果/副作用数据，"
                 "因此不能推断“挂了会怎样/产生什么效果”等运行后果。")
@@ -727,9 +740,15 @@ def _effect_section(found, query) -> str:
         _c = _match_effect_card(_cards, _f, _t, _e.get("event") or _e.get("via"))
         if _c and not _is_effect_card_stale(_c):
             _seen.add((_f, _t))
-            _lines.append(f"效果：{_c['effect']}（证据：{_c.get('evidence')}）")
+            # 493.16-1：低置信（confidence<0.7）卡标注「低置信」，不当确定效果
+            _conf = float(_c.get("confidence", 1.0) or 1.0)
+            _low = "（低置信）" if _conf < 0.7 else ""
+            _lines.append(f"效果：{_c['effect']}（证据：{_c.get('evidence')}）{_low}")
     if _lines:
-        return "\n" + "\n".join(_lines)
+        # 493.16-1：结构连接与效果明确分隔——先「有几条边」(render)，再「效果是什么」
+        _head = ("\n—— 效果说明（以下为运行效果，基于 file:line 证据，"
+                 "非结构连接） ——")
+        return _head + "\n" + "\n".join(_lines)
     # 493.15-1：有边无卡，且用户问协作/关系/怎么连/影响 → 给一句基于边方向的人话说明
     _rel_intent = (_EFFECT_WORDS_RE.search(query or "")
                    or _rel_words_re().search(query or ""))
@@ -782,7 +801,8 @@ def _answer_module_relation(query, mg, events, organs) -> str | None:
         _found = _edges_between(mg, _ta, _tb)
         if _found:
             return (_render_module_edges(f"{_a} ↔ {_b}", _found)
-                    + _honest_effect_note(query) + _effect_section(_found, query))
+                    + _honest_effect_note(query, found=_found)
+                    + _effect_section(_found, query))
         _rel = _answer_relation(events, _a, _b)
         if _rel:
             return _rel + (_honest_effect_note(query, no_edge=True) or "")
@@ -809,7 +829,8 @@ def _answer_module_relation(query, mg, events, organs) -> str | None:
         _all.sort(key=lambda _e: 0 if _e.get("kind") != "import" else 1)
         if _all:
             return (_render_module_edges(f"{_a} 的相关连接", _all)
-                    + _honest_effect_note(query) + _effect_section(_all, query))
+                    + _honest_effect_note(query, found=_all)
+                    + _effect_section(_all, query))
         return (f"我查了模块图：{_a} 暂未登记到与其它模块的连接边。"
                 + _honest_effect_note(query, no_edge=True))
     return None

@@ -1698,18 +1698,25 @@ class QICA(BasePulseOrgan):
             "last": dict(getattr(self, "_m360_absorb_last", {}) or {}),
         }
 
-    def _m49315_absorb_record(self, rule: dict, result: str) -> None:
-        """493.15-5：最小留痕——每次实际吸收一条规则，记录时间/证据来源/结果/规则ID。
+    def _m49315_absorb_record(self, rule: dict, result: str,
+                              downstream_delta: str = "") -> None:
+        """493.15-5 / 493.16-2：规则级证据账——每次实际吸收一条规则，记录完整链路。
 
-        不改动吸收主逻辑（domain_knowledge / concept_correction / 纠正关系边）；
-        仅追加一条可追溯记录到 self._m49315_absorb_trace，并累加
-        self._m49315_absorb_applied（从 0 起，可复算），供证据消化口径统计。
+        字段：{ts, rule_id, type, concept, path, source, result, downstream_delta}
+        - 内存追加到 self._m49315_absorb_trace（重启后由 _m49315_load_absorb_trace 续算）
+        - 落盘 data/self_index/absorb_trace.jsonl（追加写，重启可见历史）
+        - 累加 self._m49315_absorb_applied（从已落盘记录复算，跨重启续算）
+        不改动吸收主逻辑（domain_knowledge / concept_correction / 纠正关系边）。
         """
         try:
+            import os as _os
+            import json as _json
             if not hasattr(self, "_m49315_absorb_trace"):
-                self._m49315_absorb_trace: list = []
-                self._m49315_absorb_applied: int = 0
-            self._m49315_absorb_trace.append({
+                self._m49315_absorb_trace = self._m49315_load_absorb_trace()
+                self._m49315_absorb_applied = sum(
+                    1 for _r in self._m49315_absorb_trace
+                    if _r.get("result") in ("applied", "applied_correction_edge"))
+            _entry = {
                 "ts": time_mod.time(),
                 "rule_id": (rule.get("id") or rule.get("rule_id")
                             or f"{rule.get('type', '')}:{rule.get('concept', '')}"),
@@ -1718,10 +1725,43 @@ class QICA(BasePulseOrgan):
                 "path": rule.get("path") or rule.get("correct_path", ""),
                 "source": rule.get("source") or "growth_distill",
                 "result": result,
-            })
+                "downstream_delta": downstream_delta,
+            }
+            self._m49315_absorb_trace.append(_entry)
             self._m49315_absorb_applied += 1
+            # 落盘 jsonl（追加写）
+            _p = _os.path.join("data", "self_index", "absorb_trace.jsonl")
+            try:
+                _os.makedirs(_os.path.dirname(_p), exist_ok=True)
+            except Exception:
+                pass
+            with open(_p, "a", encoding="utf-8") as _f:
+                _f.write(_json.dumps(_entry, ensure_ascii=False) + "\n")
         except Exception as _e:
             silent_exc(_e, where="QICA._m49315_absorb_record", level="debug")
+
+    def _m49315_load_absorb_trace(self) -> list:
+        """493.16-2：加载已落盘的 absorb 证据账（重启续算前提）。"""
+        try:
+            import os as _os
+            import json as _json
+            _p = _os.path.join("data", "self_index", "absorb_trace.jsonl")
+            if not _os.path.exists(_p):
+                return []
+            _out = []
+            with open(_p, encoding="utf-8") as _f:
+                for _line in _f:
+                    _line = _line.strip()
+                    if not _line:
+                        continue
+                    try:
+                        _out.append(_json.loads(_line))
+                    except Exception:
+                        continue
+            return _out
+        except Exception as _e:
+            silent_exc(_e, where="QICA._m49315_load_absorb_trace", level="debug")
+            return []
 
     def absorb_growth_rules(self, rules: list[dict[str, Any]]) -> int:
         """
@@ -1758,7 +1798,8 @@ class QICA(BasePulseOrgan):
                     if not (len(_concept) <= 2 and ("/身份/" in _path or "/自我/" in _path)):
                         if _concept not in self._domain_knowledge or _rule.get("confidence", 0.5) >= 0.7:
                             self._domain_knowledge[_concept] = _path
-                            self._m49315_absorb_record(_rule, "applied")
+                            self._m49315_absorb_record(_rule, "applied",
+                                f"QICA._domain_knowledge 更新条目: {_concept}={_path}")
                             _absorbed += 1
                         else:
                             _bump("low_confidence")
@@ -1781,7 +1822,8 @@ class QICA(BasePulseOrgan):
                     if _path and not (len(_concept) <= 2 and ("/身份/" in _path or "/自我/" in _path)):
                         if _concept not in self._domain_knowledge or _rule.get("confidence", 0.5) >= 0.7:
                             self._domain_knowledge[_concept] = _path
-                            self._m49315_absorb_record(_rule, "applied")
+                            self._m49315_absorb_record(_rule, "applied",
+                                f"QICA._domain_knowledge 更新条目: {_concept}={_path}")
                             _absorbed += 1
                         else:
                             _bump("low_confidence")
@@ -1805,7 +1847,8 @@ class QICA(BasePulseOrgan):
                     _node.add_semantic_relation(
                         _correct_node.node_id, "correction",
                         round(_rule.get("confidence", 0.6), 3), "qica_growth")
-                    self._m49315_absorb_record(_rule, "applied_correction_edge")
+                    self._m49315_absorb_record(_rule, "applied_correction_edge",
+                        f"semantic_relation 加 correction 边: {_node.node_id}->{_correct_node.node_id}")
                     _absorbed += 1
             elif _type in ("domain_knowledge", "concept_correction"):
                 # ★360刀15：类型认识但字段不全（缺 concept/path）⇒ 不是「类型不支持」

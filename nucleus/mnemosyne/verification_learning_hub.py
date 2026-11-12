@@ -133,6 +133,14 @@ class VerificationLearningHub:
             if os.path.exists(self._file_path):
                 data = safe_read_json(self._file_path, default={})
                 self._entries = data.get("entries", [])
+                # 493.16-2：回填 applied 字段（既有条目按「是否触发过补救」判为已应用）
+                _changed = False
+                for _e in self._entries:
+                    if "applied" not in _e:
+                        _e["applied"] = bool(_e.get("remediation_triggered", False))
+                        _changed = True
+                if _changed:
+                    self._save()  # 落盘回填，使每条 entry 都带 applied
         except Exception as e:
             print(f"[WARNING] verification_learning_hub.py:71: {type(e).__name__}: {e}")
             self._entries = []
@@ -286,6 +294,7 @@ class VerificationLearningHub:
                 "api_better": api_better,
                 "lesson": lesson[:300],
                 "remediation_triggered": remediation_triggered,
+                "applied": bool(remediation_triggered),
                 "origin": (origin or "")[:64],
                 "timestamp": time.time(),
             }

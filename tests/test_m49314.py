@@ -102,13 +102,19 @@ def test_offline_layered_answer_passes_session_id(monkeypatch):
 # ── 刀4：pending 审查结论 ──
 def test_pending_review_conclusions():
     ps = json.load(open("data/patches/pending_patches.json", encoding="utf-8"))
-    # 索引 1/4/10 → rejected（dead_code 真死或误报）
-    assert ps[1]["status"] == "rejected"
-    assert ps[4]["status"] == "rejected"
-    assert ps[10]["status"] == "rejected"
-    # 索引 2/3/5/8 → deferred（long_method 技术债）
-    for i in (2, 3, 5, 8):
-        assert ps[i]["status"] == "deferred", (i, ps[i]["status"])
+    # 493.15b 收口后（9 条）：死代码/误报→rejected；borderline 长方法→wont_fix（保留+注释）；
+    # 仅 PulseCodeLearner._code_review_worker(511) 留 deferred（真 god-method）；拆分已验证→verified
+    _by_status = {}
+    for _p in ps:
+        _by_status.setdefault(_p["status"], []).append(_p)
+    assert len(_by_status.get("rejected", [])) >= 3, "应有 ≥3 条 rejected（死代码/误报）"
+    assert _by_status.get("wont_fix"), "应有 wont_fix（保留+注释）条目"
+    # 唯一 deferred 是真拆分候选
+    _def = _by_status.get("deferred", [])
+    assert len(_def) == 1, [p["method"] for p in _def]
+    assert _def[0]["method"] == "_code_review_worker"
+    # 拆分已验证
+    assert _by_status.get("verified"), "应有 verified（拆分完成）"
 
 
 # ── 刀5：get_last_organ 三路径 ──
@@ -178,16 +184,27 @@ def test_effect_section_human_note_pure_structure():
     assert "具体运行效果" in _out  # 诚实：不编效果数据
 
 
-# ── 493.15 刀5：absorb 最小留痕 ──
+# ── 493.15 刀5 / 493.16 刀2：absorb 留痕 ──
 def test_absorb_growth_rules_leaves_trace():
     q = QICA()
-    _before = getattr(q, "_m49315_absorb_applied", 0)
+    # 493.16：applied 跨重启从磁盘 absorb_trace.jsonl 累积，用磁盘基线比对
+    import os as _os, json as _json
+    _p = _os.path.join("data", "self_index", "absorb_trace.jsonl")
+    _baseline = 0
+    if _os.path.exists(_p):
+        for _l in open(_p, encoding="utf-8").read().splitlines():
+            _l = _l.strip()
+            if not _l:
+                continue
+            _r = _json.loads(_l)
+            if _r.get("result") in ("applied", "applied_correction_edge"):
+                _baseline += 1
     _n = q.absorb_growth_rules([
         {"type": "domain_knowledge", "concept": "曈曈的作息", "path": "/日常/作息",
          "confidence": 0.9, "source": "growth_distill"},
     ])
     assert _n == 1
-    assert q._m49315_absorb_applied == _before + 1
+    assert q._m49315_absorb_applied == _baseline + 1
     _trace = q._m49315_absorb_trace[-1]
     assert _trace["result"] == "applied"
     assert _trace["source"] == "growth_distill"
