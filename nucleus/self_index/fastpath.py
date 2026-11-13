@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 
 from nucleus._silent_except import silent_exc
 from nucleus.self_index.exporters import ORGAN_ALIAS_TABLE
@@ -308,6 +309,42 @@ def record_self_query_shadow(content, explain, *, session_id=None,
             silent_exc(_e2, where="record_self_query_shadow.dryrun", level="debug")
     except Exception as _e:
         silent_exc(_e, where="record_self_query_shadow", level="debug")
+
+
+# 493.23 刀1：A/B 链路补全——主笔实际回答落盘（emit 点真实观测，绝不编造）。
+_PRIMARY_ANSWER_REL = os.path.join("data", "monitor",
+                                    "self_query_primary_answer.jsonl")
+
+
+def record_primary_answer(query, answer, session_id=None,
+                           source="unknown") -> int:
+    """记录主笔实际回答（A/B 对比的 answer_a 真值来源）。
+
+    只在 emit 点拿到**真实** emitted 文本时调用；answer 必须是主笔真实吐出的
+    内容，禁止传入编造文本。返回写入行数（query/answer 任一为空 → 0）。
+
+    生产链路（chat_service emit 钩子）每次主笔回答都会落一条；本沙箱 LLM 不可达
+    时，由离线兜底答案（offline_local 真实兜底）经同一函数落盘，provenance 标
+    ``offline_local_fallback`` 以区分，绝不冒充 LLM 答案。
+    """
+    try:
+        if not answer:
+            return 0
+        _d = os.path.dirname(_PRIMARY_ANSWER_REL)
+        if _d:
+            os.makedirs(_d, exist_ok=True)
+        with open(_PRIMARY_ANSWER_REL, "a", encoding="utf-8") as _f:
+            _f.write(json.dumps({
+                "ts": round(time.time(), 3),
+                "query": str(query),
+                "answer": str(answer),
+                "session_id": session_id,
+                "source": source,
+            }, ensure_ascii=False) + "\n")
+        return 1
+    except Exception as _e:
+        silent_exc(_e, where="fastpath.record_primary_answer", level="debug")
+        return 0
 
 
 def _organ_alias_match_on() -> bool:
@@ -1099,10 +1136,12 @@ def self_query_fastpath_explain(query) -> dict:
             return _explain
 
     # 3) 单器官 / 模块位置（493.7-5：器官名/模块名 + 在哪/文件 即可，不必带「器官」关键词）
+    # 493.23 刀4：放宽位置词（位置/地方/定位/何处/哪个位置/什么地方）以覆盖
+    #   「查一下胃的位置」「肾在哪个位置」「肾长在什么地方」等真实缺口措辞。
     _m = re.search(
         rf"(?:你的|我的)?({_TOKEN})|([A-Za-z0-9_]+\.py)|"
-        rf"(?:你的|我的)?([一-龥]{{1,8}}?)\s*(?:器官|模块)?\s*(?:在|的|于)?\s*"
-        r"(?:哪|什么位置|哪里|文件|路径|代码)", _q)
+        rf"(?:你的|我的)?([一-龥]{{1,8}}?)\s*(?:器官|模块)?\s*(?:在|的|于|到)?\s*"
+        r"(?:哪|什么位置|哪里|哪个位置|什么地方|文件|路径|代码|位置|地方|定位|何处)", _q)
     if _m:
         _kw = _m.group(1) or _m.group(2) or _m.group(3)
         # ★493.11-1：补 493.10-2 遗漏 —— 位置分支走 _find_organ（按文件路径匹配），
@@ -1129,6 +1168,32 @@ def self_query_fastpath_explain(query) -> dict:
             return _explain
         # 明确器官/模块均未解析（如「管消化的器官」「看东西的器官」这类描述式指称）
         # ⇒ 不硬答、落空，交后续别名/消歧分支处理。
+
+    # 3b) 493.23 刀4：定位/查找类真实缺口（「帮我定位肾」「找一下胃」「查一下胃的位置」）。
+    #   分支3 的位置词已覆盖「位置/地方」，这里补「定位/找/查一下」动作词在前的情况。
+    _m2 = re.search(
+        r"(?:帮我)?(?:定位|找一下?|查找?|查一下?)\s*"
+        r"([一-龥]{1,8}?)\s*(?:器官|模块)?\s*(?:的)?\s*(?:位置|在哪|哪里)?", _q)
+    if _m2:
+        _kw2 = _m2.group(1)
+        if _m49310_on():
+            from nucleus.self_index.exporters import is_module_token
+            if is_module_token(_kw2):
+                _mo = _find_module(_mg, _kw2)
+                if _mo:
+                    _set(f"{_kw2} 模块在代码路径 {_mo.get('file')}（模块 {_mo.get('module')}）。",
+                         "module.location", 0.85, intent="location")
+                    return _explain
+        _o2 = _find_organ(_organs, _kw2)
+        if _o2:
+            _set(_answer_organ_location(_o2), "organ.location", 0.9,
+                 organ=_o2.get("name"), intent="location")
+            return _explain
+        _mo2 = _find_module(_mg, _kw2)
+        if _mo2:
+            _set(f"{_kw2} 模块在代码路径 {_mo2.get('file')}（模块 {_mo2.get('module')}）。",
+                 "module.location", 0.85, intent="location")
+            return _explain
 
     # 4) 裸英文 / 模块词命中（覆盖「pulse_XXX」「InfoField」这类指称，无论是否带「你的」）
     for _w in re.findall(rf"{_TOKEN}", _q):
@@ -1202,7 +1267,7 @@ def self_query_fastpath_explain(query) -> dict:
         _nm = str(_o.get("name") or "")
         if not _nm or _nm not in _q:
             continue
-        if re.search(r"忙|在途|任务|还在跑|有没有.*做|多少.*任务|并发数|并发|负载", _q):
+        if re.search(r"忙|在途|任务|还在跑|有没有.*做|多少.*任务|并发数|并发|负载|状态|如何|咋样|情况|现状", _q):
             _v = _o.get("inflight")
             if _v is not None:
                 _set(f"{_nm} 当前在途任务数 {_v}。", "organ.inflight", 0.85,
@@ -1211,7 +1276,7 @@ def self_query_fastpath_explain(query) -> dict:
             _set(f"我暂时拿不到 {_nm} 的在途任务数（埋点未就绪）。",
                  "organ.inflight.missing", 0.7, organ=_nm, intent="inflight")
             return _explain
-        if re.search(r"队列|积压|排队", _q):
+        if re.search(r"队列|积压|排队|背压|深度", _q):
             _v = _o.get("queue_depth")
             if _v is not None:
                 _set(f"{_nm} 当前队列深度 {_v}。", "organ.queue", 0.8, organ=_nm, intent="queue")

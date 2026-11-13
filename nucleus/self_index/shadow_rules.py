@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 
 from nucleus._silent_except import silent_exc
@@ -126,7 +127,8 @@ def build_shadow_suggestion(query, primary_paths=None,
 
 def record_shadow_compare(suggestion: dict, path: str = None,
                           answer_b: str = None, answer_a: str = None,
-                          winner: str = None) -> int:
+                          winner: str = None,
+                          answer_a_source: str = None) -> int:
     """把「主笔路径 vs 影子路径」对比记录追加到影子日志 jsonl（不 emit）。
 
     493.20 刀1 格式修复：**每条规则一条记录**，顶层带
@@ -195,6 +197,7 @@ def record_shadow_compare(suggestion: dict, path: str = None,
                     "note": suggestion.get("note"),
                     # 493.22 刀3：A/B 真值字段，默认 None（不写假 winner）
                     "answer_a": answer_a,
+                    "answer_a_source": answer_a_source,
                     "answer_b": answer_b,
                     "winner": winner,
                 }
@@ -203,4 +206,104 @@ def record_shadow_compare(suggestion: dict, path: str = None,
         return _n
     except Exception as _e:
         silent_exc(_e, where="shadow_rules.record_shadow_compare", level="debug")
+        return 0
+
+
+def _norm(s) -> str:
+    return re.sub(r"\s+", "", str(s)).lower()
+
+
+def _judge_winner(answer_a, answer_b) -> str | None:
+    """493.23 刀1：诚实 winner 判定——绝不写假 verdict。
+
+    只有「双答案文本归一化相等」才能确定判为 ``平局``；其余皆无质量裁判，
+    只能给**状态型**表述，不能冒充质量 verdict（主笔赢/影子赢/都不对 都需
+    真实 ground truth 才能判，本环境没有 ⇒ 不写）。
+
+    - answer_a / answer_b 任一缺失 → None（无真实双答案，不写假 winner）
+    - 双答案归一化相等 → ``平局``
+    - answer_b 缺失 → ``无影子候选``（影子侧无答案可比，非质量 verdict）
+    - 双答案都在但不同 → ``双答案待评估``（已记录，等人工/金标裁判）
+    """
+    if not answer_a or not answer_b:
+        return None
+    if _norm(answer_a) == _norm(answer_b):
+        return "平局"
+    if answer_b is None or str(answer_b).strip() == "":
+        return "无影子候选"
+    return "双答案待评估"
+
+
+def fill_compare_from_primary(primary_map: dict | None = None,
+                              path: str = None) -> int:
+    """493.23 刀1：用真实主笔答案(answer_a)补全 compare 记录并计算诚实 winner。
+
+    primary_map: ``{query: (answer_text, provenance)}``；为 None 时从
+    ``self_query_primary_answer.jsonl`` 取每 query 最新主笔答案。
+    返回补全的记录数（answer_a 被写入且 winner 被诚实重算）。
+
+    纪律：绝不写假 winner（见 ``_judge_winner``）；provenance 必须如实标注
+    （如 ``offline_local_fallback`` 表示本沙箱 LLM 不可达时的真实兜底答案，
+    不冒充 LLM 主笔答案）。
+    """
+    _p = path or _SHADOW_COMPARE_REL
+    try:
+        if not os.path.isfile(_p):
+            return 0
+        # 收集主笔答案
+        _pmap = {}
+        if primary_map:
+            _pmap = dict(primary_map)
+        else:
+            _pap = os.path.join("data", "monitor",
+                                "self_query_primary_answer.jsonl")
+            if os.path.isfile(_pap):
+                try:
+                    with open(_pap, encoding="utf-8") as _pf:
+                        for _l in _pf:
+                            _l = _l.strip()
+                            if not _l:
+                                continue
+                            try:
+                                _r = json.loads(_l)
+                            except Exception as _e:
+                                silent_exc(_e, where="shadow_rules.fill_compare.primary_line",
+                                           level="debug")
+                                continue
+                            _pmap[_r.get("query")] = (_r.get("answer"),
+                                                       _r.get("source"))
+                except Exception as _e:
+                    silent_exc(_e, where="shadow_rules.fill_compare.primary",
+                               level="debug")
+        # 读现有 compare 并重算
+        _recs = []
+        with open(_p, encoding="utf-8") as _f:
+            for _l in _f:
+                _l = _l.strip()
+                if not _l:
+                    continue
+                try:
+                    _recs.append(json.loads(_l))
+                except Exception as _e:
+                    silent_exc(_e, where="shadow_rules.fill_compare.compare_line",
+                               level="debug")
+                    continue
+        _filled = 0
+        for _rec in _recs:
+            _q = _rec.get("query")
+            if _q in _pmap:
+                _ans, _src = _pmap[_q]
+                if _ans:
+                    _rec["answer_a"] = _ans
+                    _rec["answer_a_source"] = _src
+                    _rec["winner"] = _judge_winner(_ans, _rec.get("answer_b"))
+                    _filled += 1
+        # 写回
+        with open(_p, "w", encoding="utf-8") as _f:
+            for _rec in _recs:
+                _f.write(json.dumps(_rec, ensure_ascii=False) + "\n")
+        return _filled
+    except Exception as _e:
+        silent_exc(_e, where="shadow_rules.fill_compare_from_primary",
+                   level="debug")
         return 0

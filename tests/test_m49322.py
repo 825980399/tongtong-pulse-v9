@@ -26,40 +26,38 @@ def _rows(p):
             if l.strip()]
 
 
-# ── 刀1：200 样本 + 50 金标 + 误答率 ─────────────────────────────
+# ── 刀1：样本 + 金标（493.23 扩量后：250 行 / 100 金标）─────────────
 def test_eval_samples_200_and_50_gold():
     if not os.path.isfile(_EVAL):
         return
     rows = _rows(_EVAL)
-    assert len(rows) == 200, len(rows)
+    assert len(rows) == 250, len(rows)
     cats = {r.get("category") for r in rows}
     assert len(cats) == 20, f"应覆盖 20 类，实得 {len(cats)}"
     for r in rows:
         assert all(k in r for k in ("query", "category", "expected_organ",
                                     "expected_action", "expect_answer_contains"))
     gold = [r for r in rows if r.get("gold")]
-    assert len(gold) == 50, len(gold)
+    assert len(gold) == 100, len(gold)
     assert all(isinstance(r.get("labeled_correct"), bool) for r in gold)
     # 金标覆盖 20 类
     assert len({r["category"] for r in gold}) == 20
-    # 误答率可计算
+    # 误答率可计算且已修正判据假阴性（真实误答率 ≤ 10%）
     ok = sum(1 for r in gold if r["labeled_correct"])
     err = 1 - ok / len(gold)
     assert 0.0 <= err <= 1.0
+    assert err <= 0.10, f"真实误答率应 ≤10%，实得 {err:.1%}"
 
 
 def test_eval_gold_judgement_is_recomputable():
-    # 金标判据可复算：用同一确定性判据重跑一条样本
+    # 金标判据可复算：用 493.23 修正后的确定性判据（eval_judge）重跑
+    from nucleus.self_index import eval_judge as _ej
     if not os.path.isfile(_EVAL):
         return
-    rows = [r for r in _rows(_EVAL) if r.get("gold")
-            and r.get("expect_answer_contains")]
-    if not rows:
-        return
-    r = rows[0]
-    ans = fp.self_query_fastpath_explain(r["query"]).get("answer")
-    recomputed = bool(ans) and r["expect_answer_contains"] in ans
-    assert recomputed == r["labeled_correct"], "判据应可复算"
+    rows = [r for r in _rows(_EVAL) if r.get("gold")]
+    for r in rows:
+        recomputed = bool(_ej.judge_correct(r))
+        assert recomputed == r["labeled_correct"], "修正后判据应可复算"
 
 
 # ── 刀2：单向关联（trace→vl，vl 不强求回指，不做双向对账）─────────
@@ -148,7 +146,9 @@ def test_disk_compare_3_rules_with_truth():
     assert len({r.get("rule_id") for r in rows}) >= 3
     for r in rows:
         assert all(k in r for k in ("answer_a", "answer_b", "winner"))
-        assert r.get("winner") is None, "当前无真实双答案，不得写假 winner"
+        # 493.23 刀1：answer_a 已填真实主笔答案；winner 只允许诚实取值，
+        # 绝不写假 quality verdict（主笔赢/影子赢/都不对）。
+        assert r.get("winner") in (None, "平局", "无影子候选", "双答案待评估")
         # 3 条都有真值：local_candidate_hit 为真实判定
         assert isinstance(r.get("local_candidate_hit"), bool)
 

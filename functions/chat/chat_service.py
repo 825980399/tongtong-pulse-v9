@@ -344,6 +344,17 @@ class ChatService:
                 print(f"[图标]{_prefix} 曈曈: {content}\n")
             except Exception as _e:
                 silent_exc(_e, "chat_service.py:253", level="debug")
+        # ★493.23 刀1：A/B 链路补全——emit 点真实观测主笔实际回答落盘。
+        #   emit 负载无原始 query 字段（仅 content/source/session），故 query 留空，
+        #   仅作审计；query 维度的 answer_a 补全由 shadow_rules.fill_compare_from_primary
+        #   显式驱动（生产链路如需 query 维度自动补全，需在 emit 负载透传 query）。
+        try:
+            from nucleus.self_index.fastpath import record_primary_answer
+            record_primary_answer("", content,
+                                  session_id=payload.get("session_id"),
+                                  source=source)
+        except Exception as _e:
+            silent_exc(_e, "chat_service.py:493.23.primary_answer", level="debug")
 
         # 重新显示输入提示符（如果用户正在输入，输入内容不会丢失）
         try:
